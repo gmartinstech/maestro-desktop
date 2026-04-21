@@ -28,3 +28,4 @@ backend/uv-bin/
 .account-factory
 openswarm-cloud
 .openswarm-cloud
+.claude/
