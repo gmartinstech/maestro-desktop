@@ -6,6 +6,7 @@ import re
 import logging
 import secrets
 import shutil
+import sys
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -415,24 +416,26 @@ def _resolve_command(command: str) -> str | None:
     found = shutil.which(command)
     if found:
         return found
+    # Windows binaries need an extension. shutil.which() handles PATHEXT for
+    # PATH lookups, but we manually scan _extra_bin_dirs below — replicate
+    # the suffix probing here so `uvx` finds `uvx.exe`, etc.
+    if sys.platform == "win32":
+        suffixes = [""] + os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").lower().split(os.pathsep)
+    else:
+        suffixes = [""]
+    def _probe(directory: str) -> str | None:
+        for suffix in suffixes:
+            candidate = os.path.join(directory, command + suffix)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+        return None
     for d in _extra_bin_dirs():
-        candidate = os.path.join(d, command)
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
+        hit = _probe(d)
+        if hit:
+            return hit
     # Check bundled uv-bin directory (ships uv/uvx for non-dev users)
     _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    _is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
-    if _is_packaged:
-        # In packaged app: <resources>/backend/uv-bin/
-        candidate = os.path.join(_backend, "uv-bin", command)
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-    else:
-        # In dev: backend/uv-bin/
-        candidate = os.path.join(_backend, "uv-bin", command)
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-    return None
+    return _probe(os.path.join(_backend, "uv-bin"))
 
 
 def _augmented_path() -> str:
@@ -552,14 +555,21 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         # Point uv/uvx at our bundled Python — avoids macOS CLT popup on fresh Macs
         # and avoids downloading Python at runtime
         _is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+        _is_windows = sys.platform == "win32"
         if _is_packaged:
             _resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            _bundled_python = os.path.join(_resources, "python-env", "bin", "python3")
+            if _is_windows:
+                _bundled_python = os.path.join(_resources, "python-env", "python.exe")
+            else:
+                _bundled_python = os.path.join(_resources, "python-env", "bin", "python3")
             if os.path.exists(_bundled_python):
                 env.setdefault("UV_PYTHON", _bundled_python)
         else:
             _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            _venv_python = os.path.join(_backend, ".venv", "bin", "python3")
+            if _is_windows:
+                _venv_python = os.path.join(_backend, ".venv", "Scripts", "python.exe")
+            else:
+                _venv_python = os.path.join(_backend, ".venv", "bin", "python3")
             if os.path.exists(_venv_python):
                 env.setdefault("UV_PYTHON", _venv_python)
 

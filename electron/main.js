@@ -79,7 +79,9 @@ let cachedUpdateStatus = { status: 'idle', info: null, error: null };
 
 const isPackaged = app.isPackaged;
 const isDev = process.env.ELECTRON_DEV === '1';
-const iconPath = path.join(__dirname, 'build', 'icon.png');
+const iconPath = process.platform === 'win32'
+  ? path.join(__dirname, 'build', 'icon.ico')
+  : path.join(__dirname, 'build', 'icon.png');
 
 /**
  * macOS GUI apps launched from Finder/Dock inherit a minimal PATH from launchd
@@ -164,12 +166,20 @@ function getResourcePath(...segments) {
 }
 
 function getPythonPath() {
+  // python-build-standalone layout differs by OS:
+  //   macOS / Linux: <env>/bin/python3
+  //   Windows:       <env>\python.exe   (no bin/, no python3)
   if (isPackaged) {
     const envPath = path.join(process.resourcesPath, 'python-env');
+    if (process.platform === 'win32') {
+      return path.join(envPath, 'python.exe');
+    }
     return path.join(envPath, 'bin', 'python3');
   }
-  const venvPython = path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python3');
-  return venvPython;
+  if (process.platform === 'win32') {
+    return path.join(__dirname, '..', 'backend', '.venv', 'Scripts', 'python.exe');
+  }
+  return path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python3');
 }
 
 function waitForBackend(port, timeoutMs = 60000) {
@@ -212,15 +222,19 @@ async function startBackend() {
     OPENSWARM_PORT: String(backendPort),
     OPENSWARM_ELECTRON_PATH: process.execPath,
     PYTHONDONTWRITEBYTECODE: '1',
+    // PEP 540 UTF-8 mode: makes open() default to UTF-8 on Windows where
+    // the locale is otherwise cp1252. Many backend modules read UTF-8
+    // .md / .json files without an explicit encoding= argument.
+    PYTHONUTF8: '1',
   };
 
   if (isPackaged) {
-    const pythonEnvSitePackages = path.join(
-      process.resourcesPath, 'python-env', 'lib',
-      'python3.13', 'site-packages'
-    );
+    // site-packages location differs by OS — Windows has no lib/python3.13/.
+    const pythonEnvSitePackages = process.platform === 'win32'
+      ? path.join(process.resourcesPath, 'python-env', 'Lib', 'site-packages')
+      : path.join(process.resourcesPath, 'python-env', 'lib', 'python3.13', 'site-packages');
     const debuggerDir = getResourcePath('debugger');
-    env.PYTHONPATH = [projectRoot, debuggerDir, pythonEnvSitePackages].join(':');
+    env.PYTHONPATH = [projectRoot, debuggerDir, pythonEnvSitePackages].join(path.delimiter);
   }
 
   console.log(`Starting backend: ${pythonPath} on port ${backendPort}`);
@@ -369,12 +383,27 @@ function setupAutoUpdater() {
 function killBackend() {
   if (backendProcess) {
     console.log('Killing backend process...');
-    backendProcess.kill('SIGTERM');
-    setTimeout(() => {
-      if (backendProcess && !backendProcess.killed) {
-        backendProcess.kill('SIGKILL');
+    if (process.platform === 'win32') {
+      // Windows: Node's child.kill() only terminates the direct child, leaving
+      // grandchildren (e.g. the 9router node process the Python backend
+      // spawned) as orphans. Use `taskkill /T /F` to walk the process tree.
+      try {
+        require('child_process').execFileSync(
+          'taskkill', ['/PID', String(backendProcess.pid), '/T', '/F'],
+          { stdio: 'ignore' },
+        );
+      } catch (_) {
+        // taskkill failed (process may have already exited) — fall back to kill().
+        try { backendProcess.kill(); } catch (_) {}
       }
-    }, 3000);
+    } else {
+      backendProcess.kill('SIGTERM');
+      setTimeout(() => {
+        if (backendProcess && !backendProcess.killed) {
+          backendProcess.kill('SIGKILL');
+        }
+      }, 3000);
+    }
     backendProcess = null;
   }
 }
@@ -497,9 +526,11 @@ app.on('web-contents-created', (_event, contents) => {
     mainWindow &&
     contents !== mainWindow.webContents
   ) {
-    const OAUTH_POPUP_UA =
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+    const OAUTH_POPUP_UA = process.platform === 'win32'
+      ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
     contents.setUserAgent(OAUTH_POPUP_UA);
   }
 

@@ -1,7 +1,6 @@
 {
   "name": "notionhq-notion-mcp-server",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,5 +11,6 @@
   "type": "commonjs",
   "dependencies": {
     "@notionhq/notion-mcp-server": "^2.2.1"
-  }
+  },
+  "description": ""
 }

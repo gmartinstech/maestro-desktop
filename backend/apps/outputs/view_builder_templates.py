@@ -4,7 +4,7 @@ import os
 
 _SKILL_PATH = os.path.join(os.path.dirname(__file__), "view_builder_skill.md")
 
-with open(_SKILL_PATH) as _f:
+with open(_SKILL_PATH, encoding="utf-8") as _f:
     VIEW_BUILDER_SKILL = _f.read()
 
 VIEW_TEMPLATE_INDEX = """\
