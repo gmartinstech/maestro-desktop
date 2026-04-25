@@ -65,6 +65,17 @@ def _resolve_nine_router_model(model: str, has_api_key: bool) -> str:
         return model
     return NINE_ROUTER_MODEL_MAP.get(model, f"cc/{model}")
 
+
+def _resolve_extra_args(has_api_key: bool) -> dict[str, str | None]:
+    """When routing through 9Router, force the CLI to bypass keychain/OAuth.
+
+    Without ``--bare`` the Claude Code CLI may consult the local Claude.ai
+    OAuth login and ignore ANTHROPIC_BASE_URL, which sends server-side
+    tools (WebSearch/WebFetch) to api.anthropic.com over a subscription
+    token that isn't entitled for them.
+    """
+    return {} if has_api_key else {"bare": None}
+
 AGENT_STORE: PydanticStore[Agent] = PydanticStore[Agent](
     model_cls=Agent,
     data_dir=os.path.join(DB_ROOT, "sessions"),
@@ -207,12 +218,15 @@ async def launch_agent(
     can_use_tool, pre_tool_hook, post_tool_hook = create_sdk_hooks(agent)
 
     settings = load_settings()
+    has_api_key: bool = bool(settings.anthropic_api_key)
     env = resolve_sdk_env(
         api_key=settings.anthropic_api_key,
-        nine_router_port=NINE_ROUTER_PORT if not settings.anthropic_api_key else None,
+        nine_router_port=NINE_ROUTER_PORT if not has_api_key else None,
     )
 
-    resolved_model = _resolve_nine_router_model(model, bool(settings.anthropic_api_key))
+    resolved_model = _resolve_nine_router_model(model, has_api_key)
+    extra_args = _resolve_extra_args(has_api_key)
+    debug("launch_agent backend=%s bare=%s", "api_key" if has_api_key else "9router", not has_api_key)
 
     agent.config = ClaudeAgentOptions(
         env=env,
@@ -225,6 +239,7 @@ async def launch_agent(
         disallowed_tools=resolved_mode_config.disallowed_tools,
         permission_mode="default",
         can_use_tool=can_use_tool,
+        extra_args=extra_args,
         hooks={
             "PreToolUse": [HookMatcher(matcher=None, hooks=[pre_tool_hook])],
             "PostToolUse": [HookMatcher(matcher=None, hooks=[post_tool_hook])],
@@ -311,9 +326,9 @@ async def send_message(
         agent.config.system_prompt = resolved_mode_config.system_prompt
         if model_changed:
             settings = load_settings()
-            agent.config.model = _resolve_nine_router_model(
-                agent.model, bool(settings.anthropic_api_key),
-            )
+            has_api_key: bool = bool(settings.anthropic_api_key)
+            agent.config.model = _resolve_nine_router_model(agent.model, has_api_key)
+            agent.config.extra_args = _resolve_extra_args(has_api_key)
         agent.config.allowed_tools = resolved_mode_config.allowed_tools
         agent.config.disallowed_tools = resolved_mode_config.disallowed_tools
         if resolved_mode_config.cwd:

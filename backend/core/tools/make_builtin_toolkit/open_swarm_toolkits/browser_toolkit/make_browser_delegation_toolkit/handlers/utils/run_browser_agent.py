@@ -36,6 +36,7 @@ async def run_browser_agent(
     browser_config = ClaudeAgentOptions(
         env=parent.config.env,
         model=parent.config.model,
+        extra_args=parent.config.extra_args,
         system_prompt=BROWSER_AGENT_SYSTEM_PROMPT,
         tools=tool_names,
         mcp_servers=mcp_servers,
