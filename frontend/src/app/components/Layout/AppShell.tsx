@@ -170,7 +170,7 @@ const AppShell: React.FC = () => {
           return;
         }
       }
-      dispatch(addBrowserCard({ url }));
+      dispatch(addBrowserCard({ url, viewportWidth: window.innerWidth }));
     } else {
       dispatch(setPendingBrowserUrl(url));
       const lastId = (window as any).__openswarm_last_dashboard_id as string | undefined;

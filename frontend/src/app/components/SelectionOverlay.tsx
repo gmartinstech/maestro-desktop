@@ -45,7 +45,7 @@ const SelectionOverlay: React.FC<Props> = ({ overlay, dragRect, dragPreview = []
       return;
     }
 
-    const updateRects = () => {
+    const measureRects = () => {
       const rects: PersistentRect[] = [];
       for (const sel of semanticEls) {
         try {
@@ -65,13 +65,47 @@ const SelectionOverlay: React.FC<Props> = ({ overlay, dragRect, dragPreview = []
           // selector might be invalid
         }
       }
-      setPersistentRects(rects);
-      rafRef.current = requestAnimationFrame(updateRects);
+
+      setPersistentRects((prev) => {
+        if (prev.length !== rects.length) return rects;
+        for (let i = 0; i < rects.length; i++) {
+          const a = prev[i], b = rects[i];
+          if (a.id !== b.id || a.top !== b.top || a.left !== b.left ||
+              a.width !== b.width || a.height !== b.height) return rects;
+        }
+        return prev;
+      });
     };
 
-    rafRef.current = requestAnimationFrame(updateRects);
+    measureRects();
+
+    const scheduleUpdate = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(measureRects);
+    };
+
+    window.addEventListener('scroll', scheduleUpdate, true);
+    window.addEventListener('resize', scheduleUpdate);
+
+    // Observe size changes on the selected elements specifically. We
+    // deliberately avoid a document-wide MutationObserver here — that would
+    // fire on every streamed chat token (and many other unrelated mutations)
+    // and effectively re-create the runaway loop we're replacing.
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleUpdate) : null;
+    if (ro) {
+      for (const sel of semanticEls) {
+        try {
+          const domEl = document.querySelector(sel.selectorPath);
+          if (domEl) ro.observe(domEl);
+        } catch { /* selector might be invalid */ }
+      }
+    }
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.removeEventListener('scroll', scheduleUpdate, true);
+      window.removeEventListener('resize', scheduleUpdate);
+      if (ro) ro.disconnect();
     };
   }, [ctx?.selectedElements]);
 
