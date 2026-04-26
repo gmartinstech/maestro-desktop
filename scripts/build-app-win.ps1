@@ -79,7 +79,7 @@ if (-not (Test-Path (Join-Path $UvBinDir 'uvx.exe'))) {
     try {
         Invoke-WebRequest -Uri $UvUrl -OutFile $TmpZip -UseBasicParsing
         Expand-Archive -Path $TmpZip -DestinationPath $TmpExtract -Force
-        # Only copy uvx.exe — skip uv.exe entirely.
+        # Only copy uvx.exe -- skip uv.exe entirely.
         Get-ChildItem -Path $TmpExtract -Recurse -Filter 'uvx.exe' | Select-Object -First 1 | ForEach-Object { Copy-Item $_.FullName (Join-Path $UvBinDir 'uvx.exe') -Force }
         Write-Host "uvx.exe downloaded and bundled."
     } finally {
@@ -113,7 +113,7 @@ New-Item -ItemType Directory -Force -Path $McpBundleDir | Out-Null
 # Single-file CJS bundle. Output path: mcp-bundles\<output>.js. Use for
 # packages that don't read sibling files at runtime. The import.meta.url
 # polyfill is applied uniformly because nearly every modern ESM package
-# uses createRequire(import.meta.url) somewhere — without the polyfill,
+# uses createRequire(import.meta.url) somewhere -- without the polyfill,
 # esbuild's ESM->CJS transform leaves import.meta.url as undefined and
 # the bundle crashes at module load.
 function Build-McpBundleSingle($PackageName, $EntrySubpath, $OutputName) {
@@ -290,7 +290,7 @@ function Copy-Excluded($Source, $Dest, $Exclude) {
     foreach ($d in $Exclude.Dirs)  { $args += '/XD'; $args += $d }
     foreach ($f in $Exclude.Files) { $args += '/XF'; $args += $f }
     & robocopy @args | Out-Null
-    # robocopy exit codes 0–7 are success
+    # robocopy exit codes 0-7 are success
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($Source -> $Dest, exit $LASTEXITCODE)" }
     $global:LASTEXITCODE = 0
 }
@@ -325,7 +325,7 @@ if (Test-Path $DevEnvPath) {
     Set-Content -Path $ShipEnvPath -Value $kept
     Write-Host "Staged OAuth credentials: $($kept.Count) keys (release secrets + personal API keys excluded)"
 } else {
-    Write-Host "WARNING: backend\.env not found — packaged build will have no OAuth credentials configured."
+    Write-Host "WARNING: backend\.env not found -- packaged build will have no OAuth credentials configured."
     Set-Content -Path $ShipEnvPath -Value '' -NoNewline
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $Staging 'backend\data\tools') | Out-Null
