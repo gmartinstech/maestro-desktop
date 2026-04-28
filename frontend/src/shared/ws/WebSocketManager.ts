@@ -11,6 +11,8 @@ import {
   removeApprovalRequest,
   updateSessionStatus,
   updateSessionCost,
+  updateSessionContext,
+  setContextOverflow,
   addBranch,
   setActiveBranch,
   closeSessionFromWs,
@@ -266,6 +268,42 @@ class WebSocketManager {
           store.dispatch(updateSessionCost({
             sessionId: session_id,
             costUsd: data.cost_usd,
+          }));
+        }
+        break;
+
+      case 'agent:context_update':
+        if (session_id) {
+          store.dispatch(updateSessionContext({
+            sessionId: session_id,
+            inputTokens: data.input_tokens ?? 0,
+            outputTokens: data.output_tokens ?? 0,
+            cacheReadTokens: data.cache_read_tokens ?? 0,
+            cacheReadPct: data.cache_read_pct ?? 0,
+            ctxUsedPct: data.ctx_used_pct ?? 0,
+            activeMcps: Array.isArray(data.active_mcps) ? data.active_mcps : [],
+          }));
+        }
+        break;
+
+      case 'agent:context_overflow':
+        if (session_id) {
+          store.dispatch(setContextOverflow({
+            sessionId: session_id,
+            reason: data.reason ?? 'long_context_required',
+            message: data.message ?? 'Context full.',
+          }));
+        }
+        break;
+
+      case 'agent:auth_error':
+        // Re-uses the context_overflow card slot — both are "this session is
+        // blocked, here's what to do" cards. Reason field disambiguates.
+        if (session_id) {
+          store.dispatch(setContextOverflow({
+            sessionId: session_id,
+            reason: data.reason ?? 'auth_error',
+            message: data.message ?? 'Authentication failed.',
           }));
         }
         break;

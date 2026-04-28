@@ -353,26 +353,68 @@ async def list_models():
     # groups, with the Anthropic group using the pinned "-cc" variants so a
     # per-call selection actually routes through 9Router instead of the proxy.
     anthropic_models = BUILTIN_MODELS.get("Anthropic", [])
-    adaptive = [m for m in anthropic_models if m.get("route") != "cc"]
+    adaptive = [m for m in anthropic_models if m.get("route") not in ("cc", "api")]
     cc_variants = [m for m in anthropic_models if m.get("route") == "cc"]
+    api_variants = [m for m in anthropic_models if m.get("route") == "api"]
 
-    if is_openswarm_pro and has_claude_sub:
+    # Anthropic surface depends on which credentials are wired:
+    #   - is_openswarm_pro + has_claude_sub: two groups. "OpenSwarm Pro" uses
+    #     the unsuffixed values (proxy-routed); "Anthropic" uses the -cc
+    #     variants which 9Router routes via the user's own claude
+    #     subscription, bypassing the Pro proxy.
+    #   - is_openswarm_pro + has_api_key only (no claude sub): the -cc route
+    #     would fail with "No credentials for provider: claude" because
+    #     9Router has no claude provider node. The API key sits dormant
+    #     while proxy mode is active — the user must switch connection_mode
+    #     to own_key in Settings to use the key directly. We surface a
+    #     one-line note instead of a broken-route group.
+    #   - is_openswarm_pro alone: only the proxy-routed group.
+    #   - has_api_key or has_claude_sub without proxy: single Anthropic group
+    #     using adaptive values, which fall through to 9Router and use
+    #     whichever creds are available.
+    notes: list[dict] = []
+    if is_openswarm_pro:
+        # Always show the OpenSwarm Pro group. Then layer on whatever
+        # alternate Anthropic credentials the user has (claude-sub via cc/,
+        # api-key via direct). Both variants live under "Anthropic" — the
+        # labels disambiguate ("(Pro/Max)" vs "(API key)").
         result["OpenSwarm Pro"] = _serialize(adaptive)
-        result["Anthropic"] = _serialize(cc_variants)
-    elif is_openswarm_pro:
-        result["OpenSwarm Pro"] = _serialize(adaptive)
+        anth_alternates: list[dict] = []
+        if has_claude_sub:
+            anth_alternates += cc_variants
+        if has_api_key:
+            anth_alternates += api_variants
+        if anth_alternates:
+            result["Anthropic"] = _serialize(anth_alternates)
     elif has_api_key or has_claude_sub:
+        # Pure own_key mode. The adaptive route already uses the api_key
+        # (or falls through to 9Router for the claude sub) — no need for
+        # explicit -api / -cc variants in the picker.
         result["Anthropic"] = _serialize(adaptive)
 
-    # Non-Anthropic providers (OpenAI, Google, etc.) —
-    # visibility is gated by 9Router's connected providers set.
+    # Non-Anthropic providers (OpenAI, Google, etc.).
+    # Subscription-routed models (api=codex/gemini-cli/antigravity) are
+    # gated by 9Router's connected providers set.
+    # API-key-routed models (route="api", api=openai/gemini) are gated by
+    # the corresponding *_api_key being set in settings — same pattern as
+    # the Anthropic -api variants.
+    has_openai_key = bool(getattr(settings, "openai_api_key", None))
+    has_google_key = bool(getattr(settings, "google_api_key", None))
     for provider_name, models in BUILTIN_MODELS.items():
         if provider_name == "Anthropic":
             continue
         visible = []
         for m in models:
             api = m.get("api", "")
-            if m.get("subscription_only"):
+            route = m.get("route")
+            if route == "api":
+                # Direct API key path. Show only when the matching key is set.
+                if api == "openai" and not has_openai_key:
+                    continue
+                if api == "gemini" and not has_google_key:
+                    continue
+            elif m.get("subscription_only"):
+                # Subscription path. Show only when 9Router has the lane up.
                 if not nine_router_up or api not in connected:
                     continue
             visible.append({
@@ -384,7 +426,7 @@ async def list_models():
         if visible:
             result[provider_name] = visible
 
-    return {"models": result}
+    return {"models": result, "notes": notes}
 
 
 @agents.router.post("/subscriptions/disconnect")

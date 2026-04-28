@@ -77,6 +77,15 @@ class AgentSession(BaseModel):
     browser_id: Optional[str] = None
     parent_session_id: Optional[str] = None
     needs_fork: bool = False
+    # Sanitized server names (matching tools_lib._sanitize_server_name) of MCP
+    # servers the model has explicitly activated this session via the
+    # MCPActivate meta-tool. Empty by default — the gate in
+    # _build_mcp_servers intersects connected MCPs with this list, so no
+    # MCP tool is callable until the model searches for and activates a
+    # server. The product invariant is that this is non-bypassable: the
+    # filter lives at the dispatch layer (mcp_servers passed to the SDK),
+    # not the prompt layer.
+    active_mcps: list[str] = Field(default_factory=list)
     # How much the model should "think" before answering. Provider-agnostic
     # value that gets translated per-API in agent_manager:
     #   off    — no thinking

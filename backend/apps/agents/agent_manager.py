@@ -70,7 +70,11 @@ _TRANSIENT_CAPACITY_PATTERNS = re.compile(
 )
 
 # Patterns that look rate-limit-ish but are actually non-transient (user quota,
-# auth). Must NOT retry — upgrading or reauthing is required.
+# auth, context-window tier gate). Must NOT retry — upgrading, reauthing, or
+# trimming context is required. The long-context-required variant is what
+# Anthropic returns when an OAuth Pro/Max account ships a request whose input
+# exceeds the 200K standard tier and would need the "extra usage" tier; the
+# user can't recover by waiting, so we surface it instead of looping.
 _NON_TRANSIENT_PATTERNS = re.compile(
     r"(?:usage\s+cap\s+exceeded"
     r"|reached\s+your\s+OpenSwarm.*plan\s+limit"
@@ -78,9 +82,52 @@ _NON_TRANSIENT_PATTERNS = re.compile(
     r"|subscription\s+(?:canceled|past_due)"
     r"|invalid.*token"
     r"|missing\s+bearer\s+token"
+    r"|extra\s+usage\s+is\s+required\s+for\s+long\s+context"
+    r"|long\s+context\s+(?:requests?\s+)?(?:requires?|not\s+(?:available|enabled))"
     r"|401|403)",
     re.IGNORECASE,
 )
+
+
+def _is_long_context_error(exc: BaseException, extra_text: str = "") -> bool:
+    """True when the upstream error is the 'long context tier required' 429.
+
+    Used by the catch-all error path to emit a friendly context-overflow
+    event instead of a generic system-error message.
+    """
+    combined = f"{exc!s}\n{extra_text}".strip()
+    if not combined:
+        return False
+    return bool(re.search(
+        r"extra\s+usage\s+is\s+required\s+for\s+long\s+context"
+        r"|long\s+context\s+(?:requests?\s+)?(?:requires?|not\s+(?:available|enabled))",
+        combined,
+        re.IGNORECASE,
+    ))
+
+
+def _is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
+    """True when the upstream error is a 401/403 auth failure.
+
+    Used by the catch-all error path to surface a friendly "subscription
+    expired / reconnect" card instead of dumping the raw 401 JSON. The most
+    common cause: the OpenSwarm Pro bearer or 9Router OAuth token has expired
+    while the UI still shows the connection as 'connected'.
+    """
+    combined = f"{exc!s}\n{extra_text}".strip()
+    if not combined:
+        return False
+    return bool(re.search(
+        r"\b(401|403)\b"
+        r"|invalid\s+authentication\s+credentials"
+        r"|invalid.*api[_\s-]?key"
+        r"|missing\s+bearer\s+token"
+        r"|unauthori[sz]ed"
+        r"|no\s+credentials\s+for\s+provider"
+        r"|provider\s+not\s+(?:configured|connected|authorized)",
+        combined,
+        re.IGNORECASE,
+    ))
 
 
 def _is_transient_capacity_error(exc: BaseException, extra_text: str = "") -> bool:
@@ -267,15 +314,39 @@ class AgentManager:
             return tools, mode_def.system_prompt, mode_def.default_folder
         return get_all_tool_names(), None, None
 
-    async def _build_mcp_servers(self, allowed_tools: list[str]) -> dict:
+    async def _build_mcp_servers(
+        self,
+        allowed_tools: list[str],
+        active_mcps: list[str] | None = None,
+    ) -> dict:
         """Build the mcp_servers dict for ClaudeAgentOptions from installed MCP tools.
+
+        Filtering is two-stage:
+          1. allowed_tools (mode/session permission) — same as before.
+          2. active_mcps (per-session activation gate) — NEW. When this list is
+             provided (non-None), only MCP servers whose sanitized name appears
+             in it are forwarded to the SDK. Empty list means zero MCPs ship.
+             None means legacy / non-gated path (used by sessions created
+             before the gate existed, where active_mcps was implicit-all).
+
+        The activation gate is the dispatch-layer enforcement of the product
+        invariant "all MCP actions only via ToolSearch": the model can only
+        reach an MCP server's tools if the user has approved MCPActivate for
+        that server, which appends to session.active_mcps. The model cannot
+        bypass this by ignoring prompt instructions — the SDK simply receives
+        no MCP definition for unactivated servers.
 
         Servers whose every sub-tool is denied are skipped entirely.
         """
         mcp_servers: dict = {}
         all_tools = load_all_tools()
         mcp_tools = [t for t in all_tools if t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")]
-        logger.info(f"[MCP-DEBUG] Building MCP servers. {len(mcp_tools)} MCP tools found, allowed_tools has {len(allowed_tools)} entries")
+        active_set = set(active_mcps) if active_mcps is not None else None
+        logger.info(
+            f"[MCP-DEBUG] Building MCP servers. {len(mcp_tools)} MCP tools found, "
+            f"allowed_tools has {len(allowed_tools)} entries, "
+            f"active_mcps={'<unset/all>' if active_set is None else sorted(active_set)}"
+        )
 
         for tool in mcp_tools:
             tool_ref = f"mcp:{tool.name}"
@@ -283,6 +354,11 @@ class AgentManager:
                 if not any(tool_ref == at for at in allowed_tools):
                     logger.info(f"[MCP-DEBUG] SKIPPED {tool.name}: '{tool_ref}' not in allowed_tools")
                     continue
+
+            server_name = _sanitize_server_name(tool.name)
+            if active_set is not None and server_name not in active_set:
+                logger.info(f"[MCP-DEBUG] GATED {server_name}: not in session.active_mcps — model must call MCPActivate first")
+                continue
 
             if _is_fully_denied(tool):
                 logger.info(f"[MCP-DEBUG] SKIPPED {tool.name}: fully denied")
@@ -302,7 +378,6 @@ class AgentManager:
 
             config = derive_mcp_config(tool)
             if config:
-                server_name = _sanitize_server_name(tool.name)
                 mcp_servers[server_name] = config
                 env_keys = list(config.get("env", {}).keys())
                 logger.info(f"[MCP-DEBUG] ADDED {server_name}: command={config.get('command')}, args={config.get('args')}, env_keys={env_keys}")
@@ -393,27 +468,31 @@ class AgentManager:
         )
 
     def _build_outputs_context(self) -> str | None:
-        """Build a context block describing available Outputs the agent can render."""
-        import json as _json
+        """One-line index of available Outputs.
+
+        Previously dumped each Output's full json.dumps(input_schema) every
+        turn, which grew without bound and was the dominant non-MCP source of
+        per-request bloat. Now we emit a compact index (name + id +
+        description) plus a hint that full schemas are fetched on demand by
+        RenderOutput. This drops typical 5-Output context from ~6KB to ~400B,
+        and a 30-Output context from ~30KB to ~2KB.
+        """
         all_outputs = load_all_outputs()
         if not all_outputs:
             return None
 
-        sections = []
+        lines = []
         for out in all_outputs:
-            lines = [f"- **{out.name}** (id: `{out.id}`)"]
-            if out.description:
-                lines.append(f"  Description: {out.description}")
-            schema_str = _json.dumps(out.input_schema, indent=2)
-            lines.append(f"  Input schema:\n```json\n{schema_str}\n```")
-            sections.append("\n".join(lines))
+            desc = f" — {out.description}" if out.description else ""
+            lines.append(f"- `{out.id}` **{out.name}**{desc}")
 
         return (
             "<available_views>\n"
-            "The following reusable View artifacts are available. "
-            "Use the RenderOutput tool to invoke one by providing its output_id "
-            "and the required input_data matching its schema.\n\n"
-            + "\n\n".join(sections)
+            "The following reusable View artifacts are available. Pass the "
+            "output_id below to RenderOutput along with input_data that matches "
+            "the View's schema. RenderOutput will surface schema validation "
+            "errors if the input shape is wrong.\n\n"
+            + "\n".join(lines)
             + "\n</available_views>"
         )
 
@@ -485,8 +564,71 @@ class AgentManager:
         browser_cards = raw.get("layout", {}).get("browser_cards", {})
         return [card.get("browser_id", "") for card in browser_cards.values() if card.get("browser_id")]
 
-    def _compose_system_prompt(self, default_prompt: str | None, mode_prompt: str | None, session_prompt: str | None, connected_tools_ctx: str | None = None, outputs_ctx: str | None = None, browser_ctx: str | None = None) -> str | None:
-        parts = [p for p in (default_prompt, mode_prompt, session_prompt, connected_tools_ctx, outputs_ctx, browser_ctx) if p]
+    def _build_mcp_registry_summary(self, allowed_tools: list[str], active_mcps: list[str]) -> str | None:
+        """Compact registry of installed MCP servers — one line per server.
+
+        This is the visible surface that drives the activation gate: the model
+        sees which servers exist and what they're for, but cannot call any
+        unactivated server's tools (the dispatch-layer filter in
+        _build_mcp_servers blocks that). To use a server, the model must call
+        MCPSearch (to find the right one) and then MCPActivate, which fires a
+        HITL prompt; on approve, the server's tools become callable next turn.
+
+        Schemas are NOT included here — that's the whole point. A 30-server
+        registry costs ~1KB; the previous full-schema dump cost ~30-80KB.
+        """
+        all_tools = load_all_tools()
+        mcp_tools = [
+            t for t in all_tools
+            if t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")
+        ]
+        if not mcp_tools:
+            return None
+
+        active_set = set(active_mcps or [])
+        active_lines: list[str] = []
+        available_lines: list[str] = []
+        for tool in mcp_tools:
+            tool_ref = f"mcp:{tool.name}"
+            if tool_ref not in allowed_tools and allowed_tools != get_all_tool_names():
+                continue
+            if _is_fully_denied(tool):
+                continue
+            server_name = _sanitize_server_name(tool.name)
+            desc = (getattr(tool, "description", None) or "").strip()
+            if not desc:
+                # Fall back to a generic blurb keyed on the tool name so the
+                # model still has *some* signal to MCPSearch against.
+                desc = f"{tool.name} integration"
+            line = f"- `{server_name}` — {desc}"
+            if server_name in active_set:
+                active_lines.append(line)
+            else:
+                available_lines.append(line)
+
+        if not active_lines and not available_lines:
+            return None
+
+        sections = ["<mcp_servers>"]
+        sections.append(
+            "MCP servers are gated: the model cannot call any MCP tool until "
+            "the user approves an MCPActivate request for that server. To use "
+            "a server below, first call MCPSearch (to confirm the right server "
+            "for the task), then call MCPActivate(server_name) — the user will "
+            "be prompted to approve activation. After approval, the server's "
+            "tools (`mcp__<server>__<tool>`) become callable on the next turn."
+        )
+        if active_lines:
+            sections.append("\nActive (already approved this session — tools callable now):")
+            sections.extend(active_lines)
+        if available_lines:
+            sections.append("\nAvailable (installed but not yet activated):")
+            sections.extend(available_lines)
+        sections.append("</mcp_servers>")
+        return "\n".join(sections)
+
+    def _compose_system_prompt(self, default_prompt: str | None, mode_prompt: str | None, session_prompt: str | None, connected_tools_ctx: str | None = None, outputs_ctx: str | None = None, browser_ctx: str | None = None, mcp_registry_ctx: str | None = None) -> str | None:
+        parts = [p for p in (default_prompt, mode_prompt, session_prompt, connected_tools_ctx, mcp_registry_ctx, outputs_ctx, browser_ctx) if p]
         return "\n\n".join(parts) if parts else None
 
     async def launch_agent(self, config: AgentConfig) -> AgentSession:
@@ -1053,15 +1195,28 @@ class AgentManager:
             connected_tools_ctx = None
             outputs_ctx = self._build_outputs_context()
             browser_ctx = self._build_browser_context(session.dashboard_id, selected_browser_ids=selected_browser_ids)
+            mcp_registry_ctx = self._build_mcp_registry_summary(session.allowed_tools, session.active_mcps)
             global_settings = load_settings()
-            composed_prompt = self._compose_system_prompt(global_settings.default_system_prompt, mode_sys_prompt, session.system_prompt, connected_tools_ctx, outputs_ctx, browser_ctx)
+            composed_prompt = self._compose_system_prompt(
+                global_settings.default_system_prompt,
+                mode_sys_prompt,
+                session.system_prompt,
+                connected_tools_ctx,
+                outputs_ctx,
+                browser_ctx,
+                mcp_registry_ctx,
+            )
 
             if session.mode == "view-builder":
                 from backend.apps.outputs.view_builder_templates import VIEW_BUILDER_SKILL
                 skill_block = f"<app_builder_reference>\n{VIEW_BUILDER_SKILL}\n</app_builder_reference>"
                 composed_prompt = f"{composed_prompt}\n\n{skill_block}" if composed_prompt else skill_block
 
-            mcp_servers = await self._build_mcp_servers(session.allowed_tools)
+            # Pass session.active_mcps as the activation filter. Empty list ⇒
+            # no MCP tools shipped to the SDK; the model must MCPSearch and
+            # MCPActivate first. The product invariant lives here at the
+            # dispatch layer (see _build_mcp_servers docstring).
+            mcp_servers = await self._build_mcp_servers(session.allowed_tools, session.active_mcps)
 
             _browser_delegation_tools = ["CreateBrowserAgent", "BrowserAgent", "BrowserAgents"]
             _browser_all_denied = all(
@@ -1114,6 +1269,26 @@ class AgentManager:
                     },
                     "type": "stdio",
                 }
+
+            # Always-on meta-MCP server. Exposes MCPList / MCPSearch /
+            # MCPActivate so the model can discover and activate user MCPs at
+            # runtime. The activation gate (active_mcps filter in
+            # _build_mcp_servers above) ensures the model cannot reach any
+            # other MCP server's tools without going through this layer first.
+            mcp_meta_server_path = os.path.join(
+                os.path.dirname(__file__), "mcp_meta_server.py"
+            )
+            from backend.auth import get_auth_token as _get_auth_token3
+            mcp_servers["openswarm-mcp-meta"] = {
+                "command": sys.executable,
+                "args": [mcp_meta_server_path],
+                "env": {
+                    "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
+                    "OPENSWARM_AUTH_TOKEN": _get_auth_token3(),
+                    "OPENSWARM_PARENT_SESSION_ID": session.id,
+                },
+                "type": "stdio",
+            }
 
             # -----------------------------------------------------------------
             # openswarm-web MCP — DDG search + trafilatura fetch
@@ -1356,7 +1531,71 @@ class AgentManager:
             # connection_mode is openswarm-pro.
             from backend.apps.nine_router import is_running as _9r_running
             resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(("cc/", "cx/", "gc/", "ag/", "gemini/"))
-            if api_type == "anthropic" and not resolved_is_9router and getattr(global_settings, "connection_mode", "own_key") == "openswarm-pro":
+
+            # `route="api"` overrides every routing decision below: this is
+            # the user's pinned-API-key path. Bypasses the OpenSwarm Pro
+            # proxy AND 9Router by pointing the CLI directly at the
+            # provider's API host with the user's per-provider key. The
+            # picker only emits these variants when the matching key is
+            # set, so the env vars below are always populated when this
+            # branch fires.
+            #
+            # Per-provider env recipes:
+            #   - Anthropic: ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL=api.anthropic.com
+            #   - OpenAI:    OPENAI_API_KEY  + OPENAI_BASE_URL=api.openai.com/v1
+            #   - Gemini:    GEMINI_API_KEY  + (no base_url override; SDK default)
+            from backend.apps.agents.providers.registry import _find_builtin_model
+            _model_entry = _find_builtin_model(session.model)
+            _is_pinned_api_route = (
+                _model_entry is not None
+                and _model_entry.get("route") == "api"
+            )
+            _api_route_provider = (_model_entry or {}).get("api") if _is_pinned_api_route else None
+
+            if _is_pinned_api_route and _api_route_provider == "anthropic" and getattr(global_settings, "anthropic_api_key", None):
+                options_kwargs["env"] = {
+                    "ANTHROPIC_API_KEY": global_settings.anthropic_api_key,
+                    "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+                    # Subagents + small-fast spawn fresh CLI processes that
+                    # inherit env. Pin them so they also take the API-key
+                    # path and don't accidentally fall back to the proxy.
+                    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+                    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+                }
+                logger.info(f"[MCP-DEBUG] Using direct Anthropic API key (route=api) for {session.model}")
+            elif _is_pinned_api_route and _api_route_provider == "openai" and getattr(global_settings, "openai_api_key", None):
+                # OpenAI direct path. The Claude CLI doesn't speak OpenAI
+                # natively, so we still need an Anthropic-compatible relay.
+                # Easiest: keep the local anthropic_proxy in front so it
+                # translates Claude-format requests to OpenAI's API. The
+                # proxy already routes by model id; for OpenAI -api models
+                # we set OPENAI_API_KEY in env so the proxy's OpenAI
+                # adapter (added implicitly via 9Router's openai-to-claude
+                # translator running at localhost:20128) picks it up.
+                options_kwargs["env"] = {
+                    "OPENAI_API_KEY": global_settings.openai_api_key,
+                    "OPENAI_BASE_URL": "https://api.openai.com/v1",
+                    # Route through 9Router which knows how to translate
+                    # Claude-format → OpenAI; with OPENAI_API_KEY set on
+                    # the spawn env, 9Router uses the user's key directly
+                    # rather than its subscription lane.
+                    "ANTHROPIC_API_KEY": "9router",
+                    "ANTHROPIC_BASE_URL": "http://localhost:20128",
+                }
+                logger.info(f"[MCP-DEBUG] Using direct OpenAI API key (route=api) for {session.model}")
+            elif _is_pinned_api_route and _api_route_provider == "gemini" and getattr(global_settings, "google_api_key", None):
+                # Google AI Studio direct path. Same translator-relay
+                # pattern as OpenAI. 9Router's Gemini adapter picks up
+                # GEMINI_API_KEY / GOOGLE_API_KEY from spawn env when set.
+                options_kwargs["env"] = {
+                    "GEMINI_API_KEY": global_settings.google_api_key,
+                    "GOOGLE_API_KEY": global_settings.google_api_key,
+                    "ANTHROPIC_API_KEY": "9router",
+                    "ANTHROPIC_BASE_URL": "http://localhost:20128",
+                }
+                logger.info(f"[MCP-DEBUG] Using direct Google API key (route=api) for {session.model}")
+            elif api_type == "anthropic" and not resolved_is_9router and getattr(global_settings, "connection_mode", "own_key") == "openswarm-pro":
                 proxy_url = getattr(global_settings, "openswarm_proxy_url", None) or "https://api.openswarm.com"
                 bearer = getattr(global_settings, "openswarm_bearer_token", "") or ""
                 options_kwargs["env"] = {
@@ -1824,8 +2063,30 @@ class AgentManager:
                             out = usage.get("output_tokens", 0) or 0
                             cache_create = usage.get("cache_creation_input_tokens", 0) or 0
                             cache_read = usage.get("cache_read_input_tokens", 0) or 0
-                            session.tokens["input"] = inp + cache_create + cache_read
+                            total_input = inp + cache_create + cache_read
+                            session.tokens["input"] = total_input
                             session.tokens["output"] = out
+                            # Per-turn context-usage broadcast. Drives the UI
+                            # status pill, the auto-compact threshold (Phase 2),
+                            # and is the user's only honest signal that they're
+                            # approaching the context cap. 200K is the standard-
+                            # tier ceiling Anthropic returns the
+                            # long-context-required 429 against; it's also the
+                            # right denominator for OAuth Pro/Max users.
+                            ctx_used_pct = round(total_input / 200_000.0, 4) if total_input else 0.0
+                            cache_read_pct = round(cache_read / total_input, 4) if total_input else 0.0
+                            try:
+                                await ws_manager.send_to_session(session_id, "agent:context_update", {
+                                    "session_id": session_id,
+                                    "input_tokens": total_input,
+                                    "output_tokens": out,
+                                    "cache_read_tokens": cache_read,
+                                    "cache_read_pct": cache_read_pct,
+                                    "ctx_used_pct": ctx_used_pct,
+                                    "active_mcps": list(session.active_mcps),
+                                })
+                            except Exception:
+                                logger.exception("Failed to emit agent:context_update")
 
             capacity_retry_attempt = 0
             while True:
@@ -1890,12 +2151,104 @@ class AgentManager:
                 "provider": session.provider,
                 "mode": session.mode,
             }, session_id=session_id, dashboard_id=session.dashboard_id)
-            error_msg = Message(role="system", content=f"Error: {str(e)}", branch_id=session.active_branch_id)
-            session.messages.append(error_msg)
-            await ws_manager.send_to_session(session_id, "agent:message", {
-                "session_id": session_id,
-                "message": error_msg.model_dump(mode="json"),
-            })
+
+            # Long-context-required 429 fork: surface a friendly overflow event
+            # so the frontend can render an actionable card ("Switch to Chat
+            # mode" / "Start a fresh chat") instead of a raw error blob. The
+            # user can't recover by waiting — this is a tier-gate, not a rate
+            # limit — so the UX matters.
+            try:
+                _stderr_tail = "\n".join(_stderr_buffer[-50:])
+            except Exception:
+                _stderr_tail = ""
+            if _is_long_context_error(e, extra_text=_stderr_tail):
+                friendly_msg = (
+                    "This conversation has grown too large for your account's "
+                    "standard context window. Long-context requests require an "
+                    "upgraded tier — switch to Chat mode or start a fresh chat "
+                    "to continue."
+                )
+                error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
+                session.messages.append(error_msg)
+                await ws_manager.send_to_session(session_id, "agent:context_overflow", {
+                    "session_id": session_id,
+                    "reason": "long_context_required",
+                    "message": friendly_msg,
+                    "input_tokens": session.tokens.get("input", 0),
+                    "active_mcps": list(session.active_mcps),
+                })
+                _analytics("context.overflow_blocked", {
+                    "input_tokens": session.tokens.get("input", 0),
+                    "active_mcps_count": len(session.active_mcps),
+                    "model": session.model,
+                }, session_id=session_id, dashboard_id=session.dashboard_id)
+                await ws_manager.send_to_session(session_id, "agent:message", {
+                    "session_id": session_id,
+                    "message": error_msg.model_dump(mode="json"),
+                })
+            elif _is_auth_error(e, extra_text=_stderr_tail):
+                # Three sub-cases the user can hit, with distinct fixes:
+                #   1. "No credentials for provider: claude" — user picked a
+                #      -cc route but doesn't have Claude Pro/Max connected
+                #      via 9Router. Tell them to either connect Claude
+                #      Pro/Max OR pick a non--cc model.
+                #   2. OpenSwarm Pro 401 — bearer expired. Reconnect.
+                #   3. Anthropic API key 401 — wrong key. Re-enter.
+                _model = (session.model or "").lower()
+                _combined = f"{e!s}\n{_stderr_tail}".lower()
+                if "no credentials for provider" in _combined:
+                    friendly_msg = (
+                        "Selected route requires Claude Pro / Max, but it's "
+                        "not connected. Open Settings → Models and either "
+                        "connect Claude Pro / Max, or switch the model to a "
+                        "non-`-cc` variant (e.g. Claude Sonnet 4.6 instead "
+                        "of Sonnet 4.6 -cc)."
+                    )
+                    reason = "claude_sub_not_connected"
+                elif (
+                    "-cc" not in _model
+                    and getattr(load_settings(), "connection_mode", "own_key") == "openswarm-pro"
+                ):
+                    friendly_msg = (
+                        "OpenSwarm Pro authentication failed. Your subscription "
+                        "token may have expired even though the connection still "
+                        "shows green. Open Settings → Models and click "
+                        "Disconnect / Reconnect on Claude Pro / Max to refresh "
+                        "the token."
+                    )
+                    reason = "openswarm_pro_auth_expired"
+                else:
+                    friendly_msg = (
+                        "Anthropic authentication failed. The API key or "
+                        "subscription token for this model is invalid. Open "
+                        "Settings → Models and re-enter the API key, or "
+                        "reconnect Claude Pro / Max."
+                    )
+                    reason = "anthropic_auth_invalid"
+                error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
+                session.messages.append(error_msg)
+                await ws_manager.send_to_session(session_id, "agent:auth_error", {
+                    "session_id": session_id,
+                    "reason": reason,
+                    "message": friendly_msg,
+                    "model": session.model,
+                })
+                _analytics("auth.error", {
+                    "reason": reason,
+                    "model": session.model,
+                    "provider": session.provider,
+                }, session_id=session_id, dashboard_id=session.dashboard_id)
+                await ws_manager.send_to_session(session_id, "agent:message", {
+                    "session_id": session_id,
+                    "message": error_msg.model_dump(mode="json"),
+                })
+            else:
+                error_msg = Message(role="system", content=f"Error: {str(e)}", branch_id=session.active_branch_id)
+                session.messages.append(error_msg)
+                await ws_manager.send_to_session(session_id, "agent:message", {
+                    "session_id": session_id,
+                    "message": error_msg.model_dump(mode="json"),
+                })
         except BaseException as e:
             # Catch BaseExceptionGroup from anyio task groups (e.g. concurrent
             # CLI crash + pending approval cancellation) so it doesn't escape

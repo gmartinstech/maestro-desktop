@@ -143,6 +143,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const session = useAppSelector((state) => (id ? state.agents.sessions[id] : undefined));
   const modesMap = useAppSelector((state) => state.modes.items);
   const modelsByProvider = useAppSelector((state) => state.models.byProvider);
+  const connectionMode = useAppSelector((state) => state.settings.data.connection_mode);
   // Used by the "too many connected apps for Haiku" warning rendered above
   // ChatInput. Each connected MCP adds a meaningful chunk of tool-schema
   // tokens to every request; Haiku 4.5's 200K window can't hold 5+ of them.
@@ -769,18 +770,81 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 )}
               </Box>
               {!isDraft && (
-                <Box sx={{ display: 'flex', gap: 1.5, mt: 0.25 }}>
+                <Box sx={{ display: 'flex', gap: 1.5, mt: 0.25, alignItems: 'center' }}>
                   <Typography variant="caption" sx={{ color: c.text.tertiary }}>
                     {session.model}
                   </Typography>
                   <Typography variant="caption" sx={{ color: c.text.tertiary }}>
                     {session.branch_name}
                   </Typography>
-                  {session.cost_usd > 0 && (
-                    <Typography variant="caption" sx={{ color: c.accent.primary }}>
-                      ${session.cost_usd.toFixed(4)}
-                    </Typography>
-                  )}
+                  {(() => {
+                    if (!(session.cost_usd > 0)) return null;
+                    // The SDK reports a per-call $ figure regardless of how
+                    // the request was routed. For requests that went through
+                    // a subscription path, that figure is misleading — the
+                    // user pays flat-rate. Show "subscription" instead in
+                    // those cases. Show $ only when the call was actually
+                    // metered (Anthropic API key, OpenAI API key, etc.).
+                    //
+                    // Model-id signals (these are short_name values from the
+                    // BUILTIN_MODELS registry):
+                    //   - `*-api` → pinned Anthropic API key (METERED)
+                    //   - `*-cc` → pinned Claude Pro/Max via 9Router (sub)
+                    //   - plain sonnet/opus/haiku + openswarm-pro mode → Pro proxy (sub)
+                    //   - plain sonnet/opus/haiku + own_key mode → API key (METERED)
+                    //   - gpt-5.4* / gpt-5.3* → ChatGPT Plus/Pro via 9Router (sub)
+                    //   - gemini-*  → Gemini Advanced via 9Router (sub)
+                    const m = (session.model || '').toLowerCase();
+                    const isApiRoute = m.endsWith('-api');
+                    if (isApiRoute) {
+                      return (
+                        <Typography variant="caption" sx={{ color: c.accent.primary }}>
+                          ${session.cost_usd.toFixed(4)}
+                        </Typography>
+                      );
+                    }
+                    const isCcRoute = m.endsWith('-cc');
+                    const isPlainAnthropic = m === 'sonnet' || m === 'opus' || m === 'haiku';
+                    const isProRoute = isPlainAnthropic && connectionMode === 'openswarm-pro';
+                    const isOwnKeyAnthropic = isPlainAnthropic && connectionMode !== 'openswarm-pro';
+                    const isOpenAISub = m.startsWith('gpt-5') || m.startsWith('gpt-4') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
+                    const isGeminiSub = m.startsWith('gemini-');
+                    const isSubscriptionRouted = isCcRoute || isProRoute || isOpenAISub || isGeminiSub;
+                    if (isSubscriptionRouted) {
+                      return (
+                        <Typography
+                          variant="caption"
+                          sx={{ color: c.text.tertiary }}
+                          title="Routed through subscription — flat-rate, per-call cost not metered"
+                        >
+                          subscription
+                        </Typography>
+                      );
+                    }
+                    // own-key Anthropic OR anything else → real $ figure.
+                    void isOwnKeyAnthropic;
+                    return (
+                      <Typography variant="caption" sx={{ color: c.accent.primary }}>
+                        ${session.cost_usd.toFixed(4)}
+                      </Typography>
+                    );
+                  })()}
+                  {(() => {
+                    const pct = session.ctx_used_pct ?? 0;
+                    if (!pct) return null;
+                    const pctTxt = `${Math.round(pct * 100)}%`;
+                    const color = pct >= 0.9 ? '#ef4444' : pct >= 0.7 ? '#f59e0b' : c.text.tertiary;
+                    const mcpCount = session.active_mcps?.length ?? 0;
+                    return (
+                      <Typography
+                        variant="caption"
+                        sx={{ color, fontVariantNumeric: 'tabular-nums' }}
+                        title={`Context ${pctTxt} of 200K · ${mcpCount} MCP${mcpCount === 1 ? '' : 's'} active`}
+                      >
+                        {pctTxt} ctx · {mcpCount} mcp
+                      </Typography>
+                    );
+                  })()}
                 </Box>
               )}
             </Box>
@@ -813,6 +877,52 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               scrollbarColor: `${c.border.medium} transparent`,
             }}
           >
+            {session.context_overflow && (() => {
+              const reason = session.context_overflow.reason;
+              const isAuth = reason === 'openswarm_pro_auth_expired' || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
+              const title = isAuth ? 'Sign-in required' : 'Context full';
+              const primaryLabel = isAuth ? 'Open Settings' : 'Start a fresh chat';
+              const onPrimary = () => {
+                if (isAuth) window.location.hash = '#/settings';
+                else window.location.hash = '#/';
+              };
+              return (
+                <Box sx={{
+                  mt: 1,
+                  mb: 1.5,
+                  p: 1.5,
+                  borderRadius: 1.5,
+                  border: `1px solid ${c.border.strong}`,
+                  bgcolor: c.bg.secondary,
+                }}>
+                  <Typography variant="body2" sx={{ color: c.text.primary, fontWeight: 500, mb: 0.5 }}>
+                    {title}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 1.25 }}>
+                    {session.context_overflow.message}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Typography
+                      component="button"
+                      variant="caption"
+                      onClick={onPrimary}
+                      sx={{
+                        cursor: 'pointer',
+                        border: `1px solid ${c.border.medium}`,
+                        borderRadius: 1,
+                        px: 1.25,
+                        py: 0.5,
+                        bgcolor: 'transparent',
+                        color: c.text.primary,
+                        '&:hover': { bgcolor: c.bg.elevated },
+                      }}
+                    >
+                      {primaryLabel}
+                    </Typography>
+                  </Box>
+                </Box>
+              );
+            })()}
             {renderItems.filter((item) => !session.streamingMessage || item.id !== session.streamingMessage.id).map((item) => {
               if (isToolGroup(item)) {
                 const groupMeta = session.tool_group_meta?.[item.id];

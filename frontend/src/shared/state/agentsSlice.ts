@@ -74,6 +74,11 @@ export interface AgentSession {
   browser_id?: string | null;
   parent_session_id?: string | null;
   thinking_level?: 'off' | 'low' | 'medium' | 'high' | 'auto';
+  active_mcps?: string[];
+  ctx_used_pct?: number;
+  cache_read_pct?: number;
+  cache_read_tokens?: number;
+  context_overflow?: { reason: string; message: string; at: string } | null;
 }
 
 export interface AgentConfig {
@@ -682,6 +687,60 @@ const agentsSlice = createSlice({
       }
     },
 
+    updateSessionContext(
+      state,
+      action: PayloadAction<{
+        sessionId: string;
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number;
+        cacheReadPct: number;
+        ctxUsedPct: number;
+        activeMcps: string[];
+      }>
+    ) {
+      const session = state.sessions[action.payload.sessionId];
+      if (session) {
+        session.tokens = {
+          ...(session.tokens || {}),
+          input: action.payload.inputTokens,
+          output: action.payload.outputTokens,
+        };
+        session.cache_read_tokens = action.payload.cacheReadTokens;
+        session.cache_read_pct = action.payload.cacheReadPct;
+        session.ctx_used_pct = action.payload.ctxUsedPct;
+        session.active_mcps = action.payload.activeMcps;
+      }
+    },
+
+    setContextOverflow(
+      state,
+      action: PayloadAction<{
+        sessionId: string;
+        reason: string;
+        message: string;
+      }>
+    ) {
+      const session = state.sessions[action.payload.sessionId];
+      if (session) {
+        session.context_overflow = {
+          reason: action.payload.reason,
+          message: action.payload.message,
+          at: new Date().toISOString(),
+        };
+      }
+    },
+
+    clearContextOverflow(
+      state,
+      action: PayloadAction<{ sessionId: string }>
+    ) {
+      const session = state.sessions[action.payload.sessionId];
+      if (session) {
+        session.context_overflow = null;
+      }
+    },
+
     addBranch(state, action: PayloadAction<{ sessionId: string; branch: MessageBranch }>) {
       const session = state.sessions[action.payload.sessionId];
       if (session) {
@@ -1048,6 +1107,9 @@ export const {
   addApprovalRequest,
   removeApprovalRequest,
   updateSessionCost,
+  updateSessionContext,
+  setContextOverflow,
+  clearContextOverflow,
   addBranch,
   setActiveBranch,
   updateSessionProvider,

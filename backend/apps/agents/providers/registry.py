@@ -75,17 +75,21 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         # BOTH openswarm-pro active AND the 9Router `claude` subscription
         # connected — so the model picker can offer a per-call choice between
         # the managed OpenSwarm proxy and their own Claude subscription.
-        {"value": "sonnet-cc", "label": "Claude Sonnet 4.6", "context_window": 1_000_000,
+        {"value": "sonnet-cc", "label": "Claude Sonnet 4.6 (Pro/Max)", "context_window": 1_000_000,
          "model_id": "claude-sonnet-4-6", "router_model_id": "cc/claude-sonnet-4-6", "api": "anthropic", "reasoning": True, "route": "cc"},
-        {"value": "opus-cc", "label": "Claude Opus 4.6", "context_window": 1_000_000,
+        {"value": "opus-cc", "label": "Claude Opus 4.6 (Pro/Max)", "context_window": 1_000_000,
          "model_id": "claude-opus-4-6", "router_model_id": "cc/claude-opus-4-6", "api": "anthropic", "reasoning": True, "route": "cc"},
-        {"value": "haiku-cc", "label": "Claude Haiku 4.5", "context_window": 200_000,
+        {"value": "haiku-cc", "label": "Claude Haiku 4.5 (Pro/Max)", "context_window": 200_000,
          "model_id": "claude-haiku-4-5", "router_model_id": "cc/claude-haiku-4-5-20251001", "api": "anthropic", "reasoning": True, "route": "cc"},
+      
+        {"value": "sonnet-api", "label": "Claude Sonnet 4.6 (API key)", "context_window": 1_000_000,
+         "model_id": "claude-sonnet-4-6", "router_model_id": "claude-sonnet-4-6", "api": "anthropic", "reasoning": True, "route": "api"},
+        {"value": "opus-api", "label": "Claude Opus 4.6 (API key)", "context_window": 1_000_000,
+         "model_id": "claude-opus-4-6", "router_model_id": "claude-opus-4-6", "api": "anthropic", "reasoning": True, "route": "api"},
+        {"value": "haiku-api", "label": "Claude Haiku 4.5 (API key)", "context_window": 200_000,
+         "model_id": "claude-haiku-4-5", "router_model_id": "claude-haiku-4-5", "api": "anthropic", "reasoning": True, "route": "api"},
     ],
-    # OpenAI: ChatGPT Plus/Pro (Codex) subscription. gpt-5.4 is the
-    # current flagship — combines GPT-5.3 Codex coding capabilities with
-    # stronger reasoning, tool use, and agentic workflows.
-    # See: https://developers.openai.com/codex/models
+  
     "OpenAI": [
         {"value": "gpt-5.4", "label": "GPT-5.4",
          "context_window": 1_000_000, "router_model_id": "cx/gpt-5.4",
@@ -96,6 +100,20 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gpt-5.3-codex", "label": "GPT-5.3 Codex",
          "context_window": 400_000, "router_model_id": "cx/gpt-5.3-codex",
          "api": "codex", "subscription_only": True, "reasoning": True},
+        # Pinned-API-key entries: bypass 9Router and call api.openai.com
+        # directly with openai_api_key. Model ids match what OpenAI's API
+        # accepts (no cx/ prefix). Surfaced when openai_api_key is set —
+        # gives a metered alternative to the ChatGPT-Plus subscription
+        # route. Same -api suffix convention as the Anthropic mirrors.
+        {"value": "gpt-5.4-api", "label": "GPT-5.4 (API key)",
+         "context_window": 1_000_000, "router_model_id": "gpt-5.4", "model_id": "gpt-5.4",
+         "api": "openai", "reasoning": True, "route": "api"},
+        {"value": "gpt-5.4-mini-api", "label": "GPT-5.4 Mini (API key)",
+         "context_window": 400_000, "router_model_id": "gpt-5.4-mini", "model_id": "gpt-5.4-mini",
+         "api": "openai", "reasoning": True, "route": "api"},
+        {"value": "gpt-5.3-codex-api", "label": "GPT-5.3 Codex (API key)",
+         "context_window": 400_000, "router_model_id": "gpt-5.3-codex", "model_id": "gpt-5.3-codex",
+         "api": "openai", "reasoning": True, "route": "api"},
     ],
     # Google: Gemini via Gemini CLI subscription. Both 3.x (thinking-
     # capable) and 2.5 (stable) are offered. Gemini 3 models have
@@ -119,6 +137,23 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gemini-2.5-flash", "label": "Gemini 2.5 Flash",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-2.5-flash",
          "api": "gemini-cli", "subscription_only": True},
+        # Pinned-API-key entries for Google AI Studio (api="gemini"). Bypass
+        # both 9Router (which routes via Gemini CLI/Antigravity OAuth) and
+        # any subscription path; call generativelanguage.googleapis.com
+        # directly with google_api_key. Free-tier quota is generous (~1K
+        # requests/day) and lives separately from the OAuth lanes.
+        {"value": "gemini-3-pro-api", "label": "Gemini 3 Pro (API key)",
+         "context_window": 1_000_000, "router_model_id": "gemini-3-pro-preview", "model_id": "gemini-3-pro-preview",
+         "api": "gemini", "reasoning": True, "route": "api"},
+        {"value": "gemini-3-flash-api", "label": "Gemini 3 Flash (API key)",
+         "context_window": 1_000_000, "router_model_id": "gemini-3-flash-preview", "model_id": "gemini-3-flash-preview",
+         "api": "gemini", "reasoning": True, "route": "api"},
+        {"value": "gemini-2.5-pro-api", "label": "Gemini 2.5 Pro (API key)",
+         "context_window": 1_000_000, "router_model_id": "gemini-2.5-pro", "model_id": "gemini-2.5-pro",
+         "api": "gemini", "route": "api"},
+        {"value": "gemini-2.5-flash-api", "label": "Gemini 2.5 Flash (API key)",
+         "context_window": 1_000_000, "router_model_id": "gemini-2.5-flash", "model_id": "gemini-2.5-flash",
+         "api": "gemini", "route": "api"},
     ],
 }
 
@@ -242,6 +277,13 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     # subscription even while openswarm-pro is the default Claude route.
     if entry.get("route") == "cc":
         return entry.get("router_model_id", entry.get("model_id", short_name))
+    # route="api" is the analogue for the user's direct Anthropic API key:
+    # bare model_id, and agent_manager will force the spawn env to point at
+    # api.anthropic.com with the api_key (skipping both the Pro proxy AND
+    # 9Router). This is what makes "use my API key" reachable even when
+    # connection_mode is openswarm-pro.
+    if entry.get("route") == "api":
+        return entry.get("model_id", short_name)
     if entry.get("api") == "anthropic":
         if getattr(settings, "connection_mode", "own_key") == "openswarm-pro":
             return entry.get("model_id", short_name)

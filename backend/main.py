@@ -337,6 +337,161 @@ async def browser_agent_run(request: Request):
     return JSONResponse({"results": results})
 
 
+@app.post("/api/mcp-meta/{action}")
+async def mcp_meta(action: str, request: Request):
+    """Back the openswarm-mcp-meta stdio MCP server.
+
+    Actions:
+      - list: enumerate installed MCPs, separated by active vs available.
+      - search: rank by description match against a query.
+      - activate: append to session.active_mcps + flag needs_fork=True so the
+        next turn rebuilds options with the newly-activated server. Validates
+        server_name against the canonical registry; unknown names return the
+        valid options instead of activating (anti-hallucination).
+    """
+    from backend.apps.agents.agent_manager import agent_manager
+    from backend.apps.tools_lib.tools_lib import _load_all as load_all_tools, _sanitize_server_name
+
+    body = await request.json()
+    parent_session_id = body.get("parent_session_id", "")
+
+    # Aliases that broaden the search corpus for common user intents. Without
+    # these, MCPSearch("email") fails to surface Google Workspace because
+    # the tool's stored description says "Gmail" not "email". Keys are
+    # sanitized server names; values are extra search-hint tokens appended
+    # to the haystack. Only generic synonyms — anything that's already in
+    # the description doesn't need to be listed.
+    _SERVER_SEARCH_ALIASES: dict[str, list[str]] = {
+        "google-workspace": [
+            "email", "inbox", "mail", "gmail", "calendar", "schedule",
+            "events", "drive", "docs", "sheets", "spreadsheet", "slides",
+            "presentation",
+        ],
+        "microsoft-365": [
+            "email", "inbox", "mail", "outlook", "calendar", "schedule",
+            "onedrive", "excel", "spreadsheet", "onenote", "teams",
+            "sharepoint", "tasks", "contacts",
+        ],
+        "discord": ["chat", "message", "messaging", "server", "guild", "voice"],
+        "slack": ["chat", "message", "messaging", "dm", "thread", "workspace"],
+        "notion": ["docs", "wiki", "notes", "knowledge base", "database", "pages"],
+        "airtable": ["spreadsheet", "database", "table", "records"],
+        "hubspot": ["crm", "sales", "leads", "contacts", "deals"],
+        "reddit": ["forum", "subreddit", "posts", "comments", "social"],
+        "youtube": ["video", "transcript", "channel"],
+    }
+
+    def _connected_servers() -> list[dict]:
+        out = []
+        for t in load_all_tools():
+            if not (t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")):
+                continue
+            sanitized = _sanitize_server_name(t.name)
+            # Pull tool sub-action names from tool_permissions._tool_descriptions
+            # so MCPSearch can match against capability names (e.g. "send_email").
+            action_names: list[str] = []
+            try:
+                td = (t.tool_permissions or {}).get("_tool_descriptions", {})
+                if isinstance(td, dict):
+                    action_names = [str(k) for k in td.keys() if not str(k).startswith("_")]
+            except Exception:
+                pass
+            aliases = _SERVER_SEARCH_ALIASES.get(sanitized, [])
+            out.append({
+                "name": sanitized,
+                "description": (t.description or "").strip() or f"{t.name} integration",
+                "raw_name": t.name,
+                "_search_extras": " ".join(action_names + aliases),
+            })
+        return out
+
+    def _strip_extras(s: dict) -> dict:
+        return {k: v for k, v in s.items() if not k.startswith("_")}
+
+    if action == "list":
+        servers = _connected_servers()
+        session = agent_manager.sessions.get(parent_session_id) if parent_session_id else None
+        active_set = set(session.active_mcps) if session else set()
+        active = [{**_strip_extras(s), "status": "active"} for s in servers if s["name"] in active_set]
+        available = [{**_strip_extras(s), "status": "available"} for s in servers if s["name"] not in active_set]
+        return JSONResponse({"active": active, "available": available})
+
+    if action == "search":
+        query = (body.get("query") or "").strip().lower()
+        servers = _connected_servers()
+        session = agent_manager.sessions.get(parent_session_id) if parent_session_id else None
+        active_set = set(session.active_mcps) if session else set()
+        # Ranking: substring hits across name+description+sub-tool names+
+        # generic-purpose aliases. The aliases are what let "email" match
+        # google-workspace even though the description says "Gmail".
+        # Active-first tiebreak so the model prefers servers it has already
+        # activated when both score equally.
+        scored: list[tuple[int, dict]] = []
+        for s in servers:
+            extras = s.get("_search_extras", "")
+            hay = f"{s['name']} {s['raw_name']} {s['description']} {extras}".lower()
+            score = 0
+            for tok in query.split():
+                if tok and tok in hay:
+                    # Hits in the canonical name count more; alias hits
+                    # count once so a "drive" query doesn't beat the actual
+                    # Drive tool description.
+                    if tok in s["name"]:
+                        score += 2
+                    elif tok in s["description"].lower():
+                        score += 2
+                    else:
+                        score += 1
+            if score:
+                annotated = {**_strip_extras(s), "status": "active" if s["name"] in active_set else "available"}
+                scored.append((score, annotated))
+        scored.sort(key=lambda t: (-t[0], 0 if t[1]["status"] == "active" else 1, t[1]["name"]))
+        matches = [s for _, s in scored[:5]]
+        return JSONResponse({"matches": matches})
+
+    if action == "activate":
+        server_name = (body.get("server_name") or "").strip()
+        reason = body.get("reason") or ""
+        if not server_name:
+            return JSONResponse({"error": "server_name is required"}, status_code=400)
+        if not parent_session_id:
+            return JSONResponse({"error": "parent_session_id is required"}, status_code=400)
+        session = agent_manager.sessions.get(parent_session_id)
+        if not session:
+            return JSONResponse({"error": "session not found"}, status_code=404)
+
+        servers = _connected_servers()
+        valid_names = {s["name"] for s in servers}
+        if server_name not in valid_names:
+            return JSONResponse({"status": "unknown_server", "available": sorted(valid_names)})
+
+        if server_name in session.active_mcps:
+            return JSONResponse({"status": "already_active", "server_name": server_name})
+
+        session.active_mcps.append(server_name)
+        session.needs_fork = True
+        try:
+            from backend.apps.agents.ws_manager import ws_manager as _ws
+            await _ws.send_to_session(parent_session_id, "agent:status", {
+                "session_id": parent_session_id,
+                "status": session.status,
+                "session": session.model_dump(mode="json"),
+            })
+        except Exception:
+            logger.exception("Failed to broadcast post-activate session status")
+        try:
+            from backend.apps.analytics.collector import record as _analytics
+            _analytics("mcp.activated", {
+                "server_name": server_name,
+                "reason_len": len(reason),
+            }, session_id=parent_session_id, dashboard_id=session.dashboard_id)
+        except Exception:
+            pass
+        return JSONResponse({"status": "activated", "server_name": server_name})
+
+    return JSONResponse({"error": f"unknown action: {action}"}, status_code=400)
+
+
 @app.post("/api/invoke-agent/run")
 async def invoke_agent_run(request: Request):
     """Fork an existing agent session and send it a new message.
