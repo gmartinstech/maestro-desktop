@@ -133,6 +133,22 @@ async def _auth_middleware(request: Request, call_next):
 
 @app.websocket("/ws/agents/{session_id}")
 async def websocket_session(websocket: WebSocket, session_id: str):
+    """Per-session WS endpoint with resume + heartbeat.
+
+    Resilience contract (see backend/apps/agents/seq_log.py):
+      - Every server→client event carries a monotonic `seq` per session.
+      - On (re)connect the client sends `client:hello` with its
+        last-seen seq; the server replays missed events (or emits
+        `agent:gap_detected` if the gap is too large) and answers
+        with `server:hello` carrying the current high-water seq.
+      - `client:ping` → `server:pong` heartbeat (default 25s) so
+        silent socket deaths (NAT idle drop, laptop sleep) are
+        detected without waiting for the next outbound frame.
+      - `WebSocketDisconnect` only removes the socket from the
+        connection registry. The agent task keeps running. The only
+        things that end a run are: natural completion, explicit
+        `agent:stop`, REST `/close`, or process shutdown.
+    """
     if not _ws_auth_ok(websocket):
         return
     await ws_manager.connect_session(session_id, websocket)
@@ -142,8 +158,38 @@ async def websocket_session(websocket: WebSocket, session_id: str):
             msg = json.loads(data)
             event = msg.get("event")
             payload = msg.get("data", {})
-            
-            if event == "agent:send_message":
+
+            if event == "client:hello":
+                # Resume handshake. The client sends this immediately
+                # after the WS opens, with `last_seq` = the highest
+                # seq it has applied. We replay anything newer; on
+                # first connect last_seq=0 and replay() correctly
+                # returns nothing (empty buffer) or the persisted
+                # terminal event for already-finished sessions.
+                last_seq = int(payload.get("last_seq") or 0)
+                connection_uuid = payload.get("connection_uuid") or ""
+                ack = await ws_manager.replay_to(session_id, websocket, last_seq)
+                from backend.apps.agents.seq_log import seq_log as _sl
+                await websocket.send_text(json.dumps({
+                    "event": "server:hello",
+                    "session_id": session_id,
+                    "data": {
+                        "connection_uuid": connection_uuid,
+                        "current_seq": _sl.current_seq(session_id),
+                        "ack": ack,
+                    },
+                }))
+            elif event == "client:ping":
+                # Heartbeat. Cheap, keeps NATs/firewalls from
+                # silently dropping the connection. Carry the
+                # client's nonce back so it can match pong→ping for
+                # round-trip latency tracking if it wants.
+                await websocket.send_text(json.dumps({
+                    "event": "server:pong",
+                    "session_id": session_id,
+                    "data": {"nonce": payload.get("nonce")},
+                }))
+            elif event == "agent:send_message":
                 from backend.apps.agents.agent_manager import agent_manager
                 await agent_manager.send_message(
                     session_id,
@@ -171,6 +217,8 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                 from backend.apps.agents.agent_manager import agent_manager
                 await agent_manager.stop_agent(session_id)
     except WebSocketDisconnect:
+        # Drops the socket from the connection list. Does NOT cancel
+        # the agent task — that's intentional. See module docstring.
         ws_manager.disconnect_session(session_id, websocket)
 
 def _ws_auth_ok(websocket: WebSocket) -> bool:

@@ -3,11 +3,26 @@ import json
 import logging
 from fastapi import WebSocket
 
+from backend.apps.agents.seq_log import TERMINAL_STATUSES, seq_log
+
 logger = logging.getLogger(__name__)
 
+
 class ConnectionManager:
-    """Manages WebSocket connections and bridges HITL approval requests."""
-    
+    """Manages WebSocket connections and bridges HITL approval requests.
+
+    Every outbound event flows through the seq log so reconnecting
+    clients can replay missed events. The send happens *under* the
+    per-session lock yielded by `seq_log.stamp(...)`, which guarantees
+    wire order matches seq order even under concurrent broadcasts.
+
+    A WS disconnect (`disconnect_session`) ONLY removes the socket
+    from the connection registry. It does NOT cancel the underlying
+    agent task. The task lives on `agent_manager.tasks`; only an
+    explicit `agent:stop`, REST `/close`, natural completion, or
+    process shutdown ends a run.
+    """
+
     def __init__(self):
         self.connections: dict[str, list[WebSocket]] = {}
         self.global_connections: list[WebSocket] = []
@@ -38,23 +53,123 @@ class ConnectionManager:
         ]
 
     async def send_to_session(self, session_id: str, event: str, data: dict):
-        """Send a message to all connections watching a specific session."""
-        payload = json.dumps({"event": event, "session_id": session_id, "data": data})
-        for ws in self.connections.get(session_id, []):
+        """Broadcast a session event with monotonic sequencing.
+
+        The send to every socket happens inside the seq_log lock so a
+        slow/dead WS doesn't reorder events on the fast ones. If a
+        single send raises (broken pipe, half-open socket), we log and
+        continue — the ring buffer still has the event so the client
+        will replay it on reconnect.
+
+        For terminal status events (completed/stopped/error) we also
+        atomically persist the payload to disk; a client that returns
+        after a process restart can then resolve the spinner via
+        `seq_log.load_terminal(...)` instead of being stuck.
+        """
+        async with seq_log.stamp(session_id, event, data) as (seq, payload_str):
+            for ws in list(self.connections.get(session_id, [])):
+                try:
+                    await ws.send_text(payload_str)
+                except Exception:
+                    logger.debug("send_to_session: send failed (will retry on reconnect)", exc_info=True)
+            for ws in list(self.global_connections):
+                try:
+                    await ws.send_text(payload_str)
+                except Exception:
+                    logger.debug("send_to_session: global send failed", exc_info=True)
+            # Persist terminal events under the lock so a concurrent
+            # `agent:status: running` can't race past and overwrite
+            # the disk file with a stale state.
+            if event == "agent:status" and data.get("status") in TERMINAL_STATUSES:
+                seq_log.persist_terminal(session_id, payload_str)
+
+    async def replay_to(
+        self, session_id: str, websocket: WebSocket, last_seq: int
+    ) -> dict:
+        """Replay buffered events with seq > last_seq to one socket.
+
+        Returns a small ack envelope describing what happened so the
+        caller (the WS handler) can send a `server:resume_ack` frame.
+
+        Three cases:
+          1. `events` non-empty: replay them in order; ack carries
+             `from_seq`, `to_seq`.
+          2. No buffer at all (process restarted, session evicted)
+             but a persisted terminal exists: send it; ack signals
+             `terminal_only=True`.
+          3. `last_seq` predates the oldest buffered seq: emit
+             `agent:gap_detected`; client REST-refreshes the session.
+        """
+        oldest, newest, events = seq_log.replay(session_id, last_seq)
+
+        # Check for gap FIRST. If the client's last_seq is below the
+        # buffer's oldest seq, we can't deliver everything they
+        # missed — silently replaying only the in-buffer tail would
+        # leave a hole in their state. Tell them to REST-refresh
+        # instead, even if the tail looks safe to send.
+        # Treat last_seq=0 as "fresh client" — they want a full
+        # replay of whatever's in the buffer, not a gap signal.
+        if last_seq > 0 and oldest is not None and last_seq < oldest - 1:
+            gap_payload = json.dumps({
+                "event": "agent:gap_detected",
+                "session_id": session_id,
+                "data": {
+                    "session_id": session_id,
+                    "oldest_seq": oldest,
+                    "newest_seq": newest,
+                    "client_seq": last_seq,
+                },
+            })
             try:
-                await ws.send_text(payload)
+                await websocket.send_text(gap_payload)
             except Exception:
                 pass
-        for ws in self.global_connections:
+            return {
+                "ok": False,
+                "reason": "gap",
+                "oldest_seq": oldest,
+                "newest_seq": newest,
+            }
+
+        if events:
+            for s in events:
+                try:
+                    await websocket.send_text(s)
+                except Exception:
+                    logger.debug("replay_to: send failed", exc_info=True)
+                    break
+            return {
+                "ok": True,
+                "replayed": len(events),
+                "from_seq": last_seq,
+                "to_seq": newest,
+            }
+
+        # Nothing in memory. Try a persisted terminal event.
+        terminal = seq_log.load_terminal(session_id)
+        if terminal is not None:
             try:
-                await ws.send_text(payload)
+                await websocket.send_text(terminal)
             except Exception:
                 pass
+            return {"ok": True, "replayed": 1, "terminal_only": True}
+
+        # Nothing missed, nothing to replay. Caller's caught up.
+        return {
+            "ok": True,
+            "replayed": 0,
+            "current_seq": newest if newest is not None else 0,
+        }
 
     async def broadcast_global(self, event: str, data: dict):
-        """Send a message to all global (dashboard) connections."""
+        """Send a message to all global (dashboard) connections.
+
+        Dashboard-scoped events don't go through the per-session seq
+        log — they're not session-bound and the dashboard WS has its
+        own resume story (full state refetch on reconnect).
+        """
         payload = json.dumps({"event": event, "data": data})
-        for ws in self.global_connections:
+        for ws in list(self.global_connections):
             try:
                 await ws.send_text(payload)
             except Exception:
@@ -65,17 +180,20 @@ class ConnectionManager:
         timeout: float = 600.0,
     ) -> dict:
         """Send an approval request and wait for the user's response.
-        Returns the approval decision dict.  Times out after *timeout* seconds
-        (default 10 minutes) to prevent permanently stuck agents."""
+
+        Returns the approval decision dict. Times out after `timeout`
+        seconds (default 10 minutes) so a forgotten request doesn't
+        permanently park the agent.
+        """
         future = asyncio.get_event_loop().create_future()
         self.pending_futures[request_id] = future
-        
+
         await self.send_to_session(session_id, "agent:approval_request", {
             "request_id": request_id,
             "tool_name": tool_name,
             "tool_input": tool_input,
         })
-        
+
         try:
             result = await asyncio.wait_for(future, timeout=timeout)
             return result
@@ -122,5 +240,6 @@ class ConnectionManager:
         future = self.browser_futures.get(request_id)
         if future and not future.done():
             future.set_result(result)
+
 
 ws_manager = ConnectionManager()

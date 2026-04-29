@@ -83,6 +83,12 @@ export interface AgentSession {
   mcp_suggestions_is_vague?: boolean;
   active_outputs?: string[];
   compacted_through_msg_id?: string | null;
+  // Transient frontend-only WS connection state. Independent of
+  // `status` (which describes the agent run itself). When the WS
+  // drops we set this to 'reconnecting' so the UI can render a
+  // subtle indicator without faking a terminal status. Cleared back
+  // to 'live' on resume_ack. Never persisted to the backend.
+  connection_state?: 'live' | 'reconnecting';
 }
 
 export interface AgentConfig {
@@ -599,6 +605,19 @@ const agentsSlice = createSlice({
       }
       if (action.payload.status === 'running' && !state.trackedNotificationIds.includes(action.payload.sessionId)) {
         state.trackedNotificationIds.push(action.payload.sessionId);
+      }
+    },
+
+    setSessionConnState(
+      state,
+      action: PayloadAction<{ sessionId: string; state: 'live' | 'reconnecting' }>
+    ) {
+      // Transient WS-layer indicator. Decoupled from session.status
+      // so a network blip never masquerades as a run terminating —
+      // status keeps reflecting the agent's actual lifecycle.
+      const session = state.sessions[action.payload.sessionId];
+      if (session) {
+        session.connection_state = action.payload.state;
       }
     },
 
@@ -1129,6 +1148,7 @@ export const {
   setDraftSystemPrompt,
   updateSession,
   updateSessionStatus,
+  setSessionConnState,
   addMessage,
   streamStart,
   streamDelta,
