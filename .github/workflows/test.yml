@@ -34,6 +34,8 @@ jobs:
             backend/requirements-dev.txt
 
       - name: Install backend deps
+        # Default cwd in GH Actions is the repo root, which is required for
+        # the `-e ./debugger` line in backend/requirements-dev.txt to resolve.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \

@@ -38,6 +38,14 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
     python3 -m venv "$VENV_DIR"
 fi
 
+# Pinned to project root so:
+#   1. `from backend.apps...` imports resolve when pytest runs (same as
+#      before — see end of file).
+#   2. The `-e ./debugger` line in backend/requirements-dev.txt resolves
+#      correctly. pip resolves relative paths in requirements files
+#      relative to CWD, not the requirements file's directory.
+cd "$PROJECT_ROOT"
+
 # --- Ensure pytest is installed (idempotent: only re-installs if missing) -
 if ! "$PYTHON_BIN" -c "import pytest, pytest_asyncio" >/dev/null 2>&1; then
     echo "==> Installing backend deps + dev deps into $VENV_DIR"
@@ -58,7 +66,6 @@ if [[ "$QUICK" -eq 1 ]]; then
     echo "==> --quick: DISCONNECT_STRESS_N=$DISCONNECT_STRESS_N"
 fi
 
-# Run from project root so `from backend.apps...` imports resolve.
-cd "$PROJECT_ROOT"
+# Already cd'd to $PROJECT_ROOT above so `from backend.apps...` resolves.
 echo "==> Running: pytest ${PYTEST_ARGS[*]}"
 exec "$PYTHON_BIN" -m pytest "${PYTEST_ARGS[@]}"
