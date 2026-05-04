@@ -267,6 +267,8 @@ const NoteCard: React.FC<Props> = ({
         top: displayY,
         width: displayW,
         height: displayH,
+        // contain: reflow inside this note doesn't shake the dashboard.
+        contain: 'layout style',
         borderRadius: `${c.radius.md}px`,
         bgcolor: palette.bg,
         border: isHighlighted

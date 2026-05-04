@@ -334,8 +334,9 @@ const AppShell: React.FC = () => {
 
   const handleDashboardRenameSubmit = (id: string) => {
     const trimmed = renameValue.trim();
-    if (trimmed && trimmed !== dashboardItems[id]?.name) {
-      dispatch(renameDashboard({ id, name: trimmed }));
+    const previousName = dashboardItems[id]?.name;
+    if (trimmed && trimmed !== previousName) {
+      dispatch(renameDashboard({ id, name: trimmed, previousName }));
     }
     setRenamingDashboardId(null);
   };
