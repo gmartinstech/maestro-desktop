@@ -30,7 +30,9 @@ import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import CloseIcon from '@mui/icons-material/Close';
 import LinearProgress from '@mui/material/LinearProgress';
 import CircularProgress from '@mui/material/CircularProgress';
-import Settings from '@/app/pages/Settings/Settings';
+// Settings is a global modal — lazy-load so its 2.3K LOC + Stripe / OAuth helpers
+// don't ship on first paint. Prefetched on idle so click-to-open feels instant.
+const Settings = React.lazy(() => import('@/app/pages/Settings/Settings'));
 import DynamicIsland from '@/app/components/DynamicIsland';
 import Dashboard from '@/app/pages/Dashboard/Dashboard';
 import DashboardHost from '@/app/components/Layout/DashboardHost';
@@ -152,14 +154,32 @@ const AppShell: React.FC = () => {
   );
 
   const outputItems = useAppSelector((state) => state.outputs.items);
-  const appsList = Object.values(outputItems).sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+  // memo so the sort doesn't re-run on every AppShell re-render.
+  const appsList = React.useMemo(
+    () => Object.values(outputItems).sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    ),
+    [outputItems],
   );
 
   useEffect(() => {
     dispatch(fetchDashboards());
     dispatch(fetchOutputs());
   }, [dispatch]);
+
+  // Idle-prefetch the lazy Settings chunk so click-to-open is instant.
+  // requestIdleCallback waits until the browser is genuinely idle so we
+  // don't fight first-paint work for the network slot.
+  useEffect(() => {
+    const ric = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 1500));
+    const handle = ric(() => {
+      import('@/app/pages/Settings/Settings').catch(() => {});
+    }, { timeout: 3000 });
+    return () => {
+      const cic = (window as any).cancelIdleCallback || clearTimeout;
+      try { cic(handle); } catch {}
+    };
+  }, []);
 
   const openUrlInBrowser = useCallback((url: string, webContentsId?: number) => {
     const dashMatch = location.pathname.match(/^\/dashboard\/(.+)/);
@@ -1057,7 +1077,9 @@ const AppShell: React.FC = () => {
       </Box>
       </Box>
 
-      <Settings />
+      <React.Suspense fallback={null}>
+        <Settings />
+      </React.Suspense>
 
       <Snackbar
         open={showUpdateSnackbar}

@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState, useRef } from 'react';
+import React, { useMemo, useEffect, useState, useRef, Suspense, lazy } from 'react';
 import { Provider } from 'react-redux';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider, createTheme, CssBaseline } from '@mui/material';
@@ -19,13 +19,15 @@ import {
 } from '@/shared/state/updateSlice';
 import AppShell from './components/Layout/AppShell';
 import DashboardSelection from './pages/DashboardSelection/DashboardSelection';
-import Skills from './pages/Skills/Skills';
-import Tools from './pages/Tools/Tools';
-import Modes from './pages/Modes/Modes';
-import Views from './pages/Views/Views';
-import Customization from './pages/Customization/Customization';
-import Analytics from './pages/Analytics/Analytics';
-import OnboardingModal from './components/OnboardingModal';
+import ErrorBoundary from './components/ErrorBoundary';
+// Lazy: heavy pages that aren't on the first-paint path.
+const Skills = lazy(() => import('./pages/Skills/Skills'));
+const Tools = lazy(() => import('./pages/Tools/Tools'));
+const Modes = lazy(() => import('./pages/Modes/Modes'));
+const Views = lazy(() => import('./pages/Views/Views'));
+const Customization = lazy(() => import('./pages/Customization/Customization'));
+const Analytics = lazy(() => import('./pages/Analytics/Analytics'));
+const OnboardingModal = lazy(() => import('./components/OnboardingModal'));
 import { trackEvent, getLastAction, getLastPage, getTimeSpent } from '@/shared/analytics';
 import { useKeyboardShortcuts } from '@/shared/hooks/useKeyboardShortcuts';
 import { useDeepLink } from '@/shared/hooks/useDeepLink';
@@ -364,23 +366,29 @@ const ThemedApp: React.FC = () => {
             <DefaultModelGuard>
             <UpdateListener>
               <DeepLinkListener>
-                <Routes>
-                  <Route element={<AppShell />}>
-                    <Route path="/" element={<DashboardSelection />} />
-                    {/* Dashboard route is a no-op stub — the actual <Dashboard /> is rendered
-                        persistently inside AppShell so its webviews survive navigation between
-                        routes. This route exists only so React Router matches the URL. */}
-                    <Route path="/dashboard/:id" element={null} />
-                    <Route path="/customization" element={<Customization />} />
-                    <Route path="/skills" element={<Skills />} />
-                    <Route path="/actions" element={<Tools />} />
-                    <Route path="/modes" element={<Modes />} />
-                    <Route path="/apps" element={<Views />} />
-                    <Route path="/apps/:id" element={<Views />} />
-                    <Route path="/analytics" element={<Analytics />} />
-                  </Route>
-                </Routes>
-                <OnboardingModal />
+                <ErrorBoundary scope="routes">
+                  <Suspense fallback={null}>
+                    <Routes>
+                      <Route element={<AppShell />}>
+                        <Route path="/" element={<DashboardSelection />} />
+                        {/* Dashboard route is a no-op stub — the actual <Dashboard /> is rendered
+                            persistently inside AppShell so its webviews survive navigation between
+                            routes. This route exists only so React Router matches the URL. */}
+                        <Route path="/dashboard/:id" element={null} />
+                        <Route path="/customization" element={<Customization />} />
+                        <Route path="/skills" element={<Skills />} />
+                        <Route path="/actions" element={<Tools />} />
+                        <Route path="/modes" element={<Modes />} />
+                        <Route path="/apps" element={<Views />} />
+                        <Route path="/apps/:id" element={<Views />} />
+                        <Route path="/analytics" element={<Analytics />} />
+                      </Route>
+                    </Routes>
+                  </Suspense>
+                </ErrorBoundary>
+                <Suspense fallback={null}>
+                  <OnboardingModal />
+                </Suspense>
               </DeepLinkListener>
             </UpdateListener>
             </DefaultModelGuard>

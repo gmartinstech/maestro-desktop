@@ -418,4 +418,4 @@ const NoteCard: React.FC<Props> = ({
   );
 };
 
-export default NoteCard;
+export default React.memo(NoteCard);

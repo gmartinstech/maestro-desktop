@@ -120,7 +120,10 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const outputs = useAppSelector((state) => state.outputs.items);
   const glowingAgentCards = useAppSelector((state) => state.dashboardLayout.glowingAgentCards);
   const glowingBrowserCards = useAppSelector((state) => state.dashboardLayout.glowingBrowserCards);
-  const sessionList = Object.values(sessions);
+  // sessions is the top-level dict; useMemo on its identity so sessionList
+  // is stable when sessions hasn't actually changed (RTK only swaps the dict
+  // ref when one of its values changes, so this is the right granularity).
+  const sessionList = useMemo(() => Object.values(sessions), [sessions]);
 
   const contentBounds = useMemo(() => {
     const allRects = [
