@@ -62,46 +62,60 @@ def _compute_delta(current: float, last: float | None, threshold: float = _RESTA
     return current - last, current
 
 
+_heartbeat_count = 0
+_heartbeat_hours: set = set()
+_heartbeat_cost_total = 0.0
+_heartbeat_batch_size = 10
+
+
 async def _heartbeat_loop():
     global _last_9r_cost, _last_9r_prompt_tokens, _last_9r_completion_tokens, _last_9r_requests
+    global _heartbeat_count, _heartbeat_hours, _heartbeat_cost_total
+
     while True:
         await asyncio.sleep(60)
+        _heartbeat_count += 1
         try:
-            from backend.apps.agents.agent_manager import agent_manager
-            props: dict = {
-                "active_session_count": len(agent_manager.sessions),
-            }
-            try:
-                from backend.apps.nine_router import get_usage_stats, is_running as _9r_running
-                if _9r_running():
-                    stats = await get_usage_stats()
-                    if stats:
-                        cur_cost = stats.get("totalCost", 0) or 0
-                        cur_prompt = stats.get("totalPromptTokens", 0) or 0
-                        cur_completion = stats.get("totalCompletionTokens", 0) or 0
-                        cur_requests = stats.get("totalRequests", 0) or 0
-                        cost_delta, _last_9r_cost = _compute_delta(cur_cost, _last_9r_cost)
-                        prompt_delta, _last_9r_prompt_tokens = _compute_delta(cur_prompt, _last_9r_prompt_tokens, threshold=1000)
-                        completion_delta, _last_9r_completion_tokens = _compute_delta(cur_completion, _last_9r_completion_tokens, threshold=1000)
-                        requests_delta, _last_9r_requests = _compute_delta(cur_requests, _last_9r_requests, threshold=10)
-                        props["nine_router_total_cost"] = cur_cost
-                        props["nine_router_total_prompt_tokens"] = cur_prompt
-                        props["nine_router_total_completion_tokens"] = cur_completion
-                        for model_name, model_data in (stats.get("byModel") or {}).items():
-                            safe_name = model_name.replace(".", "_").replace("-", "_")[:40]
-                            props[f"cost_model_{safe_name}"] = model_data.get("cost", 0)
-            except Exception:
-                pass
-            svc.submit("state", props)
-            if "nine_router_total_cost" in props:
-                svc.submit("state", {
-                    "d_cost": cost_delta,
-                    "d_prompt": int(prompt_delta),
-                    "d_completion": int(completion_delta),
-                    "d_requests": int(requests_delta),
-                })
+            import datetime as _dt
+            _heartbeat_hours.add(_dt.datetime.now().hour)
         except Exception:
             pass
+
+        cost_delta = 0.0
+        try:
+            from backend.apps.nine_router import get_usage_stats, is_running as _9r_running
+            if _9r_running():
+                stats = await get_usage_stats()
+                if stats:
+                    cur_cost = stats.get("totalCost", 0) or 0
+                    cur_prompt = stats.get("totalPromptTokens", 0) or 0
+                    cur_completion = stats.get("totalCompletionTokens", 0) or 0
+                    cur_requests = stats.get("totalRequests", 0) or 0
+                    cost_delta, _last_9r_cost = _compute_delta(cur_cost, _last_9r_cost)
+                    prompt_delta, _last_9r_prompt_tokens = _compute_delta(cur_prompt, _last_9r_prompt_tokens, threshold=1000)
+                    completion_delta, _last_9r_completion_tokens = _compute_delta(cur_completion, _last_9r_completion_tokens, threshold=1000)
+                    requests_delta, _last_9r_requests = _compute_delta(cur_requests, _last_9r_requests, threshold=10)
+                    _heartbeat_cost_total += cost_delta
+        except Exception:
+            pass
+
+        # Only send to cloud every N heartbeats (batch). Reduces cloud
+        # traffic from 480 calls/day to 48 calls/day per user.
+        if _heartbeat_count >= _heartbeat_batch_size:
+            try:
+                from backend.apps.agents.agent_manager import agent_manager
+                svc.submit("state", {
+                    "active_session_count": len(agent_manager.sessions),
+                    "hours_active": sorted(_heartbeat_hours),
+                    "pings_in_batch": _heartbeat_count,
+                    "nine_router_total_cost": _last_9r_cost or 0,
+                    "d_cost": _heartbeat_cost_total,
+                })
+            except Exception:
+                pass
+            _heartbeat_count = 0
+            _heartbeat_hours = set()
+            _heartbeat_cost_total = 0.0
 
 
 async def _drain_loop():
