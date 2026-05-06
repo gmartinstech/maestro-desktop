@@ -22,17 +22,6 @@ from backend.apps.settings.settings import load_settings
 
 logger = logging.getLogger(__name__)
 
-MODEL_MAP = {
-    "sonnet": "claude-sonnet-4-20250514",
-    "opus": "claude-opus-4-20250514",
-    "haiku": "claude-haiku-4-5-20251001",
-}
-
-
-def _resolve_model(short_name: str) -> str:
-    return MODEL_MAP.get(short_name, short_name)
-
-
 def _get_anthropic_client(api_model: str | None = None):
     """Create an AsyncAnthropic client using the API key from app settings.
 
@@ -180,15 +169,6 @@ def _load(output_id: str) -> Output:
     path = os.path.join(DATA_DIR, f"{output_id}.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Output not found")
-    with open(path) as f:
-        return Output(**json.load(f))
-
-
-def load_output(output_id: str) -> Output | None:
-    """Public helper for other modules to resolve an output by ID."""
-    path = os.path.join(DATA_DIR, f"{output_id}.json")
-    if not os.path.exists(path):
-        return None
     with open(path) as f:
         return Output(**json.load(f))
 

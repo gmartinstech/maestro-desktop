@@ -49,24 +49,6 @@ class WebSearchTool(BaseTool):
         "snippets for the top results."
     )
 
-    def get_schema(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query.",
-                },
-                "num_results": {
-                    "type": "integer",
-                    "description": "Maximum number of results to return (default 5).",
-                    "default": 5,
-                },
-            },
-            "required": ["query"],
-            "additionalProperties": False,
-        }
-
     async def execute(self, input_data: dict, context: ToolContext) -> list[dict]:
         query: str = input_data["query"]
         num_results: int = input_data.get("num_results", 5)
@@ -162,23 +144,6 @@ class WebFetchTool(BaseTool):
         "Fetch the contents of a URL and return the extracted text. "
         "HTML is stripped to plain text. Output capped at ~250 KB."
     )
-
-    def get_schema(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The URL to fetch.",
-                },
-                "prompt": {
-                    "type": "string",
-                    "description": "Optional prompt/context describing what information to look for.",
-                },
-            },
-            "required": ["url"],
-            "additionalProperties": False,
-        }
 
     async def execute(self, input_data: dict, context: ToolContext) -> list[dict]:
         url: str = input_data["url"]

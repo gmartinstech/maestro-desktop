@@ -4,12 +4,12 @@ These exercise pure logic and pydantic models without booting FastAPI.
 The integration surface (routes) lives in `test_api_outputs.py`.
 
 Covers:
-  - outputs.py helpers: _resolve_model, _validate_against_schema,
+  - outputs.py helpers: _validate_against_schema,
     _build_data_injection, _inject_data_into_html,
     _inject_token_into_relative_urls (every branch in
     _ABSOLUTE_URL_PREFIXES + token-already-present + fragment),
     _decode_data_param, _walk_directory.
-  - On-disk store helpers: _save / _load / load_output / _load_all.
+  - On-disk store helpers: _save / _load / _load_all.
   - Models: legacy `frontend_code` / `backend_code` / `schema_json`
     migration into `files`, plus the property accessors.
   - executor.execute_backend_code: happy path, stdout capture,
@@ -35,12 +35,9 @@ from backend.apps.outputs.outputs import (
     _inject_token_into_relative_urls,
     _load,
     _load_all,
-    _resolve_model,
     _save,
     _validate_against_schema,
     _walk_directory,
-    load_output,
-    MODEL_MAP,
 )
 from backend.apps.outputs.models import (
     AutoRunConfig,
@@ -53,22 +50,6 @@ from backend.apps.outputs.executor import (
     BackendExecResult,
     execute_backend_code,
 )
-
-
-# ---------------------------------------------------------------------------
-# _resolve_model
-# ---------------------------------------------------------------------------
-
-
-def test_resolve_model_known_short_name():
-    assert _resolve_model("sonnet") == MODEL_MAP["sonnet"]
-    assert _resolve_model("opus") == MODEL_MAP["opus"]
-    assert _resolve_model("haiku") == MODEL_MAP["haiku"]
-
-
-def test_resolve_model_unknown_passthrough():
-    assert _resolve_model("claude-3-5-haiku") == "claude-3-5-haiku"
-    assert _resolve_model("") == ""
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +253,7 @@ def test_walk_directory_skips_unreadable(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _load_all / _save / _load / load_output
+# _load_all / _save / _load
 # ---------------------------------------------------------------------------
 
 
@@ -289,18 +270,6 @@ def test_load_missing_raises_404(tmp_data_dirs):
     with pytest.raises(HTTPException) as exc:
         _load("does-not-exist")
     assert exc.value.status_code == 404
-
-
-def test_load_output_returns_none_for_missing(tmp_data_dirs):
-    assert load_output("does-not-exist") is None
-
-
-def test_load_output_returns_resolved(tmp_data_dirs):
-    out = Output(name="x")
-    _save(out)
-    fetched = load_output(out.id)
-    assert fetched is not None
-    assert fetched.name == "x"
 
 
 def test_load_all_picks_up_saved(tmp_data_dirs):

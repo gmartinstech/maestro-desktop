@@ -12,8 +12,7 @@ Test groups:
   - pure instance methods (`_resolve_mode`, `_compose_system_prompt`,
     `_resolve_context_paths`, `_build_dir_tree`, `_resolve_forced_tools`,
     `_resolve_attached_skills`, `_get_branch_messages`,
-    `_build_history_prefix`, `_approx_tokens`,
-    `_summarize_message_block`, `_truncate_large_tool_result`,
+    `_build_history_prefix`, `_truncate_large_tool_result`,
     `_build_search_text`, `_maybe_compact`)
   - lifecycle (launch/update/edit/switch_branch/duplicate/close/
     delete/resume/stop, history, browser-agent children, approval,
@@ -564,7 +563,7 @@ def test_get_branch_messages_walks_fork_lineage():
 
 
 # ---------------------------------------------------------------------------
-# _build_history_prefix / _approx_tokens / _summarize_message_block
+# _build_history_prefix
 # ---------------------------------------------------------------------------
 
 
@@ -585,59 +584,6 @@ def test_build_history_prefix_skips_non_user_assistant_and_hidden():
 
 def test_build_history_prefix_empty_returns_empty():
     assert AgentManager._build_history_prefix([]) == ""
-
-
-@pytest.mark.parametrize("text,expected", [
-    ("", 1),
-    ("a" * 4, 1),
-    ("a" * 16, 4),
-    ("a" * 100, 25),
-])
-def test_approx_tokens_chars_over_four(text, expected):
-    assert AgentManager._approx_tokens(text) == expected
-
-
-def test_approx_tokens_handles_none():
-    assert AgentManager._approx_tokens(None) == 1
-
-
-def test_summarize_message_block_empty_returns_empty():
-    assert AgentManager._summarize_message_block([]) == ""
-
-
-def test_summarize_message_block_extracts_initial_task_and_counts():
-    msgs = [
-        Message(role="user", content="please do the thing"),
-        Message(role="tool_call", content={"tool": "Read", "input": {}}),
-        Message(role="tool_call", content={"tool": "Bash", "input": {}}),
-        Message(role="tool_call", content={"tool": "Read", "input": {}}),
-        Message(role="tool_result", content="ok"),
-        Message(role="assistant", content="done"),
-    ]
-    out = AgentManager._summarize_message_block(msgs)
-    assert "<compacted_history>" in out
-    assert "please do the thing" in out
-    # Tool counts
-    assert "Read×2" in out
-    assert "Bash×1" in out
-    assert "Tool calls so far (3 total)" in out
-    assert "Tool results received: 1" in out
-    assert "Last assistant message:" in out
-    assert "done" in out
-
-
-def test_summarize_message_block_assistant_list_content():
-    """Assistant messages with list content (Anthropic block shape)
-    should still surface their text."""
-    msgs = [
-        Message(role="user", content="task"),
-        Message(role="assistant", content=[
-            {"type": "text", "text": "the answer"},
-            {"type": "tool_use", "id": "t1"},
-        ]),
-    ]
-    out = AgentManager._summarize_message_block(msgs)
-    assert "the answer" in out
 
 
 # ---------------------------------------------------------------------------

@@ -11,8 +11,7 @@ in small helpers that can be exercised in isolation:
     conversations.
   - `_format_tool_result` — translate `ws_manager` result dicts into
     Anthropic content blocks.
-  - `clear_browser_history` / `execute_browser_tool` — small async + state
-    helpers.
+  - `execute_browser_tool` — small async + state helper.
 
 The integration-level tests for `run_browser_agent` /
 `run_browser_agents` / `_create_browser_card` live in the sister file
@@ -40,7 +39,6 @@ from backend.apps.agents.browser_agent import (
     _summarize_messages,
     _trim_history_by_turns,
     _validate_message_pairing,
-    clear_browser_history,
     execute_browser_tool,
 )
 
@@ -57,28 +55,6 @@ def _clear_browser_history_module_state():
     ba._browser_history.clear()
     yield
     ba._browser_history.clear()
-
-
-# ---------------------------------------------------------------------------
-# clear_browser_history
-# ---------------------------------------------------------------------------
-
-
-def test_clear_browser_history_drops_only_target_entry():
-    ba._browser_history["b-1"] = [{"role": "user", "content": "hi"}]
-    ba._browser_history["b-2"] = [{"role": "user", "content": "yo"}]
-
-    clear_browser_history("b-1")
-
-    assert "b-1" not in ba._browser_history
-    assert "b-2" in ba._browser_history
-
-
-def test_clear_browser_history_missing_id_is_noop():
-    """Calling clear on an unknown id must not raise (it's used in
-    cleanup paths where the cache may already be empty)."""
-    clear_browser_history("never-existed")
-    assert ba._browser_history == {}
 
 
 # ---------------------------------------------------------------------------

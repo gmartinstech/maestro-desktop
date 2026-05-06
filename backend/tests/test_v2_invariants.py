@@ -927,23 +927,6 @@ def test_find_builtin_model_returns_dict_for_known():
 
 
 # ===========================================================================
-# Group R — context window
-# ===========================================================================
-
-
-def test_get_context_window_known_model():
-    from backend.apps.agents.providers.registry import get_context_window
-    cw = get_context_window("Anthropic", "sonnet")
-    assert cw >= 200_000
-
-
-def test_get_context_window_unknown_returns_default():
-    from backend.apps.agents.providers.registry import get_context_window
-    cw = get_context_window("Unknown", "fake-model")
-    assert cw == 128_000
-
-
-# ===========================================================================
 # Group S — calculate_cost regression tests
 # ===========================================================================
 
@@ -1051,18 +1034,16 @@ def test_web_tools_classes_inherit_basetool():
     assert issubclass(WebFetchTool, BaseTool)
 
 
-def test_web_search_tool_has_name_and_schema():
+def test_web_search_tool_has_name():
     from backend.apps.agents.tools.web import WebSearchTool
     tool = WebSearchTool()
     assert tool.name
-    assert isinstance(tool.get_schema(), dict)
 
 
-def test_web_fetch_tool_has_name_and_schema():
+def test_web_fetch_tool_has_name():
     from backend.apps.agents.tools.web import WebFetchTool
     tool = WebFetchTool()
     assert tool.name
-    assert isinstance(tool.get_schema(), dict)
 
 
 # ===========================================================================

@@ -75,36 +75,6 @@ def validate_credentials(settings: AppSettings, provider: str = "anthropic") -> 
         return
 
 
-def get_provider_credentials(settings: AppSettings, provider: str) -> dict[str, str]:
-    """Return credential dict for a specific provider."""
-    p = provider.lower().strip()
-    validate_credentials(settings, provider)
-
-    if p in ("anthropic", "claude"):
-        if getattr(settings, "connection_mode", "own_key") == "openswarm-pro":
-            return {
-                "auth_token": getattr(settings, "openswarm_bearer_token", "") or "",
-                "base_url": getattr(settings, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL,
-            }
-        return {"api_key": settings.anthropic_api_key or ""}
-
-    if p in ("openai", "codex"):
-        return {"api_key": settings.openai_api_key or ""}
-
-    if p in ("gemini", "google", "gemini-cli"):
-        return {"api_key": getattr(settings, "google_api_key", "") or ""}
-
-    if p == "openrouter":
-        return {"api_key": getattr(settings, "openrouter_api_key", "") or ""}
-
-    # Custom provider
-    for cp in getattr(settings, "custom_providers", []):
-        if cp.name.lower() == p:
-            return {"api_key": cp.api_key, "base_url": cp.base_url}
-
-    raise ValueError(f"No credentials for provider: {provider}")
-
-
 # ---------------------------------------------------------------------------
 # Legacy helpers (kept for backward compat during migration)
 # ---------------------------------------------------------------------------

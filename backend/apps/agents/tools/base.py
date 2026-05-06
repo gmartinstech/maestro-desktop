@@ -15,9 +15,5 @@ class BaseTool(ABC):
     description: str
 
     @abstractmethod
-    def get_schema(self) -> dict:
-        ...
-
-    @abstractmethod
     async def execute(self, input_data: dict, context: ToolContext) -> list[dict]:
         ...

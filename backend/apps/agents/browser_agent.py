@@ -20,12 +20,6 @@ from backend.apps.tools_lib.tools_lib import load_builtin_permissions
 
 logger = logging.getLogger(__name__)
 
-MODEL_MAP = {
-    "sonnet": "claude-sonnet-4-6",
-    "opus": "claude-opus-4-6",
-    "haiku": "claude-haiku-4-5-20251001",
-}
-
 # Cache of conversation history per browser_id so successive BrowserAgent
 # calls on the same browser can resume rather than restart from scratch.
 # Without this every "swipe right" / "swipe left" call has to take a new
@@ -33,11 +27,6 @@ MODEL_MAP = {
 _browser_history: dict[str, list[dict]] = {}
 # Cap history to prevent unbounded growth on long-lived browsers.
 _MAX_HISTORY_MESSAGES = 30
-
-
-def clear_browser_history(browser_id: str) -> None:
-    """Drop cached conversation history for a browser (e.g. when it's closed)."""
-    _browser_history.pop(browser_id, None)
 
 
 # ---------------------------------------------------------------------------

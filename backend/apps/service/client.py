@@ -46,7 +46,6 @@ _MAX_INFLIGHT = 16
 
 _test_sink: Optional[Any] = None
 _install_id: Optional[str] = None
-_user_id: Optional[str] = None
 _inflight = 0
 _inflight_lock = asyncio.Lock()
 _drain_lock = asyncio.Lock()
@@ -85,20 +84,12 @@ def _get_install_id() -> str:
 
 
 def _get_user_id() -> Optional[str]:
-    global _user_id
-    if _user_id:
-        return _user_id
     try:
         from backend.apps.settings.settings import load_settings
         s = load_settings()
         return getattr(s, "user_email", None) or None
     except Exception:
         return None
-
-
-def set_user_id(uid: Optional[str]) -> None:
-    global _user_id
-    _user_id = uid or None
 
 
 def _is_enabled(kind: str) -> bool:

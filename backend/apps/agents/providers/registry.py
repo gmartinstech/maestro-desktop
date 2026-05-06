@@ -185,92 +185,6 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Thinking level translation
-# ---------------------------------------------------------------------------
-# Each provider has a different API shape for "how hard should the model
-# think." We expose a single provider-agnostic level (off/low/medium/high/
-# auto) on the session and translate here.
-#
-# Returns the provider-specific payload to merge into request params, or
-# None if no special thinking params should be sent (use defaults).
-
-def thinking_params_for(api: str, level: str, model_id: str = "") -> dict | None:
-    """Translate a provider-agnostic thinking level to per-provider API params.
-
-    Args:
-        api: "anthropic" | "codex" | "gemini-cli"
-        level: "off" | "low" | "medium" | "high" | "auto"
-        model_id: optional, used to pick adaptive vs legacy for Claude
-
-    Returns a dict to merge into request params, or None for "use defaults".
-    """
-    if level == "auto":
-        # Let provider use its own default. For Claude 4.6 we still want
-        # adaptive thinking on by default so users see reasoning.
-        if api == "anthropic":
-            return {"thinking": {"type": "adaptive"}}
-        return None
-
-    if level == "off":
-        if api == "anthropic":
-            return {"thinking": {"type": "disabled"}}
-        if api == "codex":
-            return {"reasoning": {"effort": "none"}}
-        # Gemini: thinkingBudget=0 truly disables reasoning (no
-        # thoughtSignature emitted). Critical for multi-step tool turns
-        # — without this Gemini 2.5/3.x still emits signatures even at
-        # the lowest "level," which then break the next request with
-        # "Thought signature is not valid" 400 because the SDK has no
-        # way to round-trip them. The translator at 9Router 0.3.60
-        # explicitly checks `thinkingBudget == 0` to skip emitting
-        # thinking config, which is what we want.
-        if api == "gemini-cli":
-            return {"thinkingConfig": {"thinkingBudget": 0}}
-        return None
-
-    # Claude 4.6 models use adaptive thinking (no manual budget). For older
-    # Claude models we'd use budget_tokens; we don't ship those today.
-    if api == "anthropic":
-        return {"thinking": {"type": "adaptive"}}
-
-    if api == "codex":
-        effort_map = {"low": "low", "medium": "medium", "high": "high"}
-        return {"reasoning": {"effort": effort_map[level]}}
-
-    if api == "gemini-cli":
-        level_map = {"low": "LOW", "medium": "MEDIUM", "high": "HIGH"}
-        return {"thinkingConfig": {"thinkingLevel": level_map[level]}}
-
-    return None
-
-
-# ---------------------------------------------------------------------------
-# OpenRouter: built-in integration for 300+ models
-# ---------------------------------------------------------------------------
-
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-
-_9router_cache: dict = {"available": None, "checked_at": 0}
-
-
-def _is_9router_available() -> bool:
-    """Check if 9Router is running on localhost:20128. Caches for 30 seconds."""
-    import time as _time
-    now = _time.time()
-    if _9router_cache["available"] is not None and now - _9router_cache["checked_at"] < 30:
-        return _9router_cache["available"]
-    try:
-        import httpx
-        r = httpx.get("http://localhost:20128/v1/models", timeout=2.0)
-        available = r.status_code == 200
-    except Exception:
-        available = False
-    _9router_cache["available"] = available
-    _9router_cache["checked_at"] = now
-    return available
-
-
-# ---------------------------------------------------------------------------
 # Model resolution (used by the live claude_agent_sdk path)
 # ---------------------------------------------------------------------------
 
@@ -483,24 +397,6 @@ async def resolve_aux_model(
         "No AI provider connected for auxiliary LLM call. "
         "Connect at least one subscription in Settings."
     )
-
-
-def get_context_window(provider: str, model: str, settings: AppSettings | None = None) -> int:
-    """Look up context window for any model."""
-    # Check built-in models first
-    for models in BUILTIN_MODELS.values():
-        for m in models:
-            if m["value"] == model:
-                return m.get("context_window", 128_000)
-
-    # Check custom providers
-    if settings:
-        for cp in getattr(settings, "custom_providers", []):
-            for m in cp.models:
-                if m.get("value") == model or m.get("id") == model:
-                    return m.get("context_window", 128_000)
-
-    return 128_000  # safe default
 
 
 # ---------------------------------------------------------------------------

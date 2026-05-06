@@ -207,13 +207,6 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                     "message": payload.get("message"),
                     "updated_input": payload.get("updated_input"),
                 })
-            elif event == "agent:edit_message":
-                from backend.apps.agents.agent_manager import agent_manager
-                await agent_manager.edit_message(
-                    session_id,
-                    payload.get("message_id", ""),
-                    payload.get("content", ""),
-                )
             elif event == "agent:stop":
                 from backend.apps.agents.agent_manager import agent_manager
                 await agent_manager.stop_agent(session_id)

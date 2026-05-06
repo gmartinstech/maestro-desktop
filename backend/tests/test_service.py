@@ -45,7 +45,6 @@ def patch_settings(tmp_path):
 def fresh_client(tmp_path):
     import backend.apps.service.client as client
     client._install_id = None
-    client._user_id = None
     client._test_sink = None
     spool = tmp_path / "spool.db"
     with patch.object(client, "_spool_path", lambda: str(spool)):
@@ -78,35 +77,42 @@ def test_sync_carries_install_id(sink):
     assert body["client_state"]["install_id"] == "test-install-abc"
 
 
-def test_sync_carries_user_id_when_set(sink):
-    from backend.apps.service.client import sync, set_user_id
-    set_user_id("alice@example.com")
-    sync({})
+def test_sync_carries_user_id_when_set_in_settings(tmp_path, sink):
+    """User id is read from settings.user_email at envelope-build time."""
+    sf = tmp_path / "settings_with_email.json"
+    sf.write_text(json.dumps({
+        "installation_id": "test-install-abc",
+        "analytics_opt_in": True,
+        "user_email": "alice@example.com",
+    }))
+    import backend.apps.settings.settings as settings_mod
+    with patch.object(settings_mod, "SETTINGS_FILE", str(sf)):
+        from backend.apps.service.client import sync
+        sync({})
     _, body = sink[0]
     assert body["client_state"]["user_id"] == "alice@example.com"
 
 
-def test_sync_no_user_id_when_not_set(sink):
+def test_sync_no_user_id_when_email_not_set(sink):
+    """No user_email in settings → user_id absent from envelope."""
     from backend.apps.service.client import sync
     sync({})
     _, body = sink[0]
     assert "user_id" not in body["client_state"]
 
 
-def test_sync_user_id_cleared_with_none(sink):
-    from backend.apps.service.client import sync, set_user_id
-    set_user_id("alice")
-    set_user_id(None)
-    sync({})
-    _, body = sink[0]
-    assert "user_id" not in body["client_state"]
-
-
-def test_sync_user_id_cleared_with_empty(sink):
-    from backend.apps.service.client import sync, set_user_id
-    set_user_id("alice")
-    set_user_id("")
-    sync({})
+def test_sync_no_user_id_when_email_empty(tmp_path, sink):
+    """Empty-string user_email is treated like missing."""
+    sf = tmp_path / "settings_empty_email.json"
+    sf.write_text(json.dumps({
+        "installation_id": "test-install-abc",
+        "analytics_opt_in": True,
+        "user_email": "",
+    }))
+    import backend.apps.settings.settings as settings_mod
+    with patch.object(settings_mod, "SETTINGS_FILE", str(sf)):
+        from backend.apps.service.client import sync
+        sync({})
     _, body = sink[0]
     assert "user_id" not in body["client_state"]
 
