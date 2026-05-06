@@ -1,11 +1,8 @@
 from backend.config.Apps import SubApp
 from backend.apps.agents.agent_manager import agent_manager
-from backend.apps.agents.ws_manager import ws_manager
 from backend.apps.agents.models import AgentConfig, ApprovalResponse
 from contextlib import asynccontextmanager
-from fastapi import WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import JSONResponse
-import json
+from fastapi import HTTPException
 import logging
 
 logger = logging.getLogger(__name__)

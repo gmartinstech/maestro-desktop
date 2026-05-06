@@ -31,9 +31,7 @@ import asyncio
 import json
 import os
 import random
-import sys
 import tempfile
-from typing import Any
 from unittest.mock import patch
 
 import pytest

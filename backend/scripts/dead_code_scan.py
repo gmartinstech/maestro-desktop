@@ -539,7 +539,6 @@ def _extract_ws_event_branches(tree: ast.Module) -> list[tuple[str, str]]:
     listenable events.
     """
     out: list[tuple[str, str]] = []
-    ws_handler_lines: set[int] = set()
 
     def _has_ws_decorator(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         for dec in fn.decorator_list:

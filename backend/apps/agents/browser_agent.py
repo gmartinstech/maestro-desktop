@@ -13,7 +13,6 @@ import time
 from datetime import datetime
 from uuid import uuid4
 
-import anthropic
 
 from backend.apps.agents.models import AgentSession, ApprovalRequest, Message
 from backend.apps.agents.ws_manager import ws_manager

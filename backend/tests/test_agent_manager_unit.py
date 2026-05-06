@@ -29,10 +29,8 @@ can write directly to a `tmp_path` without leaking into siblings.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

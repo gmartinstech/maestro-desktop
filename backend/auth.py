@@ -29,7 +29,7 @@ import logging
 import os
 import secrets
 
-from backend.config.paths import AUTH_TOKEN_FILE, DATA_ROOT
+from backend.config.paths import AUTH_TOKEN_FILE
 
 logger = logging.getLogger(__name__)
 

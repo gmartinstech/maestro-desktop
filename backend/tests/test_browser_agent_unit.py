@@ -126,12 +126,6 @@ def test_hash_tool_call_falls_back_to_repr_on_serialization_failure():
     """Self-referential dicts trip json.dumps even with default=str.
     The except branch must still return a (str, str, str) tuple."""
 
-    class _Boom:
-        def __repr__(self) -> str:
-            return "<Boom>"
-
-    boom = _Boom()
-    # Self-referential dict — json.dumps raises ValueError with default=str
     bad_input: dict = {"x": 1}
     bad_input["self"] = bad_input
 

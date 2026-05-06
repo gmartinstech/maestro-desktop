@@ -6,7 +6,7 @@ import mimetypes
 import base64
 from datetime import datetime
 from contextlib import asynccontextmanager
-from fastapi import HTTPException, Query
+from fastapi import HTTPException
 from fastapi.responses import Response
 from backend.auth import get_auth_token
 from jsonschema import validate as schema_validate, ValidationError as SchemaValidationError
@@ -410,7 +410,7 @@ Every required field must be present. Use realistic, meaningful data.\
 async def auto_run_output(body: AutoRunRequest):
     """Use an LLM to generate input data matching the schema, then optionally execute backend code."""
     try:
-        import anthropic
+        import anthropic  # noqa: F401  -- availability probe; client built below via helper
     except ImportError:
         return {"error": "anthropic SDK not installed", "input_data": None, "backend_result": None}
 

@@ -345,7 +345,6 @@ async def subscriptions_callback(request: Request):
 async def browser_agent_run(request: Request):
     """Run one or more browser sub-agents in parallel.
     Called by the browser_agent_mcp_server stdio subprocess."""
-    from backend.apps.settings.settings import load_settings
     from backend.apps.agents.browser_agent import run_browser_agents
 
     body = await request.json()
@@ -482,7 +481,6 @@ async def mcp_meta(action: str, request: Request):
 
     if action == "activate":
         server_name = (body.get("server_name") or "").strip()
-        reason = body.get("reason") or ""
         if not server_name:
             return JSONResponse({"error": "server_name is required"}, status_code=400)
         if not parent_session_id:
@@ -663,7 +661,6 @@ async def outputs_meta(action: str, request: Request):
 
     if action == "activate":
         output_id = (body.get("output_id") or "").strip()
-        reason = body.get("reason") or ""
         if not output_id:
             return JSONResponse({"error": "output_id is required"}, status_code=400)
         if not parent_session_id:

@@ -801,7 +801,6 @@ class AgentManager:
         )
         self.sessions[session_id] = session
 
-        from backend.apps.service.service import APP_VERSION
 
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
@@ -4100,14 +4099,6 @@ class AgentManager:
             raise ValueError(f"Session {session_id} not found in history")
 
         session = AgentSession(**data)
-
-        hours_since_closed = 0
-        if data.get("closed_at"):
-            try:
-                closed = datetime.fromisoformat(data["closed_at"][:19])
-                hours_since_closed = round((datetime.now() - closed).total_seconds() / 3600, 1)
-            except Exception:
-                pass
 
         session.closed_at = None
         self.sessions[session_id] = session

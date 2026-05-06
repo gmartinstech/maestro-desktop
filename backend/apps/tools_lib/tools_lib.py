@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import os
 import re
@@ -16,7 +15,6 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import HTTPException, Query
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
 from backend.config.Apps import SubApp
 from backend.apps.tools_lib.models import ToolDefinition, ToolCreate, ToolUpdate, BUILTIN_TOOLS
 
@@ -937,7 +935,7 @@ async def m365_device_login(tool_id: str):
     """
     import subprocess
 
-    tool = _load(tool_id)
+    _load(tool_id)  # 404s if the tool doesn't exist
     script = _m365_server_script()
     if not os.path.isfile(script):
         raise HTTPException(status_code=500, detail="M365 MCP server not installed")

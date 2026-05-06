@@ -24,10 +24,8 @@ endpoint. This file fills in branches that those don't:
 from __future__ import annotations
 
 import asyncio
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
 from backend.apps.agents import agents as agents_mod
 from backend.apps.agents.agent_manager import (

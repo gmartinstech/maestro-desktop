@@ -28,13 +28,11 @@ What's done here:
 
 from __future__ import annotations
 
-import asyncio
 import os
 import shutil
-import sys
 import tempfile
 from typing import Iterator
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

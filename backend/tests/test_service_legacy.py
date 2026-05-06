@@ -13,8 +13,6 @@ Run with:
 import json
 import os
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
 
@@ -136,7 +134,7 @@ def last_sync(kind: str) -> dict:
 
 # Import application modules (after fixtures are wired).
 from backend.apps.service.client import record
-from backend.apps.agents.models import AgentConfig, AgentSession, Message, ApprovalRequest
+from backend.apps.agents.models import AgentConfig, Message
 from backend.apps.agents.agent_manager import AgentManager
 
 

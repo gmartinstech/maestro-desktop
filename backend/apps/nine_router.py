@@ -70,7 +70,6 @@ def _find_9router_dir() -> str | None:
 
     if _is_packaged:
         # Packaged Electron app — router is in extraResources
-        import sys
         # In packaged mode, backend is at <resources>/backend/
         # So router is at <resources>/router/
         _resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
