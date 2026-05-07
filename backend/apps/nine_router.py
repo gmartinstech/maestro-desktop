@@ -412,6 +412,8 @@ async def get_providers() -> list[dict]:
 # 9Router falls back to whatever OAuth connection the user still has.
 
 NINE_ROUTER_KEYED_NAME = "AI Studio (OpenSwarm-managed)"
+NINE_ROUTER_OPENAI_KEYED_NAME = "OpenAI (OpenSwarm-managed)"
+NINE_ROUTER_OPENROUTER_KEYED_NAME = "OpenRouter (OpenSwarm-managed)"
 NINE_ROUTER_CLAUDE_PRO_NAME = "OpenSwarm Pro (OpenSwarm-managed)"
 
 
@@ -431,24 +433,28 @@ async def _find_keyed_connection(provider: str, name: str) -> dict | None:
     return None
 
 
-async def sync_gemini_api_key(api_key: str | None) -> None:
-    """Create, update, or delete the Gemini API-key connection in 9Router
-    to match the user's `google_api_key` setting. Silent on 9Router-down
-    (will retry on next settings change or backend restart)."""
+async def _sync_apikey_provider(
+    provider: str,
+    api_key: str | None,
+    name: str,
+    *,
+    label: str,
+) -> None:
+    """Create/update/delete an OpenSwarm-managed apikey connection. Silent if 9Router is down."""
     if not is_running():
         return
 
-    existing = await _find_keyed_connection("gemini", NINE_ROUTER_KEYED_NAME)
+    existing = await _find_keyed_connection(provider, name)
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             if api_key:
                 payload = {
-                    "provider": "gemini",
+                    "provider": provider,
                     "authType": "apikey",
-                    "name": NINE_ROUTER_KEYED_NAME,
+                    "name": name,
                     "apiKey": api_key,
                     # Priority 0 = highest. OAuth connections default to 1,
-                    # so keyed connection is preferred when both exist.
+                    # so keyed connections are preferred when both exist.
                     "priority": 0,
                 }
                 if existing:
@@ -456,21 +462,43 @@ async def sync_gemini_api_key(api_key: str | None) -> None:
                         f"{NINE_ROUTER_API}/providers/{existing['id']}",
                         json=payload,
                     )
-                    logger.info("9Router: updated Gemini API-key connection")
+                    logger.info(f"9Router: updated {label} API-key connection")
                 else:
                     r = await client.post(f"{NINE_ROUTER_API}/providers", json=payload)
                     if r.status_code < 300:
-                        logger.info("9Router: created Gemini API-key connection")
+                        logger.info(f"9Router: created {label} API-key connection")
                     else:
                         logger.warning(
-                            f"9Router: failed to create Gemini API-key connection: {r.status_code} {r.text[:200]}"
+                            f"9Router: failed to create {label} API-key connection: "
+                            f"{r.status_code} {r.text[:200]}"
                         )
             else:
                 if existing:
                     await client.delete(f"{NINE_ROUTER_API}/providers/{existing['id']}")
-                    logger.info("9Router: removed Gemini API-key connection")
+                    logger.info(f"9Router: removed {label} API-key connection")
     except Exception as e:
-        logger.warning(f"9Router Gemini API-key sync failed: {e}")
+        logger.warning(f"9Router {label} API-key sync failed: {e}")
+
+
+async def sync_gemini_api_key(api_key: str | None) -> None:
+    """Mirror google_api_key into 9Router; bypasses Code Assist's tight quota."""
+    await _sync_apikey_provider(
+        "gemini", api_key, NINE_ROUTER_KEYED_NAME, label="Gemini"
+    )
+
+
+async def sync_openai_api_key(api_key: str | None) -> None:
+    """Mirror openai_api_key into 9Router; without it, route=api GPT entries 401."""
+    await _sync_apikey_provider(
+        "openai", api_key, NINE_ROUTER_OPENAI_KEYED_NAME, label="OpenAI"
+    )
+
+
+async def sync_openrouter_api_key(api_key: str | None) -> None:
+    """Mirror openrouter_api_key into 9Router; supplies bearer for openrouter/ routes."""
+    await _sync_apikey_provider(
+        "openrouter", api_key, NINE_ROUTER_OPENROUTER_KEYED_NAME, label="OpenRouter"
+    )
 
 
 async def sync_openswarm_pro_as_claude(bearer_token: str | None, proxy_url: str | None) -> None:

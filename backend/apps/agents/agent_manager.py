@@ -1535,6 +1535,18 @@ class AgentManager:
                 skill_block = f"<app_builder_reference>\n{VIEW_BUILDER_SKILL}\n</app_builder_reference>"
                 composed_prompt = f"{composed_prompt}\n\n{skill_block}" if composed_prompt else skill_block
 
+            # Per-turn estimate of framework overhead (subtracted from displayed
+            # input). Conservative on purpose so honest over-shows beat lies.
+            # 16K Claude Code preset, 12K base+deferred tools, 600/MCP, char/4 prompt.
+            _PRESET_OVERHEAD = 16_000
+            _TOOL_DEFS_OVERHEAD = 12_000
+            _PER_MCP_OVERHEAD = 600
+            _composed_tokens = len(composed_prompt or "") // 4
+            _mcp_tokens = len(session.active_mcps) * _PER_MCP_OVERHEAD
+            session.framework_overhead_tokens = (
+                _PRESET_OVERHEAD + _TOOL_DEFS_OVERHEAD + _composed_tokens + _mcp_tokens
+            )
+
             # Pass session.active_mcps as the activation filter. Empty list ⇒
             # no MCP tools shipped to the SDK; the model must MCPSearch and
             # MCPActivate first. The product invariant lives here at the
@@ -1820,28 +1832,11 @@ class AgentManager:
                 "disallowed_tools": effective_disallowed,
                 "include_partial_messages": True,
             }
-            # Priority: openswarm-pro mode → Anthropic API key → 9Router.
-            # Non-Anthropic api_types always route through 9Router regardless.
-            # A resolved_model carrying a 9Router prefix (cc/cx/gc/) also
-            # forces the 9Router branch — this is what makes pinned-route
-            # Anthropic values ("sonnet-cc" etc.) bypass the OpenSwarm Pro
-            # proxy and land on the user's own Claude subscription even while
-            # connection_mode is openswarm-pro.
+            # cc/cx/gc/ag/gemini/openrouter prefixes force 9Router; route="api"
+            # bypasses to the provider's host directly; otherwise Pro proxy or key.
             from backend.apps.nine_router import is_running as _9r_running
-            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(("cc/", "cx/", "gc/", "ag/", "gemini/"))
+            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter/"))
 
-            # `route="api"` overrides every routing decision below: this is
-            # the user's pinned-API-key path. Bypasses the OpenSwarm Pro
-            # proxy AND 9Router by pointing the CLI directly at the
-            # provider's API host with the user's per-provider key. The
-            # picker only emits these variants when the matching key is
-            # set, so the env vars below are always populated when this
-            # branch fires.
-            #
-            # Per-provider env recipes:
-            #   - Anthropic: ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL=api.anthropic.com
-            #   - OpenAI:    OPENAI_API_KEY  + OPENAI_BASE_URL=api.openai.com/v1
-            #   - Gemini:    GEMINI_API_KEY  + (no base_url override; SDK default)
             from backend.apps.agents.providers.registry import _find_builtin_model
             _model_entry = _find_builtin_model(session.model)
             _is_pinned_api_route = (
@@ -1854,61 +1849,75 @@ class AgentManager:
                 options_kwargs["env"] = {
                     "ANTHROPIC_API_KEY": global_settings.anthropic_api_key,
                     "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
-                    # Subagents + small-fast spawn fresh CLI processes that
-                    # inherit env. Pin them so they also take the API-key
-                    # path and don't accidentally fall back to the proxy.
+                    # Pin subagent envs so they don't drift back to the proxy.
                     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
                     "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
                     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
                 }
                 logger.info(f"[MCP-DEBUG] Using direct Anthropic API key (route=api) for {session.model}")
             elif _is_pinned_api_route and _api_route_provider == "openai" and getattr(global_settings, "openai_api_key", None):
-                # OpenAI direct path. The Claude CLI doesn't speak OpenAI
-                # natively, so we still need an Anthropic-compatible relay.
-                # Easiest: keep the local anthropic_proxy in front so it
-                # translates Claude-format requests to OpenAI's API. The
-                # proxy already routes by model id; for OpenAI -api models
-                # we set OPENAI_API_KEY in env so the proxy's OpenAI
-                # adapter (added implicitly via 9Router's openai-to-claude
-                # translator running at localhost:20128) picks it up.
+                # CLI doesn't speak OpenAI; relay through 9Router's translator.
                 options_kwargs["env"] = {
                     "OPENAI_API_KEY": global_settings.openai_api_key,
                     "OPENAI_BASE_URL": "https://api.openai.com/v1",
-                    # Route through 9Router which knows how to translate
-                    # Claude-format → OpenAI; with OPENAI_API_KEY set on
-                    # the spawn env, 9Router uses the user's key directly
-                    # rather than its subscription lane.
                     "ANTHROPIC_API_KEY": "9router",
                     "ANTHROPIC_BASE_URL": "http://localhost:20128",
                 }
                 logger.info(f"[MCP-DEBUG] Using direct OpenAI API key (route=api) for {session.model}")
             elif _is_pinned_api_route and _api_route_provider == "gemini" and getattr(global_settings, "google_api_key", None):
-                # Google AI Studio direct path. Same translator-relay
-                # pattern as OpenAI. 9Router's Gemini adapter picks up
-                # GEMINI_API_KEY / GOOGLE_API_KEY from spawn env when set.
+                # Routed through the local anthropic-proxy so it can scrub the
+                # JSON-Schema fields Gemini's API rejects ($schema, additionalProperties,
+                # propertyNames, exclusiveMinimum, nested const) that 9Router 0.3.60 misses.
+                from backend.auth import get_auth_token as _get_auth_token_g
+                _proxy_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
                 options_kwargs["env"] = {
                     "GEMINI_API_KEY": global_settings.google_api_key,
                     "GOOGLE_API_KEY": global_settings.google_api_key,
+                    "ANTHROPIC_API_KEY": _get_auth_token_g() or "9router",
+                    "ANTHROPIC_BASE_URL": _proxy_url,
+                }
+                logger.info(f"[MCP-DEBUG] Using direct Google API key (route=api) for {session.model} via local proxy")
+            elif api_type == "openrouter" and getattr(global_settings, "openrouter_api_key", None):
+                # OpenRouter primary. The route="openrouter" entry's
+                # router_model_id is `openrouter/<vendor>/<model>` so
+                # 9Router routes via the apikey connection synced from
+                # CLI's WebSearch delegation needs an Anthropic-shaped lane;
+                # if the user has no Anthropic key/sub/Pro, fall back to OR's
+                # resold Claude so subagents stay on the same OR billing.
+                if not _9r_running():
+                    from backend.apps.nine_router import ensure_running as _9r_ensure
+                    logger.info(f"[MCP-DEBUG] OpenRouter selected but 9Router not running; waiting for startup")
+                    await _9r_ensure()
+                    if not _9r_running():
+                        raise ValueError(
+                            "9Router could not start. OpenRouter routing requires "
+                            "Node.js — install it and restart the app, or pick a "
+                            "model that uses a direct API key (Anthropic, OpenAI, "
+                            "or Google AI Studio)."
+                        )
+                env = {
                     "ANTHROPIC_API_KEY": "9router",
                     "ANTHROPIC_BASE_URL": "http://localhost:20128",
                 }
-                logger.info(f"[MCP-DEBUG] Using direct Google API key (route=api) for {session.model}")
+                if global_settings.anthropic_api_key:
+                    env["CLAUDE_CODE_SUBAGENT_MODEL"] = "claude-sonnet-4-6"
+                    env["ANTHROPIC_SMALL_FAST_MODEL"] = "claude-haiku-4-5-20251001"
+                    env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-haiku-4-5-20251001"
+                else:
+                    env["CLAUDE_CODE_SUBAGENT_MODEL"] = "openrouter/anthropic/claude-sonnet-4.5"
+                    env["ANTHROPIC_SMALL_FAST_MODEL"] = "openrouter/anthropic/claude-haiku-4.5"
+                    env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "openrouter/anthropic/claude-haiku-4.5"
+                env["ENABLE_TOOL_SEARCH"] = "auto"
+                options_kwargs["env"] = env
+                logger.info(f"[MCP-DEBUG] Using OpenRouter for {session.model}")
             elif api_type == "anthropic" and not resolved_is_9router and getattr(global_settings, "connection_mode", "own_key") == "openswarm-pro":
                 proxy_url = getattr(global_settings, "openswarm_proxy_url", None) or "https://api.openswarm.com"
                 bearer = getattr(global_settings, "openswarm_bearer_token", "") or ""
                 options_kwargs["env"] = {
                     "ANTHROPIC_AUTH_TOKEN": bearer,
                     "ANTHROPIC_BASE_URL": proxy_url,
-                    # Pin subagent + small-fast model to IDs that OpenSwarm
-                    # Pro's Anthropic surface accepts. Without these, the
-                    # CLI defaults to `claude-haiku-4-5-20251001` for sub-
-                    # agents and WebSearch delegation, which the Pro cloud
-                    # rejects with "No credentials for provider: anthropic".
-                    # Using claude-sonnet-4-6 (same family as typical Pro
-                    # primary selection) guarantees the Pro route accepts
-                    # the request. Subagents get Sonnet-level quality; the
-                    # small-fast model stays on Haiku-4-5 since the cheap
-                    # tier is what matters for delegated tool execution.
+                    # Pin subagent ids; CLI default 'claude-haiku-4-5-20251001'
+                    # gets rejected by Pro's surface as "No credentials for provider: anthropic".
                     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
                     "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
                     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
@@ -1918,135 +1927,66 @@ class AgentManager:
                 options_kwargs["env"] = {"ANTHROPIC_API_KEY": global_settings.anthropic_api_key}
                 logger.info("[MCP-DEBUG] Using direct Anthropic API key")
             elif _9r_running():
-                # For Pro users on non-Claude primaries, route ALL
-                # Anthropic-format traffic through our own backend proxy
-                # (backend/apps/agents/anthropic_proxy.py). That proxy
-                # sniffs the `model` field: Claude-like models go to the
-                # OpenSwarm Pro cloud; everything else forwards to
-                # 9Router. This makes subagents (default Haiku) and
-                # CLI's WebSearch delegation actually reach Anthropic
-                # without requiring 9Router-level provider-node wiring.
-                #
-                # Non-Claude primary = api_type != "anthropic". For
-                # `cc/*` pinned-Claude routes (user has a real Claude
-                # sub via 9Router) we stay on 9Router directly so that
-                # sub quota is used — no need to proxy through Pro.
-                # Pro + non-Claude primary: intentionally do NOT route
-                # subagents/WebSearch through our Pro Anthropic pool.
-                # The user is already paying for a ChatGPT or Gemini
-                # subscription — use that lane (free to us) and keep
-                # the Pro credit for when they actually select a Claude
-                # primary. The plain 9Router branch below picks a
-                # subagent model that matches whichever OAuth lane they
-                # have active.
-                if False:  # reserved for future Pro-only routing cases
-                    pass
+                # Gemini-bound ids go through the local proxy for schema scrubbing;
+                # everything else hits 9Router directly.
+                _is_gemini_bound = (
+                    isinstance(resolved_model, str)
+                    and resolved_model.startswith(("gemini/", "gc/", "ag/"))
+                )
+                if _is_gemini_bound:
+                    from backend.auth import get_auth_token as _get_auth_token_g2
+                    _base_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
+                    env = {
+                        "ANTHROPIC_API_KEY": _get_auth_token_g2() or "9router",
+                        "ANTHROPIC_BASE_URL": _base_url,
+                    }
                 else:
                     env = {
                         "ANTHROPIC_API_KEY": "9router",
                         "ANTHROPIC_BASE_URL": "http://localhost:20128",
                     }
-                    # No Pro bearer → the CLI's default subagent model
-                    # (`claude-haiku-4-5-20251001`) would hit 9Router
-                    # with no Anthropic route and fail with "No
-                    # credentials for provider: anthropic". Pick a
-                    # subagent model that matches whatever lane the
-                    # user DOES have, in priority order: own Anthropic
-                    # key > Claude-sub > ChatGPT-Plus > Antigravity >
-                    # Gemini-CLI. If none of those are connected, leave
-                    # it unset and the CLI will fail gracefully.
-                    try:
-                        _sub_conns = _conns  # reuse the list fetched above
-                    except NameError:
-                        _sub_conns = []
-                    _active = {c.get("provider") for c in _sub_conns
-                               if isinstance(c, dict) and c.get("isActive")}
-                    _sub_model = None
-                    _small_model = None
-                    if global_settings.anthropic_api_key:
-                        _sub_model = "claude-sonnet-4-6"
-                        _small_model = "claude-haiku-4-5-20251001"
-                    elif "claude" in _active or "anthropic" in _active:
-                        _sub_model = "cc/claude-sonnet-4-6"
-                        _small_model = "cc/claude-haiku-4-5-20251001"
-                    elif "antigravity" in _active:
-                        _sub_model = "ag/gemini-3-flash"
-                        _small_model = "ag/gemini-3-flash"
-                    elif "gemini-cli" in _active:
-                        _sub_model = "gc/gemini-2.5-flash"
-                        _small_model = "gc/gemini-2.5-flash"
-                    elif "codex" in _active:
-                        _sub_model = "cx/gpt-5.4-mini"
-                        _small_model = "cx/gpt-5.4-mini"
-                    if _sub_model:
-                        env["CLAUDE_CODE_SUBAGENT_MODEL"] = _sub_model
-                    if _small_model:
-                        env["ANTHROPIC_SMALL_FAST_MODEL"] = _small_model
-                        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = _small_model
-                    logger.info(
-                        f"[MCP-DEBUG] 9Router direct — subagent_model={_sub_model}, small_fast={_small_model}"
-                    )
-                # ENABLE_TOOL_SEARCH=auto is Claude-specific. It keeps the
-                # deferred-tool pool (WebSearch, NotebookEdit, TodoWrite,
-                # EnterPlanMode, Cron*, Task*, etc.) reachable via the
-                # ToolSearch loader when the CLI is pointed at a non-first-
-                # party host — otherwise the CLI auto-disables tool search.
-                #
-                # For non-Claude models the same flag is actively dangerous:
-                # the CLI would still inject a ToolSearch reference block
-                # into the system prompt, and GPT/Gemini may (a) call
-                # ToolSearch with hallucinated arguments, (b) ignore it and
-                # lose the base tool set, or (c) loop on failed calls. Drop
-                # the flag for non-Anthropic so the CLI eagerly loads the
-                # base Read/Edit/Bash/WebSearch set into the system prompt
-                # instead of deferring it.
-                #
-                # NOTE on context bloat (Claude path): in `auto` mode MCPs
-                # and deferred builtins are loaded eagerly when the
-                # deferred-tool tokens are below ~10% of the model's context
-                # window. Setting this to "true" would force-enable tool
-                # search but the CLI's internal `tengu_defer_all_bn4`
-                # Statsig flag (defaults to true outside Anthropic's first-
-                # party network) then defers ALL non-core tools including
-                # Read/Edit/Bash, leaving the model with effectively zero
-                # tools. Until we have a way to override that Statsig flag
-                # from outside the binary, "auto" is the only working
-                # setting for Claude.
-                # Enable ToolSearch for ALL providers, not just Anthropic.
-                # Without this flag the CLI's internal `tengu_defer_all_bn4`
-                # Statsig flag (default ON outside Anthropic's network) defers
-                # all non-core tools (WebSearch, WebFetch, TodoWrite,
-                # NotebookEdit, EnterPlanMode, Task*, Cron*, Agent, etc.)
-                # with no way to load them — making 16 tools completely
-                # inaccessible on non-Anthropic models.
-                #
-                # With "auto", the CLI eagerly loads tools when the schema
-                # budget fits within ~10% of context, and defers the rest
-                # behind ToolSearch. Frontier models (GPT-5.3 Codex,
-                # Gemini 3 Pro) can follow the ToolSearch instructions in
-                # the system prompt to load deferred tools on demand.
-                # OpenClaw (open-source Claude Code alternative) validates
-                # this approach — they load ALL tools upfront for every
-                # provider with no deferral at all.
-                #
-                # Original concern was hallucinated ToolSearch calls from
-                # non-Claude models, but in practice frontier models handle
-                # structured tool-call instructions reliably.
+                # Pin subagent ids to whichever lane the user has, else CLI's
+                # default Haiku 4.5 hits 9Router with no Claude route and 401s.
+                try:
+                    _sub_conns = _conns  # reuse list fetched above
+                except NameError:
+                    _sub_conns = []
+                _active = {c.get("provider") for c in _sub_conns
+                           if isinstance(c, dict) and c.get("isActive")}
+                _sub_model = None
+                _small_model = None
+                if global_settings.anthropic_api_key:
+                    _sub_model = "claude-sonnet-4-6"
+                    _small_model = "claude-haiku-4-5-20251001"
+                elif "claude" in _active or "anthropic" in _active:
+                    _sub_model = "cc/claude-sonnet-4-6"
+                    _small_model = "cc/claude-haiku-4-5-20251001"
+                elif "antigravity" in _active:
+                    _sub_model = "ag/gemini-3-flash"
+                    _small_model = "ag/gemini-3-flash"
+                elif "gemini-cli" in _active:
+                    _sub_model = "gc/gemini-2.5-flash"
+                    _small_model = "gc/gemini-2.5-flash"
+                elif "codex" in _active:
+                    _sub_model = "cx/gpt-5.4-mini"
+                    _small_model = "cx/gpt-5.4-mini"
+                if _sub_model:
+                    env["CLAUDE_CODE_SUBAGENT_MODEL"] = _sub_model
+                if _small_model:
+                    env["ANTHROPIC_SMALL_FAST_MODEL"] = _small_model
+                    env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = _small_model
+                logger.info(
+                    f"[MCP-DEBUG] 9Router direct — subagent_model={_sub_model}, small_fast={_small_model}"
+                )
+                # ENABLE_TOOL_SEARCH=auto: without it, CLI's tengu_defer_all_bn4
+                # Statsig flag defers 16 tools with no way to load them on non-
+                # Anthropic networks. "auto" eagerly loads tools when schema
+                # budget fits in ~10% of context. Don't pass --bare — sets
+                # CLAUDE_CODE_SIMPLE=1 which strips the system prompt scaffolding.
                 env["ENABLE_TOOL_SEARCH"] = "auto"
                 options_kwargs["env"] = env
-                # NOTE: do NOT pass `--bare`. It internally sets
-                # CLAUDE_CODE_SIMPLE=1, which short-circuits the default
-                # Claude Code system prompt to a `"You are Claude Code"`
-                # stub and disables the deferred-tools / ToolSearch
-                # initialization. The CLI still picks up ANTHROPIC_API_KEY
-                # from env first (before OAuth/keychain), so the original
-                # goal of bare mode (skip OAuth/keychain) is preserved as
-                # long as ANTHROPIC_API_KEY is set above — which it is.
                 logger.info(f"[MCP-DEBUG] Using 9Router (api_type={api_type})")
             else:
-                # 9Router is not up yet. For non-Anthropic api_types there
-                # is no API-key fallback, so wait for 9Router to start
-                # before giving up. ensure_running has its own 30s timeout.
                 if api_type != "anthropic":
                     from backend.apps.nine_router import ensure_running as _9r_ensure
                     logger.info(f"[MCP-DEBUG] 9Router not running for non-Anthropic model {session.model}; waiting for startup")
@@ -2069,39 +2009,16 @@ class AgentManager:
                 options_kwargs["mcp_servers"] = mcp_servers
                 mcp_json_len = len(json.dumps({"mcpServers": mcp_servers}))
                 logger.info(f"[MCP-DEBUG] mcp_servers passed to SDK: {list(mcp_servers.keys())}, JSON length={mcp_json_len}")
-            # Use the claude_code preset for BOTH the system prompt and the
-            # base tool set so the CLI's default scaffolding (deferred-tools
-            # listing + ToolSearch instructions) and full base tool set come
-            # along for the ride. Passing a raw string for system_prompt would
-            # send `--system-prompt` (REPLACE) and strip that scaffolding;
-            # leaving `tools` unset makes the CLI fall back to a much smaller
-            # default base set than the model expects (empirically only Bash/
-            # Read/Edit get surfaced). The pair below is what stock Claude
-            # Code uses, plus our composed_prompt appended on top.
+            # claude_code preset for BOTH system_prompt and tools so the CLI's
+            # deferred-tools scaffolding survives. Raw string would replace it.
             options_kwargs["tools"] = {
                 "type": "preset",
                 "preset": "claude_code",
             }
-            # exclude_dynamic_sections=True tells the CLI to keep
-            # per-user/per-machine grounding (cwd, git status, recent
-            # commits, OS info) out of the cached system prompt prefix
-            # and re-inject it into the first user message instead. This
-            # makes the prefix byte-identical across users + sessions,
-            # which is what unlocks Anthropic's prompt cache (turn 2+
-            # gets a cache hit, ~80% input-token cost cut and 13–31%
-            # faster TTFT). The grounding info still reaches the model;
-            # only its position in the wire format changes.
-            #
-            # Trade-off: dynamic sections freeze at turn 1 — branch
-            # switches / large workspace state changes mid-session won't
-            # refresh until a new session starts. Acceptable for a
-            # multi-purpose agent canvas where most sessions aren't
-            # long-running coding marathons; coding-specific modes
-            # (view-builder, skill-builder) can flip this off later if
-            # we see drift complaints.
-            #
-            # Older bundled CLIs silently ignore the flag, so this is
-            # forward-safe; no version gate needed.
+            # exclude_dynamic_sections=True moves cwd/git/OS grounding out of
+            # the cached prefix and into the first user message — unlocks
+            # Anthropic prompt cache (~80% input-token cut, 13-31% faster TTFT).
+            # Trade-off: grounding freezes at turn 1.
             if composed_prompt:
                 options_kwargs["system_prompt"] = {
                     "type": "preset",
@@ -2126,43 +2043,23 @@ class AgentManager:
                 _ensure_cwd_git_repo(session.cwd)
                 options_kwargs["cwd"] = session.cwd
 
-            # Apply the session's thinking_level. Claude SDK accepts both a
-            # `thinking` config and a simple `effort` level. "auto" is the
-            # default path — we still enable adaptive thinking for Claude
-            # 4.6 so reasoning bubbles surface. For non-Claude models, the
-            # reasoning params are applied by 9Router (see resolve_model_id).
             try:
                 level = getattr(session, "thinking_level", "auto") or "auto"
-                # Gemini CLI safety override: if the request is going out via
-                # gc/<gemini-3*> (i.e. the Antigravity bypass didn't engage —
-                # AG isn't connected, or the model isn't in _ANTIGRAVITY_MAP),
-                # the thoughtSignature continuity check will 400 every multi-
-                # step tool turn. Our SDK has no hook to round-trip the
-                # signature, so the only stable path is to disable thinking
-                # entirely (thinkingBudget=0). Surface a one-line log so users
-                # who *expected* reasoning know why it didn't appear.
+                # gc/gemini-3* without Antigravity 400s every multi-step turn
+                # on thoughtSignature continuity. Force-disable thinking.
                 if (
                     isinstance(resolved_model, str)
                     and resolved_model.startswith("gc/gemini-3")
                     and level != "off"
                 ):
                     logger.info(
-                        "Forcing thinking_level=off for %s — gc/ enforces "
-                        "thoughtSignature continuity that the Anthropic SDK "
-                        "can't round-trip. Connect Antigravity or use the "
-                        "API-key variant for reasoning traces.",
+                        "Forcing thinking_level=off for %s (gc/ thoughtSignature isn't roundtrippable; connect Antigravity for reasoning).",
                         resolved_model,
                     )
                     level = "off"
                 if api_type == "anthropic":
                     if level == "off":
                         options_kwargs["thinking"] = {"type": "disabled"}
-                    elif level == "auto":
-                        # Keep existing behavior — let the SDK / Claude Code
-                        # preset decide. Don't force adaptive here because
-                        # some 9Router-relayed paths may choke on unknown
-                        # thinking config shapes.
-                        pass
                     elif level in ("low", "medium", "high"):
                         options_kwargs["effort"] = level
             except Exception as e:
@@ -2517,6 +2414,15 @@ class AgentManager:
                 _turn_total_tokens: int | None = (
                     _parent_in + _parent_out + _children_in + _children_out
                 )
+                # Strip framework overhead so bubble shows what the user
+                # actually controls. Floor at output so over-estimates can't
+                # render absurdly small.
+                if _turn_total_tokens and session.framework_overhead_tokens > 0:
+                    _adjusted = _turn_total_tokens - session.framework_overhead_tokens
+                    _floor = _parent_out + _children_out
+                    if _adjusted < _floor:
+                        _adjusted = _floor
+                    _turn_total_tokens = _adjusted
                 if not _turn_total_tokens or _turn_total_tokens <= 0:
                     _turn_total_tokens = None
                 consolidated = Message(
@@ -3045,15 +2951,10 @@ class AgentManager:
                         _thinking_block_starts = {}
 
                         session.sdk_session_id = getattr(message, "session_id", None)
-                        cost = getattr(message, "total_cost_usd", None)
-                        if cost is not None:
-                            session.cost_usd = cost
-                            await ws_manager.send_to_session(session_id, "agent:cost_update", {
-                                "session_id": session_id,
-                                "cost_usd": session.cost_usd,
-                            })
-                        # Extract token usage from ResultMessage
+                        # Pull usage first; SDK's total_cost_usd is wrong for OR
+                        # (assumes Anthropic rates) and we recompute below.
                         usage = getattr(message, "usage", None) or {}
+                        inp = out = cache_create = cache_read = total_input = 0
                         if isinstance(usage, dict):
                             inp = usage.get("input_tokens", 0) or 0
                             out = usage.get("output_tokens", 0) or 0
@@ -3062,6 +2963,42 @@ class AgentManager:
                             total_input = inp + cache_create + cache_read
                             session.tokens["input"] = total_input
                             session.tokens["output"] = out
+
+                        cost = getattr(message, "total_cost_usd", None)
+                        if cost is not None:
+                            _free_route = False
+                            if isinstance(resolved_model, str):
+                                if resolved_model.startswith(("cc/", "cx/", "gc/", "ag/")):
+                                    _free_route = True
+                                elif resolved_model.startswith("openrouter/") and ":free" in resolved_model:
+                                    _free_route = True
+                            if (
+                                api_type == "anthropic"
+                                and getattr(global_settings, "connection_mode", "own_key") == "openswarm-pro"
+                                and getattr(global_settings, "openswarm_bearer_token", None)
+                            ):
+                                _free_route = True
+
+                            if _free_route:
+                                cost = 0.0
+                            elif isinstance(resolved_model, str) and resolved_model.startswith("openrouter/"):
+                                # SDK assumes Anthropic rates → 50-100× off for OR.
+                                from backend.apps.agents.providers.registry import get_openrouter_pricing
+                                pricing = get_openrouter_pricing(resolved_model)
+                                if pricing:
+                                    in_rate, out_rate = pricing
+                                    cost = (
+                                        (inp + cache_create + cache_read) * in_rate
+                                        + out * out_rate
+                                    ) / 1_000_000
+
+                            session.cost_usd = cost
+                            await ws_manager.send_to_session(session_id, "agent:cost_update", {
+                                "session_id": session_id,
+                                "cost_usd": session.cost_usd,
+                            })
+
+                        if isinstance(usage, dict):
                             # Per-turn context-usage broadcast. Drives the UI
                             # status pill, the auto-compact threshold (Phase 2),
                             # and is the user's only honest signal that they're

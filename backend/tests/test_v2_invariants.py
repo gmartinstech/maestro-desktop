@@ -428,6 +428,57 @@ async def test_resolve_aux_model_raises_when_nothing_available():
             await registry.resolve_aux_model(settings)
 
 
+@pytest.mark.asyncio
+async def test_resolve_aux_model_openrouter_only_fallback():
+    """OR-only user (no Pro, no Anthropic key, no claude/codex/gemini sub)
+    falls back to OR-resold Haiku instead of raising. Covers the gap that
+    used to leave OR-only users at 'Untitled session'."""
+    from backend.apps.agents.providers import registry
+    from backend.apps.settings.models import AppSettings
+    settings = AppSettings()  # no anthropic_api_key, no Pro
+    with patch("backend.apps.nine_router.is_running", return_value=True), \
+         patch("backend.apps.nine_router.get_providers",
+               new=AsyncMock(return_value=[{"provider": "openrouter", "isActive": True}])):
+        model_id, base = await registry.resolve_aux_model(settings, preferred_tier="haiku")
+        assert model_id == "openrouter/anthropic/claude-haiku-4.5", f"got {model_id}"
+        assert base == "http://localhost:20128", f"got {base}"
+
+
+@pytest.mark.asyncio
+async def test_resolve_aux_model_openrouter_primary_prefers_or():
+    """OR-primary chat keeps aux on OR (single-bill predictability) even
+    when other free lanes happen to be connected. Stay-on-family rule."""
+    from backend.apps.agents.providers import registry
+    from backend.apps.settings.models import AppSettings
+    settings = AppSettings()
+    with patch("backend.apps.nine_router.is_running", return_value=True), \
+         patch("backend.apps.nine_router.get_providers",
+               new=AsyncMock(return_value=[
+                   {"provider": "openrouter", "isActive": True},
+                   {"provider": "claude", "isActive": True},
+               ])):
+        model_id, base = await registry.resolve_aux_model(settings, primary_api="openrouter")
+        assert model_id == "openrouter/anthropic/claude-haiku-4.5", f"got {model_id}"
+
+
+@pytest.mark.asyncio
+async def test_resolve_aux_model_openrouter_priority_after_subs():
+    """In the default cascade (no primary_api), Claude/Codex/Gemini subs
+    win over OR — OR is metered while subs are sub-covered free."""
+    from backend.apps.agents.providers import registry
+    from backend.apps.settings.models import AppSettings
+    settings = AppSettings()
+    # Both Codex and OR connected — Codex (free via sub) should win.
+    with patch("backend.apps.nine_router.is_running", return_value=True), \
+         patch("backend.apps.nine_router.get_providers",
+               new=AsyncMock(return_value=[
+                   {"provider": "codex", "isActive": True},
+                   {"provider": "openrouter", "isActive": True},
+               ])):
+        model_id, _ = await registry.resolve_aux_model(settings)
+        assert model_id == "cx/gpt-5.4-mini", f"got {model_id}"
+
+
 # ===========================================================================
 # Group E — 9Router-streamed 401 detection
 # ===========================================================================

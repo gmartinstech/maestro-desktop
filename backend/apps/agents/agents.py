@@ -329,22 +329,86 @@ async def subscriptions_models():
     return {"models": models}
 
 
+@agents.router.post("/probe-model")
+async def probe_model(body: dict):
+    """1-token health probe. Returns {ok, latency_ms} or {ok:false, error}
+    or {ok:true, skipped:true} when the route's ambiguous (silent beats wrong)."""
+    import time as _time
+    short_name = (body or {}).get("model") or ""
+    if not short_name:
+        return {"ok": False, "error": "model required"}
+    try:
+        from backend.apps.agents.providers.registry import (
+            resolve_model_id_for_sdk,
+            get_api_type,
+            _find_builtin_model,
+        )
+        from backend.apps.settings.settings import load_settings
+        from backend.apps.nine_router import is_running as _9r_running
+        settings = load_settings()
+        api_type = get_api_type(short_name)
+        resolved = resolve_model_id_for_sdk(short_name, settings)
+        entry = _find_builtin_model(short_name) or {}
+        route = entry.get("route")
+        connection_mode = getattr(settings, "connection_mode", "own_key")
+
+        import anthropic
+        client = None
+
+        # Routing mirrors agent_manager: prefix takes precedence over Pro.
+        resolved_is_9router = (
+            isinstance(resolved, str)
+            and resolved.startswith(("cc/", "cx/", "gc/", "ag/", "openrouter/", "gemini/"))
+        )
+
+        if resolved_is_9router:
+            if not _9r_running():
+                return {"ok": True, "skipped": True}
+            client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
+        elif route == "api" and api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        elif api_type == "anthropic" and connection_mode == "openswarm-pro":
+            bearer = getattr(settings, "openswarm_bearer_token", "") or ""
+            proxy_url = (getattr(settings, "openswarm_proxy_url", None) or "https://api.openswarm.com").rstrip("/")
+            if not bearer:
+                return {"ok": True, "skipped": True}
+            client = anthropic.AsyncAnthropic(auth_token=bearer, base_url=proxy_url)
+        elif api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        else:
+            if not _9r_running():
+                return {"ok": True, "skipped": True}
+            client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
+
+        t0 = _time.monotonic()
+        await client.messages.create(
+            model=resolved,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "ping"}],
+            timeout=10.0,
+        )
+        return {"ok": True, "latency_ms": int((_time.monotonic() - t0) * 1000)}
+    except Exception as e:
+        msg = str(e).splitlines()[0] if str(e) else type(e).__name__
+        low = msg.lower()
+        # Suppress transients — chat will retry naturally and probe-time aliasing
+        # 404s often differ from how the chat path resolves the same id.
+        if any(s in low for s in (
+            "timeout", "timed out",
+            "connection reset", "connection aborted",
+            "rate_limit", "rate limit", "429",
+            "internal server error", "503", "502", "504",
+            "reset after",
+            "provider returned error",
+            "404", "not_found", "not found",
+        )):
+            return {"ok": True, "skipped": True}
+        return {"ok": False, "error": msg[:240]}
+
+
 @agents.router.get("/models")
 async def list_models():
-    """Return the chat-picker model list grouped by provider.
-
-    Intersects BUILTIN_MODELS with runtime availability:
-    - Anthropic models are visible if an API key is set OR 9Router has the
-      `claude` subscription connected.
-    - Subscription-only models (OpenAI/Google/Copilot routed via 9Router's
-      cx/gc/gh prefixes) are visible only when 9Router is up AND that
-      provider has an active connection.
-
-    The frontend already calls this endpoint from
-    frontend/src/shared/state/modelsSlice.ts:24 and falls back to hardcoded
-    Claude entries on failure, so the response shape is
-    `{"models": {"provider_name": [{value, label, context_window}, ...]}}`.
-    """
+    """Picker model list, grouped by provider, intersected with available creds."""
     from backend.apps.agents.providers.registry import BUILTIN_MODELS
     from backend.apps.nine_router import is_running as _9r_running, get_providers as _9r_providers
     from backend.apps.settings.settings import load_settings
@@ -356,34 +420,57 @@ async def list_models():
     if nine_router_up:
         try:
             conns = await _9r_providers()
-            # `get_providers` now unwraps 9Router's {"connections":[...]} envelope
-            # into a plain list of connection dicts.
             raw_providers = {c.get("provider", "") for c in conns if c.get("isActive") or c.get("testStatus") == "active"}
-            # Map 9Router's provider names to our BUILTIN_MODELS api field names.
-            # 9Router stores "claude" but our models use api="anthropic", etc.
+            # 9Router uses "claude"; our models use api="anthropic" — map across.
             _9R_TO_API = {
                 "claude": "anthropic",
                 "codex": "codex",
                 "gemini-cli": "gemini-cli",
-                # Antigravity is a separate OAuth lane to the same
-                # underlying Gemini models — treat it as the Google-
-                # subscription provider for model-visibility purposes.
-                "antigravity": "gemini-cli",
+                "antigravity": "gemini-cli",  # AG = same Gemini models, separate OAuth.
             }
             connected = raw_providers | {_9R_TO_API.get(p, p) for p in raw_providers}
         except Exception as e:
             logger.debug(f"Failed to fetch 9Router providers: {e}")
 
     def _serialize(models: list[dict]) -> list[dict]:
-        return [
-            {
+        # Native models. Tiers describe the model itself; billing_kind
+        # describes the user's wallet for it. Pricing is shown only for paid.
+        from backend.apps.agents.providers.registry import (
+            COST_PER_1M_TOKENS,
+            compute_tiers,
+            compute_billing_kind,
+        )
+        out = []
+        for m in models:
+            input_cost = output_cost = 0.0
+            for (_p, _v), rates in COST_PER_1M_TOKENS.items():
+                if _v == m["value"]:
+                    input_cost, output_cost = rates
+                    break
+            api = m.get("api", "")
+            route = m.get("route")
+            billing_kind = compute_billing_kind(
+                api=api, route=route, is_or_free=False, settings=settings,
+            )
+            tiers = compute_tiers(
+                m.get("model_id", m["value"]),
+                m["label"],
+                output_cost,
+                bool(m.get("reasoning", False)),
+            )
+            out.append({
                 "value": m["value"],
                 "label": m["label"],
                 "context_window": m.get("context_window", 128_000),
                 "reasoning": bool(m.get("reasoning", False)),
-            }
-            for m in models
-        ]
+                "input_cost_per_1m": input_cost,
+                "output_cost_per_1m": output_cost,
+                # Strict — subscription doesn't count. Pickerside uses Subscription chip.
+                "is_free": billing_kind == "free",
+                "billing_kind": billing_kind,
+                "tiers": list(tiers),
+            })
+        return out
 
     has_api_key = bool(getattr(settings, "anthropic_api_key", None))
     is_openswarm_pro = (
@@ -394,38 +481,15 @@ async def list_models():
 
     result: dict[str, list[dict]] = {}
 
-    # Anthropic models: emit under "OpenSwarm Pro" (proxy-routed, adaptive
-    # values) and/or "Anthropic" (direct API key OR 9Router claude sub). When
-    # both the proxy and the personal claude sub are active we emit both
-    # groups, with the Anthropic group using the pinned "-cc" variants so a
-    # per-call selection actually routes through 9Router instead of the proxy.
     anthropic_models = BUILTIN_MODELS.get("Anthropic", [])
     adaptive = [m for m in anthropic_models if m.get("route") not in ("cc", "api")]
     cc_variants = [m for m in anthropic_models if m.get("route") == "cc"]
     api_variants = [m for m in anthropic_models if m.get("route") == "api"]
 
-    # Anthropic surface depends on which credentials are wired:
-    #   - is_openswarm_pro + has_claude_sub: two groups. "OpenSwarm Pro" uses
-    #     the unsuffixed values (proxy-routed); "Anthropic" uses the -cc
-    #     variants which 9Router routes via the user's own claude
-    #     subscription, bypassing the Pro proxy.
-    #   - is_openswarm_pro + has_api_key only (no claude sub): the -cc route
-    #     would fail with "No credentials for provider: claude" because
-    #     9Router has no claude provider node. The API key sits dormant
-    #     while proxy mode is active — the user must switch connection_mode
-    #     to own_key in Settings to use the key directly. We surface a
-    #     one-line note instead of a broken-route group.
-    #   - is_openswarm_pro alone: only the proxy-routed group.
-    #   - has_api_key or has_claude_sub without proxy: single Anthropic group
-    #     using adaptive values, which fall through to 9Router and use
-    #     whichever creds are available.
+    # Pro mode shows two groups (Pro proxy + Anthropic alternates via cc/api);
+    # own-key mode collapses to one Anthropic group using adaptive routing.
     notes: list[dict] = []
     if is_openswarm_pro:
-        # Always show the OpenSwarm Pro group. Then layer on whatever
-        # alternate Anthropic credentials the user has (claude-sub via cc/,
-        # api-key via direct). Both variants live under "Anthropic" — the
-        # group header disambiguates against "OpenSwarm Pro"; api-key
-        # variants keep an "(API key)" suffix to distinguish from cc/.
         result["OpenSwarm Pro"] = _serialize(adaptive)
         anth_alternates: list[dict] = []
         if has_claude_sub:
@@ -435,19 +499,16 @@ async def list_models():
         if anth_alternates:
             result["Anthropic"] = _serialize(anth_alternates)
     elif has_api_key or has_claude_sub:
-        # Pure own_key mode. The adaptive route already uses the api_key
-        # (or falls through to 9Router for the claude sub) — no need for
-        # explicit -api / -cc variants in the picker.
         result["Anthropic"] = _serialize(adaptive)
 
-    # Non-Anthropic providers (OpenAI, Google, etc.).
-    # Subscription-routed models (api=codex/gemini-cli/antigravity) are
-    # gated by 9Router's connected providers set.
-    # API-key-routed models (route="api", api=openai/gemini) are gated by
-    # the corresponding *_api_key being set in settings — same pattern as
-    # the Anthropic -api variants.
     has_openai_key = bool(getattr(settings, "openai_api_key", None))
     has_google_key = bool(getattr(settings, "google_api_key", None))
+    has_openrouter_key = bool(getattr(settings, "openrouter_api_key", None))
+    from backend.apps.agents.providers.registry import (
+        COST_PER_1M_TOKENS as _CPM,
+        compute_tiers as _ct_native,
+        compute_billing_kind as _cbk_native,
+    )
     for provider_name, models in BUILTIN_MODELS.items():
         if provider_name == "Anthropic":
             continue
@@ -456,23 +517,89 @@ async def list_models():
             api = m.get("api", "")
             route = m.get("route")
             if route == "api":
-                # Direct API key path. Show only when the matching key is set.
                 if api == "openai" and not has_openai_key:
                     continue
                 if api == "gemini" and not has_google_key:
                     continue
             elif m.get("subscription_only"):
-                # Subscription path. Show only when 9Router has the lane up.
                 if not nine_router_up or api not in connected:
                     continue
+            in_cost = out_cost = 0.0
+            for (_p, _v), rates in _CPM.items():
+                if _v == m["value"]:
+                    in_cost, out_cost = rates
+                    break
+            billing_kind = _cbk_native(
+                api=api, route=route, is_or_free=False, settings=settings,
+            )
+            tiers = _ct_native(
+                m.get("model_id", m["value"]),
+                m["label"],
+                out_cost,
+                bool(m.get("reasoning", False)),
+            )
             visible.append({
                 "value": m["value"],
                 "label": m["label"],
                 "context_window": m.get("context_window", 128_000),
                 "reasoning": bool(m.get("reasoning", False)),
+                "input_cost_per_1m": in_cost,
+                "output_cost_per_1m": out_cost,
+                "is_free": billing_kind == "free",
+                "billing_kind": billing_kind,
+                "tiers": list(tiers),
             })
         if visible:
             result[provider_name] = visible
+
+    # OR catalog fetched straight from openrouter.ai (independent of 9Router
+    # boot state) so picker populates the moment a key lands.
+    if has_openrouter_key:
+        try:
+            from backend.apps.agents.providers.registry import fetch_openrouter_models
+            or_models = await fetch_openrouter_models(settings.openrouter_api_key)
+        except Exception as e:
+            logger.debug(f"OpenRouter catalog fetch failed: {e}")
+            or_models = []
+        if or_models:
+            by_vendor: dict[str, list[dict]] = {}
+            from backend.apps.agents.providers.registry import (
+                compute_tiers as _ct,
+                compute_billing_kind as _cbk,
+            )
+            for m in or_models:
+                v = m.get("vendor") or "Other"
+                in_cost = float(m.get("input_cost_per_1m", 0.0))
+                out_cost = float(m.get("output_cost_per_1m", 0.0))
+                is_free = bool(m.get("is_free", False))
+                billing_kind = _cbk(
+                    api="openrouter", route="openrouter", is_or_free=is_free,
+                    settings=settings,
+                )
+                tiers = _ct(
+                    m.get("model_id", m["value"]),
+                    m["label"],
+                    out_cost,
+                    bool(m.get("reasoning", False)),
+                )
+                by_vendor.setdefault(v, []).append({
+                    "value": m["value"],
+                    "label": m["label"],
+                    "context_window": m.get("context_window", 128_000),
+                    "reasoning": bool(m.get("reasoning", False)),
+                    "input_cost_per_1m": in_cost,
+                    "output_cost_per_1m": out_cost,
+                    "is_free": is_free,
+                    "billing_kind": billing_kind,
+                    "tiers": list(tiers),
+                    "max_completion_tokens": m.get("max_completion_tokens"),
+                })
+            for vendor in sorted(by_vendor.keys()):
+                pretty = (
+                    vendor.replace("-", " ").replace("_", " ").title().replace("Ai", "AI")
+                )
+                entries = sorted(by_vendor[vendor], key=lambda x: x["label"].lower())
+                result[f"OpenRouter · {pretty}"] = entries
 
     return {"models": result, "notes": notes}
 

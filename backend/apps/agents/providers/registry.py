@@ -1,9 +1,4 @@
-"""Provider registry and model catalog.
-
-Live agent path goes through claude_agent_sdk via agent_manager._run_agent_loop.
-Non-Anthropic models route through 9Router's /v1/messages endpoint with
-prefixed ids (cx/gpt-5.4, gc/gemini-3-pro-preview).
-"""
+"""Provider registry. Anthropic via SDK; everything else via 9Router prefix routing."""
 
 from __future__ import annotations
 
@@ -15,61 +10,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Tier 1: Built-in models (curated, we know their quirks)
-# ---------------------------------------------------------------------------
-#
-# Fields:
-#   value            — short internal name stored on AgentSession.model
-#   label            — display name in the model picker
-#   context_window   — tokens
-#   model_id         — bare model string for direct API calls (Anthropic key path)
-#   router_model_id  — prefixed string for 9Router routing (cc/, cx/, gc/)
-#   api              — "anthropic" | "codex" | "gemini-cli"
-#   subscription_only— True means hidden from picker unless 9Router has that
-#                      provider actively connected
-#   reasoning        — True for models that emit Anthropic `thinking` content
-#                      blocks via 9Router's translator. OpenSwarm's stream
-#                      handler at agent_manager.py:1141-1165 does not yet
-#                      render these blocks — final text still appears but
-#                      the reasoning trace is silently dropped. Tracked as
-#                      a follow-up; add a `thinking` case to the handler
-#                      to surface the trace.
-#
-# Model IDs match 9Router's internal routing catalog at
-# 9router/src/shared/constants/pricing.js. Each provider has a distinct
-# model-name convention:
-#   - cc/  (Claude Code subscription) uses dash-notation: claude-sonnet-4-6
-#   - cx/  (OpenAI Codex subscription) uses dot-notation with -codex suffix.
-#          Note: `gpt-5.4` is NOT available on this path — it's API-key-only.
-#          The Codex subscription's flagship is gpt-5.3-codex.
-#   - gc/  (Gemini CLI subscription) uses gemini-3-pro-preview / 3-flash-preview
-#          (Gemini 3 family — thinking-capable). 2.5 models removed.
-#          Gemini 3 thought signatures handled via skip_thought_signature_validator.
-
+# Entry fields: value, label, context_window, model_id, router_model_id, api,
+# subscription_only, reasoning, route ("cc"|"api"|"openrouter"|None).
+# 9Router prefixes: cc/ Claude sub (dashes), cx/ Codex sub (dots), gc/ Gemini CLI.
 BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
-    # Anthropic: Sonnet 4.6 (Feb 17 2026), Opus 4.6 (Feb 5 2026),
-    # Haiku 4.5 (Oct 2025). Opus 4.7 was briefly exposed but pulled —
-    # the Claude Code SDK currently elides plaintext thinking deltas
-    # for 4.7 (encrypted/redacted blocks only), which broke the
-    # "Thought for Ns" pill UX. Re-add once Anthropic ships the
-    # plaintext summarizer for 4.7.
     "Anthropic": [
-        # Adaptive entries: route is chosen at call time based on
-        # settings.connection_mode (openswarm-pro → proxy; api_key → direct;
-        # else → 9Router cc/).
+        # Opus 4.7: SDK currently strips plaintext thinking deltas (encrypted only)
+        # so the live "Thought for Ns" pill loses mid-turn text. Final answer + tokens fine.
+        {"value": "opus-4-7", "label": "Claude Opus 4.7", "context_window": 1_000_000,
+         "model_id": "claude-opus-4-7", "router_model_id": "cc/claude-opus-4-7", "api": "anthropic", "reasoning": True},
         {"value": "sonnet", "label": "Claude Sonnet 4.6", "context_window": 1_000_000,
          "model_id": "claude-sonnet-4-6", "router_model_id": "cc/claude-sonnet-4-6", "api": "anthropic", "reasoning": True},
         {"value": "opus", "label": "Claude Opus 4.6", "context_window": 1_000_000,
          "model_id": "claude-opus-4-6", "router_model_id": "cc/claude-opus-4-6", "api": "anthropic", "reasoning": True},
         {"value": "haiku", "label": "Claude Haiku 4.5", "context_window": 200_000,
          "model_id": "claude-haiku-4-5", "router_model_id": "cc/claude-haiku-4-5-20251001", "api": "anthropic", "reasoning": True},
-        # Pinned-subscription entries: always route via 9Router's `cc/` prefix
-        # (the user's personal Claude Pro/Max subscription), regardless of
-        # connection_mode. Surfaced in list_models only when the user has
-        # BOTH openswarm-pro active AND the 9Router `claude` subscription
-        # connected — so the model picker can offer a per-call choice between
-        # the managed OpenSwarm proxy and their own Claude subscription.
+        # cc/ pins the user's Claude sub regardless of connection_mode.
+        {"value": "opus-4-7-cc", "label": "Claude Opus 4.7", "context_window": 1_000_000,
+         "model_id": "claude-opus-4-7", "router_model_id": "cc/claude-opus-4-7", "api": "anthropic", "reasoning": True, "route": "cc"},
         {"value": "sonnet-cc", "label": "Claude Sonnet 4.6", "context_window": 1_000_000,
          "model_id": "claude-sonnet-4-6", "router_model_id": "cc/claude-sonnet-4-6", "api": "anthropic", "reasoning": True, "route": "cc"},
         {"value": "opus-cc", "label": "Claude Opus 4.6", "context_window": 1_000_000,
@@ -77,6 +35,8 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "haiku-cc", "label": "Claude Haiku 4.5", "context_window": 200_000,
          "model_id": "claude-haiku-4-5", "router_model_id": "cc/claude-haiku-4-5-20251001", "api": "anthropic", "reasoning": True, "route": "cc"},
 
+        {"value": "opus-4-7-api", "label": "Claude Opus 4.7 (API key)", "context_window": 1_000_000,
+         "model_id": "claude-opus-4-7", "router_model_id": "claude-opus-4-7", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "sonnet-api", "label": "Claude Sonnet 4.6 (API key)", "context_window": 1_000_000,
          "model_id": "claude-sonnet-4-6", "router_model_id": "claude-sonnet-4-6", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "opus-api", "label": "Claude Opus 4.6 (API key)", "context_window": 1_000_000,
@@ -86,11 +46,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
     ],
   
     "OpenAI": [
-        # GPT-5.5 — newest ChatGPT flagship (May 2026). Available via
-        # the Codex subscription path on 9Router 0.4.x catalogs; on
-        # 0.3.60 (our pin) the cx/ catalog stops at gpt-5.4, so the
-        # subscription-routed entry will 404 until we bump. The
-        # API-key entry below works today against api.openai.com.
+        # GPT-5.5 cx/ entry 404s on 9Router 0.3.60 (our pin); API-key route below works.
         {"value": "gpt-5.5", "label": "GPT-5.5",
          "context_window": 1_000_000, "router_model_id": "cx/gpt-5.5",
          "api": "codex", "subscription_only": True, "reasoning": True},
@@ -100,11 +56,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gpt-5.4-mini", "label": "GPT-5.4 Mini",
          "context_window": 400_000, "router_model_id": "cx/gpt-5.4-mini",
          "api": "codex", "subscription_only": True, "reasoning": True},
-        # GPT-5.3 Codex variants. The bare `gpt-5.3-codex` adapts reasoning
-        # effort from session.thinking_level. The -high / -xhigh suffixes
-        # are distinct codex tunes from OpenAI optimized for longer-horizon
-        # coding (xhigh = max-quality, slowest). Both are surfaced for users
-        # who want to pin effort independently of the global thinking knob.
+        # -high / -xhigh are distinct codex tunes (xhigh = max quality, slowest).
         {"value": "gpt-5.3-codex", "label": "GPT-5.3 Codex",
          "context_window": 400_000, "router_model_id": "cx/gpt-5.3-codex",
          "api": "codex", "subscription_only": True, "reasoning": True},
@@ -114,11 +66,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gpt-5.3-codex-xhigh", "label": "GPT-5.3 Codex Extra High",
          "context_window": 400_000, "router_model_id": "cx/gpt-5.3-codex-xhigh",
          "api": "codex", "subscription_only": True, "reasoning": True},
-        # Pinned-API-key entries: bypass 9Router and call api.openai.com
-        # directly with openai_api_key. Model ids match what OpenAI's API
-        # accepts (no cx/ prefix). Surfaced when openai_api_key is set —
-        # gives a metered alternative to the ChatGPT-Plus subscription
-        # route. Same -api suffix convention as the Anthropic mirrors.
+        # API-key entries: bypass 9Router, call api.openai.com directly.
         {"value": "gpt-5.5-api", "label": "GPT-5.5 (API key)",
          "context_window": 1_000_000, "router_model_id": "gpt-5.5", "model_id": "gpt-5.5",
          "api": "openai", "reasoning": True, "route": "api"},
@@ -138,20 +86,11 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
          "context_window": 400_000, "router_model_id": "gpt-5.3-codex-xhigh", "model_id": "gpt-5.3-codex-xhigh",
          "api": "openai", "reasoning": True, "route": "api"},
     ],
-    # Google: Gemini via Gemini CLI subscription. Both 3.x (thinking-
-    # capable) and 2.5 (stable) are offered. Gemini 3 models have
-    # always-on thinking with per-session thought signatures that are
-    # lost during the format translation round-trip. We use Google's
-    # official workaround: `skip_thought_signature_validator` on all
-    # historical function call and thinking parts (see 9router
-    # openai-to-gemini.js). This bypasses signature validation at the
-    # cost of the model not being able to build on prior reasoning
-    # across turns — but all tools work and thinking is visible.
+    # Google: Gemini 3.x thoughtSignature continuity is bypassed via 9Router's
+    # skip_thought_signature_validator (model can't build on prior reasoning,
+    # but tools and thinking work). 3-pro / 3-flash route via Antigravity when
+    # the AG OAuth lane is active; gc/ otherwise.
     "Google": [
-        # Gemini 3.1 Pro — newest flagship (Apr 2026), routes to
-        # `gc/gemini-3.1-pro-preview` for the subscription path. Same
-        # thoughtSignature caveat applies; resolve_model_id_for_sdk's
-        # Antigravity map handles the multi-step routing.
         {"value": "gemini-3.1-pro", "label": "Gemini 3.1 Pro",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-pro-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
@@ -164,11 +103,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gemini-3-flash", "label": "Gemini 3 Flash",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3-flash-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
-        # Pinned-API-key entries for Google AI Studio (api="gemini"). Bypass
-        # both 9Router (which routes via Gemini CLI/Antigravity OAuth) and
-        # any subscription path; call generativelanguage.googleapis.com
-        # directly with google_api_key. Free-tier quota is generous (~1K
-        # requests/day) and lives separately from the OAuth lanes.
+        # API-key entries: bypass 9Router, call generativelanguage.googleapis.com.
         {"value": "gemini-3.1-pro-api", "label": "Gemini 3.1 Pro (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.1-pro-preview", "model_id": "gemini-3.1-pro-preview",
          "api": "gemini", "reasoning": True, "route": "api"},
@@ -184,12 +119,8 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
     ],
 }
 
-# ---------------------------------------------------------------------------
-# Thinking level translation
-# ---------------------------------------------------------------------------
-# Each provider has a different API shape for "how hard should the model
-# think." We expose a single provider-agnostic level (off/low/medium/high/
-# auto) on the session and translate here.
+# --- Thinking-level translation ---
+# Provider-agnostic off/low/medium/high/auto → per-API params.
 #
 # Returns the provider-specific payload to merge into request params, or
 # None if no special thinking params should be sent (use defaults).
@@ -205,8 +136,6 @@ def thinking_params_for(api: str, level: str, model_id: str = "") -> dict | None
     Returns a dict to merge into request params, or None for "use defaults".
     """
     if level == "auto":
-        # Let provider use its own default. For Claude 4.6 we still want
-        # adaptive thinking on by default so users see reasoning.
         if api == "anthropic":
             return {"thinking": {"type": "adaptive"}}
         return None
@@ -216,20 +145,12 @@ def thinking_params_for(api: str, level: str, model_id: str = "") -> dict | None
             return {"thinking": {"type": "disabled"}}
         if api == "codex":
             return {"reasoning": {"effort": "none"}}
-        # Gemini: thinkingBudget=0 truly disables reasoning (no
-        # thoughtSignature emitted). Critical for multi-step tool turns
-        # — without this Gemini 2.5/3.x still emits signatures even at
-        # the lowest "level," which then break the next request with
-        # "Thought signature is not valid" 400 because the SDK has no
-        # way to round-trip them. The translator at 9Router 0.3.60
-        # explicitly checks `thinkingBudget == 0` to skip emitting
-        # thinking config, which is what we want.
+        # Gemini: budget=0 actually disables reasoning. Anything else still
+        # emits thoughtSignatures and 400s the next tool turn.
         if api == "gemini-cli":
             return {"thinkingConfig": {"thinkingBudget": 0}}
         return None
 
-    # Claude 4.6 models use adaptive thinking (no manual budget). For older
-    # Claude models we'd use budget_tokens; we don't ship those today.
     if api == "anthropic":
         return {"thinking": {"type": "adaptive"}}
 
@@ -244,13 +165,137 @@ def thinking_params_for(api: str, level: str, model_id: str = "") -> dict | None
     return None
 
 
-# ---------------------------------------------------------------------------
-# OpenRouter: built-in integration for 300+ models
-# ---------------------------------------------------------------------------
+# --- OpenRouter ---
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
+# `or:` prefix on picker values so resolve_model_id_for_sdk recognises them
+# without a side-table.
+_OPENROUTER_VALUE_PREFIX = "or:"
+
+_OR_MODELS_TTL_OK = 3600.0
+_OR_MODELS_TTL_FAIL = 30.0
+_or_models_cache: dict = {"models": None, "fetched_at": 0.0, "ok": False}
+
 _9router_cache: dict = {"available": None, "checked_at": 0}
+
+
+def get_openrouter_pricing(resolved_model: str) -> tuple[float, float] | None:
+    """($/1M input, $/1M output) for an openrouter/ id, or None if not cached."""
+    if not isinstance(resolved_model, str) or not resolved_model.startswith("openrouter/"):
+        return None
+    bare = resolved_model[len("openrouter/"):]
+    for m in _or_models_cache.get("models") or []:
+        if m.get("model_id") == bare:
+            return (
+                float(m.get("input_cost_per_1m", 0.0)),
+                float(m.get("output_cost_per_1m", 0.0)),
+            )
+    return None
+
+
+def invalidate_openrouter_cache() -> None:
+    _or_models_cache["models"] = None
+    _or_models_cache["fetched_at"] = 0.0
+    _or_models_cache["ok"] = False
+
+
+async def fetch_openrouter_models(api_key: str | None) -> list[dict]:
+    """Return OR's tool-capable chat catalog. Cached. Never raises."""
+    import time as _time
+    if not api_key:
+        invalidate_openrouter_cache()
+        return []
+
+    now = _time.monotonic()
+    fetched_at = _or_models_cache["fetched_at"]
+    if _or_models_cache["models"] is not None:
+        ttl = _OR_MODELS_TTL_OK if _or_models_cache["ok"] else _OR_MODELS_TTL_FAIL
+        if now - fetched_at < ttl:
+            return _or_models_cache["models"]
+
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(
+                f"{OPENROUTER_BASE_URL}/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        if r.status_code != 200:
+            _or_models_cache.update(models=[], fetched_at=now, ok=False)
+            logger.debug(f"OpenRouter /models returned {r.status_code}")
+            return []
+        raw = r.json().get("data") or []
+    except Exception as e:
+        _or_models_cache.update(models=[], fetched_at=now, ok=False)
+        logger.debug(f"OpenRouter /models fetch failed: {e}")
+        return []
+
+    out: list[dict] = []
+    for m in raw:
+        if not isinstance(m, dict):
+            continue
+        model_id = m.get("id") or ""
+        if not model_id or "/" not in model_id:
+            continue
+        arch = m.get("architecture") or {}
+        in_mods = arch.get("input_modalities") or []
+        out_mods = arch.get("output_modalities") or []
+        if isinstance(in_mods, list) and in_mods and "text" not in in_mods:
+            continue
+        if isinstance(out_mods, list) and out_mods and "text" not in out_mods:
+            continue
+        # Tools required — agent loop doesn't work without function calling.
+        params = m.get("supported_parameters") or []
+        if not isinstance(params, list) or "tools" not in params:
+            continue
+        ctx = m.get("context_length") or 128_000
+        try:
+            ctx = int(ctx)
+        except (TypeError, ValueError):
+            ctx = 128_000
+        reasoning_capable = bool("reasoning" in params or "include_reasoning" in params)
+        vendor = model_id.split("/", 1)[0]
+        label = m.get("name") or model_id
+        pricing = m.get("pricing") or {}
+        try:
+            prompt_per_tok = float(pricing.get("prompt") or 0)
+            completion_per_tok = float(pricing.get("completion") or 0)
+        except (TypeError, ValueError):
+            prompt_per_tok = completion_per_tok = 0.0
+        # Negative price = OR's "varies" sentinel (e.g. openrouter/auto). Clamp.
+        is_variable_pricing = prompt_per_tok < 0 or completion_per_tok < 0
+        if is_variable_pricing:
+            prompt_per_tok = 0.0
+            completion_per_tok = 0.0
+        is_free = (
+            not is_variable_pricing
+            and prompt_per_tok == 0.0 and completion_per_tok == 0.0
+        )
+        top_provider = m.get("top_provider") or {}
+        max_completion = top_provider.get("max_completion_tokens")
+        try:
+            max_completion = int(max_completion) if max_completion else None
+        except (TypeError, ValueError):
+            max_completion = None
+        out.append({
+            "value": f"{_OPENROUTER_VALUE_PREFIX}{model_id}",
+            "label": label,
+            "context_window": ctx,
+            "model_id": model_id,
+            "router_model_id": f"openrouter/{model_id}",
+            "api": "openrouter",
+            "route": "openrouter",
+            "reasoning": reasoning_capable,
+            "vendor": vendor,
+            "input_cost_per_1m": prompt_per_tok * 1_000_000,
+            "output_cost_per_1m": completion_per_tok * 1_000_000,
+            "is_free": is_free,
+            "max_completion_tokens": max_completion,
+        })
+
+    _or_models_cache.update(models=out, fetched_at=now, ok=True)
+    return out
 
 
 def _is_9router_available() -> bool:
@@ -275,87 +320,60 @@ def _is_9router_available() -> bool:
 # ---------------------------------------------------------------------------
 
 def _find_builtin_model(short_name: str) -> dict | None:
-    """Look up a model entry by its short `value`."""
+    """Look up a model entry by its short `value`.
+
+    OpenRouter entries (prefixed `or:<vendor>/<model>`) aren't in
+    BUILTIN_MODELS — they're synthesised at request time from the live
+    OR entries are synthesised on demand so the rest of the routing
+    code can treat them like BUILTIN_MODELS entries."""
     for models in BUILTIN_MODELS.values():
         for m in models:
             if m.get("value") == short_name:
                 return m
+    if isinstance(short_name, str) and short_name.startswith(_OPENROUTER_VALUE_PREFIX):
+        bare = short_name[len(_OPENROUTER_VALUE_PREFIX):]
+        if bare:
+            return {
+                "value": short_name,
+                "label": bare,
+                "context_window": 128_000,
+                "model_id": bare,
+                "router_model_id": f"openrouter/{bare}",
+                "api": "openrouter",
+                "route": "openrouter",
+                "reasoning": False,
+            }
     return None
 
 
 def get_api_type(short_name: str) -> str:
-    """Return the api type for a short model name.
-
-    Returns one of: "anthropic", "codex", "gemini-cli".
-    Defaults to "anthropic" for unknown names so existing behavior is preserved.
-    """
     entry = _find_builtin_model(short_name)
     return (entry or {}).get("api", "anthropic")
 
 
 def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
-    """Resolve a short model name into the id string passed to ClaudeAgentOptions.
-
-    Priority:
-    - Anthropic model + openswarm-pro mode → bare `model_id` (our cloud proxy)
-    - Anthropic model with an API key set → bare `model_id` (real Anthropic API)
-    - Everything else → `router_model_id` (9Router with cc/ cx/ gc/ prefix)
-    - Unknown names pass through unchanged
-    """
+    """Short model name → id string for ClaudeAgentOptions."""
     entry = _find_builtin_model(short_name)
     if entry is None:
         return short_name
-    # Pinned-route entries (e.g. "sonnet-cc") always use their router_model_id,
-    # bypassing connection_mode. This is what lets the picker offer a
-    # distinct "Anthropic" group pointing at the user's 9Router Claude
-    # subscription even while openswarm-pro is the default Claude route.
     if entry.get("route") == "cc":
         return entry.get("router_model_id", entry.get("model_id", short_name))
-    # route="api" is the analogue for the user's direct Anthropic API key:
-    # bare model_id, and agent_manager will force the spawn env to point at
-    # api.anthropic.com with the api_key (skipping both the Pro proxy AND
-    # 9Router). This is what makes "use my API key" reachable even when
-    # connection_mode is openswarm-pro.
     if entry.get("route") == "api":
         return entry.get("model_id", short_name)
+    if entry.get("route") == "openrouter":
+        return entry.get("router_model_id", short_name)
     if entry.get("api") == "anthropic":
         if getattr(settings, "connection_mode", "own_key") == "openswarm-pro":
             return entry.get("model_id", short_name)
         if getattr(settings, "anthropic_api_key", None):
             return entry.get("model_id", short_name)
-    # Gemini: prefer lanes with higher quota in order —
-    #   1. AI Studio apikey (free 1K/day, separate from any OAuth limit)
-    #   2. Antigravity OAuth (preview, 5-10× the Gemini CLI free tier).
-    #      CRITICAL: Antigravity's wrapper around Google's API doesn't
-    #      enforce the strict thoughtSignature continuity check that
-    #      breaks multi-step tool turns through Gemini CLI. Without
-    #      this lane, agent turns that combine thinking + tool use get
-    #      "Thought signature is not valid" 400s on every follow-up
-    #      request because the claude_agent_sdk has no hook to round-
-    #      trip Gemini-specific signatures.
-    #   3. Gemini CLI OAuth (free tier, ~5 RPM — last resort, breaks
-    #      on multi-step agent turns).
-    #
-    # Antigravity exposes differently-named Gemini models than Gemini CLI:
-    #   gc/gemini-3-pro-preview  →  ag/gemini-3.1-pro-high (DISABLED —
-    #     Google returns 404 not_found_error on this even with an
-    #     active Antigravity connection; tier-side access gate.)
-    #   gc/gemini-3-flash-preview →  ag/gemini-3-flash (works)
-    # Models Antigravity doesn't have (or that 404) fall through to gc/.
+    # Gemini lane order: AI Studio apikey → Antigravity OAuth → Gemini CLI.
+    # AG bypasses the thoughtSignature validator that breaks multi-step tool
+    # turns on gc/. Without it, every Gemini turn 400s after the first tool
+    # call with "Thought signature is not valid".
     _ANTIGRAVITY_MAP = {
-        # Disabled until 9Router exposes per-model availability so we
-        # can verify pro-high is actually serviceable before routing.
-        # "gemini-3-pro-preview": "gemini-3.1-pro-high",
+        # gemini-3-pro-preview disabled — AG returns 404 even with active conn.
         "gemini-3-flash-preview": "gemini-3-flash",
-        # Gemini 3.1 family — same thoughtSignature problem as 3.0:
-        # gc/ enforces continuity, the Anthropic SDK has no hook to
-        # round-trip the signature, every multi-step tool turn 400s
-        # with "Thought signature is not valid". Routing through
-        # ag/ (Antigravity wrapper around Google's API) sidesteps
-        # the validator. AG is flagged deprecated upstream — we keep
-        # using it on 9router 0.3.60 (our pin) as the only working
-        # multi-step Gemini path; will revisit once the SDK gets
-        # signature passthrough or 9router lands a Gemini-CLI fix.
         "gemini-3.1-pro-preview": "gemini-3.1-pro-high",
         "gemini-3.1-flash-lite-preview": "gemini-3-flash",
     }
@@ -367,7 +385,6 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
                 return "gemini/" + suffix
             ag_suffix = _ANTIGRAVITY_MAP.get(suffix)
             if ag_suffix:
-                # Check 9Router for an Antigravity connection.
                 try:
                     import httpx as _httpx
                     r = _httpx.get("http://localhost:20128/api/providers", timeout=2.0)
@@ -392,42 +409,19 @@ async def resolve_aux_model(
     preferred_tier: str = "haiku",
     primary_api: str | None = None,
 ) -> tuple[str, str | None]:
-    """Pick the cheapest/most-available model for auxiliary LLM calls.
+    """Pick the cheapest reachable model for one-shot aux LLM calls.
 
-    Used by title generation, group meta, dashboard naming, outputs/view
-    builder, and browser_agent — wherever we need a quick one-shot LLM call
-    that is NOT the user's selected chat model.
-
-    Args:
-        primary_api: when set, prefer this provider family ("anthropic" |
-            "codex" | "gemini-cli") over the default Anthropic-first cascade.
-            Lets a Codex-only or Gemini-only session keep aux work on the
-            same family it's already paying for, instead of leaking to
-            Anthropic Haiku just because the user *also* has Anthropic
-            connected. Caller passes `get_api_type(session.model)`.
-
-    Returns (model_id, base_url).
-    - If base_url is None, caller should use the default Anthropic client.
-    - If base_url is set, caller should route through that endpoint.
-
-    Priority (when primary_api is None, classic cascade):
-    1. OpenSwarm Pro mode → bare haiku/sonnet via proxy
-    2. Anthropic API key set → bare haiku/sonnet on real Anthropic API
-    3. 9Router + Claude subscription connected → cc/<model>
-    4. 9Router + Codex connected → cx/gpt-5.4-mini
-    5. 9Router + Gemini connected → gc/gemini-3.1-flash-lite-preview
-    6. Nothing available → raise ValueError
-
-    When primary_api is provided, the resolver tries that family first
-    (subscription path then API key) and only falls through to other
-    providers if the primary family isn't reachable.
+    primary_api lets the caller stay on the family the user is already
+    paying for (Codex chat → Codex aux, OR chat → OR aux, etc.).
+    Returns (model_id, base_url); base_url=None means default Anthropic.
     """
     haiku_bare = "claude-haiku-4-5-20251001"
     sonnet_bare = "claude-sonnet-4-20250514"
+    or_haiku = "openrouter/anthropic/claude-haiku-4.5"
+    or_sonnet = "openrouter/anthropic/claude-sonnet-4.5"
     bare = haiku_bare if preferred_tier == "haiku" else sonnet_bare
+    or_aux = or_haiku if preferred_tier == "haiku" else or_sonnet
 
-    # Probe 9Router once up front so the primary_api branch and the
-    # default cascade share the same connection set.
     from backend.apps.nine_router import is_running as _9r_running, get_providers as _9r_providers
 
     base_url = "http://localhost:20128"
@@ -439,30 +433,24 @@ async def resolve_aux_model(
         except Exception:
             connected = set()
 
-    # Match primary_api first when supplied. Each branch checks both the
-    # subscription path (preferred — usually free) and the direct-API path
-    # before giving up on this family.
     if primary_api == "codex":
         if "codex" in connected:
             return ("cx/gpt-5.4-mini", base_url)
         if getattr(settings, "openai_api_key", None):
             return ("gpt-5.4-mini", "https://api.openai.com/v1")
-        # primary is Codex but it's not reachable — fall through to default
     elif primary_api == "gemini-cli" or primary_api == "gemini":
         if "gemini-cli" in connected:
             return ("gc/gemini-3.1-flash-lite-preview", base_url)
         if getattr(settings, "google_api_key", None):
             return ("gemini-3.1-flash-lite-preview", "https://generativelanguage.googleapis.com/v1beta")
-        # fall through to default
-    # primary_api == "anthropic" naturally falls into the Anthropic-first
-    # cascade below — no special branch needed.
+    elif primary_api == "openrouter":
+        if "openrouter" in connected:
+            return (or_aux, base_url)
 
-    # OpenSwarm Pro — route through our cloud proxy
     if getattr(settings, "connection_mode", "own_key") == "openswarm-pro":
         proxy_url = getattr(settings, "openswarm_proxy_url", None) or "https://api.openswarm.com"
         return (bare, proxy_url)
 
-    # Direct API key wins
     if getattr(settings, "anthropic_api_key", None):
         return (bare, None)
 
@@ -478,6 +466,9 @@ async def resolve_aux_model(
         return ("cx/gpt-5.4-mini", base_url)
     if "gemini-cli" in connected:
         return ("gc/gemini-3.1-flash-lite-preview", base_url)
+    # OR is metered, hence last — saves OR-only users from "Untitled session" hell.
+    if "openrouter" in connected:
+        return (or_aux, base_url)
 
     raise ValueError(
         "No AI provider connected for auxiliary LLM call. "
@@ -504,6 +495,357 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
 
 
 # ---------------------------------------------------------------------------
+# Curated model tiers — Intelligence, Speed, Cost on a 1-5 scale
+# ---------------------------------------------------------------------------
+#
+# Hand-tuned from public benchmarks + per-token pricing (knowledge cutoff
+# Jan 2026). The tier numbers serve the picker hover card so users can
+# pick a model that fits the task without reading a leaderboard.
+#
+#   Intelligence:  5 = frontier reasoner, 1 = nano / specialised tiny
+#   Speed:         5 = sub-second TTFT + 250 tok/s, 1 = slow + thinking
+#   Cost:          5 = $25+/M output, 1 = under $0.50/M output (or free)
+#
+# Lookup order (compute_tiers below):
+#   1. Bare model_id direct
+#   2. ":free" stripped (so anthropic/claude-opus-4.7:free shares scoring
+#      with anthropic/claude-opus-4.7)
+#   3. Vendor-prefixed and bare-after-slash variants for cross-format
+#      coverage (so "claude-opus-4-7" matches "anthropic/claude-opus-4.7")
+#   4. Last-path-component normalised (dashes ↔ dots)
+#
+# Models not in this map fall through to a heuristic that uses cost
+# bucket + reasoning flag + name-keyword adjustments.
+# (intelligence, speed, cost) on a 1-5 scale. Tiers: 5 frontier, 4 top
+# open / strong sub, 3 solid mid, 2 small specialised, 1 nano.
+MODEL_TIERS: dict[str, tuple[int, int, int]] = {
+    # Anthropic
+    "claude-opus-4-7":              (5, 2, 5),
+    "claude-opus-4.7":              (5, 2, 5),
+    "anthropic/claude-opus-4.7":    (5, 2, 5),
+    "claude-opus-4-6":              (5, 2, 5),
+    "claude-opus-4.6":              (5, 2, 5),
+    "anthropic/claude-opus-4.6":    (5, 2, 5),
+    "claude-opus-4-5":              (5, 2, 5),
+    "claude-opus-4":                (5, 2, 5),
+    "anthropic/claude-opus-4":      (5, 2, 5),
+    "claude-sonnet-4-6":            (4, 4, 3),
+    "claude-sonnet-4.6":            (4, 4, 3),
+    "anthropic/claude-sonnet-4.6":  (4, 4, 3),
+    "claude-sonnet-4-5":            (4, 4, 3),
+    "claude-sonnet-4.5":            (4, 4, 3),
+    "anthropic/claude-sonnet-4.5":  (4, 4, 3),
+    "claude-sonnet-4":              (4, 4, 3),
+    "anthropic/claude-sonnet-4":    (4, 4, 3),
+    "claude-3.7-sonnet":            (4, 4, 3),
+    "anthropic/claude-3.7-sonnet":  (4, 4, 3),
+    "claude-haiku-4-5":             (3, 5, 2),
+    "claude-haiku-4.5":             (3, 5, 2),
+    "anthropic/claude-haiku-4.5":   (3, 5, 2),
+    "claude-3.5-haiku":             (2, 5, 2),
+    "anthropic/claude-3.5-haiku":   (2, 5, 2),
+    "claude-3-haiku":               (2, 5, 1),
+    "anthropic/claude-3-haiku":     (2, 5, 1),
+
+    # OpenAI
+    "gpt-5.5":                  (5, 2, 5),
+    "openai/gpt-5.5":           (5, 2, 5),
+    "gpt-5.5-pro":              (5, 1, 5),
+    "openai/gpt-5.5-pro":       (5, 1, 5),
+    "gpt-5.4":                  (4, 3, 4),
+    "openai/gpt-5.4":           (4, 3, 4),
+    "gpt-5.4-mini":             (3, 4, 2),
+    "openai/gpt-5.4-mini":      (3, 4, 2),
+    "gpt-5.3-codex":            (4, 3, 3),
+    "gpt-5.3-codex-high":       (5, 2, 4),
+    "gpt-5.3-codex-xhigh":      (5, 1, 4),
+    "gpt-5":                    (4, 3, 4),
+    "openai/gpt-5":             (4, 3, 4),
+    "gpt-5-mini":               (3, 4, 2),
+    "openai/gpt-5-mini":        (3, 4, 2),
+    "gpt-5-nano":               (2, 5, 1),
+    "openai/gpt-5-nano":        (2, 5, 1),
+    "gpt-chat-latest":          (3, 4, 2),
+    "openai/gpt-chat-latest":   (3, 4, 2),
+    "gpt-oss-120b":             (3, 3, 1),
+    "openai/gpt-oss-120b":      (3, 3, 1),
+    "gpt-oss-20b":              (2, 4, 1),
+    "openai/gpt-oss-20b":       (2, 4, 1),
+
+    # Google
+    "gemini-3.1-pro-preview":           (5, 3, 4),
+    "gemini-3.1-pro":                   (5, 3, 4),
+    "google/gemini-3.1-pro":            (5, 3, 4),
+    "gemini-3.1-flash-lite-preview":    (2, 5, 1),
+    "gemini-3.1-flash-lite":            (2, 5, 1),
+    "google/gemini-3.1-flash-lite":     (2, 5, 1),
+    "gemini-3-pro-preview":             (5, 3, 4),
+    "gemini-3-pro":                     (5, 3, 4),
+    "google/gemini-3-pro":              (5, 3, 4),
+    "gemini-3-flash-preview":           (3, 5, 2),
+    "gemini-3-flash":                   (3, 5, 2),
+    "google/gemini-3-flash":            (3, 5, 2),
+    "gemini-2.5-pro":                   (4, 3, 3),
+    "google/gemini-2.5-pro":            (4, 3, 3),
+    "gemini-2.5-flash":                 (3, 5, 1),
+    "google/gemini-2.5-flash":          (3, 5, 1),
+
+    # xAI
+    "x-ai/grok-4":          (5, 3, 4),
+    "x-ai/grok-4-0214":     (5, 3, 4),
+    "x-ai/grok-4.3":        (5, 3, 4),
+    "x-ai/grok-4-heavy":    (5, 2, 5),
+    "x-ai/grok-3":          (4, 4, 3),
+    "x-ai/grok-3-mini":     (2, 5, 1),
+    "x-ai/grok-code-fast":  (3, 5, 2),
+
+    # DeepSeek
+    "deepseek/deepseek-r1":             (5, 2, 2),  # cheap-but-frontier reasoner
+    "deepseek/deepseek-r1-0528":        (5, 2, 2),
+    "deepseek/deepseek-chat":           (4, 4, 2),
+    "deepseek/deepseek-v3":             (4, 4, 2),
+    "deepseek/deepseek-v3.1":           (4, 4, 2),
+    "deepseek/deepseek-v3.1-base":      (4, 4, 2),
+    "deepseek/deepseek-v3.1-terminus":  (4, 4, 2),
+    "deepseek/deepseek-chat-v3-0324":   (4, 4, 2),
+    "deepseek/deepseek-v3.2":           (3, 4, 1),
+    "deepseek/deepseek-v3.2-exp":       (3, 4, 1),
+
+    # Meta Llama
+    "meta-llama/llama-4-maverick":          (4, 4, 2),
+    "meta-llama/llama-4-scout":             (3, 4, 1),
+    "meta-llama/llama-3.3-70b":             (3, 4, 1),
+    "meta-llama/llama-3.3-70b-instruct":    (3, 4, 1),
+    "meta-llama/llama-3.3-8b":              (2, 5, 1),
+    "meta-llama/llama-3.2-3b":              (1, 5, 1),
+    "meta-llama/llama-3.2-1b":              (1, 5, 1),
+    "meta-llama/llama-3.1-8b":              (2, 5, 1),
+
+    # Qwen
+    "qwen/qwen3-coder":             (4, 3, 2),
+    "qwen/qwen3-235b-a22b":         (4, 3, 2),
+    "qwen/qwen3-72b":               (3, 4, 1),
+    "qwen/qwen3-32b":               (2, 4, 1),
+    "qwen/qwen3-14b":               (2, 5, 1),
+    "qwen/qwen3-vl-235b-thinking":  (4, 2, 3),
+    "qwen/qwen3-vl-8b-thinking":    (2, 3, 1),
+    "qwen/qwen3-next-80b-a3b-instruct": (3, 4, 1),
+
+    # Mistral
+    "mistralai/mistral-large-2501":             (4, 4, 3),
+    "mistralai/mistral-large":                  (4, 4, 3),
+    "mistralai/mistral-medium-3-5":             (3, 4, 2),
+    "mistralai/mistral-medium-3":               (3, 4, 2),
+    "mistralai/mistral-small-3.1-24b-instruct": (2, 5, 1),
+    "mistralai/codestral":                      (3, 5, 2),
+    "mistralai/ministral-8b":                   (1, 5, 1),
+    "mistralai/ministral-3b":                   (1, 5, 1),
+
+    # Cohere
+    "cohere/command-a-03-2025":     (3, 4, 3),
+    "cohere/command-r-plus":        (3, 4, 2),
+    "cohere/command-r":             (2, 5, 1),
+
+    # Misc frontier-ish
+    "moonshotai/kimi-k2":           (4, 3, 2),
+    "moonshotai/kimi-k1.5":         (4, 3, 2),
+    "z-ai/glm-4.6":                 (4, 3, 2),
+    "z-ai/glm-4.5":                 (4, 3, 2),
+    "z-ai/glm-4.5-air":             (3, 4, 1),
+    "ai21/jamba-large-1.7":         (3, 4, 2),
+    "minimax/minimax-m2":           (4, 3, 2),
+    "minimax/minimax-m1":           (4, 3, 2),
+    "bytedance-seed/seed-1.6":      (4, 4, 2),
+    "bytedance-seed/seed-1.6-flash": (3, 5, 1),
+
+    # Smaller/specialised
+    "baidu/cobuddy":                (2, 4, 1),
+    "baidu/ernie-4.5-21b-a3b":      (2, 5, 1),
+    "nvidia/nemotron-3-nano-30b-a3b":           (2, 5, 1),
+    "nvidia/nemotron-3-super-120b-a12b":        (3, 3, 2),
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": (2, 4, 1),
+    "ibm-granite/granite-4.1-8b":   (1, 5, 1),
+    "ibm-granite/granite-3-8b":     (1, 5, 1),
+    "inception/mercury-coder":      (2, 5, 1),
+    "thedrummer/cydonia":           (1, 5, 1),
+    "sao10k/l3.3-euryale-70b":      (2, 4, 1),
+}
+
+
+def _heuristic_tiers(label: str, output_cost_per_1m: float, reasoning: bool) -> tuple[int, int, int]:
+    """Fallback tier scoring for models not in MODEL_TIERS. Tries to
+    extract a parameter count from the label (8B/70B/235B/etc.) and
+    use that as a stronger size signal than cost alone, since open-
+    source vendors price aggressively low for marketing reasons.
+
+    Distribution:
+      Intelligence:
+        - 200B+ params or $25+/M  → 5
+        - 70-200B or $5-$25/M     → 4
+        - 30-70B or $1-$5/M       → 3
+        - 8-30B or $0.20-$1/M     → 2
+        - <8B or <$0.20/M         → 1
+        + reasoning bumps tier 1-3 by 1; doesn't push 4→5 unless
+          the model is genuinely huge.
+      Speed:
+        - inverse of size, with name keywords as ±1 nudges.
+      Cost: pure cost bucket.
+    """
+    import re as _re
+    out = output_cost_per_1m or 0.0
+
+    # Cost bucket — same 5-tier cost ladder as before.
+    if out < 0.5:
+        cb = 1
+    elif out < 2:
+        cb = 2
+    elif out < 7:
+        cb = 3
+    elif out < 25:
+        cb = 4
+    else:
+        cb = 5
+
+    # Try to parse a parameter count. Label often carries something
+    # like "Llama 3.3 70B" or "Qwen3 235B". 235B → 5, 70B → 4, 30B
+    # → 3, 14B → 2, 7B → 1. We only trust the param count when it's
+    # clearly above 1B (so we don't pick up version numbers).
+    lower = (label or "").lower()
+    param_b = 0.0
+    for m in _re.finditer(r"\b(\d{1,4}(?:\.\d+)?)\s*b\b", lower):
+        try:
+            v = float(m.group(1))
+            if v >= 1 and v > param_b:
+                param_b = v
+        except ValueError:
+            pass
+
+    if param_b >= 200:
+        size_tier = 5
+    elif param_b >= 70:
+        size_tier = 4
+    elif param_b >= 30:
+        size_tier = 3
+    elif param_b >= 8:
+        size_tier = 2
+    elif param_b > 0:
+        size_tier = 1
+    else:
+        size_tier = 0  # unknown — fall back to cost
+
+    # Intelligence is the max of cost bucket and parsed size tier.
+    # Cost is high-confidence for closed-source frontier; size is
+    # high-confidence for open-source ladders. Whichever is higher
+    # is closer to the truth.
+    intel = max(cb, size_tier)
+    if reasoning and intel < 4:
+        # Reasoning is a strong intelligence signal but only for
+        # genuinely smaller models — frontier closed-source already
+        # caps at 5, so don't double-count there.
+        intel += 1
+
+    # Speed inverse of intel.
+    speed = 6 - intel
+    if _re.search(r"\b(mini|lite|flash|haiku|nano|small|fast|turbo|micro|tiny)\b", lower):
+        speed += 1
+    if _re.search(r"\b(opus|ultra|max|xlarge|titan|huge)\b", lower):
+        speed -= 1
+    if reasoning and intel >= 4:
+        # Frontier reasoning models burn lots of tokens on hidden
+        # thoughts; user-perceived speed drops.
+        speed -= 1
+
+    return (
+        max(1, min(5, intel)),
+        max(1, min(5, speed)),
+        max(1, min(5, cb)),
+    )
+
+
+def compute_tiers(
+    model_id: str,
+    label: str,
+    output_cost_per_1m: float,
+    reasoning: bool,
+) -> tuple[int, int, int]:
+    """Look up a (intelligence, speed, cost) triple. Curated map first;
+    heuristic fallback for the long tail."""
+    candidates = [model_id]
+    if ":free" in model_id:
+        candidates.append(model_id.replace(":free", ""))
+    if "/" in model_id:
+        tail = model_id.split("/", 1)[1]
+        candidates.append(tail)
+        if ":free" in tail:
+            candidates.append(tail.replace(":free", ""))
+    # Try dashes-vs-dots normalisations for each candidate.
+    for c in list(candidates):
+        if "." in c:
+            candidates.append(c.replace(".", "-"))
+        if "-" in c:
+            candidates.append(c.replace("-", "."))
+
+    # Dedup while preserving order.
+    seen = set()
+    ordered = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            ordered.append(c)
+
+    for c in ordered:
+        if c in MODEL_TIERS:
+            return MODEL_TIERS[c]
+
+    return _heuristic_tiers(label, output_cost_per_1m, reasoning)
+
+
+def compute_billing_kind(
+    *,
+    api: str,
+    route: str | None,
+    is_or_free: bool,
+    settings,
+) -> str:
+    """Return one of:
+        'subscription' — covered by an OAuth sub or Pro plan; hide cost row
+        'api_key'      — direct API-key path (Anthropic / OpenAI / Gemini)
+        'free'         — genuinely $0 per token (rate-limited OR :free tier)
+        'paid'         — per-token metering through OpenRouter; show pricing
+
+    Why 'api_key' is split from 'paid': both meter per-token, but the user
+    is paying a different counterparty. Letting the picker filter chips
+    "API key" vs "Subscription" gives users a clear way to scope to their
+    billing relationship — direct API key vs OAuth subscription — instead
+    of conflating them under a generic "paid" bucket.
+
+    Subscription paths:
+      - api=codex (Codex sub via 9Router)
+      - api=gemini-cli (Gemini CLI sub via 9Router)
+      - route="cc" (Claude sub via 9Router)
+      - api=anthropic, adaptive route, Pro mode active with bearer
+    """
+    if api == "codex":
+        return "subscription"
+    if api == "gemini-cli":
+        return "subscription"
+    if route == "cc":
+        return "subscription"
+    if (
+        api == "anthropic"
+        and route is None
+        and getattr(settings, "connection_mode", "own_key") == "openswarm-pro"
+        and getattr(settings, "openswarm_bearer_token", None)
+    ):
+        return "subscription"
+    if route == "api":
+        return "api_key"
+    if is_or_free:
+        return "free"
+    return "paid"
+
+
+# ---------------------------------------------------------------------------
 # Cost tracking
 # ---------------------------------------------------------------------------
 
@@ -518,6 +860,7 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     # Anthropic (direct API rates).
     ("Anthropic", "sonnet"): (3.0, 15.0),
     ("Anthropic", "opus"): (5.0, 25.0),
+    ("Anthropic", "opus-4-7"): (5.0, 25.0),
     ("Anthropic", "haiku"): (1.0, 5.0),
     # OpenAI — Codex subscription path, user pays nothing per token
     ("OpenAI", "gpt-5.5"): (0.0, 0.0),

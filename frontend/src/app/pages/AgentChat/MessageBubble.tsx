@@ -583,7 +583,10 @@ const ThinkingBubble: React.FC<{
             <span>Total</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{total.toLocaleString()}</span>
           </Box>
           <Box sx={{ mt: 0.5, color: c.text.ghost, fontSize: '0.7rem', fontStyle: 'italic' }}>
-            Input includes system prompt, history, tool defs, cache reads, and any subagent/tool work this turn.
+            Input shown is your message, history, and tool outputs. The fixed
+            framework preamble (system prompt, tool defs, MCP descriptions) is
+            excluded — that part is constant overhead from the agent runtime,
+            not anything you can shrink.
           </Box>
         </Box>
       ) : (

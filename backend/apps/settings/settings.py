@@ -25,16 +25,45 @@ SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 async def settings_lifespan():
     os.makedirs(DATA_DIR, exist_ok=True)
     try:
-        from backend.apps.nine_router import sync_gemini_api_key, sync_openswarm_pro_as_claude
+        from backend.apps.nine_router import (
+            ensure_running as _9r_ensure,
+            sync_gemini_api_key,
+            sync_openai_api_key,
+            sync_openrouter_api_key,
+            sync_openswarm_pro_as_claude,
+        )
         s = load_settings()
         import asyncio as _asyncio
-        if getattr(s, "google_api_key", None):
-            _asyncio.create_task(sync_gemini_api_key(s.google_api_key))
-        if getattr(s, "connection_mode", None) == "openswarm-pro":
-            bearer = getattr(s, "openswarm_bearer_token", None)
-            proxy = getattr(s, "openswarm_proxy_url", None) or "https://api.openswarm.com"
-            if bearer:
-                _asyncio.create_task(sync_openswarm_pro_as_claude(bearer, proxy))
+
+        async def _boot_router_then_sync():
+            """Start 9Router (if any apikey-routed provider is configured)
+            then push our key-based connections into it. Sequential because
+            sync_* helpers no-op when 9Router isn't running yet — running
+            them post-boot guarantees the connections actually land."""
+            needs_router = any([
+                getattr(s, "google_api_key", None),
+                getattr(s, "openai_api_key", None),
+                getattr(s, "openrouter_api_key", None),
+                getattr(s, "connection_mode", None) == "openswarm-pro",
+            ])
+            if needs_router:
+                try:
+                    await _9r_ensure()
+                except Exception as e:
+                    logger.warning(f"9Router lifespan boot failed: {e}")
+            if getattr(s, "google_api_key", None):
+                await sync_gemini_api_key(s.google_api_key)
+            if getattr(s, "openai_api_key", None):
+                await sync_openai_api_key(s.openai_api_key)
+            if getattr(s, "openrouter_api_key", None):
+                await sync_openrouter_api_key(s.openrouter_api_key)
+            if getattr(s, "connection_mode", None) == "openswarm-pro":
+                bearer = getattr(s, "openswarm_bearer_token", None)
+                proxy = getattr(s, "openswarm_proxy_url", None) or "https://api.openswarm.com"
+                if bearer:
+                    await sync_openswarm_pro_as_claude(bearer, proxy)
+
+        _asyncio.create_task(_boot_router_then_sync())
     except Exception as e:
         logger.warning(f"9Router sync startup failed: {e}")
     yield
@@ -165,16 +194,68 @@ async def update_settings(body: AppSettings):
 
     await save_settings_async(body)
 
-    # When the user changes their Gemini AI Studio API key, mirror it into
-    # 9Router as a priority-0 apikey connection. This bypasses the Gemini
-    # CLI OAuth 429 quota (Code Assist free tier) by routing through the
-    # independent generativelanguage.googleapis.com quota instead.
-    if getattr(body, "google_api_key", None) != getattr(old, "google_api_key", None):
+    google_changed = (
+        getattr(body, "google_api_key", None) != getattr(old, "google_api_key", None)
+    )
+    openai_changed = (
+        getattr(body, "openai_api_key", None) != getattr(old, "openai_api_key", None)
+    )
+    openrouter_changed = (
+        getattr(body, "openrouter_api_key", None) != getattr(old, "openrouter_api_key", None)
+    )
+    any_keyed_added = (
+        (getattr(body, "google_api_key", None) and not getattr(old, "google_api_key", None))
+        or (getattr(body, "openai_api_key", None) and not getattr(old, "openai_api_key", None))
+        or (getattr(body, "openrouter_api_key", None) and not getattr(old, "openrouter_api_key", None))
+    )
+
+    if openrouter_changed:
         try:
-            from backend.apps.nine_router import sync_gemini_api_key
-            await sync_gemini_api_key(body.google_api_key or None)
-        except Exception as e:
-            logger.warning(f"Gemini API-key sync failed: {e}")
+            from backend.apps.agents.providers.registry import invalidate_openrouter_cache
+            invalidate_openrouter_cache()
+        except Exception:
+            pass
+
+    # Boot+sync runs off the request path — ensure_running() can take 5min
+    # on first install (npm pull) and would freeze the event loop.
+    if google_changed or openai_changed or openrouter_changed:
+        async def _boot_and_sync_keys(
+            google_key: str | None,
+            openai_key: str | None,
+            openrouter_key: str | None,
+            do_google: bool,
+            do_openai: bool,
+            do_openrouter: bool,
+            need_boot: bool,
+        ):
+            try:
+                from backend.apps.nine_router import (
+                    ensure_running as _9r_ensure,
+                    is_running as _9r_running,
+                    sync_gemini_api_key,
+                    sync_openai_api_key,
+                    sync_openrouter_api_key,
+                )
+                if need_boot and not _9r_running():
+                    await _9r_ensure()
+                if do_google:
+                    await sync_gemini_api_key(google_key or None)
+                if do_openai:
+                    await sync_openai_api_key(openai_key or None)
+                if do_openrouter:
+                    await sync_openrouter_api_key(openrouter_key or None)
+            except Exception as e:
+                logger.warning(f"Background apikey sync failed: {e}")
+
+        asyncio.create_task(_boot_and_sync_keys(
+            getattr(body, "google_api_key", None),
+            getattr(body, "openai_api_key", None),
+            getattr(body, "openrouter_api_key", None),
+            google_changed,
+            openai_changed,
+            openrouter_changed,
+            any_keyed_added,
+        ))
 
     # When openswarm-pro mode or bearer token changes, register a `claude`
     # apikey connection in 9Router that proxies through our cloud. This

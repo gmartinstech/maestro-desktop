@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
@@ -287,6 +287,21 @@ const AgentCard: React.FC<Props> = ({
   const dispatch = useAppDispatch();
   const isDashboardActive = useDashboardActive();
   const hasApiKey = !!useAppSelector((s) => s.settings.data.anthropic_api_key);
+  const modelsByProvider = useAppSelector((s) => s.models.byProvider);
+  // Stored value → curated picker label, with a tidy fallback for unknowns.
+  const friendlyModelLabel = useMemo(() => {
+    const value = session.model;
+    if (!value) return '';
+    for (const models of Object.values(modelsByProvider)) {
+      for (const m of models as any[]) {
+        if (m.value === value) return m.label;
+      }
+    }
+    let s = String(value);
+    if (s.startsWith('or:')) s = s.slice(3);
+    if (s.includes('/')) s = s.split('/').pop() || s;
+    return s;
+  }, [session.model, modelsByProvider]);
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
 
   const cardBoxRef = useRef<HTMLDivElement>(null);
@@ -923,7 +938,7 @@ const AgentCard: React.FC<Props> = ({
           ...(isDraft && { visibility: 'hidden' }),
         }}>
           <Typography variant="caption" sx={{ color: c.text.tertiary }}>
-            {session.model}
+            {friendlyModelLabel}
           </Typography>
           <Typography variant="caption" sx={{ color: c.text.tertiary }}>
             {session.mode}

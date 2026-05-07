@@ -151,6 +151,20 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const modesMap = useAppSelector((state) => state.modes.items);
   const modelsByProvider = useAppSelector((state) => state.models.byProvider);
   const connectionMode = useAppSelector((state) => state.settings.data.connection_mode);
+
+  // Stored value → curated picker label, with a tidy fallback for unknowns.
+  const resolveModelLabel = useCallback((value: string | null | undefined): string => {
+    if (!value) return '';
+    for (const models of Object.values(modelsByProvider)) {
+      for (const m of models as any[]) {
+        if (m.value === value) return m.label;
+      }
+    }
+    let s = String(value);
+    if (s.startsWith('or:')) s = s.slice(3);
+    if (s.includes('/')) s = s.split('/').pop() || s;
+    return s;
+  }, [modelsByProvider]);
   // Used by the "too many connected apps for Haiku" warning rendered above
   // ChatInput. Each connected MCP adds a meaningful chunk of tool-schema
   // tokens to every request; Haiku 4.5's 200K window can't hold 5+ of them.
@@ -814,7 +828,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               {!isDraft && (
                 <Box sx={{ display: 'flex', gap: 1.5, mt: 0.25, alignItems: 'center' }}>
                   <Typography variant="caption" sx={{ color: c.text.tertiary }}>
-                    {session.model}
+                    {resolveModelLabel(session.model)}
                   </Typography>
                   <Typography variant="caption" sx={{ color: c.text.tertiary }}>
                     {session.branch_name}

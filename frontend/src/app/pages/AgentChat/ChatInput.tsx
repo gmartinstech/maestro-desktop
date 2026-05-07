@@ -10,6 +10,12 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import InputBase from '@mui/material/InputBase';
+import SearchIcon from '@mui/icons-material/Search';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import Slider from '@mui/material/Slider';
+import Collapse from '@mui/material/Collapse';
 import MicNoneOutlinedIcon from '@mui/icons-material/MicNoneOutlined';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import StopIcon from '@mui/icons-material/Stop';
@@ -189,7 +195,102 @@ const PROVIDER_COLORS: Record<string, string> = {
   mistral: '#FF7000',
   qwen: '#A974FF',
   cohere: '#FF7759',
+  openrouter: '#64748B',  // OR brand is muted slate, not the bright teal we had.
 };
+
+const LS_RECENT_MODELS = 'openswarm.picker.recentModels';
+const LS_RECENT_SEARCHES = 'openswarm.picker.recentSearches';
+const RECENT_MODELS_MAX = 3;
+const RECENT_SEARCHES_MAX = 4;
+const OR_AUTO_COLLAPSE_THRESHOLD = 12;
+
+function readLS<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLS(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota / private mode */ }
+}
+
+// Heuristic 1-5 fallback for entries without a backend tier (only kicks in
+// for the FALLBACK_MODELS pre-load list). Cost buckets: <$0.50/1, <$2/2,
+// <$7/3, <$25/4, ≥$25/5.
+type Tier = 1 | 2 | 3 | 4 | 5;
+const clampTier = (n: number): Tier => Math.max(1, Math.min(5, n)) as Tier;
+
+function _costBucket(out: number): Tier {
+  if (out < 0.5) return 1;
+  if (out < 2) return 2;
+  if (out < 7) return 3;
+  if (out < 25) return 4;
+  return 5;
+}
+
+function tierIntelligence(opt: any): Tier {
+  let tier: number = _costBucket(opt.output_cost_per_1m ?? 0);
+  if (opt.reasoning) tier += 1;
+  return clampTier(tier);
+}
+
+function tierSpeed(opt: any): Tier {
+  let tier: number = 6 - _costBucket(opt.output_cost_per_1m ?? 0);
+  if (opt.reasoning) tier -= 1;
+  const lower = String(opt.label || '').toLowerCase();
+  if (/\b(mini|lite|flash|haiku|nano|small|fast|turbo|micro|tiny)\b/.test(lower)) tier += 1;
+  if (/\b(opus|ultra|max|xlarge|titan)\b/.test(lower)) tier -= 1;
+  return clampTier(tier);
+}
+
+function tierCost(opt: any): Tier {
+  return _costBucket(opt.output_cost_per_1m ?? 0);
+}
+
+// Pull a version number from a label. Skips param counts (70B/120B/etc)
+// by clamping to <30. "Claude Opus 4.7" → 4.7, "GPT-5.5" → 5.5.
+function modelVersion(label: string): number {
+  const matches = String(label).matchAll(/(\d+(?:\.\d+)?)/g);
+  let bestVersion = 0;
+  for (const m of matches) {
+    const v = parseFloat(m[1]);
+    if (v >= 0.5 && v < 30 && v > bestVersion) bestVersion = v;
+  }
+  return bestVersion;
+}
+
+// Strip versions + route suffixes so "Claude Sonnet 4.6" and 4.5 share a key.
+function modelFamilyKey(label: string): string {
+  return String(label)
+    .toLowerCase()
+    .replace(/\b\d+(?:\.\d+)?\b/g, '')
+    .replace(/\(api key\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Sort: intelligence desc, family asc, version desc, label asc.
+function sortModelsForPicker<T extends { label: string }>(models: T[]): T[] {
+  const intelOf = (opt: any): number => {
+    if (Array.isArray(opt.tiers) && opt.tiers.length === 3) return opt.tiers[0];
+    return tierIntelligence(opt);
+  };
+  return [...models].sort((a: any, b: any) => {
+    const intelA = intelOf(a);
+    const intelB = intelOf(b);
+    if (intelA !== intelB) return intelB - intelA;
+    const famA = modelFamilyKey(a.label);
+    const famB = modelFamilyKey(b.label);
+    if (famA !== famB) return famA.localeCompare(famB);
+    const verA = modelVersion(a.label);
+    const verB = modelVersion(b.label);
+    if (verA !== verB) return verB - verA;
+    return a.label.localeCompare(b.label);
+  });
+}
 
 const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, onModeChange, model, onModelChange, provider, onProviderChange, isRunning, onStop, autoRunMode, contextEstimate, embedded, autoFocus, sessionId, queueLength = 0, thinkingLevel = 'auto', onThinkingLevelChange }, ref) => {
   const c = useClaudeTokens();
@@ -249,12 +350,24 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       const key = connectionMode === 'openswarm-pro' ? 'OpenSwarm Pro' : 'Anthropic';
       return { flat: FALLBACK_MODELS.map(m => ({ ...m, provider: key })), grouped: { [key]: FALLBACK_MODELS } };
     }
-    const flat: Array<{ value: string; label: string; context_window: number; provider: string; reasoning: boolean }> = [];
-    const grouped: Record<string, Array<{ value: string; label: string; context_window: number; reasoning: boolean }>> = {};
+    const flat: Array<any> = [];
+    const grouped: Record<string, any[]> = {};
     for (const [prov, models] of Object.entries(modelsByProvider)) {
-      grouped[prov] = models.map(m => ({ value: m.value, label: m.label, context_window: m.context_window ?? 200_000, reasoning: !!m.reasoning }));
-      for (const m of models) {
-        flat.push({ value: m.value, label: m.label, context_window: m.context_window ?? 200_000, provider: prov, reasoning: !!m.reasoning });
+      const enriched = models.map((m: any) => ({
+        value: m.value,
+        label: m.label,
+        context_window: m.context_window ?? 200_000,
+        reasoning: !!m.reasoning,
+        input_cost_per_1m: m.input_cost_per_1m ?? 0,
+        output_cost_per_1m: m.output_cost_per_1m ?? 0,
+        is_free: !!m.is_free,
+        max_completion_tokens: m.max_completion_tokens ?? null,
+        tiers: Array.isArray(m.tiers) && m.tiers.length === 3 ? m.tiers : undefined,
+        billing_kind: m.billing_kind,
+      }));
+      grouped[prov] = sortModelsForPicker(enriched);
+      for (const m of enriched) {
+        flat.push({ ...m, provider: prov });
       }
     }
     return { flat, grouped };
@@ -264,15 +377,256 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     if (modesArr.length === 0) dispatch(fetchModes());
   }, [dispatch, modesArr.length]);
 
-  // Collapsible provider groups in the model picker. The group containing
-  // the currently selected model is always expanded; others start collapsed
-  // when there are 3+ groups to keep the dropdown manageable.
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-  // Toggle based on the *effective* collapsed state (which can come from
-  // the default), not the raw stored value. Otherwise the first click on
-  // a group that was defaulted-collapsed is a no-op (undefined → true).
-  const toggleGroup = (prov: string, currentlyCollapsed: boolean) =>
-    setCollapsedGroups(prev => ({ ...prev, [prov]: !currentlyCollapsed }));
+  const [modelSearch, setModelSearch] = useState('');
+  const modelSearchRef = useRef<HTMLInputElement | null>(null);
+
+  // Recents + history persisted to localStorage. Trim on read so existing
+  // entries from when MAX was higher respect the current cap.
+  const [recentModels, setRecentModels] = useState<string[]>(
+    () => readLS<string[]>(LS_RECENT_MODELS, []).slice(0, RECENT_MODELS_MAX),
+  );
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => readLS<string[]>(LS_RECENT_SEARCHES, []));
+  const pushRecentModel = useCallback((value: string) => {
+    setRecentModels((prev) => {
+      const next = [value, ...prev.filter((v) => v !== value)].slice(0, RECENT_MODELS_MAX);
+      writeLS(LS_RECENT_MODELS, next);
+      return next;
+    });
+  }, []);
+  const pushRecentSearch = useCallback((q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const next = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, RECENT_SEARCHES_MAX);
+      writeLS(LS_RECENT_SEARCHES, next);
+      return next;
+    });
+  }, []);
+
+  type CapFilters = { reasoning: boolean; subscription: boolean; apiKey: boolean };
+  const [capFilters, setCapFilters] = useState<CapFilters>({
+    reasoning: false, subscription: false, apiKey: false,
+  });
+
+  // Indexed sliders (idx 0 = Any).
+  const CTX_STEPS = [0, 32_000, 128_000, 200_000, 500_000, 1_000_000];
+  const CTX_LABELS = ['Any', '32K+', '128K+', '200K+', '500K+', '1M+'];
+  const COST_STEPS = [Infinity, 50, 15, 5, 1, 0];
+  const COST_LABELS = ['Any', '≤$50/M', '≤$15/M', '≤$5/M', '≤$1/M', 'Free only'];
+  const [ctxIdx, setCtxIdx] = useState(0);
+  const [costIdx, setCostIdx] = useState(0);
+
+  const LS_FILTERS_EXPANDED = 'openswarm.picker.filtersExpanded';
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean>(
+    () => readLS<boolean>(LS_FILTERS_EXPANDED, false),
+  );
+  const toggleFilters = useCallback(() => {
+    setFiltersExpanded((prev) => {
+      writeLS(LS_FILTERS_EXPANDED, !prev);
+      return !prev;
+    });
+  }, []);
+  const anyFilterActive = (
+    capFilters.reasoning || capFilters.subscription || capFilters.apiKey
+    || ctxIdx > 0 || costIdx > 0
+  );
+
+  const LS_COLLAPSED_GROUPS = 'openswarm.picker.collapsedGroups';
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(
+    () => readLS<Record<string, boolean>>(LS_COLLAPSED_GROUPS, {}),
+  );
+  const toggleGroupCollapse = useCallback((prov: string, currentlyCollapsed: boolean) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [prov]: !currentlyCollapsed };
+      writeLS(LS_COLLAPSED_GROUPS, next);
+      return next;
+    });
+  }, []);
+
+  // Probe is keyed by model value so stale results don't display.
+  const [probeResult, setProbeResult] = useState<{ value: string; ok: boolean; error?: string; latency_ms?: number } | null>(null);
+
+  // Search + capability filters + sliders. Empty/all-default returns the
+  // grouping unchanged so first-open is fast.
+  const filteredModelGroups = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase();
+    const minCtx = CTX_STEPS[ctxIdx] || 0;
+    const maxCost = COST_STEPS[costIdx];
+    const anyCap = (
+      capFilters.reasoning || capFilters.subscription || capFilters.apiKey
+      || ctxIdx > 0 || costIdx > 0
+    );
+    const filterFn = (m: any): boolean => {
+      if (capFilters.reasoning && !m.reasoning) return false;
+      // Subscription / API key chips are OR'd.
+      if (capFilters.subscription || capFilters.apiKey) {
+        const okSub = capFilters.subscription && m.billing_kind === 'subscription';
+        const okApi = capFilters.apiKey && m.billing_kind === 'api_key';
+        if (!okSub && !okApi) return false;
+      }
+      if (minCtx > 0 && (m.context_window ?? 0) < minCtx) return false;
+      // maxCost=0 means "Free only" — subscription passes (free to user),
+      // paid/api_key excluded regardless of $.
+      if (maxCost !== Infinity) {
+        if (maxCost === 0) {
+          if (m.billing_kind !== 'free' && m.billing_kind !== 'subscription') return false;
+        } else {
+          if (
+            (m.billing_kind === 'paid' || m.billing_kind === 'api_key')
+            && (m.output_cost_per_1m ?? 0) > maxCost
+          ) return false;
+        }
+      }
+      return true;
+    };
+    if (!q && !anyCap) return allModelOptions.grouped;
+    const out: Record<string, Array<any>> = {};
+    for (const [prov, models] of Object.entries(allModelOptions.grouped)) {
+      const provLower = prov.toLowerCase();
+      const qMatch = (m: any) =>
+        !q
+        || m.label.toLowerCase().includes(q)
+        || m.value.toLowerCase().includes(q)
+        || provLower.includes(q);
+      const matches = (models as any[]).filter((m) => filterFn(m) && qMatch(m));
+      if (matches.length) out[prov] = matches;
+    }
+    return out;
+  }, [modelSearch, allModelOptions.grouped, capFilters, ctxIdx, costIdx]);
+
+  // Recents materialised against current catalog so removed models drop out.
+  const recentMaterialised = useMemo(() => {
+    const flatByValue = new Map(allModelOptions.flat.map((m) => [m.value, m]));
+    return recentModels
+      .map((v) => flatByValue.get(v))
+      .filter(Boolean) as typeof allModelOptions.flat;
+  }, [recentModels, allModelOptions.flat]);
+  const showRecents = (
+    !modelSearch.trim()
+    && !capFilters.reasoning && !capFilters.subscription && !capFilters.apiKey
+    && ctxIdx === 0 && costIdx === 0
+    && recentMaterialised.length > 0
+  );
+
+  // Shared tooltip body for Recents + groups. Tiers come from backend; the
+  // local heuristic only kicks in for the pre-load FALLBACK_MODELS list.
+  const buildModelTooltip = useCallback((opt: any): React.ReactNode => {
+    const [intel, speed, cost] = (Array.isArray(opt.tiers) && opt.tiers.length === 3)
+      ? opt.tiers
+      : [tierIntelligence(opt), tierSpeed(opt), tierCost(opt)];
+    const billingKind: 'paid' | 'subscription' | 'free' = opt.billing_kind || (opt.is_free ? 'free' : 'paid');
+    // 15 pixel cells, gradient palette per tier — matches Settings' PixelBarOuter.
+    const Bars = ({ filled, palette }: { filled: number; palette: string[] }) => {
+      const TOTAL_CELLS = 15;
+      const filledCells = Math.round((filled / 5) * TOTAL_CELLS);
+      return (
+        <Box sx={{ display: 'inline-flex', gap: '1px', alignItems: 'center' }}>
+          {Array.from({ length: TOTAL_CELLS }, (_, i) => {
+            const on = i < filledCells;
+            const colorIdx = on
+              ? Math.min(palette.length - 1, Math.floor((i / Math.max(filledCells - 1, 1)) * (palette.length - 1)))
+              : 0;
+            return (
+              <Box
+                key={i}
+                sx={{
+                  width: 5, height: 5,
+                  bgcolor: on ? palette[colorIdx] : c.border.subtle,
+                  opacity: on ? 1 : 0.3,
+                  transformOrigin: 'center',
+                  animation: on
+                    ? `pixelPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.018}s both`
+                    : 'none',
+                  '@keyframes pixelPop': {
+                    '0%':   { transform: 'scale(0)', opacity: 0 },
+                    '60%':  { transform: 'scale(1.2)', opacity: 1 },
+                    '100%': { transform: 'scale(1)', opacity: 1 },
+                  },
+                }}
+              />
+            );
+          })}
+        </Box>
+      );
+    };
+    const INTEL_PALETTE  = ['#6D5BBE', '#8870D5', '#A78BFA', '#BFA3FF', '#D5BFFF'];
+    const SPEED_PALETTE  = ['#2DBFAA', '#42D6BF', '#5EEAD4', '#7FF1DF', '#A3F7E9'];
+    const COST_PALETTE   = ['#C7752E', '#DD8A3D', '#F59E0B', '#FAB23C', '#FCC773'];
+    const capabilities = [
+      opt.reasoning && 'Reasoning',
+      'Tools',
+      billingKind === 'free' && 'Free tier',
+      billingKind === 'subscription' && 'Subscription',
+      (opt.context_window ?? 0) >= 1_000_000 && '1M+ context',
+    ].filter(Boolean).join(' · ');
+    return (
+      <Box sx={{ fontSize: '0.74rem', lineHeight: 1.55, minWidth: 256 }}>
+        <Box sx={{
+          fontWeight: 600, fontSize: '0.85rem', mb: 0.85,
+          color: c.text.primary,
+          letterSpacing: '-0.01em',
+          pb: 0.6,
+          borderBottom: `1px solid ${c.border.subtle}`,
+        }}>
+          {opt.label}
+        </Box>
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
+          columnGap: 1.75, rowGap: 0.5,
+          alignItems: 'center',
+          color: c.text.muted,
+        }}>
+          <span>Intelligence</span><Bars filled={intel} palette={INTEL_PALETTE} />
+          <span>Speed</span><Bars filled={speed} palette={SPEED_PALETTE} />
+          {billingKind === 'subscription' ? null : (
+            <>
+              <span>Cost</span>
+              {billingKind === 'free'
+                ? <Box component="span" sx={{ color: '#10b981', fontWeight: 600 }}>Free</Box>
+                : <Bars filled={cost} palette={COST_PALETTE} />}
+            </>
+          )}
+          <span>Context</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: c.text.secondary }}>
+            {(opt.context_window ?? 0).toLocaleString()}
+          </span>
+          {billingKind === 'paid' && (opt.input_cost_per_1m || opt.output_cost_per_1m) ? (
+            <>
+              <span>Pricing</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums', color: c.text.secondary }}>
+                ${opt.input_cost_per_1m?.toFixed(2)}/M in · ${opt.output_cost_per_1m?.toFixed(2)}/M out
+              </span>
+            </>
+          ) : null}
+          {capabilities && (
+            <>
+              <span>Capabilities</span>
+              <span style={{ color: c.text.secondary }}>{capabilities}</span>
+            </>
+          )}
+        </Box>
+      </Box>
+    );
+  }, [c]);
+
+  // Match Settings stat-card surface (Settings.tsx cardSx).
+  const tooltipSlotProps = useMemo(() => ({
+    tooltip: {
+      sx: {
+        bgcolor: c.bg.elevated,
+        color: c.text.primary,
+        border: `1px solid ${c.border.subtle}`,
+        borderRadius: `${c.radius.md}px`,
+        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.32)',
+        padding: '12px 14px',
+        maxWidth: 340,
+        fontSize: '0.78rem',
+        fontFamily: c.font.sans,
+      },
+    },
+    arrow: { sx: { color: c.bg.elevated, '&:before': { border: `1px solid ${c.border.subtle}` } } },
+  }), [c]);
 
   const [images, setImages] = useState<AttachedImage[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -302,6 +656,39 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   const [modeAnchor, setModeAnchor] = useState<HTMLElement | null>(null);
   const [modelAnchor, setModelAnchor] = useState<HTMLElement | null>(null);
   const [thinkingAnchor, setThinkingAnchor] = useState<HTMLElement | null>(null);
+
+  // Auto-focus search on menu open; reset search on close.
+  useEffect(() => {
+    if (modelAnchor) {
+      const t = setTimeout(() => modelSearchRef.current?.focus(), 30);
+      return () => clearTimeout(t);
+    }
+    setModelSearch('');
+  }, [modelAnchor]);
+
+  // Debounced 1-token probe to surface 401/402/etc before send.
+  useEffect(() => {
+    if (!model) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/agents/probe-model`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model }),
+        });
+        if (cancelled) return;
+        const data = await res.json();
+        setProbeResult({ value: model, ok: !!data.ok, error: data.error, latency_ms: data.latency_ms });
+      } catch {
+        // Non-blocking — chat send surfaces any real error.
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [model]);
 
   const currentMode = modesMap[mode];
   const FALLBACK_MODE = { ...FALLBACK_MODE_BASE, color: c.accent.primary };
@@ -713,6 +1100,11 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       border: `1px solid ${c.border.subtle}`,
       borderRadius: '10px',
       minWidth: 180,
+      // Hard cap so a long unbreakable error string in the probe
+      // banner can't stretch the menu wider than its sensible
+      // content. 380px fits the longest model label comfortably
+      // (≈ 56 chars at 0.8rem) without sprawling across the screen.
+      maxWidth: 380,
       maxHeight: 400,
       boxShadow: c.shadow.lg,
       '& .MuiMenuItem-root': {
@@ -1146,33 +1538,386 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
           anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
           transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           slotProps={{ paper: menuPaperProps }}
-          autoFocus
-          MenuListProps={{ autoFocusItem: true }}
+          // We focus our own search input (effect above), so don't let
+          // the Menu auto-focus the first MenuItem — that would steal
+          // focus and block typing.
+          autoFocus={false}
+          MenuListProps={{ autoFocusItem: false }}
         >
-          {Object.entries(allModelOptions.grouped).map(([prov, models]) => {
-            // Non-interactive provider headers followed by their models.
-            // All groups always shown — no collapse/expand. Keeping the
-            // menu layout static avoids the "cursor chases a moving
-            // target" problem that happens when items above the cursor
-            // appear/disappear.
+          {/* Sticky header. Stops click+key so Menu doesn't typeahead while typing. */}
+          <Box
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') e.stopPropagation();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            sx={{
+              position: 'sticky', top: 0, zIndex: 2,
+              bgcolor: c.bg.surface,
+              borderBottom: `1px solid ${c.border.subtle}`,
+              display: 'flex', flexDirection: 'column',
+              outline: 'none',
+              '&:focus, &:focus-within': { outline: 'none' },
+            }}
+          >
+            <Box sx={{
+              px: 1.25, height: 36,
+              display: 'flex', alignItems: 'center', gap: 0.75,
+              flexShrink: 0,
+            }}>
+              <SearchIcon sx={{ fontSize: 16, color: c.text.ghost }} />
+              <InputBase
+                inputRef={modelSearchRef}
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && modelSearch.trim()) {
+                    pushRecentSearch(modelSearch);
+                  }
+                }}
+                placeholder="Search models…"
+                fullWidth
+                sx={{
+                  fontSize: '0.85rem',
+                  color: c.text.primary,
+                  '& input': { padding: 0 },
+                  '& input::placeholder': { color: c.text.ghost, opacity: 1 },
+                }}
+              />
+              <Tooltip
+                title={anyFilterActive
+                  ? `${[capFilters.reasoning, capFilters.subscription, capFilters.apiKey, ctxIdx > 0, costIdx > 0].filter(Boolean).length} active filter${[capFilters.reasoning, capFilters.subscription, capFilters.apiKey, ctxIdx > 0, costIdx > 0].filter(Boolean).length === 1 ? '' : 's'}`
+                  : (filtersExpanded ? 'Hide filters' : 'Show filters')}
+                placement="bottom"
+                enterDelay={400}
+                slotProps={tooltipSlotProps}
+              >
+                <Box
+                  onClick={toggleFilters}
+                  sx={{
+                    cursor: 'pointer', userSelect: 'none', flexShrink: 0,
+                    position: 'relative',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 28, height: 24,
+                    color: anyFilterActive ? c.accent.primary : c.text.tertiary,
+                    borderRadius: '4px',
+                    '&:hover': {
+                      bgcolor: c.bg.elevated,
+                      color: anyFilterActive ? c.accent.primary : c.text.muted,
+                    },
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  <TuneOutlinedIcon sx={{
+                    fontSize: 16,
+                    transform: filtersExpanded ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 0.18s',
+                  }} />
+                  {anyFilterActive && (
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 3, right: 3,
+                      width: 5, height: 5,
+                      borderRadius: '50%',
+                      bgcolor: c.accent.primary,
+                      boxShadow: `0 0 0 1.5px ${c.bg.surface}`,
+                    }} />
+                  )}
+                </Box>
+              </Tooltip>
+            </Box>
+            <Collapse in={filtersExpanded} timeout={180} unmountOnExit>
+            {/* Boolean capability chips — Reasoning / Free / Subscription.
+                "Cheap" + "≥200K" got promoted to the slider rows below,
+                where they're continuous rather than discrete. */}
+            <Box sx={{
+              px: 1.25, height: 28,
+              display: 'flex', alignItems: 'center', gap: 0.5,
+              flexShrink: 0,
+              overflowX: 'auto',
+              scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' },
+            }}>
+              {([
+                { key: 'reasoning', label: 'Reasoning' },
+                { key: 'subscription', label: 'Subscription' },
+                { key: 'apiKey', label: 'API key' },
+              ] as const).map(({ key, label }) => {
+                const active = capFilters[key];
+                return (
+                  <Box
+                    key={key}
+                    onClick={() => setCapFilters((prev) => ({ ...prev, [key]: !prev[key] }))}
+                    sx={{
+                      cursor: 'pointer', userSelect: 'none',
+                      px: 0.85, height: 20,
+                      display: 'inline-flex', alignItems: 'center',
+                      fontSize: '0.66rem', fontWeight: 600,
+                      letterSpacing: '0.04em',
+                      borderRadius: '4px',
+                      border: `1px solid ${active ? c.accent.primary : c.border.subtle}`,
+                      bgcolor: active ? `${c.accent.primary}1a` : 'transparent',
+                      color: active ? c.accent.primary : c.text.tertiary,
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.12s',
+                      '&:hover': { borderColor: c.accent.primary, color: active ? c.accent.primary : c.text.muted },
+                    }}
+                  >
+                    {label}
+                  </Box>
+                );
+              })}
+              {anyFilterActive && (
+                <Box
+                  onClick={() => {
+                    setCapFilters({ reasoning: false, subscription: false, apiKey: false });
+                    setCtxIdx(0); setCostIdx(0);
+                  }}
+                  sx={{
+                    cursor: 'pointer', userSelect: 'none',
+                    fontSize: '0.66rem', fontWeight: 500,
+                    color: c.text.ghost,
+                    ml: 0.5, px: 0.5,
+                    '&:hover': { color: c.text.muted },
+                  }}
+                >
+                  Reset
+                </Box>
+              )}
+            </Box>
+            <Box sx={{
+              px: 1.5, py: 0.5,
+              display: 'flex', flexDirection: 'column', gap: 0.25,
+              flexShrink: 0,
+            }}>
+              {([
+                { label: 'Min context', idx: ctxIdx, set: setCtxIdx, max: CTX_STEPS.length - 1, valueLabel: CTX_LABELS[ctxIdx] },
+                { label: 'Max cost',    idx: costIdx, set: setCostIdx, max: COST_STEPS.length - 1, valueLabel: COST_LABELS[costIdx] },
+              ] as const).map((row, i) => (
+                <Box key={i} sx={{
+                  display: 'grid', gridTemplateColumns: '78px 1fr 60px',
+                  alignItems: 'center', gap: 0.75,
+                  height: 22,
+                }}>
+                  <Box sx={{
+                    fontSize: '0.65rem', fontWeight: 500,
+                    color: c.text.tertiary,
+                    letterSpacing: '0.02em',
+                  }}>
+                    {row.label}
+                  </Box>
+                  <Slider
+                    size="small"
+                    value={row.idx}
+                    onChange={(_, v) => row.set(v as number)}
+                    step={1}
+                    min={0}
+                    max={row.max}
+                    marks
+                    sx={{
+                      color: c.accent.primary,
+                      height: 3,
+                      padding: '8px 0',
+                      '& .MuiSlider-thumb': {
+                        width: 10, height: 10,
+                        '&:before': { boxShadow: 'none' },
+                        '&:hover, &.Mui-focusVisible': { boxShadow: `0 0 0 6px ${c.accent.primary}26` },
+                      },
+                      '& .MuiSlider-rail': {
+                        opacity: 0.35, color: c.border.subtle,
+                      },
+                      '& .MuiSlider-mark': {
+                        width: 2, height: 2, borderRadius: '50%',
+                        bgcolor: c.text.ghost, opacity: 0.6,
+                      },
+                      '& .MuiSlider-markActive': { opacity: 0 },
+                    }}
+                  />
+                  <Box sx={{
+                    fontSize: '0.65rem', fontWeight: 600,
+                    color: row.idx > 0 ? c.accent.primary : c.text.ghost,
+                    fontVariantNumeric: 'tabular-nums',
+                    textAlign: 'right',
+                  }}>
+                    {row.valueLabel}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+            </Collapse>
+          </Box>
+
+          {/* Probe warning, capped to one line — full text on hover. */}
+          {probeResult && probeResult.value === model && !probeResult.ok && (
+            <Tooltip title={probeResult.error || 'health check failed'} placement="bottom-start" enterDelay={400}>
+              <Box
+                onClick={(e) => e.stopPropagation()}
+                sx={{
+                  mx: 1, my: 0.5,
+                  px: 1, height: 26,
+                  display: 'flex', alignItems: 'center', gap: 0.5,
+                  borderRadius: '6px',
+                  bgcolor: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.18)',
+                  color: '#ef4444',
+                  fontSize: '0.7rem',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <Box component="span" sx={{ fontWeight: 700, flexShrink: 0 }}>Heads up</Box>
+                <Box component="span" sx={{
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  opacity: 0.85,
+                }}>
+                  · {probeResult.error || 'this model failed its health check'}
+                </Box>
+              </Box>
+            </Tooltip>
+          )}
+
+          {showRecents && (() => {
+            const recentKey = 'Recent';
+            const recentCollapsed = !!collapsedGroups[recentKey];
+            return (
+            <>
+              <MenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleGroupCollapse(recentKey, recentCollapsed);
+                }}
+                sx={{
+                  opacity: '1 !important',
+                  py: 0.75, px: 1.5, minHeight: 'auto',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: '100%' }}>
+                  <KeyboardArrowRightIcon
+                    sx={{
+                      fontSize: 14, color: c.text.tertiary,
+                      transform: recentCollapsed ? 'none' : 'rotate(90deg)',
+                      transition: 'transform 0.15s',
+                    }}
+                  />
+                  <AccessTimeIcon sx={{ fontSize: 12, color: c.text.tertiary }} />
+                  <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: c.text.tertiary, flex: 1 }}>
+                    Recent
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.65rem', color: c.text.ghost, fontWeight: 500 }}>
+                    {recentMaterialised.length}
+                  </Typography>
+                </Box>
+              </MenuItem>
+              <Collapse in={!recentCollapsed} timeout={180} unmountOnExit>
+                {recentMaterialised.map((opt: any) => (
+                  <Tooltip
+                    key={`recent-${opt.value}`}
+                    title={buildModelTooltip(opt)}
+                    placement="right"
+                    enterDelay={300}
+                    slotProps={tooltipSlotProps}
+                  >
+                    <MenuItem
+                      selected={model === opt.value}
+                      onClick={() => {
+                        onModelChange(opt.value);
+                        pushRecentModel(opt.value);
+                        setModelAnchor(null);
+                      }}
+                    >
+                      <ListItemText
+                        primary={opt.label}
+                        slotProps={{ primary: { sx: { fontSize: '0.8rem', color: model === opt.value ? c.text.primary : c.text.muted } } }}
+                      />
+                    </MenuItem>
+                  </Tooltip>
+                ))}
+              </Collapse>
+            </>
+            );
+          })()}
+
+          {Object.keys(filteredModelGroups).length === 0 && (
+            <Box
+              sx={{
+                px: 2, py: 1.5,
+                fontSize: '0.8rem',
+                color: c.text.ghost,
+                textAlign: 'center',
+                fontStyle: 'italic',
+              }}
+            >
+              {modelSearch.trim() ? (
+                <>No models match "{modelSearch.trim()}".{anyFilterActive && (<><br/><Box component="span" sx={{ fontSize: '0.7rem' }}>Try clearing the filters above.</Box></>)}</>
+              ) : (
+                <>No models match the current filters.</>
+              )}
+            </Box>
+          )}
+
+          {Object.entries(filteredModelGroups).map(([prov, models]) => {
             const isOpenSwarmPro = prov === 'OpenSwarm Pro';
-            const brandColor = PROVIDER_COLORS[prov.toLowerCase()] ?? c.text.tertiary;
-            // OpenSwarm Pro uses a warm blue→pink→orange gradient to stand
-            // out as the recommended paid tier (distinct from plain provider
-            // brand dots).
+            const isOR = prov.startsWith('OpenRouter');
+            const ms = models as any[];
+            // Every group is collapsible — chevron + member-count
+            // badge appear on every header for consistency. OR vendor
+            // groups with >12 entries auto-collapse on first open;
+            // everything else starts expanded. Search disables auto-
+            // collapse so matches stay visible while typing.
+            const collapsible = true;
+            const searchActive = modelSearch.trim().length > 0;
+            const userToggle = collapsedGroups[prov];
+            const autoCollapse = isOR && !searchActive && ms.length > OR_AUTO_COLLAPSE_THRESHOLD;
+            const collapsed = userToggle !== undefined ? userToggle : autoCollapse;
+            const brandKey = (isOR ? 'openrouter' : prov.toLowerCase());
+            const brandColor = PROVIDER_COLORS[brandKey] ?? c.text.tertiary;
             const OPENSWARM_GRADIENT =
               'linear-gradient(135deg, #8FB3FF 0%, #E56BC4 45%, #FFA85C 100%)';
+
+            const highlightMatch = (text: string): React.ReactNode => {
+              const q = modelSearch.trim();
+              if (!q) return text;
+              const idx = text.toLowerCase().indexOf(q.toLowerCase());
+              if (idx < 0) return text;
+              return (
+                <>
+                  {text.slice(0, idx)}
+                  <Box component="span" sx={{ fontWeight: 700, color: c.text.primary }}>
+                    {text.slice(idx, idx + q.length)}
+                  </Box>
+                  {text.slice(idx + q.length)}
+                </>
+              );
+            };
+
             return [
               <MenuItem
                 key={`header-${prov}`}
-                disabled
-                sx={{ opacity: '1 !important', py: 0.75, px: 1.5, minHeight: 'auto', pointerEvents: 'none' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleGroupCollapse(prov, collapsed);
+                }}
+                sx={{
+                  opacity: '1 !important',
+                  py: 0.75, px: 1.5, minHeight: 'auto',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
+                }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: '100%' }}>
+                  <KeyboardArrowRightIcon
+                    sx={{
+                      fontSize: 14,
+                      color: c.text.tertiary,
+                      transform: collapsed ? 'none' : 'rotate(90deg)',
+                      transition: 'transform 0.15s',
+                    }}
+                  />
                   <Box sx={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
+                    width: 6, height: 6, borderRadius: '50%',
                     background: isOpenSwarmPro ? OPENSWARM_GRADIENT : brandColor,
                     boxShadow: isOpenSwarmPro
                       ? '0 0 8px rgba(229, 107, 196, 0.6)'
@@ -1180,10 +1925,9 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
                     flexShrink: 0,
                   }} />
                   <Typography sx={{
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
+                    fontSize: '0.7rem', fontWeight: 700,
+                    letterSpacing: '0.08em', textTransform: 'uppercase',
+                    flex: 1,
                     ...(isOpenSwarmPro
                       ? {
                           background: OPENSWARM_GRADIENT,
@@ -1195,41 +1939,82 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
                   }}>
                     {prov}
                   </Typography>
+                  <Typography sx={{ fontSize: '0.65rem', color: c.text.ghost, fontWeight: 500 }}>
+                    {ms.length}
+                  </Typography>
                 </Box>
               </MenuItem>,
-              ...models.map((opt) => (
-                <MenuItem
-                  key={opt.value}
-                  selected={model === opt.value}
-                  onClick={() => {
-                    onModelChange(opt.value);
-                    if (onProviderChange) {
-                      const provLower = prov.toLowerCase();
-                      const providerMap: Record<string, string> = {
-                        anthropic: 'anthropic',
-                        'openswarm pro': 'anthropic',
-                        openai: 'openai',
-                        google: 'gemini',
-                        xai: 'openrouter',
-                        meta: 'openrouter',
-                        deepseek: 'openrouter',
-                        mistral: 'openrouter',
-                        qwen: 'openrouter',
-                        cohere: 'openrouter',
-                      };
-                      onProviderChange(providerMap[provLower] || provLower);
+              // 180ms matches the Filters tray for visual consistency.
+              <Collapse
+                key={`coll-${prov}`}
+                in={!collapsed}
+                timeout={180}
+                unmountOnExit
+              >
+                {models.map((opt: any) => {
+                    let displayLabel = opt.label;
+                    if (isOR && displayLabel.includes(': ')) {
+                      const groupVendor = prov.replace(/^OpenRouter\s*[·•]\s*/i, '').toLowerCase();
+                      const colonIdx = displayLabel.indexOf(': ');
+                      const labelPrefix = displayLabel.slice(0, colonIdx).toLowerCase();
+                      if (labelPrefix === groupVendor) {
+                        displayLabel = displayLabel.slice(colonIdx + 2);
+                      }
                     }
-                    setModelAnchor(null);
-                  }}
-                >
-                  <ListItemText
-                    primary={opt.label}
-                    slotProps={{ primary: { sx: { fontSize: '0.8rem', color: model === opt.value ? c.text.primary : c.text.muted } } }}
-                  />
-                </MenuItem>
-              )),
+                    return (
+                      <Tooltip
+                        key={opt.value}
+                        title={buildModelTooltip(opt)}
+                        placement="right"
+                        enterDelay={300}
+                        slotProps={tooltipSlotProps}
+                      >
+                        <MenuItem
+                          selected={model === opt.value}
+                          onClick={() => {
+                            onModelChange(opt.value);
+                            pushRecentModel(opt.value);
+                            if (modelSearch.trim()) pushRecentSearch(modelSearch);
+                            if (onProviderChange) {
+                              const provLower = prov.toLowerCase();
+                              const providerMap: Record<string, string> = {
+                                anthropic: 'anthropic',
+                                'openswarm pro': 'anthropic',
+                                openai: 'openai',
+                                google: 'gemini',
+                              };
+                              onProviderChange(providerMap[provLower] || (isOR ? 'openrouter' : provLower));
+                            }
+                            setModelAnchor(null);
+                          }}
+                        >
+                          <ListItemText
+                            primary={highlightMatch(displayLabel)}
+                            slotProps={{ primary: { sx: { fontSize: '0.8rem', color: model === opt.value ? c.text.primary : c.text.muted } } }}
+                          />
+                        </MenuItem>
+                      </Tooltip>
+                    );
+                  })}
+              </Collapse>,
             ];
           }).flat()}
+
+          <Box
+            onClick={(e) => e.stopPropagation()}
+            sx={{
+              position: 'sticky', bottom: 0,
+              bgcolor: c.bg.surface,
+              borderTop: `1px solid ${c.border.subtle}`,
+              px: 1.25, py: 0.5,
+              fontSize: '0.65rem', color: c.text.ghost,
+              display: 'flex', justifyContent: 'space-between',
+              pointerEvents: 'none',
+            }}
+          >
+            <span>Type to search · Esc to close</span>
+            <span>{Object.values(filteredModelGroups).reduce((sum, ms) => sum + (ms as any[]).length, 0)} models</span>
+          </Box>
         </Menu>
 
         {/* Thinking-level picker — only rendered for reasoning-capable models */}

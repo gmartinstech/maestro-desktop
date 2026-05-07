@@ -46,6 +46,57 @@ _CLAUDE_MODEL_PREFIXES = (
     "cc/",
 )
 
+_GEMINI_MODEL_PREFIXES = ("gemini/", "gc/", "ag/")
+
+# Fields Gemini's function_declarations validator rejects. 9Router 0.3.60's
+# translator strips allOf/anyOf/oneOf/const-toplevel/required but misses these.
+_GEMINI_FORBIDDEN_SCHEMA_KEYS = {
+    "$schema",
+    "additionalProperties",
+    "propertyNames",
+    "patternProperties",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "const",  # nested const leaks through 9Router's top-level-only strip.
+}
+
+
+def _scrub_gemini_schema(node):
+    """Recursive in-place strip of Gemini-rejected JSON Schema fields."""
+    if isinstance(node, dict):
+        for k in list(node.keys()):
+            if k in _GEMINI_FORBIDDEN_SCHEMA_KEYS:
+                node.pop(k, None)
+                continue
+            node[k] = _scrub_gemini_schema(node[k])
+        return node
+    if isinstance(node, list):
+        for i, v in enumerate(node):
+            node[i] = _scrub_gemini_schema(v)
+        return node
+    return node
+
+
+def _scrub_request_for_gemini(body: bytes) -> bytes:
+    """Strip Gemini-incompatible schema keys from request tools. Bytes-in/out, never raises."""
+    if not body:
+        return body
+    try:
+        parsed = json.loads(body)
+    except Exception:
+        return body
+    tools = parsed.get("tools") if isinstance(parsed, dict) else None
+    if isinstance(tools, list):
+        for t in tools:
+            if not isinstance(t, dict):
+                continue
+            if isinstance(t.get("input_schema"), (dict, list)):
+                _scrub_gemini_schema(t["input_schema"])
+            if isinstance(t.get("parameters"), (dict, list)):
+                _scrub_gemini_schema(t["parameters"])
+    return json.dumps(parsed).encode("utf-8")
+
+
 # Headers we strip before forwarding — these change hop-by-hop or we
 # replace them with upstream-specific auth.
 _HOP_HEADERS = {
@@ -67,6 +118,11 @@ _HOP_HEADERS = {
 def _is_claude_model(model: str) -> bool:
     m = (model or "").strip().lower()
     return m.startswith(_CLAUDE_MODEL_PREFIXES)
+
+
+def _is_gemini_model(model: str) -> bool:
+    m = (model or "").strip().lower()
+    return m.startswith(_GEMINI_MODEL_PREFIXES)
 
 
 def _pick_upstream(model: str) -> tuple[str, dict[str, str]]:
@@ -115,6 +171,9 @@ async def proxy(rest: str, request: Request):
             model = str(parsed.get("model") or "")
         except Exception:
             pass
+
+    if _is_gemini_model(model):
+        body = _scrub_request_for_gemini(body)
 
     base_url, auth_headers = _pick_upstream(model)
 

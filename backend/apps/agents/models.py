@@ -161,6 +161,10 @@ class AgentSession(BaseModel):
     # input_schema is shipped only for the ids in this list. Same gate
     # pattern as active_mcps but for the Outputs/Views surface.
     active_outputs: list[str] = Field(default_factory=list)
+    # Estimated framework preamble tokens (preset + tool defs + MCP descs +
+    # composed prompt). Subtracted from displayed input for honest "this turn"
+    # numbers. Heuristic; clamped >= 0.
+    framework_overhead_tokens: int = 0
     # Compaction state. compact_threshold_pct is the live ctx_used ratio
     # that triggers _maybe_compact at the next turn boundary — turn-based
     # thresholds break under uneven workloads (one big Bash dump fills

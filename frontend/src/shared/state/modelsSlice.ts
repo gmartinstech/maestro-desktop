@@ -9,6 +9,13 @@ export interface ModelOption {
   version?: string;
   context_window: number;
   reasoning?: boolean;
+  // Optional picker-UX fields from list_models.
+  input_cost_per_1m?: number;
+  output_cost_per_1m?: number;
+  is_free?: boolean;
+  max_completion_tokens?: number | null;
+  tiers?: [number, number, number];  // (intelligence, speed, cost), 1-5.
+  billing_kind?: 'paid' | 'subscription' | 'free' | 'api_key';
 }
 
 interface ModelsState {
