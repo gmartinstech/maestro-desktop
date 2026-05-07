@@ -208,18 +208,6 @@ def test_legacy_identify_routes_through_sync(sink):
     assert len(sink) == 1
 
 
-def test_legacy_submit_session_close(sink):
-    from backend.apps.service.client import submit_session_close
-    submit_session_close({"id": "s-1", "cost_usd": 0.42})
-    assert len(sink) == 1
-
-
-def test_legacy_submit_diagnostic(sink):
-    from backend.apps.service.client import submit_diagnostic
-    submit_diagnostic({"kind": "error_caught"})
-    assert len(sink) == 1
-
-
 # --- spool -------------------------------------------------------------------
 
 def test_buffer_enqueue_and_drain(tmp_path):

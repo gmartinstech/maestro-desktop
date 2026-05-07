@@ -75,27 +75,6 @@ def validate_credentials(settings: AppSettings, provider: str = "anthropic") -> 
         return
 
 
-# ---------------------------------------------------------------------------
-# Legacy helpers (kept for backward compat during migration)
-# ---------------------------------------------------------------------------
-
-def get_agent_sdk_env(settings: AppSettings) -> dict[str, str]:
-    """Return the env dict for ClaudeAgentOptions based on connection mode.
-
-    DEPRECATED: Use create_provider() from providers.registry instead.
-    """
-    validate_credentials(settings, "anthropic")
-
-    if getattr(settings, "connection_mode", "own_key") == "openswarm-pro":
-        proxy_url = getattr(settings, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL
-        return {
-            "ANTHROPIC_AUTH_TOKEN": getattr(settings, "openswarm_bearer_token", ""),
-            "ANTHROPIC_BASE_URL": proxy_url,
-        }
-
-    return {"ANTHROPIC_API_KEY": settings.anthropic_api_key}
-
-
 def get_anthropic_client(settings: AppSettings) -> anthropic.AsyncAnthropic:
     """Return a configured AsyncAnthropic client based on connection mode.
 

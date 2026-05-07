@@ -301,23 +301,6 @@ def submit_event(
     submit("event", p)
 
 
-def submit_state(*, sessions_open: int = 0, connectors_active: int = 0) -> None:
-    submit("state", {"sessions_open": sessions_open, "connectors_active": connectors_active})
-
-
-def submit_session_close(session_dump: dict, activity: Optional[dict] = None) -> None:
-    submit("session", {"usage_window": session_dump, "activity": activity or {}})
-
-
-def submit_diagnostic(diagnostic: dict) -> None:
-    try:
-        from backend.apps.service.ring_buffer import snapshot
-        diagnostic["recent_log"] = snapshot()
-    except Exception:
-        pass
-    submit("diagnostic", {"diagnostic": diagnostic})
-
-
 def update_identity(extra: Optional[dict] = None) -> None:
     submit("state", {"identity": extra or {}})
 
