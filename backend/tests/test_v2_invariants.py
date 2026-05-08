@@ -1078,6 +1078,591 @@ def test_custom_provider_slug_is_url_safe():
     assert _custom_provider_slug_for_lookup("   ") == "custom"
 
 
+def test_custom_provider_slug_unicode_collapses_safely():
+    """Unicode names are folded to ASCII-safe dashes; emojis/accents drop."""
+    from backend.apps.agents.providers.registry import _custom_provider_slug_for_lookup
+    # Accented chars get stripped (regex is [a-zA-Z0-9-] only).
+    assert _custom_provider_slug_for_lookup("Tögether AI 🚀") == "t-gether-ai"
+    # Pure-emoji name → fallback "custom".
+    assert _custom_provider_slug_for_lookup("🚀💎") == "custom"
+    # Trailing/leading dashes get stripped.
+    assert _custom_provider_slug_for_lookup("---weird---") == "weird"
+
+
+def test_custom_provider_slug_does_not_collide_with_routing_prefixes():
+    """The cp- prefix in the routing string must not collide with 9Router's
+    built-in prefixes (cc/, cx/, gc/, ag/, gemini/, openrouter/) used by
+    resolved_is_9router. cp- starts with 'c' and dash so it can't be
+    confused with cc/, but verify the dispatch logic agrees."""
+    from backend.apps.agents.providers.registry import _find_builtin_model
+    entry = _find_builtin_model("custom/cc/whatever")  # adversarial slug "cc"
+    assert entry is not None
+    routed = entry["model_id"]
+    assert routed == "cp-cc/whatever"
+    # cp-cc is NOT cc/ — startswith check would have to match the exact slash.
+    assert not routed.startswith(("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter/"))
+
+
+def test_custom_provider_models_with_special_chars():
+    """Model ids in the wild contain colons (Ollama 'gpt-oss:120b'), dots
+    (deepseek 'deepseek-v3.1'), version suffixes (':free'), and slashes
+    (Together 'meta-llama/Llama-3-70B'). All must round-trip without
+    being mangled."""
+    from backend.apps.agents.providers.registry import _find_builtin_model
+    cases = [
+        "custom/ollama/gpt-oss:120b",
+        "custom/together/meta-llama/Llama-3.3-70B-Instruct",
+        "custom/deepseek/deepseek-v3.1-base",
+        "custom/openrouter/anthropic/claude-haiku-4.5:free",
+        "custom/groq/llama-3.3-70b-versatile",
+    ]
+    for v in cases:
+        e = _find_builtin_model(v)
+        assert e is not None, f"failed: {v}"
+        # Bare-model portion is everything after first slash after the slug.
+        rest = v[len("custom/"):]
+        slug, _, bare = rest.partition("/")
+        assert e["model_id"] == f"cp-{slug}/{bare}", f"bad routing for {v}: {e['model_id']}"
+
+
+def test_custom_provider_value_with_invalid_format_returns_none():
+    """Malformed picker values (no slug, no model) must not synthesise a
+    bogus entry — they should miss _find_builtin_model entirely so the
+    dispatch loop falls through to the 'unknown model' branch."""
+    from backend.apps.agents.providers.registry import _find_builtin_model
+    assert _find_builtin_model("custom/") is None
+    assert _find_builtin_model("custom/onlyslug") is None
+    assert _find_builtin_model("custom//onlymodel") is None  # empty slug
+
+
+def test_custom_provider_get_api_type_returns_custom():
+    """get_api_type drives the dispatch branch in agent_manager.py — must
+    return 'custom' (not 'anthropic' default fallback) for a custom value."""
+    from backend.apps.agents.providers.registry import get_api_type
+    assert get_api_type("custom/ollama/gpt-oss:120b") == "custom"
+
+
+def test_custom_provider_pydantic_round_trip_preserves_models():
+    """Settings save/load uses Pydantic; the models field is list[dict] and
+    must survive serialize-deserialize without dropping per-model fields."""
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    s = AppSettings(custom_providers=[
+        CustomProvider(
+            name="My LM Studio",
+            base_url="http://localhost:1234/v1",
+            api_key="not-needed",
+            models=[
+                {"value": "qwen3-coder", "label": "Qwen 3 Coder", "context_window": 128_000},
+                {"value": "llama-3.3-70b", "label": "Llama 3.3 70B"},  # no ctx
+            ],
+        ),
+    ])
+    dumped = s.model_dump()
+    re = AppSettings(**dumped)
+    assert len(re.custom_providers) == 1
+    cp = re.custom_providers[0]
+    assert cp.name == "My LM Studio"
+    assert len(cp.models) == 2
+    assert cp.models[0]["context_window"] == 128_000
+    assert cp.models[1].get("context_window") is None or cp.models[1].get("context_window") == 0
+
+
+def test_custom_provider_settings_default_is_empty_list():
+    """Existing settings.json without custom_providers must default to []
+    (not None / KeyError) so old installs upgrade cleanly."""
+    from backend.apps.settings.models import AppSettings
+    s = AppSettings()
+    assert s.custom_providers == []
+    assert isinstance(s.custom_providers, list)
+
+
+def test_custom_provider_get_anthropic_client_routes_cp_to_9router():
+    """probe-model and browser_agent both use get_anthropic_client_for_model.
+    A cp- prefixed router id must build a client pointed at 9Router, not
+    direct Anthropic, so the request actually reaches the openai-compat
+    translator instead of Anthropic's API rejecting an unknown model id."""
+    from backend.apps.settings.credentials import get_anthropic_client_for_model
+    from backend.apps.settings.models import AppSettings
+    s = AppSettings(anthropic_api_key="sk-ant-anything")
+    c = get_anthropic_client_for_model(s, "cp-ollama/gpt-oss:120b")
+    assert "20128" in str(c.base_url), f"client should point at 9Router, got {c.base_url}"
+
+
+def test_custom_provider_two_providers_get_distinct_slugs():
+    """Two custom providers with different display names must produce
+    two different slugs / routing prefixes — otherwise 9Router will route
+    both to whichever connection was created last."""
+    from backend.apps.agents.providers.registry import _custom_provider_slug_for_lookup
+    a = _custom_provider_slug_for_lookup("Ollama Cloud")
+    b = _custom_provider_slug_for_lookup("Together AI")
+    c = _custom_provider_slug_for_lookup("Groq")
+    assert len({a, b, c}) == 3
+
+
+def test_custom_provider_slug_collision_after_sanitize():
+    """Two raw names that slugify to the same string is a real footgun
+    (e.g. 'Ollama Cloud' vs 'ollama-cloud' both → 'ollama-cloud').
+    The dedupe-by-name UI check guards against same-string entries; this
+    test just documents that post-slug collisions DO collide and the
+    UI-level uniqueness check (in Settings.tsx) is the right enforcement
+    layer — backend resolution would always pick the first match."""
+    from backend.apps.agents.providers.registry import _custom_provider_slug_for_lookup
+    assert _custom_provider_slug_for_lookup("Ollama Cloud") == \
+           _custom_provider_slug_for_lookup("ollama-cloud") == \
+           _custom_provider_slug_for_lookup("OLLAMA cloud")
+
+
+def test_list_models_includes_complete_custom_providers_excludes_incomplete():
+    """list_models must surface fully-configured providers and silently
+    skip incomplete ones (missing name/base_url/models). This is what
+    let the user's empty-base-URL save 'silently' fail to appear in the
+    picker."""
+    import asyncio
+    from backend.apps.agents.agents import list_models
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    from unittest.mock import patch
+
+    cfg = AppSettings(custom_providers=[
+        # Complete — should appear.
+        CustomProvider(
+            name="Ollama Cloud", base_url="https://ollama.com/v1", api_key="x",
+            models=[{"value": "gpt-oss:120b", "label": "gpt-oss:120b"}],
+        ),
+        # Empty base_url — should NOT appear.
+        CustomProvider(
+            name="Broken", base_url="", api_key="y",
+            models=[{"value": "model-a", "label": "model-a"}],
+        ),
+        # No models — should NOT appear.
+        CustomProvider(
+            name="Empty", base_url="https://example.com/v1", api_key="z",
+            models=[],
+        ),
+        # Empty name — should NOT appear.
+        CustomProvider(
+            name="", base_url="https://example.com/v1", api_key="z",
+            models=[{"value": "x", "label": "x"}],
+        ),
+    ])
+
+    with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
+         patch("backend.apps.nine_router.is_running", return_value=False):
+        result = asyncio.run(list_models())
+
+    groups = result["models"]
+    assert "Ollama Cloud" in groups
+    assert len(groups["Ollama Cloud"]) == 1
+    assert groups["Ollama Cloud"][0]["value"] == "custom/ollama-cloud/gpt-oss:120b"
+    assert groups["Ollama Cloud"][0]["billing_kind"] == "api_key"
+    # None of the incomplete entries' names create a group.
+    assert "Broken" not in groups
+    assert "Empty" not in groups
+
+
+def test_list_models_custom_provider_model_with_only_value_fills_label():
+    """Per the Settings UI we send {value, label} where label = value. But
+    list_models should be tolerant of a model dict missing 'label' (e.g.
+    if a power user edits settings.json by hand)."""
+    import asyncio
+    from backend.apps.agents.agents import list_models
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    from unittest.mock import patch
+
+    cfg = AppSettings(custom_providers=[
+        CustomProvider(
+            name="Bare", base_url="https://x/v1", api_key="k",
+            models=[{"value": "model-only-value"}],  # no label
+        ),
+    ])
+    with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
+         patch("backend.apps.nine_router.is_running", return_value=False):
+        result = asyncio.run(list_models())
+
+    assert "Bare" in result["models"]
+    entry = result["models"]["Bare"][0]
+    assert entry["label"] == "model-only-value"
+
+
+def test_list_models_custom_provider_id_field_alias_for_value():
+    """Test the back-compat: cp.models[].id (alternate key) works
+    alongside cp.models[].value, since get_context_window uses both."""
+    import asyncio
+    from backend.apps.agents.agents import list_models
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    from unittest.mock import patch
+
+    cfg = AppSettings(custom_providers=[
+        CustomProvider(
+            name="IdProvider", base_url="https://x/v1", api_key="k",
+            models=[{"id": "model-via-id-field", "label": "Model"}],
+        ),
+    ])
+    with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
+         patch("backend.apps.nine_router.is_running", return_value=False):
+        result = asyncio.run(list_models())
+
+    assert "IdProvider" in result["models"]
+    assert result["models"]["IdProvider"][0]["value"] == "custom/idprovider/model-via-id-field"
+
+
+def test_custom_provider_context_window_falls_back_to_default():
+    """Power users may not specify context_window. Default is 128k."""
+    from backend.apps.agents.providers.registry import get_context_window
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    s = AppSettings(custom_providers=[
+        CustomProvider(
+            name="Provider", base_url="https://x/v1", api_key="k",
+            models=[{"value": "m", "label": "m"}],  # no context_window
+        ),
+    ])
+    cw = get_context_window("Provider", "custom/provider/m", s)
+    assert cw == 128_000
+
+
+def test_custom_provider_resolve_aux_model_unaffected():
+    """resolve_aux_model is the one-shot LLM call path. Custom providers
+    are NOT in its decision tree — Haiku/9Router/OR fallbacks should still
+    fire. Custom providers are deliberately not used for aux because we
+    don't know if they support tool calling well enough."""
+    import asyncio
+    from backend.apps.agents.providers.registry import resolve_aux_model
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    s = AppSettings(
+        anthropic_api_key="sk-ant-test",
+        custom_providers=[CustomProvider(name="Foo", base_url="https://x/v1", api_key="k")],
+    )
+    # Should pick Anthropic Haiku, not anything custom.
+    rid, base = asyncio.run(resolve_aux_model(s, preferred_tier="haiku"))
+    assert "haiku" in rid.lower()
+    assert not rid.startswith("cp-")
+
+
+def test_custom_provider_with_very_long_name_still_works():
+    """No upper bound on name length anywhere in the pipeline. Verify a
+    250-char name slugs cleanly."""
+    from backend.apps.agents.providers.registry import _custom_provider_slug_for_lookup, _find_builtin_model
+    long_name = "a" * 250
+    slug = _custom_provider_slug_for_lookup(long_name)
+    assert slug == long_name
+    entry = _find_builtin_model(f"custom/{slug}/some-model")
+    assert entry is not None
+    assert entry["model_id"] == f"cp-{slug}/some-model"
+
+
+# ===========================================================================
+# 9Router sync stress tests — async, mocked HTTP layer
+# ===========================================================================
+
+
+def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=None):
+    """Build a mock httpx.AsyncClient that simulates 9Router's HTTP API.
+    Tracks state across requests so we can assert idempotency.
+    Returns (mock_client_class, state_dict) — state_dict is mutated by calls."""
+    from unittest.mock import AsyncMock, MagicMock
+    state = {
+        "nodes": list(initial_nodes or []),
+        "connections": list(initial_conns or []),
+        "calls": [],  # list of (method, url, json) tuples
+        "next_id": 1,
+    }
+    fail = fail_endpoints or set()
+
+    def _resp(status_code=200, payload=None):
+        r = MagicMock()
+        r.status_code = status_code
+        r.text = "" if not payload else str(payload)
+        r.json = MagicMock(return_value=payload or {})
+        return r
+
+    async def _get(url, **kw):
+        state["calls"].append(("GET", url, None))
+        if "/api/provider-nodes" in url and "GET:provider-nodes" in fail:
+            return _resp(500)
+        if url.endswith("/api/provider-nodes"):
+            return _resp(200, {"nodes": state["nodes"]})
+        if url.endswith("/api/providers"):
+            return _resp(200, {"connections": state["connections"]})
+        return _resp(404)
+
+    async def _post(url, json=None, **kw):
+        state["calls"].append(("POST", url, json))
+        if "/api/provider-nodes" in url and not url.endswith("/provider-nodes/"):
+            if "POST:provider-nodes" in fail:
+                return _resp(500, {"error": "fail"})
+            node_id = f"openai-compatible-chat-{state['next_id']}"
+            state["next_id"] += 1
+            new_node = {**(json or {}), "id": node_id}
+            state["nodes"].append(new_node)
+            return _resp(201, {"node": new_node})
+        if "/api/providers" in url:
+            if "POST:providers" in fail:
+                return _resp(500, {"error": "fail"})
+            conn_id = f"conn-{state['next_id']}"
+            state["next_id"] += 1
+            new_conn = {**(json or {}), "id": conn_id, "isActive": True}
+            state["connections"].append(new_conn)
+            return _resp(201, {"connection": new_conn})
+        return _resp(404)
+
+    async def _put(url, json=None, **kw):
+        state["calls"].append(("PUT", url, json))
+        # /api/provider-nodes/<id>
+        for n in state["nodes"]:
+            if url.endswith(f"/provider-nodes/{n['id']}"):
+                n.update(json or {})
+                return _resp(200, {"node": n})
+        return _resp(404)
+
+    async def _patch(url, json=None, **kw):
+        state["calls"].append(("PATCH", url, json))
+        for c in state["connections"]:
+            if url.endswith(f"/providers/{c['id']}"):
+                c.update(json or {})
+                return _resp(200, {"connection": c})
+        return _resp(404)
+
+    async def _delete(url, **kw):
+        state["calls"].append(("DELETE", url, None))
+        for n in list(state["nodes"]):
+            if url.endswith(f"/provider-nodes/{n['id']}"):
+                state["nodes"].remove(n)
+                # Cascade-delete connections.
+                state["connections"] = [
+                    c for c in state["connections"] if c.get("provider") != n["id"]
+                ]
+                return _resp(200, {"success": True})
+        for c in list(state["connections"]):
+            if url.endswith(f"/providers/{c['id']}"):
+                state["connections"].remove(c)
+                return _resp(200, {"success": True})
+        return _resp(404)
+
+    class MockClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        get = AsyncMock(side_effect=_get)
+        post = AsyncMock(side_effect=_post)
+        put = AsyncMock(side_effect=_put)
+        patch = AsyncMock(side_effect=_patch)
+        delete = AsyncMock(side_effect=_delete)
+
+    return MockClient, state
+
+
+def test_sync_custom_providers_silently_noop_when_9router_down():
+    """Most important invariant: app must boot fine without 9Router. The
+    sync should detect down and return without raising or making any
+    HTTP calls."""
+    import asyncio
+    from unittest.mock import patch as upatch
+    from backend.apps.nine_router import sync_custom_providers
+    from backend.apps.settings.models import CustomProvider
+
+    with upatch("backend.apps.nine_router.is_running", return_value=False):
+        # Should not raise even with malformed/empty input.
+        asyncio.run(sync_custom_providers([]))
+        asyncio.run(sync_custom_providers([
+            CustomProvider(name="X", base_url="https://x/v1", api_key="k"),
+        ]))
+
+
+def test_sync_custom_providers_creates_node_and_connection_for_new_provider():
+    import asyncio
+    from unittest.mock import patch as upatch
+    from backend.apps.nine_router import sync_custom_providers
+    from backend.apps.settings.models import CustomProvider
+
+    MockClient, state = _make_mock_9router()
+    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+         upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
+         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+        asyncio.run(sync_custom_providers([
+            CustomProvider(name="Ollama Cloud", base_url="https://ollama.com/v1",
+                          api_key="key1", models=[]),
+        ]))
+
+    # Should have POSTed exactly one node and one connection.
+    posts = [c for c in state["calls"] if c[0] == "POST"]
+    assert len(posts) == 2, f"expected 2 POSTs, got {len(posts)}: {posts}"
+    node_post = next(c for c in posts if "/provider-nodes" in c[1])
+    assert node_post[2]["prefix"] == "cp-ollama-cloud"
+    assert node_post[2]["baseUrl"] == "https://ollama.com/v1"
+    assert node_post[2]["type"] == "openai-compatible"
+    assert node_post[2]["apiType"] == "chat"
+
+    conn_post = next(c for c in posts if c[1].endswith("/providers"))
+    assert conn_post[2]["apiKey"] == "key1"
+
+
+def test_sync_custom_providers_updates_existing_node_in_place():
+    """Idempotency: a second sync of the same provider should PUT the
+    existing node, not POST a duplicate."""
+    import asyncio
+    from unittest.mock import patch as upatch
+    from backend.apps.nine_router import sync_custom_providers
+    from backend.apps.settings.models import CustomProvider
+
+    existing_nodes = [
+        {
+            "id": "openai-compatible-chat-existing",
+            "name": "Together AI (OpenSwarm-managed)",
+            "prefix": "cp-together-ai",
+            "type": "openai-compatible",
+            "baseUrl": "https://api.together.xyz/v1",
+            "apiType": "chat",
+        },
+    ]
+    existing_conns = [
+        {
+            "id": "conn-existing",
+            "provider": "openai-compatible-chat-existing",
+            "name": "Together AI (OpenSwarm-managed)",
+            "authType": "apikey",
+            "apiKey": "old-key",
+        },
+    ]
+    MockClient, state = _make_mock_9router(existing_nodes, existing_conns)
+    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+         upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
+         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return(existing_conns)):
+        asyncio.run(sync_custom_providers([
+            CustomProvider(
+                name="Together AI",
+                base_url="https://api.together.xyz/v1",  # unchanged URL
+                api_key="new-key",  # changed key
+                models=[],
+            ),
+        ]))
+
+    # Should PUT the node, PATCH the connection. NO new POSTs.
+    posts = [c for c in state["calls"] if c[0] == "POST"]
+    puts = [c for c in state["calls"] if c[0] == "PUT"]
+    patches = [c for c in state["calls"] if c[0] == "PATCH"]
+    assert posts == [], f"expected no new nodes/conns, got {posts}"
+    assert len(puts) >= 1, f"expected node PUT, got {puts}"
+    assert len(patches) >= 1, f"expected conn PATCH, got {patches}"
+    # And the apiKey should be the new one in the patched payload.
+    assert patches[0][2]["apiKey"] == "new-key"
+
+
+def test_sync_custom_providers_deletes_orphaned_managed_nodes():
+    """When a user removes a custom provider in Settings, the next sync
+    should delete the corresponding 9Router node (and its connection
+    cascades). Other unmanaged nodes must NOT be touched."""
+    import asyncio
+    from unittest.mock import patch as upatch
+    from backend.apps.nine_router import sync_custom_providers
+
+    existing_nodes = [
+        {
+            "id": "node-orphan",
+            "name": "OldProvider (OpenSwarm-managed)",
+            "prefix": "cp-oldprovider",
+            "type": "openai-compatible",
+        },
+        # An UNMANAGED node — should never be deleted.
+        {
+            "id": "node-user-created",
+            "name": "Manual Setup",   # no suffix
+            "prefix": "manual",
+            "type": "openai-compatible",
+        },
+    ]
+    MockClient, state = _make_mock_9router(existing_nodes, [])
+    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+         upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
+         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+        asyncio.run(sync_custom_providers([]))  # empty list → delete all managed
+
+    deletes = [c for c in state["calls"] if c[0] == "DELETE"]
+    deleted_urls = [c[1] for c in deletes]
+    assert any("node-orphan" in u for u in deleted_urls), \
+        f"orphan should be deleted: {deleted_urls}"
+    assert not any("node-user-created" in u for u in deleted_urls), \
+        f"unmanaged nodes must be left alone: {deleted_urls}"
+
+
+def test_sync_custom_providers_skips_incomplete_entries():
+    """Empty name or empty base_url → skip silently. Don't create a
+    bogus 9Router node from a half-filled form state."""
+    import asyncio
+    from unittest.mock import patch as upatch
+    from backend.apps.nine_router import sync_custom_providers
+    from backend.apps.settings.models import CustomProvider
+
+    MockClient, state = _make_mock_9router()
+    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+         upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
+         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+        asyncio.run(sync_custom_providers([
+            CustomProvider(name="", base_url="https://x/v1", api_key="k"),
+            CustomProvider(name="OnlyName", base_url="", api_key="k"),
+            CustomProvider(name="   ", base_url="   ", api_key="k"),
+        ]))
+
+    posts = [c for c in state["calls"] if c[0] == "POST"]
+    assert posts == [], f"no POSTs should fire for incomplete entries: {posts}"
+
+
+def test_sync_custom_providers_handles_node_post_failure_without_crashing():
+    """If 9Router rejects the node POST (e.g. duplicate prefix), don't
+    crash the whole sync — log and move on to the next provider."""
+    import asyncio
+    from unittest.mock import patch as upatch
+    from backend.apps.nine_router import sync_custom_providers
+    from backend.apps.settings.models import CustomProvider
+
+    MockClient, state = _make_mock_9router(fail_endpoints={"POST:provider-nodes"})
+    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+         upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
+         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+        # Should NOT raise.
+        asyncio.run(sync_custom_providers([
+            CustomProvider(name="A", base_url="https://a/v1", api_key="k1"),
+            CustomProvider(name="B", base_url="https://b/v1", api_key="k2"),
+        ]))
+
+
+def test_sync_custom_providers_three_distinct_providers_create_three_nodes():
+    """Realistic scenario: user adds Ollama + Together + Groq simultaneously.
+    All three should land in 9Router with distinct prefixes."""
+    import asyncio
+    from unittest.mock import patch as upatch
+    from backend.apps.nine_router import sync_custom_providers
+    from backend.apps.settings.models import CustomProvider
+
+    MockClient, state = _make_mock_9router()
+    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+         upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
+         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+        asyncio.run(sync_custom_providers([
+            CustomProvider(name="Ollama Cloud", base_url="https://ollama.com/v1", api_key="k1"),
+            CustomProvider(name="Together AI", base_url="https://api.together.xyz/v1", api_key="k2"),
+            CustomProvider(name="Groq", base_url="https://api.groq.com/openai/v1", api_key="k3"),
+        ]))
+
+    # Should have POSTed 3 nodes + 3 connections = 6 POSTs.
+    posts = [c for c in state["calls"] if c[0] == "POST"]
+    assert len(posts) == 6, f"expected 6 POSTs (3 nodes + 3 conns), got {len(posts)}"
+
+    node_posts = [c for c in posts if "/provider-nodes" in c[1] and not c[1].endswith("/providers")]
+    prefixes = sorted(p[2]["prefix"] for p in node_posts if "prefix" in (p[2] or {}))
+    assert prefixes == sorted(["cp-ollama-cloud", "cp-together-ai", "cp-groq"]), \
+        f"prefixes: {prefixes}"
+
+
+def _async_return(value):
+    """Helper: return a coroutine that resolves to value (for mocking
+    `get_providers` which is called WITHOUT being awaited as a function)."""
+    async def _f():
+        return value
+    return _f()
+
+
 # ===========================================================================
 # Group S — calculate_cost regression tests
 # ===========================================================================
