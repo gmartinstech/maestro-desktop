@@ -1921,6 +1921,20 @@ class AgentManager:
                 "type": "preset",
                 "preset": "claude_code",
             }
+            # Suppress Claude Code's bundled plugin skills (/init, /review,
+            # /security-review, /simplify, /loop, /schedule, /update-config,
+            # /keybindings-help, /fewer-permission-prompts, /claude-api).
+            # OpenSwarm has its own skills system that injects skill content
+            # into the user prompt via _resolve_attached_skills, bypassing the
+            # SDK's Skill tool entirely — so the bundled skills only cause
+            # confusion: half mutate ~/.claude state OpenSwarm doesn't use
+            # (settings.json, keybindings.json), and the rest tell the model
+            # it can invoke slash commands the backend doesn't intercept.
+            # Empty list is the SDK's documented "skills off" signal — see
+            # the `skills` field on ClaudeAgentOptions in claude_agent_sdk
+            # types.py. User-attached skills are unaffected because they
+            # don't go through the Skill tool.
+            options_kwargs["skills"] = []
             # exclude_dynamic_sections=True tells the CLI to keep
             # per-user/per-machine grounding (cwd, git status, recent
             # commits, OS info) out of the cached system prompt prefix

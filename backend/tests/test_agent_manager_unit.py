@@ -416,6 +416,26 @@ def test_compose_system_prompt_all_none_returns_none():
     assert AgentManager()._compose_system_prompt(None, None, None) is None
 
 
+def test_run_agent_loop_disables_bundled_claude_code_skills():
+    """Regression guard for `options_kwargs["skills"] = []` in _run_agent_loop.
+
+    The claude-agent-sdk ships a Skill tool that surfaces Claude Code's
+    bundled plugin skills (/init, /review, /security-review, /simplify,
+    /loop, /schedule, /update-config, /keybindings-help,
+    /fewer-permission-prompts, /claude-api). These are inappropriate in
+    OpenSwarm — half mutate ~/.claude config the backend doesn't read, and
+    the rest reference slash commands the backend never intercepts. The
+    SDK's documented "skills off" signal is `skills=[]` on
+    ClaudeAgentOptions; user-attached skills bypass the Skill tool and
+    are unaffected. If this assignment ever gets dropped during a rebase
+    or refactor the bundled skills come back, so we pin it here.
+    """
+    import inspect
+
+    src = inspect.getsource(AgentManager._run_agent_loop)
+    assert 'options_kwargs["skills"] = []' in src
+
+
 def test_resolve_context_paths_empty_returns_empty():
     assert AgentManager()._resolve_context_paths(None) == ""
     assert AgentManager()._resolve_context_paths([]) == ""
