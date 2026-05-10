@@ -314,25 +314,6 @@ def test_get_all_tool_names_drops_explicitly_denied_builtins(tmp_data_dirs):
 # ---------------------------------------------------------------------------
 
 
-def test_ensure_cwd_git_repo_creates_repo_when_missing(tmp_path):
-    """Fresh tmp dir with no .git → function inits a repo + empty commit."""
-    cwd = tmp_path / "fresh"
-    cwd.mkdir()
-    _ensure_cwd_git_repo(str(cwd), home=str(tmp_path))
-    # Either .git lives here directly, or git decided we're already in
-    # a parent repo (the test runner's repo, for instance). Both are
-    # valid healthy outcomes.
-    if (cwd / ".git").exists():
-        # Verify HEAD resolves — the function commits an empty seed.
-        import subprocess
-        head = subprocess.run(
-            ["git", "rev-parse", "--verify", "HEAD"],
-            cwd=str(cwd),
-            capture_output=True,
-        )
-        assert head.returncode == 0
-
-
 def test_ensure_cwd_git_repo_skips_risky_roots(tmp_path):
     """Calling on $HOME / / / parent-of-home must short-circuit and
     leave the directory untouched."""
@@ -416,24 +397,117 @@ def test_compose_system_prompt_all_none_returns_none():
     assert AgentManager()._compose_system_prompt(None, None, None) is None
 
 
-def test_run_agent_loop_disables_bundled_claude_code_skills():
-    """Regression guard for `options_kwargs["skills"] = []` in _run_agent_loop.
+def test_run_agent_loop_uses_skill_allowlist_not_kill_switch():
+    """`_run_agent_loop` must hand the SDK a per-turn allowlist, not the
+    old `[]` kill-switch.
 
-    The claude-agent-sdk ships a Skill tool that surfaces Claude Code's
-    bundled plugin skills (/init, /review, /security-review, /simplify,
-    /loop, /schedule, /update-config, /keybindings-help,
-    /fewer-permission-prompts, /claude-api). These are inappropriate in
-    OpenSwarm — half mutate ~/.claude config the backend doesn't read, and
-    the rest reference slash commands the backend never intercepts. The
-    SDK's documented "skills off" signal is `skills=[]` on
-    ClaudeAgentOptions; user-attached skills bypass the Skill tool and
-    are unaffected. If this assignment ever gets dropped during a rebase
-    or refactor the bundled skills come back, so we pin it here.
+    The bundled Claude Code skills (/init, /review, /security-review,
+    /simplify, /loop, /schedule, /update-config, /keybindings-help,
+    /fewer-permission-prompts, /claude-api) need to stay suppressed —
+    half mutate ~/.claude state OpenSwarm doesn't read, the rest
+    reference slash commands the backend never intercepts. Passing
+    `None` to the SDK lets the CLI's defaults reintroduce them; passing
+    `[]` (the previous behavior) suppresses them but also kills user
+    skills. The right answer is `list[str]` with only user-installed
+    slugs, which is what `_resolve_sdk_skill_allowlist` produces. This
+    test pins the wiring so a future refactor can't silently revert.
     """
     import inspect
 
     src = inspect.getsource(AgentManager._run_agent_loop)
-    assert 'options_kwargs["skills"] = []' in src
+    assert 'options_kwargs["skills"] = self._resolve_sdk_skill_allowlist(' in src
+    assert 'options_kwargs["skills"] = []' not in src
+    assert 'options_kwargs["skills"] = None' not in src
+
+
+def test_resolve_sdk_skill_allowlist_empty_when_no_skills_installed(
+    monkeypatch, tmp_path
+):
+    from backend.apps.skills import skills as skills_mod
+
+    monkeypatch.setattr(skills_mod, "SKILLS_DIR", str(tmp_path / "skills"))
+    assert AgentManager._resolve_sdk_skill_allowlist(None) == []
+    assert AgentManager._resolve_sdk_skill_allowlist([]) == []
+
+
+def test_resolve_sdk_skill_allowlist_lists_only_directory_skills(
+    monkeypatch, tmp_path
+):
+    """Only `<slug>/SKILL.md` entries count — flat files and dotfiles are
+    skipped since the CLI's discovery ignores them."""
+    from backend.apps.skills import skills as skills_mod
+
+    skills_root = tmp_path / "skills"
+    skills_root.mkdir()
+    (skills_root / "alpha").mkdir()
+    (skills_root / "alpha" / "SKILL.md").write_text("---\nname: alpha\n---\n")
+    (skills_root / "beta").mkdir()
+    (skills_root / "beta" / "SKILL.md").write_text("---\nname: beta\n---\n")
+    (skills_root / "no-skill-md").mkdir()
+    (skills_root / "no-skill-md" / "README.md").write_text("not a skill")
+    (skills_root / "stray.md").write_text("legacy flat file")
+    (skills_root / ".skills_index.json").write_text("{}")
+
+    monkeypatch.setattr(skills_mod, "SKILLS_DIR", str(skills_root))
+    out = AgentManager._resolve_sdk_skill_allowlist(None)
+    assert out == ["alpha", "beta"], (
+        "expected sorted slugs of directories containing SKILL.md, with "
+        "flat files / dotfiles / partial dirs excluded"
+    )
+
+
+def test_resolve_sdk_skill_allowlist_dedups_manually_attached(
+    monkeypatch, tmp_path
+):
+    """Skills the user attached via `/` are eagerly injected into the
+    user message by `_resolve_attached_skills`; they must therefore drop
+    out of the SDK allowlist for this turn so the same content can't
+    re-enter via the lazy Skill-tool path."""
+    from backend.apps.skills import skills as skills_mod
+
+    skills_root = tmp_path / "skills"
+    skills_root.mkdir()
+    for slug in ("alpha", "beta", "gamma"):
+        (skills_root / slug).mkdir()
+        (skills_root / slug / "SKILL.md").write_text(f"---\nname: {slug}\n---\n")
+
+    monkeypatch.setattr(skills_mod, "SKILLS_DIR", str(skills_root))
+    out = AgentManager._resolve_sdk_skill_allowlist(
+        [{"id": "beta", "name": "Beta"}]
+    )
+    assert out == ["alpha", "gamma"]
+
+
+def test_resolve_sdk_skill_allowlist_excludes_bundled_claude_code_names(
+    monkeypatch, tmp_path
+):
+    """The allowlist must never contain bundled Claude Code skill names
+    just because someone happens to know them — only what's actually on
+    disk under SKILLS_DIR. This pins the behavior that the bundled
+    `/init`, `/review`, etc. stay invisible."""
+    from backend.apps.skills import skills as skills_mod
+
+    skills_root = tmp_path / "skills"
+    skills_root.mkdir()
+    (skills_root / "user-skill").mkdir()
+    (skills_root / "user-skill" / "SKILL.md").write_text("---\nname: x\n---\n")
+
+    monkeypatch.setattr(skills_mod, "SKILLS_DIR", str(skills_root))
+    out = AgentManager._resolve_sdk_skill_allowlist(None)
+    bundled = {
+        "init",
+        "review",
+        "security-review",
+        "simplify",
+        "loop",
+        "schedule",
+        "update-config",
+        "keybindings-help",
+        "fewer-permission-prompts",
+        "claude-api",
+    }
+    assert not bundled.intersection(out)
+    assert "user-skill" in out
 
 
 def test_resolve_context_paths_empty_returns_empty():

@@ -829,6 +829,48 @@ class AgentManager:
         return "\n\n".join(sections)
 
     @staticmethod
+    def _resolve_sdk_skill_allowlist(attached_skills: list | None) -> list[str]:
+        """Build the per-turn SDK Skill-tool allowlist.
+
+        The Claude Code CLI auto-discovers skills from `~/.claude/skills/<slug>/
+        SKILL.md` and surfaces each one's frontmatter (name + description) into
+        the model's system prompt so it can decide on its own when to call
+        `Skill(slug)` and pull the body. The SDK exposes that filter as
+        `options.skills`:
+
+        - `None`  — CLI defaults (re-enables Claude Code's bundled plugin
+          skills like /init, /review, /security-review, ...). We don't want
+          those: half mutate ~/.claude state OpenSwarm doesn't read, and the
+          rest reference slash commands the backend never intercepts.
+        - `[]`    — suppress everything (was the previous behavior; safe but
+          also kills user-installed skills, defeating the point).
+        - `list[str]` — allowlist. Bundled skills are filtered out because
+          they're not on the list, and the model still sees user skills.
+
+        Manually-attached skills (the `/` picker → `attached_skills` flow) are
+        excluded from the allowlist for *this* turn: their full body is
+        already prepended to the user message by `_resolve_attached_skills`,
+        so admitting them on the lazy Skill-tool path too would just let the
+        model load the same content a second time.
+
+        The installed-slugs scan is cached in `backend.apps.skills.skills`
+        and invalidated by the create / delete endpoints + the startup
+        migration, so this is effectively free on the hot path — no
+        per-turn filesystem walk.
+        """
+        from backend.apps.skills.skills import get_installed_slugs
+
+        installed = get_installed_slugs()
+        if not attached_skills:
+            return list(installed)
+        attached_ids = {
+            s.get("id") for s in attached_skills if s.get("id")
+        }
+        if not attached_ids:
+            return list(installed)
+        return [slug for slug in installed if slug not in attached_ids]
+
+    @staticmethod
     def _get_branch_messages(session) -> list:
         """Return the linear message list for the active branch, walking the branch tree."""
         branch_id = session.active_branch_id or "main"
@@ -1921,20 +1963,23 @@ class AgentManager:
                 "type": "preset",
                 "preset": "claude_code",
             }
-            # Suppress Claude Code's bundled plugin skills (/init, /review,
-            # /security-review, /simplify, /loop, /schedule, /update-config,
-            # /keybindings-help, /fewer-permission-prompts, /claude-api).
-            # OpenSwarm has its own skills system that injects skill content
-            # into the user prompt via _resolve_attached_skills, bypassing the
-            # SDK's Skill tool entirely — so the bundled skills only cause
-            # confusion: half mutate ~/.claude state OpenSwarm doesn't use
-            # (settings.json, keybindings.json), and the rest tell the model
-            # it can invoke slash commands the backend doesn't intercept.
-            # Empty list is the SDK's documented "skills off" signal — see
-            # the `skills` field on ClaudeAgentOptions in claude_agent_sdk
-            # types.py. User-attached skills are unaffected because they
-            # don't go through the Skill tool.
-            options_kwargs["skills"] = []
+            # Skill auto-discovery: hand the SDK an allowlist of the user's
+            # installed skill slugs (one dir per skill under ~/.claude/skills/)
+            # so the CLI exposes each one's frontmatter to the model and the
+            # model can call `Skill(slug)` on its own when relevant. Bundled
+            # Claude Code skills (/init, /review, /security-review, /simplify,
+            # /loop, /schedule, /update-config, /keybindings-help,
+            # /fewer-permission-prompts, /claude-api) are filtered out by
+            # virtue of *not* being on the allowlist — half mutate ~/.claude
+            # state OpenSwarm doesn't read and the rest reference slash
+            # commands the backend never intercepts.
+            #
+            # Skills the user attached this turn via `/` are dropped from the
+            # allowlist: their full body is already prepended to the user
+            # message by `_resolve_attached_skills`, so allowing the SDK
+            # tool path would let the model double-load the same content.
+            # See `_resolve_sdk_skill_allowlist` for the full rationale.
+            options_kwargs["skills"] = self._resolve_sdk_skill_allowlist(attached_skills)
             # exclude_dynamic_sections=True tells the CLI to keep
             # per-user/per-machine grounding (cwd, git status, recent
             # commits, OS info) out of the cached system prompt prefix
