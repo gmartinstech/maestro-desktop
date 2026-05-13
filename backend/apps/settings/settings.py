@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import HTTPException, Query, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 
 from backend.config.Apps import SubApp
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
@@ -297,6 +297,37 @@ async def update_settings(body: AppSettings):
             logger.warning(f"OpenSwarm-Pro → Claude sync failed: {e}")
 
     return {"ok": True, "settings": body.model_dump()}
+
+
+class AppThemeOverridePayload(BaseModel):
+    mode: Optional[Literal["light", "dark"]] = None
+
+
+@settings.router.get("/app-theme-override")
+async def get_app_theme_override():
+    """Cross-app theme preference for App Builder workspaces.
+
+    Returns the current override (or `null` for follow-system). Apps
+    served from the template fetch this on mount so a toggle inside
+    any one app sticks across every future app the user builds. Each
+    app workspace runs on its own vite port (separate localStorage
+    origin), so the backend is the only place this can live."""
+    return {"mode": load_settings().app_template_theme_override}
+
+
+@settings.router.put("/app-theme-override")
+async def put_app_theme_override(body: AppThemeOverridePayload):
+    """MERGE the theme override into AppSettings. The general PUT
+    /api/settings endpoint replaces the whole AppSettings object —
+    sending a partial body there would default every secret-bearing
+    field (api keys, subscription tokens), which logs the user out
+    and pops the SignInGate. This dedicated endpoint mutates only
+    `app_template_theme_override` and leaves every other field
+    untouched."""
+    current = load_settings()
+    current.app_template_theme_override = body.mode
+    await save_settings_async(current)
+    return {"ok": True, "mode": current.app_template_theme_override}
 
 
 @settings.router.get("/default-system-prompt")

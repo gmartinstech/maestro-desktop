@@ -1282,7 +1282,17 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       {contextPaths.length > 0 && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, px: 1.5, pt: images.length > 0 ? 0.25 : 1, pb: 0 }}>
           {contextPaths.map((cp, idx) => {
-            const label = cp.path.split('/').filter(Boolean).slice(-2).join('/');
+            // Friendlier label for the App Builder's auto-attached
+            // workspace directory. Without this special-case, the chip
+            // shows `outputs_workspace/ws-mp3pasq6` — a path the user
+            // never typed and has no idea what it means. The full path
+            // still lives in the tooltip for any agent/dev who needs
+            // it. Pattern is stable: every App Builder workspace path
+            // ends in `outputs_workspace/ws-<random>`.
+            const isAppWorkspace = /\/outputs_workspace\/ws-[^/]+\/?$/.test(cp.path);
+            const label = isAppWorkspace
+              ? 'App files'
+              : cp.path.split('/').filter(Boolean).slice(-2).join('/');
             return (
               <Tooltip
                 key={`${cp.path}-${idx}`}

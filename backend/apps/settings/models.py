@@ -40,6 +40,16 @@ class AppSettings(BaseModel):
     default_thinking_level: Literal["off", "low", "medium", "high", "auto"] = "auto"
     zoom_sensitivity: float = 50.0
     theme: str = "dark"
+    # App Builder workspaces seed a React template that ships with its own
+    # theme toggle ("Light" / "Dark" at the bottom of the sidebar). By
+    # default the template should follow the user's OS appearance; once
+    # the user explicitly toggles it inside any one app the override
+    # persists across every subsequently-built app via this field
+    # (the template fetches /api/settings on mount and PUTs back here on
+    # toggle, so the preference is shared even though each app runs from
+    # its own vite port / localStorage origin).
+    # null = follow system / no override; 'light' or 'dark' = sticky.
+    app_template_theme_override: Optional[Literal["light", "dark"]] = None
     new_agent_shortcut: str = "Meta+l"
     anthropic_api_key: Optional[str] = None
     browser_homepage: str = "https://www.google.com"

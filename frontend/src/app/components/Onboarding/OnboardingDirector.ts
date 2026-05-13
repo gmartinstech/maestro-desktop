@@ -96,12 +96,30 @@ class OnboardingDirector {
     //    and abort if it changes; lets the user explore freely without
     //    the AC stranding itself on the wrong page.
     const startHash = window.location.hash;
-    const onLost = () => {
+    // Console-visible breadcrumb for which abort listener fired. The
+    // existing `report()` calls only go to analytics; we couldn't tell
+    // whether step 8's recurring `AbortError: aborted` was from a
+    // lost-target (chat-input element disconnected by an in-flight
+    // remount) or from a route change (`hashchange` firing as a side
+    // effect of e.g. ViewEditor calling history.replaceState mid-flow).
+    // Logging on each abort path resolves that ambiguity without
+    // needing to open the Network/Analytics panel.
+    const onLost = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[onboarding] step ${stepId} aborted: lost-target`,
+        detail,
+      );
       report('step_aborted_lost_target', { step_id: stepId });
       controller.abort();
     };
     const onRouteChange = () => {
       if (window.location.hash !== startHash) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[onboarding] step ${stepId} aborted: hash changed ${startHash} -> ${window.location.hash}`,
+        );
         report('step_aborted_route_change', {
           step_id: stepId,
           from: startHash,

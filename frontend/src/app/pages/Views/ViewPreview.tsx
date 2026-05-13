@@ -5,6 +5,7 @@ import { Skeleton } from '@/app/components/Loading';
 import { useElementSelection } from '@/app/components/ElementSelectionContext';
 import { useIframeElementSelector } from './useIframeElementSelector';
 import { getAuthToken, ensureAuthToken } from '@/shared/config';
+import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
 // We render apps in a <webview> when running inside the Electron shell so
 // they escape iframe restrictions (popups, mic/camera, WebAuthn,
@@ -29,6 +30,13 @@ interface Props {
    *  running app (captured by webview-preload.js → ipc-message). Only
    *  fires in the webview path — iframes have no comparable channel. */
   onConsoleMessage?: (level: string, text: string) => void;
+  /** Fires once the iframe/webview has finished its first navigation +
+   *  load event for a given serveUrl. Lets parents (ViewEditor) keep
+   *  the cold-start placeholder visible until the embedded app has
+   *  actually painted, instead of unmounting the placeholder the moment
+   *  vite reports "ready" (which leaves a 1-2 s window where the
+   *  iframe has a URL but no content → visible grey flash). */
+  onContentLoad?: () => void;
 }
 
 function buildSrcdoc(
@@ -65,10 +73,20 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
   backendResult = null,
   style,
   onConsoleMessage,
+  onContentLoad,
 }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const webviewRef = useRef<any>(null);
   const ctx = useElementSelection();
+  // Match the iframe/webview's BG to the OpenSwarm host's theme during
+  // load. Previously hardcoded '#fff', which on a dark OpenSwarm host
+  // produced a jarring white flash for the 60-90 s between vite spawn
+  // and first paint, then ANOTHER flash to the same white when the
+  // app reattached. Using the host's page color means the loading
+  // state visually blends with the chrome around it — no flashes
+  // until the app's own theme paints over it.
+  const _hostTokens = useClaudeTokens();
+  const _hostBg = _hostTokens.bg.page;
   const [reloadKey, setReloadKey] = useState(0);
   // Track auth token in state so the iframe URL is rebuilt the moment the
   // token IPC roundtrip resolves. Without this, the first render runs while
@@ -136,7 +154,15 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
     // load fires for both the about:blank pause-step AND the restored URL —
     // only the latter should clear the overlay.
     if (!windowHidden) setRestoring(false);
-  }, [windowHidden]);
+    // Notify parent that an actual URL just finished loading. Skip the
+    // about:blank pauses (those happen while the OpenSwarm window is
+    // hidden) — those aren't user-visible content paints. The parent
+    // (ViewEditor) uses this to know when its install-placeholder can
+    // safely fade away.
+    if (!windowHidden && onContentLoad) {
+      onContentLoad();
+    }
+  }, [windowHidden, onContentLoad]);
 
   const srcdoc = useMemo(() => {
     if (serveUrl || !frontendCode) return undefined;
@@ -291,7 +317,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
             width: '100%',
             height: '100%',
             border: 'none',
-            background: '#fff',
+            background: _hostBg,
             ...style,
           }}
         />
@@ -314,7 +340,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
             width: '100%',
             height: '100%',
             border: 'none',
-            background: '#fff',
+            background: _hostBg,
             ...style,
           }}
           title="App Preview"
@@ -330,7 +356,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
             alignItems: 'center',
             justifyContent: 'center',
             gap: 1.5,
-            bgcolor: '#fff',
+            bgcolor: _hostBg,
             zIndex: 2,
             pointerEvents: 'none',
           }}

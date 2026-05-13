@@ -809,6 +809,19 @@ async function runOp(op: ACOp, ctx: RunContext): Promise<void> {
         );
       }
       ac.hidePopup();
+      // CRITICAL: stop tracking the previous move_to target now that
+      // the user has engaged with it. Many `wait_user click_target`
+      // targets are ephemeral — the App Builder's `+ New app` button
+      // disappears the instant the user clicks it (Views.tsx swaps
+      // ViewEditor in), and if the tracker keeps watching that now-
+      // disconnected element, the lost-target watchdog fires after
+      // 2.5 s and aborts the entire step (step 8 was aborting before
+      // it ever reached `type_into` for this exact reason — the
+      // `[onboarding] step make_app aborted: lost-target` console
+      // line pointed at `apps-new-button`, not at chat-input). The
+      // tracker for the NEXT target (chat-input, send button, etc.)
+      // starts in the next move_to / type_into op.
+      ac.stopTracking();
       // The user just did the thing — they don't need a dwell floor on
       // top of having engaged with the popup. Clearing popupShownAt
       // makes the next op's clearsTransients block a no-op for dwell,

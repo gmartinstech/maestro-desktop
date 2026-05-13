@@ -387,6 +387,47 @@ Common deps already in the template:
 
 ---
 
+## Verify before declaring done — runtime errors are silent in the preview
+
+The preview iframe is wrapped in an ErrorBoundary that surfaces React
+runtime errors as a visible red error card AND mirrors the error into
+the Terminal pane as a `[FRONTEND]` line tagged `[openswarm:app-error]`.
+After substantial edits — especially anything that touches imports,
+hooks, or React state — **always check the most recent `[FRONTEND]`
+lines in your Terminal output before saying "done"**. If you see one,
+fix it before claiming the app is ready.
+
+The three most common ways agent edits crash a React preview:
+
+1. **Lost import after MultiEdit / Edit.** When you delete or rename a
+   symbol's usage inside a file but don't update the corresponding
+   `import` line, the file references an undefined name at runtime.
+   Symptom in Terminal: `[FRONTEND] ReferenceError: HomeIcon is not defined`
+   or similar. Always re-read the imports block of any file you
+   edited and confirm every imported name is still used and every
+   used name is still imported.
+
+2. **`Invalid hook call` from a duplicate React copy.** Running
+   `npm install react` or `npm install some-package-that-bundles-react`
+   inside the workspace adds a second React to `node_modules`, and the
+   two copies' hook dispatchers can't see each other → every `useState`
+   call throws on mount. The template's `node_modules` is symlinked to
+   a shared warm cache; only add packages whose `peerDependencies`
+   declare a non-bundled React. If you see `Cannot read properties of null (reading 'useState')`, suspect a duplicate React first.
+
+3. **Hooks called outside a component body or after a conditional
+   return.** `useState`/`useEffect`/`useMemo` must run in the same
+   order on every render. Adding an `if (...) return null` BEFORE a
+   hook, or calling a hook inside a callback, breaks the rule. The
+   ErrorBoundary will print the offending component name in the
+   surfaced stack — start there.
+
+When in doubt, read the file you just edited end-to-end one more time.
+Re-reading is cheap; sending a half-broken preview back to the user is
+not.
+
+---
+
 ## Quick start checklist
 
 When making a new app from scratch:

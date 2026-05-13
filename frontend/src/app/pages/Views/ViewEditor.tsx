@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
+import LinearProgress from '@mui/material/LinearProgress';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
@@ -43,6 +44,116 @@ import { API_BASE, getAuthToken } from '@/shared/config';
 import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 
 const WORKSPACE_API = `${API_BASE}/outputs/workspace`;
+
+// ---- App-Builder cold-start placeholder -----------------------------------
+//
+// On a fresh app the workspace needs npm/vite + (optionally) uvicorn to
+// finish booting before the preview iframe has anything to render. That's
+// ~60-90s the first time. The old placeholder was a static spinner + a
+// jargon-heavy "Cold start can take 60-90 seconds. Check the Terminal tab
+// to follow npm install + Vite startup output..." — non-devs read that as
+// "something is broken." Two psychology fixes here:
+//
+//   1. Indeterminate spinners feel STUCK once the user has been staring
+//      ~20 s. A LinearProgress that ALWAYS moves (even fake, asymptotic
+//      toward 95%) reads as "still working" forever.
+//   2. Rotating quirky status copy ("Brewing your app...", "Wiring
+//      things up...") gives the eye new info to process every ~6 s, so
+//      the wait doesn't feel like a single long pause.
+//
+// Implementation note: progress curve is `95 * (1 - exp(-elapsed / K))`
+// with K = 22_000 ms — reaches ~63 % at 20 s, ~85 % at 40 s, ~92 % at
+// 60 s, then plateaus. Once the workspace is actually ready, the
+// placeholder unmounts (the parent's `showInstallPlaceholder` flips
+// false) and ViewPreview takes over with a hard 100 %-feel snap.
+const COOK_MESSAGES = [
+  'Brewing your app',
+  'Gathering ingredients',
+  'Wiring things up',
+  'Tightening the bolts',
+  'Adding finishing touches',
+  'Almost there',
+];
+
+const InstallPlaceholder: React.FC = () => {
+  const c = useClaudeTokens();
+  const [progress, setProgress] = useState<number>(0);
+  const [messageIdx, setMessageIdx] = useState<number>(0);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const K = 22_000;
+    const id = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      // 95 * (1 - e^(-t/K)) — fast at first, asymptotes to 95 %.
+      setProgress(95 * (1 - Math.exp(-elapsed / K)));
+    }, 200);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setMessageIdx((i) => (i + 1) % COOK_MESSAGES.length);
+    }, 6000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <Box
+      sx={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+        bgcolor: c.bg.surface,
+        p: 4,
+        textAlign: 'center',
+      }}
+    >
+      <Typography
+        sx={{
+          color: c.text.primary,
+          fontSize: '1.05rem',
+          fontWeight: 600,
+          minHeight: '1.5em',
+          transition: 'opacity 300ms ease',
+        }}
+        key={messageIdx}
+      >
+        {COOK_MESSAGES[messageIdx]}…
+      </Typography>
+      <Box sx={{ width: '60%', maxWidth: 360 }}>
+        <LinearProgress
+          variant="determinate"
+          value={progress}
+          sx={{
+            height: 6,
+            borderRadius: 3,
+            bgcolor: c.bg.elevated,
+            '& .MuiLinearProgress-bar': {
+              bgcolor: c.accent.primary,
+              transition: 'transform 400ms cubic-bezier(0.25, 0.1, 0.25, 1)',
+            },
+          }}
+        />
+      </Box>
+      <Typography
+        sx={{
+          color: c.text.ghost,
+          fontSize: '0.82rem',
+          maxWidth: 400,
+          lineHeight: 1.55,
+          mt: 0.5,
+        }}
+      >
+        First app takes about a minute. After this, new ones spin up in a few seconds.
+      </Typography>
+    </Box>
+  );
+};
 
 // File-tree noise defaults. VSCode's equivalent `files.exclude` hides
 // the same set (plus a few more) — we apply by basename anywhere in
@@ -289,6 +400,15 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   const TERMINAL_BUFFER_CAP = 5000; // trim FIFO past this so we don't grow unbounded
 
   const previewRef = useRef<ViewPreviewHandle>(null);
+  // `iframePainted` is true once the embedded app's first navigation
+  // has fired its `load` event PLUS a 300 ms grace for React/Vue/etc.
+  // to commit its first paint. Used to keep the cold-start placeholder
+  // overlaid on top of the iframe until the user-visible content is
+  // actually on screen — otherwise vite reporting "ready" → placeholder
+  // unmount → iframe-still-loading-its-bundle reads as a grey flash.
+  // Resets whenever the serve URL changes (new app, vite restart) so
+  // each load has its own placeholder lifecycle.
+  const [iframePainted, setIframePainted] = useState(false);
 
   const SIDEBAR_MIN = 280;
   const SIDEBAR_MAX = 800;
@@ -838,32 +958,41 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   // 404s — new-mode workspaces have no `index.html` at root, only
   // `frontend/index.html` reachable via Vite).
   const [isNewModeRuntime, setIsNewModeRuntime] = useState(false);
-  // Has runtime/start been fired for this workspace yet? Used by the
-  // tab-gated lifecycle below so we only POST start the FIRST time the
-  // user lands on (or switches to) Preview/Terminal. Switching between
-  // tabs after that is a no-op — the runtime is already up and the
-  // WS is already streaming. Reset when workspaceId changes so a new
-  // workspace gets its own one-shot.
-  const runtimeStartedRef = useRef(false);
+  // Latched flag: true once the user has visited a tab that needs the
+  // runtime (Preview / Terminal) for the current workspace. Only goes
+  // true → reset to false ONLY when the workspace changes. Tab flips
+  // back to Code DON'T reset it, so the lifecycle effect that depends
+  // on it doesn't tear down on Preview → Code → Preview. This used to
+  // be a ref (`runtimeStartedRef`) but refs don't trigger re-renders,
+  // and the lifecycle effect couldn't react to the flip without
+  // running activeTab through its dep array — which is exactly what
+  // caused the cleanup-on-tab-switch bug.
+  const [runtimeShouldRun, setRuntimeShouldRun] = useState(false);
   useEffect(() => {
-    runtimeStartedRef.current = false;
+    setRuntimeShouldRun(false);
   }, [workspaceId]);
 
+  // Split into two effects so a tab switch never tears down the
+  // running workspace. The original single useEffect included
+  // `activeTab` in its dep array — the early `if (runtimeStartedRef…
+  // return` skipped re-starting, but the CLEANUP from the prior run
+  // still executed, POSTing /runtime/stop and clearing both
+  // frontendUrl and isNewModeRuntime to null. With those reset, the
+  // showInstallPlaceholder gate (`isNewModeRuntime && !frontendUrl`)
+  // collapsed to false, workspaceServeUrl fell back to the legacy
+  // /api/outputs/workspace/<ws>/serve/index.html path which 404s for
+  // new-mode workspaces → the iframe rendered the raw
+  // `{"detail":"File not found"}` JSON. The fix is to drive Effect A
+  // (lifecycle) off a STATE flag that ONLY ever flips true → never
+  // back to false on tab change, and to let Effect B (one-shot
+  // trigger) watch activeTab. State flips are visible to React's
+  // dep checker; ref mutations aren't, so a state flag is the right
+  // primitive here.
   useEffect(() => {
-    if (!workspaceId) return;
-    // Defer the workspace runtime spawn until the user actually wants
-    // to see/hear from it. Code tab is pure editor — no need to pay
-    // the ~1-2s vite + uvicorn cold-start until they click Preview or
-    // Terminal. After the first entry, the runtime stays up (LRU pools
-    // it on unmount), so subsequent tab flips are free.
-    const wantsRuntime = activeTab === TAB_PREVIEW || activeTab === TAB_TERMINAL;
-    if (!wantsRuntime && !runtimeStartedRef.current) return;
-    if (runtimeStartedRef.current) return;
-    runtimeStartedRef.current = true;
-
+    if (!workspaceId || !runtimeShouldRun) return;
     let cancelled = false;
     let ws: WebSocket | null = null;
-    setFrontendUrl(null); // reset when workspace changes
+    setFrontendUrl(null);
     setIsNewModeRuntime(false);
 
     const auth = getAuthToken();
@@ -887,13 +1016,6 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
           try {
             const msg = JSON.parse(ev.data);
             if (msg.event === 'runtime:status') {
-              // New-mode runtimes report a frontend_url here as soon as
-              // Vite has actually bound (the runtime poll-gates it);
-              // old-mode workspaces report null and the preview pane
-              // stays on the legacy /serve/ path. We also track
-              // is_new_mode separately so the placeholder pane shows
-              // "Installing dependencies…" instead of the 404'd /serve
-              // path while Vite is mid-npm-install.
               const fu = msg.data?.frontend_url ?? null;
               setFrontendUrl(fu || null);
               setIsNewModeRuntime(!!msg.data?.is_new_mode);
@@ -922,7 +1044,21 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
         headers,
       }).catch(() => {});
     };
-  }, [workspaceId, appendTerminalLine, activeTab]);
+  }, [workspaceId, runtimeShouldRun, appendTerminalLine]);
+
+  // Effect B — one-shot trigger. The first time the user lands on a
+  // tab that actually needs the runtime (Preview or Terminal), flip
+  // runtimeShouldRun true. Effect A picks that up and fires
+  // /runtime/start. After the flip, switching back to Code does NOT
+  // flip it false — the runtime stays warm because the LRU pool
+  // keeps it alive and tab flips should be free.
+  useEffect(() => {
+    if (!workspaceId) return;
+    if (runtimeShouldRun) return;
+    const wantsRuntime = activeTab === TAB_PREVIEW || activeTab === TAB_TERMINAL;
+    if (!wantsRuntime) return;
+    setRuntimeShouldRun(true);
+  }, [workspaceId, activeTab, runtimeShouldRun, TAB_PREVIEW, TAB_TERMINAL]);
 
   // Preview URL: prefer the new-mode Vite dev server when the runtime
   // reports one; otherwise fall back to the legacy serve endpoint.
@@ -935,6 +1071,25 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   const workspaceServeUrl = showInstallPlaceholder
     ? undefined
     : (frontendUrl ?? (workspaceId ? `${SERVE_BASE}/workspace/${workspaceId}/serve/index.html` : undefined));
+
+  // Reset the paint-tracking flag when the iframe's source URL changes —
+  // each new URL is a fresh load and the placeholder needs to stay up
+  // until THAT URL's content paints, not whatever paint happened last
+  // time.
+  useEffect(() => {
+    setIframePainted(false);
+  }, [workspaceServeUrl]);
+
+  // Called by ViewPreview when its iframe (or webview) fires the `load`
+  // event for a real serveUrl. We delay flipping the painted flag by
+  // 300 ms — the `load` event fires when the HTML doc has loaded but
+  // SPA bundles (React/Vue/etc) need a beat to mount and paint, so an
+  // immediate flip would re-introduce the grey flash we're trying to
+  // kill.
+  const onIframeContentLoad = useCallback(() => {
+    const t = window.setTimeout(() => setIframePainted(true), 300);
+    return () => window.clearTimeout(t);
+  }, []);
 
   // VSCode-style default `files.exclude`: hide build/install noise from
   // the file tree by default. With the symlinked node_modules + vite's
@@ -1120,14 +1275,20 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
         <Box
           sx={{
             display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
+            // `baseline` aligns the text baselines of the two inputs so
+            // "App name" (0.9 rem, weight 600) and "Description"
+            // (0.78 rem) sit on the same visual line. Previously
+            // `alignItems: center` centered each input's containing
+            // box, which differ in height because one is bigger and
+            // one had `size="small"` — that's why the smaller
+            // Description field floated higher than the App name.
+            alignItems: 'baseline',
+            gap: 2,
             px: 1.5,
-            py: 0.75,
-            borderBottom: `1px solid ${c.border.subtle}`,
+            py: 1,
             bgcolor: c.bg.secondary,
             flexShrink: 0,
-            minHeight: 44,
+            minHeight: 48,
           }}
         >
           <TextField
@@ -1138,7 +1299,12 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
             sx={{
               flex: 1,
               maxWidth: 220,
-              '& .MuiInput-input': { fontSize: '0.9rem', fontWeight: 600, color: c.text.primary },
+              '& .MuiInput-input': {
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                color: c.text.primary,
+                py: 0.25,
+              },
               '& .MuiInput-underline:before': { borderColor: 'transparent' },
               '& .MuiInput-underline:hover:before': { borderColor: c.border.medium },
             }}
@@ -1149,11 +1315,19 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description"
             variant="standard"
-            size="small"
             sx={{
               flex: 2,
-              '& .MuiInput-input': { fontSize: '0.78rem', color: c.text.muted },
+              '& .MuiInput-input': {
+                fontSize: '0.82rem',
+                color: c.text.muted,
+                // Match the App-name input's vertical padding so the
+                // two inputs occupy the same internal height — without
+                // this the baselines drift by a couple pixels even
+                // with `alignItems: baseline` on the parent.
+                py: 0.25,
+              },
               '& .MuiInput-underline:before': { borderColor: 'transparent' },
+              '& .MuiInput-underline:hover:before': { borderColor: c.border.medium },
             }}
           />
 
@@ -1164,32 +1338,57 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
           sx={{
             display: 'flex',
             alignItems: 'center',
-            borderBottom: `1px solid ${c.border.subtle}`,
+            // Drop the hard borderBottom — let bg-color step between
+            // this tab strip and the content below carry the
+            // separation. Claude Design's pane edges are nearly
+            // invisible, which is what makes them read as airy.
             bgcolor: c.bg.secondary,
             flexShrink: 0,
+            px: 1.25,
+            py: 1,
           }}
         >
           <Tabs
             value={activeTab}
             onChange={(_, v) => setActiveTab(v)}
+            // Hide the underline indicator entirely — we're showing
+            // active state via background-fill pills instead, matching
+            // Claude Design's "Recent / Your designs" toggle pattern.
+            TabIndicatorProps={{ sx: { display: 'none' } }}
             sx={{
               flex: 1,
-              minHeight: 36,
+              minHeight: 32,
+              '& .MuiTabs-flexContainer': {
+                gap: 0.5,
+              },
               '& .MuiTab-root': {
-                minHeight: 36,
-                fontSize: '0.78rem',
+                minHeight: 32,
+                minWidth: 'auto',
+                fontSize: '0.8rem',
                 textTransform: 'none',
                 fontWeight: 500,
+                color: c.text.tertiary,
+                px: 1.75,
                 py: 0,
-              },
-              '& .MuiTabs-indicator': {
-                bgcolor: c.accent.primary,
+                borderRadius: 999,
+                transition: c.transition,
+                '&:hover': {
+                  color: c.text.secondary,
+                  bgcolor: `${c.text.primary}06`,
+                },
+                '&.Mui-selected': {
+                  color: c.text.primary,
+                  // Background-fill pill instead of underline indicator
+                  // — same active-state language as a sidebar nav item.
+                  bgcolor: c.bg.elevated,
+                  fontWeight: 600,
+                },
               },
             }}
           >
-            <Tab label="Preview" value={TAB_PREVIEW} />
-            <Tab label="Code" value={TAB_CODE} />
-            <Tab label="Terminal" value={TAB_TERMINAL} />
+            <Tab disableRipple label="Preview" value={TAB_PREVIEW} />
+            <Tab disableRipple label="Code" value={TAB_CODE} />
+            <Tab disableRipple label="Terminal" value={TAB_TERMINAL} />
           </Tabs>
           {activeTab === TAB_PREVIEW && (
             <Tooltip title="Reload preview · right-click for Hard Reload">
@@ -1230,41 +1429,44 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
         {/* Tab content */}
         <Box sx={{ flex: 1, overflow: 'hidden' }}>
           {activeTab === TAB_PREVIEW && (
-            showInstallPlaceholder ? (
-              <Box
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 1.5,
-                  bgcolor: c.bg.surface,
-                  p: 3,
-                  textAlign: 'center',
-                }}
-              >
-                <CircularProgress size={28} sx={{ color: c.accent.primary }} />
-                <Typography sx={{ color: c.text.primary, fontSize: '0.95rem', fontWeight: 600 }}>
-                  Installing dependencies…
-                </Typography>
-                <Typography sx={{ color: c.text.ghost, fontSize: '0.82rem', maxWidth: 420, lineHeight: 1.5 }}>
-                  Cold start can take 60–90 seconds. Check the <b>Terminal</b> tab to follow{' '}
-                  npm install + Vite startup output. The preview will appear here automatically{' '}
-                  once Vite is ready.
-                </Typography>
-              </Box>
-            ) : (
-              <ViewPreview
-                ref={previewRef}
-                serveUrl={workspaceServeUrl}
-                frontendCode={!workspaceServeUrl ? (files['index.html'] ?? '') : undefined}
-                inputData={testInput}
-                backendResult={null}
-                onConsoleMessage={handleWebviewConsole}
-              />
-            )
+            <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+              {/* Iframe always renders the moment we HAVE a URL — even
+                  while the install placeholder is still on top — so the
+                  embedded app's first paint completes BEFORE we fade
+                  the placeholder out. Otherwise the user sees a
+                  ~1-2 s window of blank/grey "iframe loaded but app
+                  hasn't painted yet" once `showInstallPlaceholder`
+                  flips false. */}
+              {(workspaceServeUrl || !showInstallPlaceholder) && (
+                <ViewPreview
+                  ref={previewRef}
+                  serveUrl={workspaceServeUrl}
+                  frontendCode={!workspaceServeUrl ? (files['index.html'] ?? '') : undefined}
+                  inputData={testInput}
+                  backendResult={null}
+                  onConsoleMessage={handleWebviewConsole}
+                  onContentLoad={onIframeContentLoad}
+                />
+              )}
+              {/* Overlay placeholder until the iframe has painted +
+                  a 300 ms grace for the SPA's first React commit.
+                  Fades out instead of unmount-snap so the transition
+                  is smooth and the user never sees a flash. */}
+              {(showInstallPlaceholder || !iframePainted) && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    zIndex: 5,
+                    opacity: showInstallPlaceholder || !iframePainted ? 1 : 0,
+                    transition: 'opacity 400ms ease',
+                    pointerEvents: iframePainted ? 'none' : 'auto',
+                  }}
+                >
+                  <InstallPlaceholder />
+                </Box>
+              )}
+            </Box>
           )}
           {activeTab === TAB_CODE && (
             <Box sx={{ display: 'flex', height: '100%' }}>
