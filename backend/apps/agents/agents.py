@@ -295,6 +295,18 @@ async def subscriptions_connect(body: dict):
         if not is_running():
             raise HTTPException(status_code=503, detail="9Router not available. Please install Node.js.")
 
+    # If reconnecting a primary lane (e.g. gemini-cli), drop its cascade
+    # siblings first. The registry prefers antigravity over gemini-cli
+    # when both are present, so a stale antigravity token would keep
+    # 400ing even after gemini-cli refreshes. Wiping the sibling forces
+    # the registry onto the freshly reconnected lane.
+    cascade = _PROVIDER_CASCADE_REMOVES.get(provider, [])
+    if cascade:
+        try:
+            await _delete_provider_connections(cascade)
+        except Exception:
+            pass
+
     try:
         result = await start_oauth(provider)
 
@@ -680,21 +692,61 @@ async def list_models():
     return {"models": result, "notes": notes}
 
 
+# Google's two OAuth lanes (gemini-cli and antigravity) share user-facing
+# meaning (both = "Google subscription") but 9Router treats them as
+# separate connections with independent token lifecycles. The registry
+# prefers `ag/` over `gc/` whenever AG is active because AG bypasses the
+# thoughtSignature validator that breaks multi-step tool turns. That
+# preference becomes a footgun when AG's token expires silently: the
+# user reconnects "Google", only gemini-cli refreshes, and every request
+# still routes through the stale AG token -> 400 Invalid argument.
+#
+# Cascade is one-directional. gemini-cli is the primary lane the UI
+# exposes; operations on it sweep antigravity too. Direct operations on
+# antigravity (e.g. an explicit AG opt-in/out path) MUST NOT cascade
+# back to gemini-cli or we'd nuke the user's main Google connection.
+_PROVIDER_CASCADE_REMOVES: dict[str, list[str]] = {
+    "gemini-cli": ["antigravity"],
+}
+
+
+async def _delete_provider_connections(providers: list[str]) -> int:
+    """Delete all 9Router connections whose provider is in the given list.
+    Returns the count actually removed. Silent if 9Router is unreachable."""
+    import httpx
+    from backend.apps.nine_router import NINE_ROUTER_API, get_providers
+    try:
+        connections = await get_providers()
+    except Exception:
+        return 0
+    targets = [c for c in connections if c.get("provider") in providers and c.get("id")]
+    removed = 0
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for c in targets:
+            try:
+                await client.delete(f"{NINE_ROUTER_API}/providers/{c['id']}")
+                removed += 1
+            except Exception:
+                pass
+    return removed
+
+
 @agents.router.post("/subscriptions/disconnect")
 async def subscriptions_disconnect(body: dict):
-    """Disconnect a subscription provider via 9Router."""
-    import httpx
+    """Disconnect a subscription provider via 9Router.
+
+    For Google's paired lanes (gemini-cli + antigravity), wipe BOTH so a
+    subsequent reconnect lands on a clean slate instead of resurrecting
+    a stale sibling.
+    """
     provider = body.get("provider", "")
     if not provider:
         raise HTTPException(status_code=400, detail="provider required")
 
     try:
-        from backend.apps.nine_router import NINE_ROUTER_API, get_providers
-        connections = await get_providers()
-        conn = next((c for c in connections if c.get("provider") == provider), None)
-        if conn and conn.get("id"):
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.delete(f"{NINE_ROUTER_API}/providers/{conn['id']}")
+        to_remove = [provider, *_PROVIDER_CASCADE_REMOVES.get(provider, [])]
+        removed = await _delete_provider_connections(to_remove)
+        if removed:
             from backend.apps.service.client import sync as _sync
             from backend.apps.settings.settings import load_settings
             _sync(load_settings().model_dump())

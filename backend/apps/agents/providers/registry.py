@@ -416,14 +416,19 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
             return entry.get("model_id", short_name)
         if getattr(settings, "anthropic_api_key", None):
             return entry.get("model_id", short_name)
-    # Gemini lane order: AI Studio apikey → Antigravity OAuth → Gemini CLI.
+    # Gemini lane order: AI Studio apikey, Antigravity OAuth, Gemini CLI.
     # AG bypasses the thoughtSignature validator that breaks multi-step tool
     # turns on gc/. Without it, every Gemini turn 400s after the first tool
     # call with "Thought signature is not valid".
     _ANTIGRAVITY_MAP = {
-        # gemini-3-pro-preview disabled — AG returns 404 even with active conn.
+        # gemini-3-pro-preview disabled: AG returns 404 even with active conn.
+        # gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant
+        #   400s every request with "invalid argument" (the `-high` thinking-
+        #   budget alias on AG requires a thinking_config the CLI doesn't
+        #   emit). Falls through to gc/gemini-3.1-pro-preview, which works
+        #   for non-tool turns; multi-step tool turns still hit the
+        #   thoughtSignature validator but that's a separate fight.
         "gemini-3-flash-preview": "gemini-3-flash",
-        "gemini-3.1-pro-preview": "gemini-3.1-pro-high",
         "gemini-3.1-flash-lite-preview": "gemini-3-flash",
     }
     if entry.get("api") == "gemini-cli":
