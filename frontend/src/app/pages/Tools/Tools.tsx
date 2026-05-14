@@ -144,6 +144,43 @@ const INTEGRATIONS: Integration[] = [
     ),
   },
   {
+    id: 'instagram',
+    name: 'Instagram',
+    description:
+      'Insights, publishing, comments, DMs, hashtags, mentions, and discovery for Business/Creator accounts. On the desktop app, use Sign in with Instagram below (or open an agent chat and run instagram_connect). A browser opens for Meta OAuth; the token stays in your OS keychain. In the browser-only app, connect from chat. Requires Instagram Professional.',
+    mcp_config: {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', 'instagram-mcp-buddy'],
+      env: {
+        INSTAGRAM_MCP_ENABLE_PUBLISHING: 'true',
+        INSTAGRAM_MCP_ENABLE_COMMENTMODERATION: 'true',
+        INSTAGRAM_MCP_ENABLE_MESSAGING: 'true',
+      },
+    },
+    color: '#E4405F',
+    website: 'https://www.npmjs.com/package/instagram-mcp-buddy',
+    connectLabel: 'Sign-in steps',
+    connectInstructions:
+      '1) Enable Instagram here. 2) Desktop: click Sign in with Instagram (or use agent chat / instagram_connect). 3) Complete login in the browser. 4) Optional: instagram_status lists granted scopes. Publishing/DMs require those permissions on your Meta app; OpenSwarm enables feature flags in mcp_config.env so agents see the full surface.',
+    icon: (
+      <svg viewBox="0 0 24 24" width="22" height="22">
+        <defs>
+          <linearGradient id="openswarm-ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#FED576" />
+            <stop offset="26%" stopColor="#F47133" />
+            <stop offset="61%" stopColor="#BC3081" />
+            <stop offset="100%" stopColor="#4C63D2" />
+          </linearGradient>
+        </defs>
+        <rect x="2" y="2" width="20" height="20" rx="5" fill="url(#openswarm-ig-grad)" />
+        <rect x="4.5" y="4.5" width="15" height="15" rx="4" fill="none" stroke="#fff" strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="4" fill="none" stroke="#fff" strokeWidth="2" />
+        <circle cx="17.5" cy="6.5" r="1.25" fill="#fff" />
+      </svg>
+    ),
+  },
+  {
     id: 'google-workspace',
     name: 'Google Workspace',
     description: 'Including Google Docs, Sheets, Slides, Calendar, and Gmail. (Gemini CLI extension)',
@@ -516,7 +553,7 @@ const Tools: React.FC = () => {
   // browse the long tail.
   const CURATED_MCP_NAMES = useMemo(() => new Set([
     'google-workspace', 'microsoft-365', 'slack', 'discord',
-    'notion', 'airtable', 'hubspot', 'reddit', 'youtube',
+    'notion', 'airtable', 'hubspot', 'reddit', 'youtube', 'instagram',
   ]), []);
   const regServers = useMemo(() => {
     if (regSource !== 'curated') return regServersRaw;
@@ -557,6 +594,9 @@ const Tools: React.FC = () => {
   const [credDialogIntegration, setCredDialogIntegration] = useState<Integration | null>(null);
   const [credDialogValues, setCredDialogValues] = useState<Record<string, string>>({});
   const [credDialogSaving, setCredDialogSaving] = useState(false);
+
+  /** Instagram desktop CLI (Electron); null when idle */
+  const [instagramConnectBusy, setInstagramConnectBusy] = useState<string | null>(null);
 
   const getInstalledIntegration = useCallback((integration: Integration): ToolDefinition | undefined => {
     return allTools.find((t) => t.name === integration.name);
@@ -986,6 +1026,74 @@ const Tools: React.FC = () => {
   const handleM365Disconnect = async (toolId: string) => {
     await dispatch(disconnectM365(toolId));
     setSnackbar({ open: true, message: 'Disconnected from Microsoft 365' });
+  };
+
+  const handleInstagramConnect = async (toolId: string) => {
+    const tool = items[toolId];
+    const bridge = (window as unknown as { openswarm?: { instagramConnect?: (env?: Record<string, string>) => Promise<{ ok?: boolean; error?: string; username?: string }> } }).openswarm?.instagramConnect;
+    if (!bridge) {
+      setSnackbar({
+        open: true,
+        message: 'Instagram sign-in here needs the OpenSwarm desktop app. In the browser, open an agent chat and run instagram_connect (or say “connect Instagram”).',
+        severity: 'error',
+      });
+      return;
+    }
+    setInstagramConnectBusy(toolId);
+    try {
+      const rawEnv = tool?.mcp_config?.env;
+      const mcpEnv: Record<string, string> = {};
+      if (rawEnv && typeof rawEnv === 'object' && !Array.isArray(rawEnv)) {
+        for (const [k, v] of Object.entries(rawEnv)) {
+          if (v !== undefined && v !== null) mcpEnv[k] = String(v);
+        }
+      }
+      const result = await bridge(mcpEnv);
+      if (!result?.ok) {
+        setSnackbar({ open: true, message: result?.error || 'Instagram sign-in failed', severity: 'error' });
+        return;
+      }
+      const username = typeof result.username === 'string' ? result.username : '';
+      const label = username ? `@${username}` : '';
+      await dispatch(updateTool({ id: toolId, auth_status: 'connected', connected_account_email: label }));
+      setSnackbar({ open: true, message: username ? `Instagram connected as @${username}` : 'Instagram connected — discovering actions…' });
+      setExpandedToolId(toolId);
+      dispatch(discoverTools(toolId));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSnackbar({ open: true, message: msg || 'Instagram sign-in failed', severity: 'error' });
+    } finally {
+      setInstagramConnectBusy(null);
+    }
+  };
+
+  const handleInstagramDisconnect = async (toolId: string) => {
+    const tool = items[toolId];
+    const bridge = (window as unknown as { openswarm?: { instagramLogout?: (env?: Record<string, string>) => Promise<{ ok?: boolean; error?: string }> } }).openswarm?.instagramLogout;
+    const rawEnv = tool?.mcp_config?.env;
+    const mcpEnv: Record<string, string> = {};
+    if (rawEnv && typeof rawEnv === 'object' && !Array.isArray(rawEnv)) {
+      for (const [k, v] of Object.entries(rawEnv)) {
+        if (v !== undefined && v !== null) mcpEnv[k] = String(v);
+      }
+    }
+    let keychainDetail = '';
+    if (bridge) {
+      try {
+        const r = await bridge(mcpEnv);
+        if (r && r.ok === false) keychainDetail = r.error || 'logout CLI reported failure';
+      } catch (e) {
+        keychainDetail = e instanceof Error ? e.message : String(e);
+      }
+    }
+    await dispatch(updateTool({ id: toolId, auth_status: 'configured', connected_account_email: '' }));
+    if (!bridge) {
+      setSnackbar({ open: true, message: 'OpenSwarm disconnected Instagram. Use the desktop app or run instagram-mcp-buddy logout to clear the keychain token.', severity: 'warning' });
+    } else if (keychainDetail) {
+      setSnackbar({ open: true, message: `OpenSwarm disconnected Instagram. Keychain logout: ${keychainDetail}`, severity: 'warning' });
+    } else {
+      setSnackbar({ open: true, message: 'Instagram disconnected' });
+    }
   };
 
   const openCredentialsDialog = (toolId: string, integration: Integration) => {
@@ -1647,6 +1755,10 @@ const Tools: React.FC = () => {
                   ig?.id === 'youtube' ||
                   tool.name?.toLowerCase() === 'youtube' ||
                   (tool.command || '').toLowerCase().includes('youtube');
+                const isInstagram =
+                  ig?.id === 'instagram' ||
+                  tool.name?.toLowerCase() === 'instagram' ||
+                  (tool.command || '').toLowerCase().includes('instagram');
                 return (
                   <Card
                     key={tool.id}
@@ -1709,6 +1821,18 @@ const Tools: React.FC = () => {
                             Connect Microsoft 365
                           </Button>
                         )}
+                        {!isDisabled && isInstagram && tool.auth_status !== 'connected' && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={instagramConnectBusy === tool.id ? <CircularProgress size={12} sx={{ color: ig.color }} /> : <LinkIcon sx={{ fontSize: 14 }} />}
+                            onClick={(e) => { e.stopPropagation(); void handleInstagramConnect(tool.id); }}
+                            disabled={instagramConnectBusy === tool.id}
+                            sx={{ borderColor: `${ig.color}40`, color: ig.color, '&:hover': { borderColor: ig.color, bgcolor: `${ig.color}10` }, textTransform: 'none', fontSize: '0.78rem', borderRadius: 1.5, py: 0.5, flexShrink: 0 }}
+                          >
+                            Sign in with Instagram
+                          </Button>
+                        )}
                         {!isDisabled && ig?.credentialFields && tool.auth_status !== 'connected' && (
                           <Button
                             size="small"
@@ -1721,12 +1845,17 @@ const Tools: React.FC = () => {
                           </Button>
                         )}
                         {!isDisabled && ig && tool.auth_status === 'connected' && (
-                          <Tooltip title={ig.credentialFields || ig.authType === 'oauth2' || ig.authType === 'device_code' ? 'Disconnect' : ''}>
+                          <Tooltip title={(ig.credentialFields || ig.authType === 'oauth2' || ig.authType === 'device_code' || isInstagram) ? 'Disconnect' : ''}>
                             <Chip
                               icon={<CheckCircleIcon sx={{ fontSize: 12 }} />}
                               label={tool.connected_account_email ? `Connected · ${tool.connected_account_email}` : 'Connected'}
                               size="small"
-                              onDelete={(ig.credentialFields || ig.authType === 'oauth2' || ig.authType === 'device_code') ? (e: React.SyntheticEvent) => { e.stopPropagation(); ig.authType === 'device_code' ? handleM365Disconnect(tool.id) : handleDisconnectIntegration(tool.id, ig); } : undefined}
+                              onDelete={(ig.credentialFields || ig.authType === 'oauth2' || ig.authType === 'device_code' || isInstagram) ? (e: React.SyntheticEvent) => {
+                                e.stopPropagation();
+                                if (ig.authType === 'device_code') handleM365Disconnect(tool.id);
+                                else if (isInstagram) void handleInstagramDisconnect(tool.id);
+                                else handleDisconnectIntegration(tool.id, ig);
+                              } : undefined}
                               onClick={(e) => e.stopPropagation()}
                               sx={{ bgcolor: c.status.successBg, color: c.status.success, fontSize: '0.7rem', height: 22, '& .MuiChip-icon': { color: c.status.success }, '& .MuiChip-deleteIcon': { color: c.status.success, '&:hover': { color: c.status.error } }, flexShrink: 0 }}
                             />

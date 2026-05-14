@@ -352,6 +352,62 @@ function getBundledNodePath() {
   return fs.existsSync(candidate) ? candidate : null;
 }
 
+/**
+ * Run instagram-mcp-buddy connect|logout non-interactively. Prefers the workspace
+ * build at ../instagram-mcp/dist/index.js when present (dev / source tree);
+ * otherwise `npx -y instagram-mcp-buddy` so packaged apps work without shipping
+ * the subfolder. Inherits a shell-expanded PATH on macOS (see getShellPath).
+ *
+ * @param {'connect'|'logout'} subcommand
+ * @param {Record<string, string>} [extraEnv]  merged into child env (e.g. INSTAGRAM_MCP_ENABLE_* from MCP config)
+ * @returns {Promise<Record<string, unknown>>}
+ */
+function runInstagramBuddyCli(subcommand, extraEnv = {}) {
+  return new Promise((resolve, reject) => {
+    const repoRoot = path.join(__dirname, '..');
+    const localScript = path.join(repoRoot, 'instagram-mcp', 'dist', 'index.js');
+    const pathMerged = [getShellPath(), process.env.PATH || ''].filter(Boolean).join(path.delimiter);
+    const env = { ...process.env, ...extraEnv, PATH: pathMerged };
+
+    let cmd;
+    let args;
+    let shell = false;
+    if (fs.existsSync(localScript)) {
+      const nodeExe = getBundledNodePath() || (process.platform === 'win32' ? 'node.exe' : 'node');
+      cmd = nodeExe;
+      args = [localScript, subcommand];
+    } else {
+      cmd = 'npx';
+      args = ['-y', 'instagram-mcp-buddy', subcommand];
+      if (process.platform === 'win32') shell = true;
+    }
+
+    const child = spawn(cmd, args, { env, cwd: repoRoot, windowsHide: true, shell });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (d) => { out += d.toString(); });
+    child.stderr.on('data', (d) => { err += d.toString(); });
+    child.on('error', (e) => reject(e));
+    child.on('close', (code) => {
+      if (code !== 0) {
+        const msg = (err || '').trim() || (out || '').trim() || `instagram-mcp-buddy ${subcommand} exited ${code}`;
+        reject(new Error(msg));
+        return;
+      }
+      const line = out.trim().split(/\r?\n/).filter(Boolean).pop();
+      if (!line) {
+        reject(new Error(`instagram-mcp-buddy ${subcommand}: empty stdout`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(line));
+      } catch (e) {
+        reject(new Error(`instagram-mcp-buddy ${subcommand}: invalid JSON: ${line.slice(0, 200)}`));
+      }
+    });
+  });
+}
+
 // Polls /api/health/check until the backend answers 200, or the spawned
 // python process exits non-zero (real failure). Never times out by wall
 // clock — on a cold-Defender Windows install this can take several
@@ -1475,4 +1531,32 @@ ipcMain.handle('connect-slack', async () => {
       finish(reject, new Error('Sign-in timed out after 10 minutes'));
     }, 10 * 60 * 1000);
   });
+});
+
+function normalizeEnvRecord(mcpEnv) {
+  const extra = {};
+  if (mcpEnv && typeof mcpEnv === 'object' && !Array.isArray(mcpEnv)) {
+    for (const [k, v] of Object.entries(mcpEnv)) {
+      if (v !== undefined && v !== null) extra[k] = String(v);
+    }
+  }
+  return extra;
+}
+
+ipcMain.handle('instagram-connect', async (_event, mcpEnv) => {
+  try {
+    const parsed = await runInstagramBuddyCli('connect', normalizeEnvRecord(mcpEnv));
+    return { ok: true, ...parsed };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
+
+ipcMain.handle('instagram-logout', async (_event, mcpEnv) => {
+  try {
+    const parsed = await runInstagramBuddyCli('logout', normalizeEnvRecord(mcpEnv));
+    return { ok: true, ...parsed };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
 });

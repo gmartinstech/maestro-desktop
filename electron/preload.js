@@ -28,6 +28,9 @@ const { contextBridge, ipcRenderer } = require('electron');
     // the cloud can credit the affiliate. Resolves to {} if no state yet.
     getInstallState: () => ipcRenderer.invoke('get-install-state'),
     connectSlack: () => ipcRenderer.invoke('connect-slack'),
+    /** Desktop Instagram OAuth via instagram-mcp-buddy CLI (keychain). Optional env merged from tool mcp_config.env */
+    instagramConnect: (mcpEnv) => ipcRenderer.invoke('instagram-connect', mcpEnv),
+    instagramLogout: (mcpEnv) => ipcRenderer.invoke('instagram-logout', mcpEnv),
     sendCdpCommand: (wcId, method, params) => ipcRenderer.invoke('send-cdp-command', wcId, method, params),
     cdpCacheSet: (wcId, indexMap) => ipcRenderer.invoke('cdp-cache-set', wcId, indexMap),
     cdpCacheGet: (wcId) => ipcRenderer.invoke('cdp-cache-get', wcId),
