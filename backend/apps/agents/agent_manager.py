@@ -1826,10 +1826,18 @@ class AgentManager:
                     if tool_def:
                         denied = _get_denied_tool_names(tool_def)
                         known = _get_all_known_tool_names(tool_def)
-                        for tn in known - denied:
-                            policy = tool_def.tool_permissions.get(tn, "ask")
-                            if policy == "always_allow":
-                                effective_allowed.append(f"mcp__{name}__{tn}")
+                        if known:
+                            for tn in known - denied:
+                                policy = tool_def.tool_permissions.get(tn, "ask")
+                                if policy == "always_allow":
+                                    effective_allowed.append(f"mcp__{name}__{tn}")
+                        else:
+                            # _tool_descriptions never populated (discovery skipped or
+                            # the server's schema was unavailable). Trust the server
+                            # via wildcard so freshly added MCP tools are not silently
+                            # filtered out of the CLI allowlist; explicit denies below
+                            # still apply.
+                            effective_allowed.append(f"mcp__{name}__*")
                         for tn in denied:
                             effective_disallowed.append(f"mcp__{name}__{tn}")
                     else:
