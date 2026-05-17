@@ -310,6 +310,30 @@ const INTEGRATIONS: Integration[] = [
     authType: 'oauth2',
   },
   {
+    id: 'github',
+    name: 'GitHub',
+    description:
+      'GitHub repos, issues, PRs, code, workflows, gists, security, projects. 79 tools from the official github/github-mcp-server. Run scripts/setup-github-mcp.sh once to install the binary, then paste a Personal Access Token.',
+    mcp_config: {
+      type: 'stdio',
+      command: 'bash',
+      args: ['-c', 'exec "$HOME/.openswarm/bin/github-mcp-server" stdio --toolsets=all'],
+    },
+    color: '#181717',
+    website: 'https://github.com/github/github-mcp-server',
+    connectLabel: 'Connect GitHub',
+    connectInstructions: 'Create a Personal Access Token at https://github.com/settings/tokens (fine-grained recommended) with the repo, read:org, and workflow scopes you want the agent to use. Then paste it below. First time only: run `bash scripts/setup-github-mcp.sh` in a terminal to download the github-mcp-server binary to ~/.openswarm/bin/.',
+    credentialFields: [
+      { key: 'GITHUB_PERSONAL_ACCESS_TOKEN', label: 'GitHub Personal Access Token', placeholder: 'ghp_... or github_pat_...', type: 'password' },
+    ],
+    icon: (
+      <svg viewBox="0 0 24 24" width="22" height="22">
+        <rect x="0" y="0" width="24" height="24" rx="4" fill="#181717" />
+        <path d="M12 4.3c-3.83 0-6.94 3.11-6.94 6.94 0 3.07 1.99 5.67 4.75 6.59.35.06.48-.15.48-.34 0-.17-.01-.61-.01-1.2-1.93.42-2.34-.93-2.34-.93-.32-.8-.77-1.02-.77-1.02-.63-.43.05-.42.05-.42.7.05 1.06.71 1.06.71.62 1.06 1.62.75 2.02.58.06-.45.24-.76.44-.93-1.54-.17-3.17-.77-3.17-3.43 0-.76.27-1.38.72-1.86-.07-.17-.31-.88.07-1.84 0 0 .58-.18 1.91.71.55-.15 1.15-.23 1.74-.23.59 0 1.18.08 1.74.23 1.33-.89 1.91-.71 1.91-.71.38.96.14 1.67.07 1.84.45.48.72 1.1.72 1.86 0 2.66-1.63 3.26-3.18 3.43.25.21.47.63.47 1.28 0 .92-.01 1.67-.01 1.89 0 .19.13.4.49.34 2.76-.92 4.74-3.52 4.74-6.59 0-3.83-3.11-6.94-6.94-6.94z" fill="#fff" />
+      </svg>
+    ),
+  },
+  {
     id: 'linkedin',
     name: 'LinkedIn',
     description:
@@ -638,7 +662,7 @@ const Tools: React.FC = () => {
   // browse the long tail.
   const CURATED_MCP_NAMES = useMemo(() => new Set([
     'google-workspace', 'microsoft-365', 'slack', 'discord',
-    'notion', 'airtable', 'hubspot', 'reddit', 'youtube', 'instagram', 'linkedin',
+    'notion', 'airtable', 'hubspot', 'reddit', 'youtube', 'instagram', 'linkedin', 'github',
   ]), []);
   const regServers = useMemo(() => {
     if (regSource !== 'curated') return regServersRaw;

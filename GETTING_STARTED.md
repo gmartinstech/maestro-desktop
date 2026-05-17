@@ -240,6 +240,36 @@ bash scripts/setup-linkedin-mcp.sh
 
 ---
 
+## GitHub (`github-mcp-server`) (optional)
+
+The official [github/github-mcp-server](https://github.com/github/github-mcp-server) (Go) ships as a pre-built 6.7 MB single binary. With `--toolsets=all` it exposes **79 tools** covering repos, issues, pull requests, gists, workflows, code search, security, projects, notifications, and more. Auth is a GitHub Personal Access Token passed as `GITHUB_PERSONAL_ACCESS_TOKEN`.
+
+### One-time install
+
+From the repo root:
+
+```bash
+bash scripts/setup-github-mcp.sh
+```
+
+The script detects your platform (macOS/Linux × x86_64/arm64), downloads the latest release tarball from GitHub Releases, and installs the binary at `~/.openswarm/bin/github-mcp-server`. Re-running it upgrades to the latest version.
+
+### Connect from the UI
+
+1. Create a Personal Access Token at https://github.com/settings/tokens. Fine-grained tokens are recommended; pick the scopes you want the agent to have.
+2. Open the **Tools** page in the sidebar.
+3. Find the **GitHub** tile and click **Connect GitHub**.
+4. Paste the token and confirm. The tile flips to **Connected** and the server is spawned on demand for tool calls.
+
+### Notes
+
+* No background daemon. The binary is spawned by OpenSwarm only when an agent invokes a GitHub tool.
+* The token is stored locally in OpenSwarm's tool config and passed as an env var to the binary at spawn time.
+* To rotate the token, click the **Connected** chip to disconnect, then reconnect with the new value.
+* For read-only mode (safer default for unattended agents), edit the tool's `mcp_config.args` to include `--read-only`.
+
+---
+
 ## Project structure
 
 ```
