@@ -486,6 +486,23 @@ class AgentManager:
                     f"\"{tool.connected_account_email}\" automatically — do NOT ask the user."
                 )
 
+            # Instagram and LinkedIn enforce strict per-account rate limits to
+            # prevent platform bans. When a tool call comes back with
+            # rate_limited: true OR a deny reason mentioning "RATE LIMIT HIT",
+            # the agent MUST stop the task, tell the user the retry-after, and
+            # NOT retry. Without this guidance, agents tend to loop trying
+            # alternative tools or even shell out to filesystem search.
+            if tool.name.lower() in ("instagram", "linkedin"):
+                lines.append(
+                    f"  RATE LIMIT BEHAVIOR (HARD RULE): If a {tool.name} tool returns "
+                    "rate_limited: true, or any tool call here returns a 'deny' with "
+                    "'RATE LIMIT HIT' in the message, this is FINAL for the current turn. "
+                    "Do NOT retry the same tool. Do NOT try alternative tools to accomplish "
+                    "the same goal. Do NOT shell out to Bash/curl/find to look up the package "
+                    "source. Tell the user the retry-after time in plain English and END the "
+                    "task. Looping makes the platform ban risk worse, not better."
+                )
+
             # Discord guild scoping — hard restriction. The bot may technically
             # be in other servers (across other OpenSwarm users), but this
             # specific user only authorized these guild IDs.

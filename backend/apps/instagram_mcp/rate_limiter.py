@@ -155,8 +155,11 @@ def rate_limited(category: str) -> Callable[[Callable[..., Dict[str, Any]]], Cal
                     "rate_limited": True,
                     "category": category,
                     "message": (
-                        "Rate limit hit to protect this Instagram account from being "
-                        f"flagged for automation: {reason}"
+                        f"RATE LIMIT HIT — STOP HERE. {reason} DO NOT retry this tool. "
+                        "DO NOT try alternative tools to accomplish the same goal. DO NOT "
+                        "search the filesystem or look up the package source. Tell the user "
+                        "the retry-after time in plain English and END the task. This "
+                        "protects the Instagram account from being flagged for automation."
                     ),
                     "retry_after_seconds": retry_after,
                     "limits": {k: limits[k] for k in ("per_minute", "per_hour", "per_day")},

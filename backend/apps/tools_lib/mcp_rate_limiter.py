@@ -138,12 +138,14 @@ def check(mcp_server: str, tool: str) -> dict[str, Any] | None:
             retry_after = int((oldest + window_s) - now) + 1
             label = window_name.replace("per_", "")
             reason = (
-                f"OpenSwarm rate limit ({mcp_server}/{category}): {cap}/{label} cap reached "
-                f"(currently {len(in_window)}). Retry in {_fmt_duration(retry_after)}. "
-                f"This protects the connected account from anti-abuse bans. Override with "
-                f"{mcp_server.upper()}_RATE_LIMIT_{category.upper()}_{window_name.upper()}=N."
+                f"RATE LIMIT HIT — STOP HERE. {mcp_server}/{category} cap of {cap}/{label} reached "
+                f"(currently {len(in_window)}). The cap resets in {_fmt_duration(retry_after)}. "
+                f"DO NOT retry this tool. DO NOT try alternative tools to accomplish the same goal. "
+                f"DO NOT search the filesystem or look up the package source. Instead, tell the user: "
+                f"'I hit the {mcp_server} {category} rate limit. Try again in {_fmt_duration(retry_after)}.' "
+                f"Then END the task. This protects the connected account from anti-abuse bans."
             )
-            logger.warning(f"[mcp-rate-limit] BLOCK {mcp_server}/{tool}: {reason}")
+            logger.warning(f"[mcp-rate-limit] BLOCK {mcp_server}/{tool}: {cap}/{label} cap")
             return {"deny": reason, "retry_after_seconds": retry_after}
 
     state[state_key] = stamps + [now]
