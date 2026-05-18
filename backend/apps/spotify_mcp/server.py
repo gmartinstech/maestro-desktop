@@ -101,6 +101,20 @@ def _get_client() -> spotipy.Spotify:
     except SpotifyOauthError as exc:
         raise RuntimeError(f"Spotify refresh_token rejected: {exc}. Reconnect Spotify in OpenSwarm.")
 
+    # Log what scopes the token ACTUALLY carries. If a playlist or library
+    # action errors later with "Insufficient scope", check this line first
+    # — it shows exactly what was granted at sign-in time.
+    granted = (token_info.get("scope") or "").split()
+    expected = set(_scopes().split())
+    missing = expected - set(granted)
+    if missing:
+        logger.warning(
+            f"Spotify token is missing scopes: {sorted(missing)}. "
+            f"Some tools will fail with 'Insufficient scope'. Reconnect in OpenSwarm Tools page."
+        )
+    else:
+        logger.info(f"Spotify token has all {len(granted)} expected scopes")
+
     _client = spotipy.Spotify(auth=token_info["access_token"])
     return _client
 

@@ -1122,6 +1122,11 @@ async def oauth_disconnect(tool_id: str):
             logger.warning(f"Failed to revoke Google token for tool {tool.id}: {e}")
 
     tool.oauth_tokens = {}
+    # Also clear env-var-style credentials (used by Spotify's SPOTIFY_REFRESH_TOKEN
+    # and any other future tool that stores secrets in credentials instead of
+    # oauth_tokens). Without this, disconnect "succeeds" but the old token
+    # still gets injected into the MCP server's env on next spawn.
+    tool.credentials = {}
     tool.auth_status = "configured"
     tool.connected_account_email = None
     _save(tool)
