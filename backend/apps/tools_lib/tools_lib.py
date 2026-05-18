@@ -326,6 +326,23 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
         env["PYTHONPATH"] = (_project_root + os.pathsep + existing_pp) if existing_pp else _project_root
 
+    # Instagram MCP runs as a vendored Python package (backend.apps.instagram_mcp).
+    # Same PYTHONPATH treatment as Discord so `python -m backend.apps.instagram_mcp`
+    # can find the package when spawned as a subprocess from any cwd. Without
+    # this, the spawn silently fails and the agent sees zero Instagram tools.
+    if tool.name.lower() == "instagram" and config.get("type") == "stdio":
+        env = config.setdefault("env", {})
+        _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (_project_root + os.pathsep + existing_pp) if existing_pp else _project_root
+        # Also pin `command` to the same Python interpreter the backend is
+        # running in. The MCP config's literal "python" would otherwise
+        # resolve via PATH and could land on a system Python missing
+        # instagrapi. sys.executable always points at the right env.
+        import sys as _sys
+        if config.get("command") == "python":
+            config["command"] = _sys.executable
+
     # Microsoft 365 MCP: use a stable token cache path shared across process spawns
     if tool.name.lower() == "microsoft 365" and config.get("type") == "stdio":
         env = config.setdefault("env", {})
