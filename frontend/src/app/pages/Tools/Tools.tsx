@@ -348,7 +348,8 @@ const INTEGRATIONS: Integration[] = [
     color: '#229ED9',
     website: 'https://core.telegram.org/bots',
     connectLabel: 'Connect Telegram Bot',
-    connectInstructions: 'Open Telegram → message @BotFather → send `/newbot` → pick a name and username for your bot (e.g. ShawnsOpenSwarmBot). @BotFather will reply with a token like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`. Paste that token below. After connecting, DM your bot anything and OpenSwarm runs it as an agent task. First message auto-authorizes you as owner.',
+    // No connectInstructions here — the credentials dialog renders a 4-step
+    // guided wizard for this tile (see telegramBotStep handling).
     credentialFields: [
       { key: 'TELEGRAM_BOT_TOKEN', label: 'Bot Token (from @BotFather)', placeholder: '123456:ABC-DEF1234ghIkl-...', type: 'password' },
     ],
@@ -770,6 +771,9 @@ const Tools: React.FC = () => {
     busy: boolean;
   } | null>(null);
   const [telegramInput, setTelegramInput] = useState('');
+
+  /** Telegram Bot setup wizard step (1=open BotFather, 2=send /newbot, 3=name+username, 4=paste token). */
+  const [telegramBotStep, setTelegramBotStep] = useState<number>(1);
 
   // Full-auth upgrade dialog (password + 2FA) is disabled while we figure out
   // Instagram's trusted-notification polling endpoint. Connect uses browser-only
@@ -1468,6 +1472,8 @@ const Tools: React.FC = () => {
     setCredDialogIntegration(integration);
     setCredDialogValues(initial);
     setCredDialogOpen(true);
+    // Reset multi-step wizards
+    if (integration.id === 'telegram-bot') setTelegramBotStep(1);
   };
 
   const handleCredentialsSave = async () => {
@@ -3197,6 +3203,116 @@ const Tools: React.FC = () => {
             <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5, bgcolor: c.bg.secondary, px: 2, py: 1.5, borderRadius: 2, border: `1px solid ${c.border.subtle}` }}>
               Click <strong>Sign in with Slack</strong> below — a Slack window will open. Sign in normally and the window will close automatically once you reach your workspace.
             </Typography>
+          ) : credDialogIntegration?.id === 'telegram-bot' ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Step progress dots */}
+              <Box sx={{ display: 'flex', gap: 0.75, justifyContent: 'center', mb: 1 }}>
+                {[1, 2, 3, 4].map((n) => (
+                  <Box key={n} sx={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    bgcolor: n <= telegramBotStep ? '#229ED9' : c.border.subtle,
+                    transition: 'background-color 0.2s',
+                  }}/>
+                ))}
+              </Box>
+              <Typography sx={{ color: c.text.muted, fontSize: '0.75rem', textAlign: 'center' }}>
+                Step {telegramBotStep} of 4
+              </Typography>
+
+              {telegramBotStep === 1 && (
+                <>
+                  <Typography sx={{ color: c.text.primary, fontSize: '0.95rem', fontWeight: 600 }}>
+                    Open BotFather in Telegram
+                  </Typography>
+                  <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    BotFather is the official Telegram account that creates bots. Tap below to open it in your Telegram app.
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    onClick={() => window.open('https://t.me/BotFather', '_blank')}
+                    sx={{ alignSelf: 'flex-start', borderColor: '#229ED9', color: '#229ED9', textTransform: 'none', borderRadius: 2, '&:hover': { borderColor: '#229ED9', bgcolor: '#229ED915' } }}
+                  >
+                    Open @BotFather →
+                  </Button>
+                  <Typography sx={{ color: c.text.tertiary, fontSize: '0.78rem', fontStyle: 'italic' }}>
+                    Once BotFather opens, tap <strong>Start</strong> at the bottom of the chat. Then come back here and click Next.
+                  </Typography>
+                </>
+              )}
+
+              {telegramBotStep === 2 && (
+                <>
+                  <Typography sx={{ color: c.text.primary, fontSize: '0.95rem', fontWeight: 600 }}>
+                    Tell BotFather to create a new bot
+                  </Typography>
+                  <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    In your BotFather chat, send this exact message:
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: c.bg.page, border: `1px solid ${c.border.subtle}`, borderRadius: 2, px: 2, py: 1.5 }}>
+                    <Typography sx={{ flex: 1, color: c.text.primary, fontFamily: c.font.mono, fontSize: '0.95rem' }}>
+                      /newbot
+                    </Typography>
+                    <Button
+                      size="small"
+                      onClick={() => { navigator.clipboard.writeText('/newbot'); setSnackbar({ open: true, message: 'Copied /newbot' }); }}
+                      sx={{ minWidth: 0, color: '#229ED9', textTransform: 'none', fontSize: '0.78rem' }}
+                    >
+                      Copy
+                    </Button>
+                  </Box>
+                  <Typography sx={{ color: c.text.tertiary, fontSize: '0.78rem', fontStyle: 'italic' }}>
+                    BotFather will reply asking for a name. Click Next when you're ready to continue.
+                  </Typography>
+                </>
+              )}
+
+              {telegramBotStep === 3 && (
+                <>
+                  <Typography sx={{ color: c.text.primary, fontSize: '0.95rem', fontWeight: 600 }}>
+                    Name your bot
+                  </Typography>
+                  <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    BotFather will ask two questions, in order:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, bgcolor: c.bg.page, border: `1px solid ${c.border.subtle}`, borderRadius: 2, p: 2 }}>
+                    <Typography sx={{ color: c.text.primary, fontSize: '0.85rem' }}>
+                      1. <strong>Name</strong> — anything you want. Example: <em>My OpenSwarm</em>
+                    </Typography>
+                    <Typography sx={{ color: c.text.primary, fontSize: '0.85rem' }}>
+                      2. <strong>Username</strong> — must end in <code>bot</code>. Example: <em>my_openswarm_bot</em>
+                    </Typography>
+                  </Box>
+                  <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    If the username is taken, BotFather will tell you — just try another. Once you're done, BotFather replies with a long token starting with numbers. Copy it, then click Next.
+                  </Typography>
+                </>
+              )}
+
+              {telegramBotStep === 4 && (
+                <>
+                  <Typography sx={{ color: c.text.primary, fontSize: '0.95rem', fontWeight: 600 }}>
+                    Paste your bot's token
+                  </Typography>
+                  <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    The token looks like <code>123456789:ABC-DEF1234ghIkl-...</code>
+                  </Typography>
+                  <TextField
+                    autoFocus
+                    label="Bot Token"
+                    placeholder="123456789:ABC-..."
+                    type="password"
+                    value={credDialogValues['TELEGRAM_BOT_TOKEN'] || ''}
+                    onChange={(e) => setCredDialogValues((prev) => ({ ...prev, TELEGRAM_BOT_TOKEN: e.target.value }))}
+                    fullWidth
+                    size="small"
+                    sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.page, fontFamily: c.font.mono, fontSize: '0.85rem' } }}
+                  />
+                  <Typography sx={{ color: c.text.tertiary, fontSize: '0.78rem', fontStyle: 'italic' }}>
+                    After connecting, restart OpenSwarm and DM your new bot from any Telegram device to start using it.
+                  </Typography>
+                </>
+              )}
+            </Box>
           ) : credDialogIntegration?.id === 'telegram' && telegramFlow ? (
             <>
               <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5, bgcolor: c.bg.secondary, px: 2, py: 1.5, borderRadius: 2, border: `1px solid ${c.border.subtle}` }}>
@@ -3249,8 +3365,17 @@ const Tools: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
+          {/* Back button for telegram-bot wizard, steps 2-4 */}
+          {credDialogIntegration?.id === 'telegram-bot' && telegramBotStep > 1 && (
+            <Button
+              onClick={() => setTelegramBotStep(telegramBotStep - 1)}
+              sx={{ color: c.text.tertiary, textTransform: 'none' }}
+            >
+              Back
+            </Button>
+          )}
           <Button
-            onClick={() => { setCredDialogOpen(false); setTelegramFlow(null); setTelegramInput(''); }}
+            onClick={() => { setCredDialogOpen(false); setTelegramFlow(null); setTelegramInput(''); setTelegramBotStep(1); }}
             sx={{ color: c.text.tertiary, textTransform: 'none' }}
           >
             Cancel
@@ -3262,12 +3387,18 @@ const Tools: React.FC = () => {
                 ? handleSlackAutoConnect
                 : (credDialogIntegration?.id === 'telegram' && telegramFlow)
                   ? (telegramFlow.step === 'code' ? handleTelegramVerify : handleTelegramPassword)
-                  : handleCredentialsSave
+                  : (credDialogIntegration?.id === 'telegram-bot' && telegramBotStep < 4)
+                    ? (() => setTelegramBotStep(telegramBotStep + 1))
+                    : handleCredentialsSave
             }
             disabled={
               (credDialogIntegration?.id === 'telegram' && telegramFlow)
                 ? (telegramFlow.busy || !telegramInput.trim())
-                : (credDialogSaving || (credDialogIntegration?.id !== 'slack' && (credDialogIntegration?.credentialFields || []).some((f) => !credDialogValues[f.key]?.trim())))
+                : (credDialogIntegration?.id === 'telegram-bot' && telegramBotStep === 4)
+                  ? (credDialogSaving || !(credDialogValues['TELEGRAM_BOT_TOKEN'] || '').trim())
+                  : (credDialogIntegration?.id === 'telegram-bot')
+                    ? false  // Next button always enabled on steps 1-3
+                    : (credDialogSaving || (credDialogIntegration?.id !== 'slack' && (credDialogIntegration?.credentialFields || []).some((f) => !credDialogValues[f.key]?.trim())))
             }
             startIcon={
               ((credDialogIntegration?.id === 'telegram' && telegramFlow?.busy) || credDialogSaving)
@@ -3280,7 +3411,11 @@ const Tools: React.FC = () => {
               ? (credDialogSaving ? 'Waiting for sign-in…' : 'Sign in with Slack')
               : (credDialogIntegration?.id === 'telegram' && telegramFlow)
                 ? (telegramFlow.step === 'code' ? (telegramFlow.busy ? 'Verifying…' : 'Verify code') : (telegramFlow.busy ? 'Signing in…' : 'Sign in'))
-                : 'Connect'}
+                : (credDialogIntegration?.id === 'telegram-bot' && telegramBotStep < 4)
+                  ? 'Next'
+                  : (credDialogIntegration?.id === 'telegram-bot' && telegramBotStep === 4)
+                    ? (credDialogSaving ? 'Connecting…' : 'Connect')
+                    : 'Connect'}
           </Button>
         </DialogActions>
       </Dialog>
