@@ -702,6 +702,20 @@ class WebSocketManager {
             status: data.status === 'success' ? 'completed' : 'error',
           });
         } catch { /* notifications are best-effort */ }
+        try {
+          // Fire a native OS notification too. Survives a closed window
+          // (the in-app toast doesn't), which is the whole point of
+          // promoting these to the OS layer for scheduled runs.
+          const w: any = (window as any).openswarm;
+          if (w?.notify) {
+            const title = `${data.workflow_title || 'Workflow'} • ${data.status === 'success' ? 'done' : data.status}`;
+            const body = data.tier_kind && data.fallback
+              ? `Would have ${data.tier_kind === 'call' ? 'called' : 'texted'} you. (Cloud SMS not wired yet.)`
+              : 'Tap to open the run.';
+            const deepLink = data.workflow_id ? `openswarm://workflow/${data.workflow_id}/run/${data.run_id || ''}` : undefined;
+            w.notify({ title, body, deepLink });
+          }
+        } catch { /* native notif optional */ }
         break;
 
       case 'dashboard:browser_card_added':

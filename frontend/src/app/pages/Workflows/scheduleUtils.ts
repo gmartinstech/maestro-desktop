@@ -5,6 +5,11 @@ export const WEEKDAY_LABEL_SHORT = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'S
 export const WEEKDAY_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function defaultSchedule(): ScheduleConfig {
+  // Pick the host's IANA tz so new schedules start with an explicit zone
+  // instead of the legacy "local" sentinel. Backend storage still coerces
+  // "local" if a record predates this default; new records skip that path.
+  let tz = 'local';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'; } catch { /* keep 'local' */ }
   return {
     enabled: false,
     repeat_every: 1,
@@ -12,8 +17,11 @@ export function defaultSchedule(): ScheduleConfig {
     on_days: [],
     hour: 9,
     minute: 0,
-    timezone: 'local',
+    timezone: tz,
     on_missed: 'skip',
+    ends_at: null,
+    max_runs: null,
+    runs_count: 0,
   };
 }
 
@@ -84,16 +92,36 @@ export function addDays(date: Date, n: number): Date {
   return d;
 }
 
+function lastDayOfMonth(year: number, monthZeroBased: number): number {
+  // Date(year, month, 0) returns the last day of the previous month, so
+  // passing month+1 gives the last day of `monthZeroBased`. Matches the
+  // backend's calendar.monthrange behavior so the FE preview no longer
+  // clamps to day 28 (the old shared bug between this and previewNextRun).
+  return new Date(year, monthZeroBased + 1, 0).getDate();
+}
+
 export function fireTimesWithin(workflow: Workflow, from: Date, to: Date, cap = 40): Date[] {
   const sched = workflow.schedule;
   if (!sched.enabled) return [];
+  // Honor end conditions on the FE preview too, so the calendar doesn't
+  // paint pills for fires the backend will refuse to run. ends_at is an
+  // ISO string in workflow state; max_runs/runs_count are numbers.
+  if (sched.ends_at) {
+    const endsAt = new Date(sched.ends_at);
+    if (!Number.isNaN(endsAt.getTime()) && endsAt.getTime() <= from.getTime()) return [];
+    if (!Number.isNaN(endsAt.getTime()) && endsAt.getTime() < to.getTime()) to = endsAt;
+  }
+  if (sched.max_runs != null && sched.runs_count >= sched.max_runs) return [];
+  const remainingRuns = sched.max_runs != null ? Math.max(0, sched.max_runs - sched.runs_count) : Infinity;
+  const effectiveCap = Math.min(cap, remainingRuns);
+  if (effectiveCap === 0) return [];
   const out: Date[] = [];
   const cursor = new Date(from);
   cursor.setHours(0, 0, 0, 0);
 
   if (sched.repeat_unit === 'day') {
     const step = Math.max(1, sched.repeat_every);
-    for (let i = 0; i < 366 && out.length < cap; i += step) {
+    for (let i = 0; i < 366 && out.length < effectiveCap; i += step) {
       const d = new Date(cursor);
       d.setDate(d.getDate() + i);
       d.setHours(sched.hour, sched.minute, 0, 0);
@@ -104,18 +132,25 @@ export function fireTimesWithin(workflow: Workflow, from: Date, to: Date, cap = 
   }
 
   if (sched.repeat_unit === 'month') {
-    let d = new Date(from.getFullYear(), from.getMonth(), Math.min(28, from.getDate()), sched.hour, sched.minute);
+    const startDay = from.getDate();
+    let year = from.getFullYear();
+    let month = from.getMonth();
     let guard = 0;
-    while (d <= to && out.length < cap && guard < 60) {
-      if (d >= from) out.push(new Date(d));
-      d = new Date(d.getFullYear(), d.getMonth() + Math.max(1, sched.repeat_every), d.getDate(), sched.hour, sched.minute);
+    while (out.length < effectiveCap && guard < 60) {
+      const day = Math.min(startDay, lastDayOfMonth(year, month));
+      const d = new Date(year, month, day, sched.hour, sched.minute, 0, 0);
+      if (d > to) break;
+      if (d >= from) out.push(d);
+      month += Math.max(1, sched.repeat_every);
+      year += Math.floor(month / 12);
+      month = ((month % 12) + 12) % 12;
       guard += 1;
     }
     return out;
   }
 
   const allowed = sched.on_days.length ? sched.on_days : [from.getDay()];
-  for (let i = 0; i < 60 && out.length < cap; i += 1) {
+  for (let i = 0; i < 60 && out.length < effectiveCap; i += 1) {
     const day = new Date(cursor);
     day.setDate(day.getDate() + i);
     if (!allowed.includes(day.getDay())) continue;

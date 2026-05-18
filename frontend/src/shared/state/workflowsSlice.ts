@@ -20,6 +20,24 @@ export interface ScheduleConfig {
   minute: number;
   timezone: string;
   on_missed: 'skip' | 'run_once' | 'run_all';
+  // Optional end conditions. null on both = forever. The scheduler auto-
+  // disables once either threshold is crossed.
+  ends_at: string | null;
+  max_runs: number | null;
+  runs_count: number;
+}
+
+export interface CostEstimate {
+  monthly_usd: number;
+  last_run_usd: number;
+  fires_per_month: number;
+}
+
+export interface ActiveRun {
+  workflow_id: string;
+  run_id: string;
+  title: string;
+  started_at: string | null;
 }
 
 export interface ActionsConfig {
@@ -52,9 +70,11 @@ export interface Workflow {
   created_at: string;
   updated_at: string;
   last_run_at: string | null;
-  last_run_status: 'success' | 'failure' | 'ran_late' | 'running' | null;
+  last_run_status: 'success' | 'failure' | 'ran_late' | 'running' | 'skipped' | null;
   last_run_id: string | null;
   next_run_at: string | null;
+  cost_cap_usd_monthly: number | null;
+  cost_estimate?: CostEstimate;
 }
 
 export interface WorkflowRun {
@@ -88,9 +108,12 @@ interface State {
   openCards: Record<string, OpenCard>;
   loaded: boolean;
   loading: boolean;
+  paused: boolean;
+  active: ActiveRun[];
+  cloudSmsEnabled: boolean;
 }
 
-const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false };
+const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false };
 
 export const fetchWorkflows = createAsyncThunk(
   'workflows/fetch',
@@ -150,6 +173,41 @@ export const fetchRuns = createAsyncThunk(
   },
 );
 
+export const fetchPausedState = createAsyncThunk('workflows/paused', async () => {
+  const res = await fetch(`${API}/paused`);
+  const data = await res.json();
+  return Boolean(data.paused);
+});
+
+export const fetchActiveRuns = createAsyncThunk('workflows/active', async () => {
+  const res = await fetch(`${API}/active`);
+  const data = await res.json();
+  return (data.active || []) as ActiveRun[];
+});
+
+export const setPausedAll = createAsyncThunk('workflows/setPaused', async (paused: boolean) => {
+  const res = await fetch(`${API}/${paused ? 'pause-all' : 'resume-all'}`, { method: 'POST' });
+  if (!res.ok) throw new Error(`pause-all toggle failed ${res.status}`);
+  const data = await res.json();
+  return Boolean(data.paused);
+});
+
+export const ackRun = createAsyncThunk('workflows/ackRun', async (runId: string) => {
+  const res = await fetch(`${API}/runs/${encodeURIComponent(runId)}/ack`, { method: 'POST' });
+  if (!res.ok) throw new Error(`ack failed ${res.status}`);
+  return runId;
+});
+
+export const fetchCloudSmsStatus = createAsyncThunk('workflows/cloudSms', async () => {
+  try {
+    const res = await fetch(`${API}/cloud/sms/status`);
+    const data = await res.json();
+    return Boolean(data.enabled);
+  } catch {
+    return false;
+  }
+});
+
 const slice = createSlice({
   name: 'workflows',
   initialState,
@@ -202,7 +260,11 @@ const slice = createSlice({
       })
       .addCase(fetchRuns.fulfilled, (state, action) => {
         state.runs[action.payload.id] = action.payload.runs;
-      });
+      })
+      .addCase(fetchPausedState.fulfilled, (state, action) => { state.paused = action.payload; })
+      .addCase(setPausedAll.fulfilled, (state, action) => { state.paused = action.payload; })
+      .addCase(fetchActiveRuns.fulfilled, (state, action) => { state.active = action.payload; })
+      .addCase(fetchCloudSmsStatus.fulfilled, (state, action) => { state.cloudSmsEnabled = action.payload; });
   },
 });
 

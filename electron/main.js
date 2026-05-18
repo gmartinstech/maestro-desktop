@@ -8,6 +8,8 @@ const fs = require('fs');
 const getPort = require('get-port');
 const http = require('http');
 const affiliateTracking = require('./affiliateTracking');
+const tray = require('./tray');
+const workflowsLifecycle = require('./workflowsLifecycle');
 
 // Prevent duplicate instances. Without this, double-clicking the app icon
 // (or macOS auto-launch + manual launch overlapping) spawns two independent
@@ -565,6 +567,21 @@ async function startBackend() {
   // any browser on the machine could hit our localhost API and
   // impersonate the user. See backend/auth.py.
   await loadAuthToken();
+
+  // Tray + workflow lifecycle. Tray stays resident so scheduled fires
+  // survive a window close; workflowsLifecycle polls /workflows/active
+  // every 5s to drive powerSaveBlocker, updater veto, and tray status.
+  try {
+    tray.setup({ backendPort, authToken });
+    workflowsLifecycle.setBackend({ port: backendPort, token: authToken });
+    workflowsLifecycle.setActiveChangeListener((active) => {
+      const title = active.length ? (active[0].title || 'workflow') : null;
+      tray.setStatus({ activeTitle: title, paused: false });
+    });
+    workflowsLifecycle.startPolling();
+  } catch (e) {
+    console.warn('[tray] setup failed:', e?.message || e);
+  }
 }
 
 // Per-install auth token read from <data-root>/auth.token (backend
@@ -1194,11 +1211,38 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.on('window-all-closed', () => {
+  // With the tray resident, closing the last window must NOT quit the
+  // process. Backend keeps running, scheduler keeps firing, and the user
+  // can quit explicitly from the tray menu. If tray init failed (rare),
+  // fall back to the legacy quit-on-close behavior so the app doesn't
+  // become a zombie process.
+  if (tray.isEnabled()) return;
   if (!isDev) killBackend();
   app.quit();
 });
 
+let drainingForQuit = false;
+app.on('before-quit', async (event) => {
+  // If a scheduled run is in flight, give it up to 30s to finish before
+  // we kill the backend. Skipping the drain destroys real work the user
+  // paid LLM cost for. The `drainingForQuit` guard prevents the timer
+  // from being re-armed on the second event Electron fires.
+  if (drainingForQuit) return;
+  try {
+    const active = await workflowsLifecycle.getActive();
+    if (active && active.length > 0) {
+      event.preventDefault();
+      drainingForQuit = true;
+      tray.setStatus({ activeTitle: active[0]?.title || 'workflow', paused: false });
+      await workflowsLifecycle.drainOnQuit(30);
+      app.quit();
+    }
+  } catch (_) {}
+});
+
 app.on('will-quit', () => {
+  workflowsLifecycle.stopPolling();
+  tray.destroy();
   if (!isDev) killBackend();
 });
 
@@ -1253,6 +1297,21 @@ ipcMain.handle('get-webview-preload-path', () => {
 
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);
 
+// Workflow-lifecycle IPCs. The renderer uses these to drive the app-open
+// status badge on the schedule editor and the "Fix" affordance that
+// turns OpenSwarm into an always-on host with one click.
+ipcMain.handle('workflows:get-app-open-info', () => ({
+  alwaysOn: workflowsLifecycle.getLoginItem() && tray.isEnabled(),
+  loginAtLaunch: workflowsLifecycle.getLoginItem(),
+  trayEnabled: tray.isEnabled(),
+}));
+ipcMain.handle('workflows:set-login-item', (_e, value) => workflowsLifecycle.setLoginItem(Boolean(value)));
+ipcMain.handle('workflows:get-active', () => workflowsLifecycle.getActive());
+ipcMain.handle('workflows:notify', (_e, payload) => {
+  workflowsLifecycle.showNativeNotification(payload || {});
+  return true;
+});
+
 ipcMain.handle('check-for-updates', async () => {
   if (!autoUpdater || !isPackaged) {
     sendToRenderer('update-error', 'Update check is only available in the packaged app.');
@@ -1280,9 +1339,25 @@ ipcMain.handle('download-update', async () => {
   }
 });
 
-ipcMain.handle('install-update', () => {
-  if (!autoUpdater) return;
+ipcMain.handle('install-update', async () => {
+  if (!autoUpdater) return { installed: false, queued: false };
+  // Check active workflows first. If any run is in flight, queue the
+  // install instead of letting quitAndInstall destroy the agent session.
+  // workflowsLifecycle's 5s poll fires the deferred install once active
+  // drains. Controlled by OPENSWARM_UPDATER_VETO so the feature can be
+  // disabled in case the veto loop misbehaves in the wild.
+  const vetoEnabled = process.env.OPENSWARM_UPDATER_VETO !== '0';
+  if (vetoEnabled) {
+    try {
+      const vetoed = await workflowsLifecycle.maybeVetoInstall();
+      if (vetoed) {
+        sendToRenderer('update-queued', { reason: 'workflow_active' });
+        return { installed: false, queued: true };
+      }
+    } catch (_) {}
+  }
   autoUpdater.quitAndInstall(false, true);
+  return { installed: true, queued: false };
 });
 
 ipcMain.handle('capture-page', async (event, rect) => {

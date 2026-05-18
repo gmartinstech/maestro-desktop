@@ -18,7 +18,10 @@ import {
   setWorkflowsHubPosition,
   setWorkflowsHubSize,
 } from '@/shared/state/dashboardLayoutSlice';
-import { openWorkflowCard } from '@/shared/state/workflowsSlice';
+import { openWorkflowCard, fetchPausedState, setPausedAll } from '@/shared/state/workflowsSlice';
+import Switch from '@mui/material/Switch';
+import Tooltip from '@mui/material/Tooltip';
+import { useEffect } from 'react';
 import ScheduleCalendar from './ScheduleCalendar';
 import { WEEKDAY_LABEL, addDays, sameDay, startOfMonthGrid } from './scheduleUtils';
 
@@ -65,6 +68,13 @@ const WorkflowsHubCard: React.FC<Props> = ({
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const workflows = useAppSelector((s) => s.workflows.items);
+  const paused = useAppSelector((s) => s.workflows.paused);
+
+  useEffect(() => { dispatch(fetchPausedState()); }, [dispatch]);
+
+  const togglePaused = useCallback(() => {
+    dispatch(setPausedAll(!paused));
+  }, [dispatch, paused]);
 
   const [view, setView] = useState<CalendarView>('Week');
   const [viewOpen, setViewOpen] = useState(false);
@@ -278,6 +288,24 @@ const WorkflowsHubCard: React.FC<Props> = ({
           <AddIcon sx={{ fontSize: 14 }} />
           New
         </Box>
+        <Tooltip title={paused ? 'All scheduled workflows are paused. Toggle to resume.' : 'Pause every scheduled workflow without disabling them individually.'}>
+          <Box
+            onClick={togglePaused}
+            role="button"
+            data-no-drag
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.4, ml: 0.5,
+              fontSize: '0.8rem', fontWeight: 600,
+              color: paused ? c.status.warning || c.accent.primary : c.text.secondary,
+              bgcolor: paused ? (c.status.warningBg || c.bg.elevated) : 'transparent',
+              border: `1px solid ${paused ? (c.status.warning || c.accent.primary) + '60' : c.border.subtle}`,
+              px: 0.85, py: 0.3, borderRadius: `${c.radius.md}px`, cursor: 'pointer',
+              '&:hover': { color: c.text.primary, borderColor: c.border.medium },
+            }}>
+            <Switch size="small" checked={paused} sx={{ pointerEvents: 'none', mr: -0.5, ml: -0.5 }} />
+            <span>{paused ? 'Paused' : 'Pause all'}</span>
+          </Box>
+        </Tooltip>
 
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
           <Box

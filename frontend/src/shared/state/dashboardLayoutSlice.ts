@@ -12,6 +12,12 @@ const fetchSessionRejectedAction = createAction<
   { sessionId?: string; status?: number } | undefined
 >('agents/fetchSession/rejected');
 
+// Cascade: when a workflow is deleted from the hub, drop its canvas
+// layout entry too. Otherwise the "Make workflow" tether keeps drawing
+// to where the card used to live, pointing at empty space. Matched by
+// string to dodge the circular import with workflowsSlice.
+const deleteWorkflowFulfilledAction = createAction<string>('workflows/delete/fulfilled');
+
 const DASHBOARDS_API = `${API_BASE}/dashboards`;
 
 export const DEFAULT_CARD_W = 480;
@@ -1158,6 +1164,10 @@ const dashboardLayoutSlice = createSlice({
         const id = payload.sessionId;
         if (state.cards[id]) delete state.cards[id];
         if (state.closedCardPositions[id]) delete state.closedCardPositions[id];
+      })
+      .addCase(deleteWorkflowFulfilledAction, (state, action) => {
+        const id = action.payload;
+        if (id && state.workflowCards[id]) delete state.workflowCards[id];
       })
       .addCase(launchAndSendFirstMessage.fulfilled, (state, action) => {
         const { draftId, session } = action.payload;

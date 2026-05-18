@@ -20,8 +20,18 @@ class ScheduleConfig(BaseModel):
     on_days: list[int] = Field(default_factory=list)
     hour: int = 9
     minute: int = 0
+    # IANA zone name (e.g. "America/Los_Angeles") or "local" for legacy
+    # records that predate explicit tz. storage._load_all_from_disk coerces
+    # "local" to the host zone in memory; we leave it on disk until the
+    # user's next save so backup/sync tools don't see spurious churn.
     timezone: str = "local"
     on_missed: Literal["skip", "run_once", "run_all"] = "skip"
+    # Optional end conditions. None = forever / unbounded. Schedule auto-
+    # disables once either is satisfied; scheduler._tick zeroes out
+    # next_run_at and flips enabled=False so the UI reflects reality.
+    ends_at: Optional[datetime] = None
+    max_runs: Optional[int] = None
+    runs_count: int = 0
 
 
 class ActionsConfig(BaseModel):
@@ -64,9 +74,10 @@ class Workflow(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     last_run_at: Optional[datetime] = None
-    last_run_status: Optional[Literal["success", "failure", "ran_late", "running"]] = None
+    last_run_status: Optional[Literal["success", "failure", "ran_late", "running", "skipped"]] = None
     last_run_id: Optional[str] = None
     next_run_at: Optional[datetime] = None
+    cost_cap_usd_monthly: Optional[float] = None
 
 
 class WorkflowRun(BaseModel):
@@ -97,6 +108,7 @@ class WorkflowCreate(BaseModel):
     model: Optional[str] = None
     mode: Optional[str] = None
     provider: Optional[str] = None
+    cost_cap_usd_monthly: Optional[float] = None
 
 
 class WorkflowUpdate(BaseModel):
@@ -112,3 +124,4 @@ class WorkflowUpdate(BaseModel):
     model: Optional[str] = None
     mode: Optional[str] = None
     provider: Optional[str] = None
+    cost_cap_usd_monthly: Optional[float] = None

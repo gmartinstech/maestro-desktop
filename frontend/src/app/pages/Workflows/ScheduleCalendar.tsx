@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import Tooltip from '@mui/material/Tooltip';
+import Popover from '@mui/material/Popover';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppSelector } from '@/shared/hooks';
 import type { Workflow } from '@/shared/state/workflowsSlice';
@@ -102,26 +104,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
                 const evs = (eventsByDay.map.get(key) || []).filter((e) => e.date.getHours() === hour);
                 return (
                   <Box key={`${d.toISOString()}-${hour}`} sx={{ height: SLOT_H, borderLeft: `1px solid ${c.border.subtle}`, borderTop: `1px solid ${c.border.subtle}`, position: 'relative' }}>
-                    {evs.map((e) => (
-                      <Box
-                        key={`${e.workflow.id}-${e.date.toISOString()}`}
-                        onClick={() => onSelectWorkflow?.(e.workflow.id)}
-                        sx={{
-                          position: 'absolute',
-                          left: 3, right: 3, top: 3, bottom: 3,
-                          bgcolor: c.accent.primary + '1f',
-                          color: c.accent.primary,
-                          border: `1px solid ${c.accent.primary}`,
-                          borderRadius: 999,
-                          px: 1.1, py: 0,
-                          fontSize: EVENT_FS, fontWeight: 600,
-                          overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                          cursor: 'pointer', display: 'flex', alignItems: 'center',
-                          '&:hover': { bgcolor: c.accent.primary + '33' },
-                        }}>
-                        {e.workflow.title}
-                      </Box>
-                    ))}
+                    <EventStack events={evs} onSelectWorkflow={onSelectWorkflow} eventFontSize={EVENT_FS} />
                   </Box>
                 );
               })}
@@ -196,17 +179,114 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
           </Box>
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0.4 }}>
             {events.map((e, idx) => (
-              <Box
-                key={`${e.workflow.id}-${idx}`}
-                onClick={() => onSelectWorkflow?.(e.workflow.id)}
-                sx={{ fontSize: '0.85rem', color: c.text.secondary, cursor: 'pointer', '&:hover': { color: c.accent.primary } }}>
-                <strong style={{ color: c.text.primary }}>{e.workflow.title}</strong>
-                <span style={{ color: c.text.muted, marginLeft: 8 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</span>
-              </Box>
+              <Tooltip key={`${e.workflow.id}-${idx}`} title={<EventTooltipBody event={e} />} placement="right" arrow>
+                <Box
+                  onClick={() => onSelectWorkflow?.(e.workflow.id)}
+                  sx={{ fontSize: '0.85rem', color: c.text.secondary, cursor: 'pointer', '&:hover': { color: c.accent.primary } }}>
+                  <strong style={{ color: c.text.primary }}>{e.workflow.title}</strong>
+                  <span style={{ color: c.text.muted, marginLeft: 8 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</span>
+                </Box>
+              </Tooltip>
             ))}
           </Box>
         </Box>
       ))}
+    </Box>
+  );
+}
+
+// Renders the events for a single calendar cell. Up to one pill is shown
+// inline; everything else collapses into a "+N" chip that opens a popover
+// with the full list, so the calendar stays readable at high schedule
+// density without truncating workflow titles.
+function EventStack({ events, onSelectWorkflow, eventFontSize }: {
+  events: { workflow: Workflow; date: Date }[];
+  onSelectWorkflow?: (id: string) => void;
+  eventFontSize: string;
+}) {
+  const c = useClaudeTokens();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  if (events.length === 0) return null;
+  const first = events[0];
+  const rest = events.slice(1);
+
+  return (
+    <>
+      <Tooltip title={<EventTooltipBody event={first} />} placement="top" arrow>
+        <Box
+          onClick={() => onSelectWorkflow?.(first.workflow.id)}
+          sx={{
+            position: 'absolute',
+            left: 3, right: rest.length > 0 ? 28 : 3, top: 3, bottom: 3,
+            bgcolor: c.accent.primary + '1f',
+            color: c.accent.primary,
+            border: `1px solid ${c.accent.primary}`,
+            borderRadius: 999,
+            px: 1.1, py: 0,
+            fontSize: eventFontSize, fontWeight: 600,
+            overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+            cursor: 'pointer', display: 'flex', alignItems: 'center',
+            '&:hover': { bgcolor: c.accent.primary + '33' },
+          }}>
+          {first.workflow.title}
+        </Box>
+      </Tooltip>
+      {rest.length > 0 && (
+        <Box
+          onClick={(e) => setAnchor(e.currentTarget)}
+          role="button"
+          sx={{
+            position: 'absolute',
+            right: 3, top: 3, bottom: 3,
+            width: 22,
+            bgcolor: c.accent.primary,
+            color: '#fff',
+            borderRadius: 999,
+            fontSize: eventFontSize, fontWeight: 700,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            '&:hover': { filter: 'brightness(1.1)' },
+          }}>
+          +{rest.length}
+        </Box>
+      )}
+      <Popover
+        open={Boolean(anchor)}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        <Box sx={{ minWidth: 220, p: 1 }}>
+          <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: c.text.muted, letterSpacing: '0.06em', mb: 0.5 }}>
+            {events.length} runs at this hour
+          </Typography>
+          {events.map((e, idx) => (
+            <Box
+              key={`${e.workflow.id}-${idx}`}
+              onClick={() => { setAnchor(null); onSelectWorkflow?.(e.workflow.id); }}
+              sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.5, borderRadius: `${c.radius.md}px`, cursor: 'pointer', '&:hover': { bgcolor: c.bg.elevated } }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c.accent.primary }} />
+              <Typography sx={{ flex: 1, fontSize: '0.82rem', color: c.text.primary, fontWeight: 600 }}>{e.workflow.title}</Typography>
+              <Typography sx={{ fontSize: '0.74rem', color: c.text.muted }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</Typography>
+            </Box>
+          ))}
+        </Box>
+      </Popover>
+    </>
+  );
+}
+
+function EventTooltipBody({ event }: { event: { workflow: Workflow; date: Date } }) {
+  const wf = event.workflow;
+  const status = wf.last_run_status;
+  const cost = wf.cost_estimate?.last_run_usd;
+  const monthly = wf.cost_estimate?.monthly_usd;
+  return (
+    <Box sx={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
+      <div style={{ fontWeight: 700 }}>{wf.title}</div>
+      <div>{`Fires at ${formatTime(event.date.getHours(), event.date.getMinutes())}`}</div>
+      {status && <div>{`Last run: ${status}`}</div>}
+      {typeof cost === 'number' && cost > 0 && <div>{`Last run cost: $${cost.toFixed(4)}`}</div>}
+      {typeof monthly === 'number' && monthly > 0 && <div>{`Est. monthly: $${monthly.toFixed(2)}`}</div>}
     </Box>
   );
 }

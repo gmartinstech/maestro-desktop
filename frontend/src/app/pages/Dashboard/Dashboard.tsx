@@ -117,6 +117,8 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const viewCards = useAppSelector((state) => state.dashboardLayout.viewCards);
   const browserCards = useAppSelector((state) => state.dashboardLayout.browserCards);
   const workflowCards = useAppSelector((state) => state.dashboardLayout.workflowCards);
+  const workflowItems = useAppSelector((state) => state.workflows.items);
+  const workflowOpenCards = useAppSelector((state) => state.workflows.openCards);
   const workflowsHub = useAppSelector((state) => state.dashboardLayout.workflowsHub);
   const notes = useAppSelector((state) => state.dashboardLayout.notes);
   const pendingFocusNoteId = useAppSelector((state) => state.dashboardLayout.pendingFocusNoteId);
@@ -1802,12 +1804,22 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     // persistent "Make workflow" arrow back to the agent it was generated
     // from. Reuses the same anchor-picking + elbow-path math as the
     // browser tether so visual style stays uniform across card kinds.
+    // Skip layout entries whose destination doesn't render: workflows
+    // that were deleted (workflows.items entry gone, no draft openCard)
+    // would otherwise leave a tether dangling to empty space.
     const workflowTethers: Array<{ key: string; path: string; labelX: number; labelY: number; label: string; fading: boolean }> = [];
     for (const wc of Object.values(workflowCards)) {
       const sourceId = wc.source_session_id;
       if (!sourceId) continue;
       const src = cards[sourceId];
       if (!src) continue;
+      // Defense-in-depth: a layout entry can outlive its workflow if the
+      // user deletes the workflow from the hub (deleteWorkflow doesn't
+      // remove workflowCards entries). Skip so the tether doesn't dangle
+      // to where no card is actually rendered.
+      const hasReal = wc.workflow_id in workflowItems;
+      const hasDraft = wc.workflow_id in workflowOpenCards;
+      if (!hasReal && !hasDraft) continue;
 
       let srcX = src.x, srcY = src.y;
       let dstX = wc.x, dstY = wc.y;
@@ -1884,7 +1896,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
 
     return [...agentTethers, ...browserTethers, ...workflowTethers];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, workflowCards, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList]);
+  }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, workflowCards, workflowItems, workflowOpenCards, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList]);
 
   const dotSize = Math.max(1, 1.5 * canvas.zoom);
   const dotSpacing = 24 * canvas.zoom;
@@ -2035,10 +2047,6 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
                     <path d="M 0 1 L 10 5 L 0 9 z" fill={c.accent.primary} opacity={0.8} />
                   </marker>
                 </defs>
-                <style>{`
-                  @keyframes tether-flow { to { stroke-dashoffset: -16; } }
-                  @keyframes tether-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-                `}</style>
                 {tethers.map((t) => (
                   <g
                     key={t.key}
@@ -2054,7 +2062,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
                       strokeWidth={8}
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      opacity={0.2}
+                      opacity={0.15}
                       filter="url(#tether-glow-f)"
                     />
                     <path
@@ -2064,20 +2072,8 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
                       strokeWidth={2}
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      opacity={0.65}
+                      opacity={0.8}
                       markerEnd="url(#tether-arrow)"
-                      style={{ animation: 'tether-pulse 2s ease-in-out infinite' }}
-                    />
-                    <path
-                      d={t.path}
-                      fill="none"
-                      stroke={c.accent.primary}
-                      strokeWidth={1.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray="8 8"
-                      opacity={0.9}
-                      style={{ animation: 'tether-flow 0.6s linear infinite' }}
                     />
                     {t.label && (
                       <g transform={`translate(${t.labelX},${t.labelY})`}>

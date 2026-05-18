@@ -8,7 +8,7 @@ routing, retries, and history all aligned with the rest of the app.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from backend.apps.agents.models import AgentConfig
@@ -37,6 +37,28 @@ def _resolve_allowed_tools(wf: Workflow) -> list[str]:
     return list(wf.actions.configured_sets)
 
 
+def _monthly_spend_so_far(wf: Workflow) -> float:
+    """Sum cost_usd across runs of `wf` started in the last 30 days.
+
+    Reads the bounded run log (200 rows max per workflow), so this is
+    O(history) and runs once per fire. Naive datetimes (legacy rows) are
+    treated as host-local then normalized to UTC by Python's astimezone.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    total = 0.0
+    for r in storage.list_runs(wf.id, limit=200):
+        started = r.started_at
+        if started is None:
+            continue
+        if started.tzinfo is None:
+            started = started.astimezone(timezone.utc)
+        else:
+            started = started.astimezone(timezone.utc)
+        if started >= cutoff:
+            total += float(r.cost_usd or 0.0)
+    return total
+
+
 async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: Optional[datetime] = None) -> WorkflowRun:
     from backend.apps.agents.agent_manager import agent_manager
 
@@ -47,6 +69,23 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
         started_at=datetime.now(),
         triggered_by=triggered_by,
     )
+
+    # Cost cap pre-check happens before claiming `_running` so a capped
+    # workflow doesn't block its own next fire. We still record the run so
+    # the user sees it in History with a clear reason.
+    if wf.cost_cap_usd_monthly is not None:
+        spent = _monthly_spend_so_far(wf)
+        if spent >= wf.cost_cap_usd_monthly:
+            run.status = "skipped"
+            run.error = f"Monthly cost cap reached (${spent:.2f} / ${wf.cost_cap_usd_monthly:.2f})"
+            run.finished_at = datetime.now()
+            storage.record_run(run)
+            wf.last_run_at = run.finished_at
+            wf.last_run_status = "skipped"
+            wf.last_run_id = run.id
+            storage.save_workflow(wf)
+            return run
+
     storage.record_run(run)
 
     async with _running_lock:
@@ -106,15 +145,21 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
             run.status = "failure"
             run.error = step_error
             wf.last_run_status = "failure"
-        elif scheduled_for is not None and (run.finished_at - scheduled_for).total_seconds() > 300:
+        elif scheduled_for is not None and (run.finished_at.replace(tzinfo=None) - scheduled_for.replace(tzinfo=None)).total_seconds() > 300:
             # Started more than 5 minutes after its slot (app was closed,
             # event loop backed up, etc.). Surface in History as ran_late
             # so the user can tell apart "fired on time" from "caught up".
+            # Strip tz before the subtraction so a UTC-aware scheduled_for
+            # (new code path) and a naive finished_at don't raise.
             run.status = "ran_late"
             wf.last_run_status = "ran_late"
         else:
             run.status = "success"
             wf.last_run_status = "success"
+        # Bump runs_count for scheduled fires that reached a terminal state
+        # other than "skipped". Manual runs don't count against max_runs.
+        if triggered_by == "schedule" and run.status in ("success", "ran_late", "failure"):
+            wf.schedule.runs_count += 1
         storage.record_run(run)
         wf.last_run_at = run.finished_at
         storage.save_workflow(wf)

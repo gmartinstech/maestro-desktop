@@ -16,6 +16,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckIcon from '@mui/icons-material/Check';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import ScheduleThisPopover from '@/app/pages/Workflows/ScheduleThisPopover';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
@@ -193,6 +195,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const isAtBottomRef = useRef(true);
+  const [scheduleAnchor, setScheduleAnchor] = useState<HTMLElement | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showResumeBubble, setShowResumeBubble] = useState(false);
   const [awaitingResponse, setAwaitingResponse] = useState(false);
@@ -943,6 +946,16 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               )}
             </Box>
             {!isDraft && id && (
+              <Tooltip title="Schedule this chat as a recurring workflow">
+                <IconButton
+                  size="small"
+                  onClick={(e) => setScheduleAnchor(e.currentTarget)}
+                  sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
+                  <ScheduleIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {!isDraft && id && (
               <Tooltip title="Reset history">
                 <IconButton
                   size="small"
@@ -961,6 +974,14 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   <RestartAltIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+            )}
+            {scheduleAnchor && id && (
+              <ScheduleThisPopover
+                anchorEl={scheduleAnchor}
+                onClose={() => setScheduleAnchor(null)}
+                sessionId={id}
+                sessionName={session?.name || ''}
+              />
             )}
             {onClose && (
               <IconButton onClick={onClose} size="small" sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>

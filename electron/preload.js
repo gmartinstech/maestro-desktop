@@ -96,6 +96,15 @@ const { contextBridge, ipcRenderer } = require('electron');
       return () => ipcRenderer.removeListener('openswarm:window-focus', listener);
     },
 
+    // Workflow lifecycle IPCs. ScheduleFacet uses these to render the
+    // app-open status badge and the one-click "Fix" to enable launch-at-
+    // login (and the tray, which is enabled by default once setup runs).
+    getAppOpenInfo: () => ipcRenderer.invoke('workflows:get-app-open-info'),
+    setLoginItem: (value) => ipcRenderer.invoke('workflows:set-login-item', value),
+    enableTray: (_value) => Promise.resolve(true),
+    getActiveRuns: () => ipcRenderer.invoke('workflows:get-active'),
+    notify: (payload) => ipcRenderer.invoke('workflows:notify', payload),
+
     // OAuth popup callback. Fires when any child webContents navigates to
     // localhost:20128/callback?code=... — main.js watches for this and
     // forwards the parsed params here. Used as a belt-and-suspenders

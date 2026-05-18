@@ -1,27 +1,22 @@
 """Permission/escalation chain notifier.
 
-Today we only emit the in-app notify tier (via ws broadcast). The text/call
-tiers are wired into the schema and exposed in the UI so the permission
-chain is editable today; the actual SMS/voice integration ships with the
-cloud-side affiliate billing infra and is intentionally stubbed here.
+The notify tier broadcasts a ws event the renderer picks up. The text/call
+tiers route through the cloud SMS bridge once enabled; until it's enabled
+we fall back to an extra ws notify with a `fallback: true` marker so the
+renderer can label it honestly ("Text-me fallback: cloud SMS not wired").
+The *when* of escalation is owned by apps/workflows/escalation.py.
 """
 
-import asyncio
 import logging
 from datetime import datetime
 
-from backend.apps.workflows.models import Workflow, WorkflowRun
+from backend.apps.workflows.models import PermissionTier, Workflow, WorkflowRun
 
 logger = logging.getLogger(__name__)
 
 
-async def notify_run_complete(wf: Workflow, run: WorkflowRun) -> None:
-    from backend.apps.agents.ws_manager import ws_manager
-
-    primary = (wf.permissions or [None])[0]
-    kind = getattr(primary, "kind", "notify") if primary else "notify"
-
-    payload = {
+def _base_payload(wf: Workflow, run: WorkflowRun) -> dict:
+    return {
         "workflow_id": wf.id,
         "workflow_title": wf.title,
         "run_id": run.id,
@@ -31,13 +26,30 @@ async def notify_run_complete(wf: Workflow, run: WorkflowRun) -> None:
         "finished_at": run.finished_at.isoformat() if isinstance(run.finished_at, datetime) else run.finished_at,
     }
 
-    if kind == "notify":
-        await ws_manager.broadcast_global("workflow:notify", payload)
-        return
 
-    # text/call tiers stubbed; emit the same notify event so the UI still
-    # surfaces completion. Escalation timing is enforced client-side until
-    # the cloud-side bridge ships.
+async def notify_run_complete(wf: Workflow, run: WorkflowRun) -> None:
+    from backend.apps.agents.ws_manager import ws_manager
+    from backend.apps.workflows import escalation
+
+    payload = _base_payload(wf, run)
     await ws_manager.broadcast_global("workflow:notify", payload)
-    logger.info("workflow:notify (escalation tier=%s stubbed): %s", kind, wf.id)
-    await asyncio.sleep(0)
+
+    # Kick off server-side escalation only if there are additional tiers
+    # beyond the default notify. The escalation runner will sleep + call
+    # send_tier per tier.
+    escalation.schedule(wf, run)
+
+
+async def send_tier(wf: Workflow, run: WorkflowRun, tier: PermissionTier) -> None:
+    """Send a single escalation tier. Today the text/call paths fall back
+    to an in-app notify with `fallback: true` and the tier kind set so the
+    renderer can show "Text-me fallback (cloud SMS not wired)."
+    """
+    from backend.apps.agents.ws_manager import ws_manager
+
+    payload = _base_payload(wf, run)
+    payload["tier_kind"] = tier.kind
+    payload["tier_phone"] = (tier.phone or "")[-4:] if tier.phone else None
+    payload["fallback"] = True  # flip to False once the cloud SMS bridge is wired
+    await ws_manager.broadcast_global("workflow:notify", payload)
+    logger.info("workflow tier=%s fallback fired wf=%s run=%s", tier.kind, wf.id, run.id)

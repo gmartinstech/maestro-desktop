@@ -13,7 +13,7 @@ from backend.apps.workflows.models import (
     WorkflowUpdate,
     WorkflowRun,
 )
-from backend.apps.workflows import storage, scheduler, executor
+from backend.apps.workflows import storage, scheduler, executor, audit, escalation
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,22 @@ async def list_workflows(dashboard_id: Optional[str] = None):
     if dashboard_id:
         items = [w for w in items if not w.dashboard_id or w.dashboard_id == dashboard_id]
     items.sort(key=lambda w: w.updated_at or w.created_at, reverse=True)
-    return {"workflows": [w.model_dump(mode="json") for w in items]}
+    # Enrich with cost_estimate so calendar tooltips and the WorkflowsHub
+    # list don't have to round-trip to GET /workflows/{id} per row. Cheap
+    # because fires_in_window walks at most ~30 fires per workflow.
+    return {"workflows": [_enriched(w) for w in items]}
 
 
 @workflows.router.post("/create")
 async def create_workflow(body: WorkflowCreate):
+    actions = body.actions
+    # Scheduled workflows default to freeze=on for safety. The user can
+    # flip "Full agent access" in the editor with an explicit confirm.
+    # Source-session creates inherit the chat's tool choices so we leave
+    # them alone there (the source session itself already vetted the
+    # blast radius).
+    if body.schedule.enabled and not actions.freeze and not body.source_session_id:
+        actions = actions.model_copy(update={"freeze": True})
     wf = Workflow(
         title=body.title,
         description=body.description,
@@ -65,7 +76,7 @@ async def create_workflow(body: WorkflowCreate):
         system_prompt=body.system_prompt,
         use_synced_prompt=body.use_synced_prompt,
         steps=body.steps,
-        actions=body.actions,
+        actions=actions,
         schedule=body.schedule,
         permissions=body.permissions or [],
         source_session_id=body.source_session_id,
@@ -73,6 +84,7 @@ async def create_workflow(body: WorkflowCreate):
         model=body.model or "sonnet",
         mode=body.mode or "agent",
         provider=body.provider or "anthropic",
+        cost_cap_usd_monthly=body.cost_cap_usd_monthly,
     )
     if not wf.icon:
         wf.icon = _derive_icon(wf)
@@ -80,7 +92,78 @@ async def create_workflow(body: WorkflowCreate):
         wf.next_run_at = scheduler.compute_next_fire(wf)
     storage.save_workflow(wf)
     scheduler.kick()
-    return wf.model_dump(mode="json")
+    return _enriched(wf)
+
+
+def _last_run_cost(wid: str) -> float:
+    for r in storage.list_runs(wid, limit=10):
+        if r.status in ("success", "ran_late") and r.cost_usd:
+            return float(r.cost_usd)
+    return 0.0
+
+
+def _enriched(wf: Workflow) -> dict:
+    """Serialize a workflow with a cost_estimate block attached.
+
+    monthly_usd assumes future fires cost the same as the last successful
+    fire. Surfaces honestly as "at last run's cost" in the UI so users
+    understand it's a projection, not a quota.
+    """
+    base = wf.model_dump(mode="json")
+    last = _last_run_cost(wf.id)
+    fires = scheduler.fires_in_window(wf, days=30)
+    base["cost_estimate"] = {
+        "monthly_usd": round(last * fires, 4),
+        "last_run_usd": round(last, 4),
+        "fires_per_month": fires,
+    }
+    return base
+
+
+@workflows.router.get("/active")
+async def list_active_runs():
+    """Snapshot of currently-running workflow runs. Used by the tray and
+    the auto-updater veto."""
+    return {"active": scheduler.list_active()}
+
+
+@workflows.router.post("/pause-all")
+async def pause_all_schedules():
+    storage.set_paused(True)
+    scheduler.kick()
+    return {"paused": True}
+
+
+@workflows.router.post("/resume-all")
+async def resume_all_schedules():
+    storage.set_paused(False)
+    scheduler.kick()
+    return {"paused": False}
+
+
+@workflows.router.get("/paused")
+async def get_paused_state():
+    return {"paused": storage.get_paused()}
+
+
+@workflows.router.get("/cloud/sms/status")
+async def cloud_sms_status():
+    """Probe used by the FE to decide whether to show the 'falls back to
+    in-app notify' acknowledgement on the text/call tiers. Returns
+    enabled=False until the cloud SMS bridge ships."""
+    return {"enabled": False}
+
+
+@workflows.router.post("/runs/{run_id}/ack")
+async def ack_run(run_id: str):
+    cancelled = escalation.cancel(run_id)
+    return {"acked": True, "had_pending_escalation": cancelled}
+
+
+@workflows.router.get("/runs/{run_id}/escalation")
+async def get_run_escalation(run_id: str):
+    state = escalation.status(run_id)
+    return {"state": state}
 
 
 @workflows.router.get("/{workflow_id}")
@@ -88,7 +171,15 @@ async def get_workflow(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    return wf.model_dump(mode="json")
+    return _enriched(wf)
+
+
+@workflows.router.get("/{workflow_id}/audit")
+async def get_workflow_audit(workflow_id: str, limit: int = 50):
+    wf = storage.get_workflow(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    return {"entries": audit.read_tail(workflow_id, limit=limit)}
 
 
 @workflows.router.patch("/{workflow_id}")
@@ -96,6 +187,7 @@ async def update_workflow(workflow_id: str, body: WorkflowUpdate):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    before = wf.model_dump(mode="json")
     data = body.model_dump(exclude_unset=True)
     for k, v in data.items():
         setattr(wf, k, v)
@@ -104,8 +196,9 @@ async def update_workflow(workflow_id: str, body: WorkflowUpdate):
         wf.icon = _derive_icon(wf)
     wf.next_run_at = scheduler.compute_next_fire(wf) if wf.schedule.enabled else None
     storage.save_workflow(wf)
+    audit.log_change(wf.id, "user", before, wf.model_dump(mode="json"))
     scheduler.kick()
-    return wf.model_dump(mode="json")
+    return _enriched(wf)
 
 
 @workflows.router.delete("/{workflow_id}")
