@@ -24,6 +24,7 @@ Design tenets:
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import os
 import re
@@ -47,6 +48,28 @@ _listener_task: Optional[asyncio.Task] = None
 _client: Optional[TelegramClient] = None
 _mode: Optional[str] = None  # "bot" or "user"
 _bot_tool_id: Optional[str] = None  # set when running in bot mode, for /authorize persistence
+
+# IDs of messages the listener itself just sent. In Saved Messages every
+# reply is from your own account, so without this guard the bot's reply
+# would re-trigger the handler and loop forever. Bounded deque so memory
+# stays flat over long-running sessions.
+_recent_self_sent: collections.deque[int] = collections.deque(maxlen=64)
+
+
+async def _respond(event_or_client, text: str, chat_id=None):
+    """Wrapper around respond/send_message that records the message id so the
+    self-message echo doesn't get re-routed as a new task."""
+    try:
+        if chat_id is None:
+            sent = await event_or_client.respond(text)
+        else:
+            sent = await event_or_client.send_message(chat_id, text)
+        if sent and hasattr(sent, "id"):
+            _recent_self_sent.append(sent.id)
+        return sent
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"telegram-bot: _respond failed: {exc}")
+        return None
 
 
 def _connection() -> Optional[tuple[str, dict]]:
@@ -122,13 +145,16 @@ def _ensure_listener_session(phone: str) -> Path:
 
 
 HELP_TEXT_USER_MODE = (
-    "*OpenSwarm — Saved Messages mode*\n\n"
+    "*OpenSwarm — Saved Messages*\n\n"
+    "Type any task in plain English — no slash needed:\n"
+    "  _'summarize my LinkedIn inbox'_\n"
+    "  _'DM @joe on telegram saying running late'_\n"
+    "  _'what's in my GitHub notifications?'_\n\n"
     "Commands:\n"
-    "  `/task <prompt>` — run an agent task\n"
     "  `/status` — list running sessions\n"
     "  `/help` — this message\n\n"
-    "Messages without a `/` prefix are ignored so you can keep using "
-    "Saved Messages normally."
+    "⚠ Every plain-text message here will spawn an agent. Use a different "
+    "chat for notes you don't want OpenSwarm to act on."
 )
 
 HELP_TEXT_BOT_MODE = (
@@ -169,37 +195,37 @@ async def _route(event, text: str, mode: str) -> None:
     slash-prefixed commands are honored to avoid hijacking note-taking.
     """
     if text.startswith("/help"):
-        await event.respond(HELP_TEXT_BOT_MODE if mode == "bot" else HELP_TEXT_USER_MODE)
+        await _respond(event,HELP_TEXT_BOT_MODE if mode == "bot" else HELP_TEXT_USER_MODE)
         return
     if text.startswith("/status"):
         await _handle_status(event)
         return
     if text.startswith("/authorize "):
         if mode != "bot":
-            await event.respond("`/authorize` is only available in bot mode.")
+            await _respond(event,"`/authorize` is only available in bot mode.")
             return
         await _handle_authorize(event, text[len("/authorize "):].strip())
         return
     if text.startswith("/task "):
         prompt = text[len("/task "):].strip()
         if not prompt:
-            await event.respond("Usage: `/task <prompt>`")
+            await _respond(event,"Usage: `/task <prompt>`")
             return
         await _handle_task(event, prompt)
         return
     if text.startswith("/"):
-        await event.respond("Unknown command. /help for the list.")
+        await _respond(event, "Unknown command. /help for the list.")
         return
-    # Plain text path
-    if mode == "bot":
-        await _handle_task(event, text)
+    # Plain text path — applies in BOTH modes. Users type tasks in plain
+    # English; the slash prefix is only needed for explicit commands.
+    await _handle_task(event, text)
 
 
 async def _handle_authorize(event, arg: str) -> None:
     """Add a Telegram user ID (or @username) to the bot's authorized list."""
     global _bot_tool_id
     if not _bot_tool_id:
-        await event.respond("No bot tool id loaded — restart OpenSwarm.")
+        await _respond(event,"No bot tool id loaded — restart OpenSwarm.")
         return
     from backend.apps.tools_lib.tools_lib import _load
     tool = _load(_bot_tool_id)
@@ -210,24 +236,24 @@ async def _handle_authorize(event, arg: str) -> None:
             entity = await _client.get_entity(arg)
             target_id = getattr(entity, "id", None)
         except Exception as exc:  # noqa: BLE001
-            await event.respond(f"Couldn't resolve {arg}: {exc}")
+            await _respond(event,f"Couldn't resolve {arg}: {exc}")
             return
     else:
         try: target_id = int(arg)
         except ValueError:
-            await event.respond("Usage: `/authorize <numeric_user_id>` or `/authorize @username`")
+            await _respond(event,"Usage: `/authorize <numeric_user_id>` or `/authorize @username`")
             return
 
     if not target_id:
-        await event.respond("Could not resolve target user.")
+        await _respond(event,"Could not resolve target user.")
         return
     ids = _authorized_ids(tool)
     if target_id in ids:
-        await event.respond(f"User `{target_id}` is already authorized.")
+        await _respond(event,f"User `{target_id}` is already authorized.")
         return
     ids.add(target_id)
     _save_authorized(tool, ids)
-    await event.respond(f"Authorized `{target_id}`. They can now message this bot.")
+    await _respond(event,f"Authorized `{target_id}`. They can now message this bot.")
 
 
 async def _handle_status(event) -> None:
@@ -235,13 +261,13 @@ async def _handle_status(event) -> None:
         from backend.apps.agents.agent_manager import agent_manager
         sessions = [s for s in agent_manager.get_all_sessions() if s.status == "running"]
     except Exception as exc:  # noqa: BLE001
-        await event.respond(f"Could not read sessions: {exc}")
+        await _respond(event,f"Could not read sessions: {exc}")
         return
     if not sessions:
-        await event.respond("No running sessions.")
+        await _respond(event,"No running sessions.")
         return
     lines = [f"• `{s.id[:8]}` — {s.name or '(no name)'}" for s in sessions[:10]]
-    await event.respond("Running:\n" + "\n".join(lines))
+    await _respond(event,"Running:\n" + "\n".join(lines))
 
 
 async def _handle_task(event, prompt: str) -> None:
@@ -263,15 +289,15 @@ async def _handle_task(event, prompt: str) -> None:
     try:
         session = await agent_manager.launch_agent(config)
     except Exception as exc:  # noqa: BLE001
-        await event.respond(f"Could not launch agent: {exc}")
+        await _respond(event,f"Could not launch agent: {exc}")
         return
 
-    await event.respond(f"⏳ Starting task — session `{session.id[:8]}`")
+    await _respond(event,f"⏳ Starting task — session `{session.id[:8]}`")
 
     try:
         await agent_manager.send_message(session.id, prompt)
     except Exception as exc:  # noqa: BLE001
-        await event.respond(f"Send failed: {exc}")
+        await _respond(event,f"Send failed: {exc}")
         return
 
     # Poll until the session reports a terminal status, with a hard cap.
@@ -287,7 +313,7 @@ async def _handle_task(event, prompt: str) -> None:
             break
 
     if final is None:
-        await event.respond(
+        await _respond(event,
             f"Task `{session.id[:8]}` is still running after {_TASK_TIMEOUT_S // 60}m. "
             f"Check OpenSwarm UI for progress."
         )
@@ -296,7 +322,7 @@ async def _handle_task(event, prompt: str) -> None:
     reply = _extract_last_assistant_text(final.id) or f"Task `{session.id[:8]}` finished with no text reply."
     if final.status == "error":
         reply = f"❌ Task errored.\n\n{reply}"
-    await event.respond(reply[:_MAX_REPLY_CHARS])
+    await _respond(event,reply[:_MAX_REPLY_CHARS])
 
 
 def _extract_last_assistant_text(session_id: str) -> str:
@@ -398,13 +424,13 @@ async def _run_bot_mode(api_id: int, api_hash: str, payload: dict) -> None:
             # Trust-on-first-use: first message becomes the owner.
             authorized.add(sender_id)
             _save_authorized(current_tool, authorized)
-            await event.respond(
+            await _respond(event,
                 f"👋 Hi! You're now authorized as the owner of this OpenSwarm bot (id `{sender_id}`).\n\n"
                 f"Send any message in plain English to run an agent task, or `/help` for commands."
             )
             return
         if sender_id not in authorized:
-            await event.respond(
+            await _respond(event,
                 "This bot is private. The owner has to `/authorize` you before you can use it."
             )
             return
@@ -415,7 +441,7 @@ async def _run_bot_mode(api_id: int, api_hash: str, payload: dict) -> None:
             await _route(event, text, mode="bot")
         except Exception as exc:  # noqa: BLE001
             logger.exception(f"telegram-bot: route failed: {exc}")
-            try: await event.respond(f"Listener error: {exc}")
+            try: await _respond(event,f"Listener error: {exc}")
             except Exception: pass
 
     try:
@@ -456,6 +482,12 @@ async def _run_user_mode(api_id: int, api_hash: str, phone: str) -> None:
     async def _on_message(event):
         if event.chat_id != my_id:
             return
+        # Skip the listener's own replies. In Saved Messages every message
+        # is from-self-to-self, so without this guard the bot's reply would
+        # re-trigger the handler and recurse forever once we treat plain
+        # text as task (no slash needed).
+        if event.message.id in _recent_self_sent:
+            return
         text = (event.message.message or "").strip()
         if not text:
             return
@@ -463,7 +495,7 @@ async def _run_user_mode(api_id: int, api_hash: str, phone: str) -> None:
             await _route(event, text, mode="user")
         except Exception as exc:  # noqa: BLE001
             logger.exception(f"telegram-bot: route failed: {exc}")
-            try: await event.respond(f"Listener error: {exc}")
+            try: await _respond(event, f"Listener error: {exc}")
             except Exception: pass
 
     try:
