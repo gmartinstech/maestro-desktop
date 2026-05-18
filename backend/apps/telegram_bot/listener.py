@@ -41,7 +41,10 @@ logger = logging.getLogger(__name__)
 
 _SESSION_DIR = Path.home() / ".telegram_mcp" / "sessions"
 _MAX_REPLY_CHARS = 3500
-_POLL_INTERVAL_S = 2.0
+# Tight poll interval: cheap dict lookup + we want to ack the user as soon
+# as the agent stops. At 2s we were leaving ~1s on the table per task on
+# average. 250ms is barely measurable CPU and feels snappy.
+_POLL_INTERVAL_S = 0.25
 _TASK_TIMEOUT_S = 30 * 60
 
 # Telegram is a phone-first messaging app. Agent output that's appropriate
@@ -305,6 +308,10 @@ async def _handle_task(event, prompt: str) -> None:
     config = AgentConfig(
         name=f"telegram: {prompt[:48]}",
         mode="agent",
+        # Sonnet is 2-3x faster than Opus and easily handles "summarize my
+        # inbox" / "send a quick DM" style chat tasks. Telegram-from-phone
+        # users are expecting text-message snappiness, not deep reasoning.
+        model="sonnet",
         system_prompt=TELEGRAM_SYSTEM_PROMPT,
         # Default allowed_tools (Read/Edit/Write/Bash/Glob/Grep/AskUserQuestion)
         # plus the connected MCPs so the agent can use Telegram, Instagram,
