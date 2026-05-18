@@ -163,23 +163,9 @@ Your agents can now use Google Calendar, Gmail, Drive, etc. through MCP tools.
 
 ---
 
-## Instagram (`instagram_dm_mcp` via local install) (optional)
+## Instagram (built in)
 
-OpenSwarm uses [ShawnMadadha/instagram_dm_mcp](https://github.com/ShawnMadadha/instagram_dm_mcp), a rate-limited fork of trypeggy/instagram_dm_mcp. 25 tools for DMs, user/follower lookup, post engagement, and story reads, powered by `instagrapi` (pure HTTP, no browser). The server enforces per-category rate limits on sends, likes, searches, lookups, and modifications to protect the connected account from being flagged for automation.
-
-### Prerequisites
-
-`git` and `python3` on `PATH`.
-
-### One-time install
-
-From the repo root:
-
-```bash
-bash scripts/setup-instagram-mcp.sh
-```
-
-This clones the server into `~/.openswarm/instagram-mcp/`, creates a venv, and pip-installs `instagrapi` + the rest of the dependencies. Re-running upgrades to the latest fork commit.
+The Instagram MCP server is vendored at `backend/apps/instagram_mcp/` and ships with OpenSwarm. 25 tools for DMs, user/follower lookup, post engagement, and story reads, powered by `instagrapi` (HTTP only, no browser). No setup script, no clone, no external dependencies beyond the backend's existing Python env.
 
 ### Connect from the UI
 
@@ -188,9 +174,11 @@ This clones the server into `~/.openswarm/instagram-mcp/`, creates a venv, and p
 3. Enter the username and password of the Instagram account the agent should use.
 4. Tile flips to **Connected**.
 
-Session state is cached at `~/.instagram_dm_mcp/sessions/<username>_session.json` (per OS user, isolated from any project checkout) so future restarts skip the password prompt.
+The backend validates the credentials via instagrapi and saves the session to `~/.instagram_dm_mcp/sessions/<username>_session.json`. Future tool calls spawn `python -m backend.apps.instagram_mcp` which reloads that session, so subsequent restarts skip the password prompt.
 
-### Rate limits (built into the server)
+### Built-in rate limiting
+
+The server enforces per-category caps to protect the connected account from anti-abuse bans. All caps are well below Instagram's documented thresholds and apply across server restarts.
 
 | Category | Tools | per_min | per_hour | per_day |
 |---|---|---:|---:|---:|
@@ -200,15 +188,15 @@ Session state is cached at `~/.instagram_dm_mcp/sessions/<username>_session.json
 | `lookup` | 16 read tools | 30 | 300 | 2000 |
 | `modify` | `mark_message_seen`, `mute_conversation`, `delete_message` | 10 | 100 | 500 |
 
-Plus randomized jitter (1.5–4s before DMs, 0.5–2s before likes, smaller elsewhere) so action timing isn't bot-perfect.
+Plus randomized jitter (1.5 to 4s before DMs, 0.5 to 2s before likes, smaller elsewhere) so action timing isn't bot-perfect.
 
-Overridable per env var, e.g.:
+Override any cap via env var, for example:
 
 ```bash
 export IG_RATE_LIMIT_DM_SEND_PER_DAY=40
 ```
 
-Rate-limit state persists at `~/.instagram-mcp-rate-limits.json` so a server restart doesn't reset the daily budget. When a cap is hit, the tool returns a structured `{ok: false, rate_limited: true, retry_after_seconds: ...}` response the agent can surface as *"hit DM cap, retry in 4h"* instead of failing opaquely.
+State persists at `~/.instagram-mcp-rate-limits.json`. When a cap is hit, the tool returns a structured `{ok: false, rate_limited: true, retry_after_seconds: ...}` response the agent can surface as *"hit DM cap, retry in 4h"* instead of failing opaquely.
 
 ---
 

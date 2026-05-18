@@ -1330,17 +1330,17 @@ async def validate_instagram_credentials(payload: dict) -> dict:
         msg = str(e)
         return {"ok": False, "error": msg[:300] if msg else type(e).__name__}
 
-    # Cache session where trypeggy expects it so the MCP server's startup
-    # account_info() probe has a fresh session and skips client.login() on
-    # first spawn. Trypeggy reads SESSION_FILE = REPO_ROOT/f"{username}_session.json".
+    # Cache the instagrapi session where the vendored MCP server expects it
+    # (backend/apps/instagram_mcp/server.py loads from this path). Per OS user,
+    # isolated from any project checkout — works for every OpenSwarm install.
     try:
         from pathlib import Path
-        trypeggy_root = Path("/Users/shawnmadadha/dev/instagram_dm_mcp")
-        if trypeggy_root.exists():
-            cl.dump_settings(trypeggy_root / f"{username}_session.json")
-            (trypeggy_root / "current_user.txt").write_text(username + "\n")
+        session_dir = Path.home() / ".instagram_dm_mcp" / "sessions"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        cl.dump_settings(session_dir / f"{username}_session.json")
+        (session_dir / "current_user.txt").write_text(username + "\n")
     except Exception as cache_err:  # noqa: BLE001
-        logger.warning(f"validate_instagram: could not cache session for trypeggy: {cache_err}")
+        logger.warning(f"validate_instagram: could not cache session: {cache_err}")
 
     tool.credentials = {"INSTAGRAM_USERNAME": username, "INSTAGRAM_PASSWORD": password}
     tool.auth_type = "env_vars"
@@ -1415,16 +1415,16 @@ async def instagram_from_browser(payload: dict) -> dict:
     user_id_str = result["user_id"]
     settings = result["settings"]
 
-    trypeggy_root = Path("/Users/shawnmadadha/dev/instagram_dm_mcp")
+    session_dir = Path.home() / ".instagram_dm_mcp" / "sessions"
     try:
-        if trypeggy_root.exists():
-            (trypeggy_root / f"{username}_session.json").write_text(json.dumps(settings))
-            (trypeggy_root / "current_user.txt").write_text(username + "\n")
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / f"{username}_session.json").write_text(json.dumps(settings))
+        (session_dir / "current_user.txt").write_text(username + "\n")
     except Exception as cache_err:  # noqa: BLE001
-        logger.warning(f"instagram_from_browser: could not write trypeggy session file: {cache_err}")
+        logger.warning(f"instagram_from_browser: could not write session file: {cache_err}")
 
-    # No password from the browser flow. trypeggy will load the session and
-    # tolerate a 467 on its startup account_info() probe (patched locally).
+    # No password from the browser flow. The vendored server skips the
+    # account_info() probe and trusts the loaded session.
     tool.credentials = {"INSTAGRAM_USERNAME": username}
     tool.auth_type = "env_vars"
     tool.auth_status = "connected"
