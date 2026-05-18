@@ -1,17 +1,19 @@
 // Minimum-steps-to-value entry point: from any open chat, hit "Schedule"
 // in the header, pick one of four presets, and we materialize a workflow
 // seeded with source_session_id (so it inherits the chat's tool surface
-// + steps via the existing /workflows/create path). "Custom..." opens
-// the full editor for power users.
+// + steps via the existing /workflows/create path). "Custom..." opens a
+// LOCAL draft card instead of immediately POSTing /workflows/create, so
+// users who change their mind don't leave behind an orphan workflow.
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Popover from '@mui/material/Popover';
 import InputBase from '@mui/material/InputBase';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { useAppDispatch } from '@/shared/hooks';
-import { createWorkflow, openWorkflowCard, type ScheduleConfig } from '@/shared/state/workflowsSlice';
+import { useAppDispatch, useAppSelector } from '@/shared/hooks';
+import { createWorkflow, openWorkflowCard, type ScheduleConfig, type Workflow } from '@/shared/state/workflowsSlice';
+import { addWorkflowCard } from '@/shared/state/dashboardLayoutSlice';
 import { defaultSchedule } from './scheduleUtils';
 
 type Preset = {
@@ -42,6 +44,18 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
   const [title, setTitle] = useState<string>(sessionName || 'Untitled');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const workflows = useAppSelector((s) => s.workflows.items);
+
+  // Dup-detect: a chat session can only sanely have one schedule attached.
+  // If we find one already, offer "Open existing" instead of silently
+  // creating a duplicate that fires twice.
+  const existing = useMemo<Workflow | null>(() => {
+    if (!sessionId) return null;
+    for (const w of Object.values(workflows)) {
+      if (w.source_session_id === sessionId) return w;
+    }
+    return null;
+  }, [workflows, sessionId]);
 
   const submit = useCallback(async (preset: Preset) => {
     if (busy) return;
@@ -53,9 +67,10 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
         title,
         source_session_id: sessionId,
         schedule,
-      } as any));
+      } as Partial<Workflow>));
       if (createWorkflow.fulfilled.match(result)) {
-        const wf: any = result.payload;
+        const wf = result.payload as Workflow;
+        dispatch(addWorkflowCard({ workflowId: wf.id, sourceSessionId: sessionId }));
         dispatch(openWorkflowCard({ workflowId: wf.id, view: 'saved' }));
         onCreated?.(wf.id);
         onClose();
@@ -69,31 +84,33 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
     }
   }, [busy, dispatch, sessionId, title, onClose, onCreated]);
 
-  const openCustom = useCallback(async () => {
-    // "Custom..." materializes a workflow with schedule.enabled=false
-    // and routes to the full editor. The editor's master toggle is the
-    // explicit gate — nothing fires until the user flips it on.
-    if (busy) return;
-    setBusy(true);
-    try {
-      const schedule: ScheduleConfig = { ...defaultSchedule() };
-      const result = await dispatch(createWorkflow({
+  const openCustom = useCallback(() => {
+    // Open a local draft. NO backend create yet — the workflow only
+    // exists on disk once the user clicks Save in the editor. Closing
+    // the draft card from here leaves nothing behind (the "orphan"
+    // bug from the previous create-then-edit flow).
+    const tempId = `draft-${sessionId}-${Date.now()}`;
+    dispatch(addWorkflowCard({ workflowId: tempId, sourceSessionId: sessionId }));
+    dispatch(openWorkflowCard({
+      workflowId: tempId,
+      sourceSessionId: sessionId,
+      view: 'preview',
+      draft: {
         title,
-        source_session_id: sessionId,
-        schedule,
-      } as any));
-      if (createWorkflow.fulfilled.match(result)) {
-        const wf: any = result.payload;
-        dispatch(openWorkflowCard({ workflowId: wf.id, view: 'edit', editFacet: 'Schedule' }));
-        onCreated?.(wf.id);
-        onClose();
-      } else {
-        setError('Create failed. Try again.');
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, dispatch, sessionId, title, onClose, onCreated]);
+        description: 'Scheduled from chat. Edit anytime.',
+        steps: [{ id: 'step-1', text: '' }],
+        schedule: { ...defaultSchedule() },
+      } as Partial<Workflow>,
+    }));
+    onClose();
+  }, [dispatch, sessionId, title, onClose]);
+
+  const openExisting = useCallback(() => {
+    if (!existing) return;
+    dispatch(addWorkflowCard({ workflowId: existing.id, sourceSessionId: sessionId }));
+    dispatch(openWorkflowCard({ workflowId: existing.id, view: 'saved' }));
+    onClose();
+  }, [dispatch, existing, sessionId, onClose]);
 
   return (
     <Popover
@@ -107,6 +124,30 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
       <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: c.text.muted, letterSpacing: '0.06em', mb: 0.75 }}>
         SCHEDULE THIS CHAT
       </Typography>
+      {existing && (
+        <Box sx={{
+          display: 'flex', flexDirection: 'column', gap: 0.4,
+          px: 1, py: 0.75, mb: 0.75,
+          borderRadius: `${c.radius.md}px`,
+          bgcolor: c.status.warningBg || c.bg.elevated,
+          border: `1px solid ${(c.status.warning || c.text.muted) + '60'}`,
+        }}>
+          <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: c.text.primary }}>
+            This chat is already scheduled.
+          </Typography>
+          <Typography sx={{ fontSize: '0.72rem', color: c.text.muted }}>
+            &quot;{existing.title}&quot; was made from this conversation. Adding another would fire twice.
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+            <Box onClick={openExisting} role="button" sx={{
+              fontSize: '0.74rem', fontWeight: 600, color: c.accent.primary,
+              cursor: 'pointer', px: 0.75, py: 0.3, borderRadius: `${c.radius.md}px`,
+              bgcolor: c.accent.primary + '14', border: `1px solid ${c.accent.primary}40`,
+              '&:hover': { bgcolor: c.accent.primary + '22' },
+            }}>Open existing →</Box>
+          </Box>
+        </Box>
+      )}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
         <Typography sx={{ fontSize: '0.78rem', color: c.text.secondary }}>Name:</Typography>
         <InputBase
@@ -142,7 +183,7 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
           '&:hover': { bgcolor: c.bg.elevated },
         }}>
         <Typography sx={{ fontSize: '0.84rem', fontWeight: 600, color: c.accent.primary }}>Custom…</Typography>
-        <Typography sx={{ fontSize: '0.72rem', color: c.text.muted }}>Open the full editor</Typography>
+        <Typography sx={{ fontSize: '0.72rem', color: c.text.muted }}>Open the editor without saving yet</Typography>
       </Box>
       {error && (
         <Typography sx={{ mt: 0.5, fontSize: '0.74rem', color: c.status.error }}>{error}</Typography>

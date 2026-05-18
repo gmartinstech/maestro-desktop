@@ -10,10 +10,32 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { fetchCloudSmsStatus, type Workflow, type ScheduleConfig, type PermissionTier } from '@/shared/state/workflowsSlice';
 import { WEEKDAY_LABEL, formatTime, fireTimesWithin } from './scheduleUtils';
+import { routingFor } from './workflowVisuals';
 import { nextTierAfter } from './permissionsUtils';
 import { BODY_FS, LABEL_FS, HINT_FS, INPUT_FS } from './workflowEditCommon';
 
 function jsWeekday(d: Date): number { return d.getDay(); }
+
+// Turn an IANA zone string into something a non-dev can parse. "local"
+// (legacy) or the host's own zone collapse to "your time"; otherwise
+// show "Pacific Time" / "Eastern Time" / etc. when we can resolve a
+// short name via Intl, falling back to the raw IANA name if not.
+function friendlyTzLabel(tz: string): string {
+  if (!tz || tz === 'local') return 'your time';
+  try {
+    const host = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz === host) {
+      const parts = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'long' }).formatToParts(new Date());
+      const name = parts.find((p) => p.type === 'timeZoneName')?.value || '';
+      return name ? `your time (${name.replace(' Standard Time', '').replace(' Daylight Time', '')})` : 'your time';
+    }
+    const parts = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'long' }).formatToParts(new Date());
+    const name = parts.find((p) => p.type === 'timeZoneName')?.value || '';
+    return name || tz;
+  } catch {
+    return tz;
+  }
+}
 
 function lastDayOfMonthFE(year: number, monthZeroBased: number): number {
   return new Date(year, monthZeroBased + 1, 0).getDate();
@@ -195,7 +217,7 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
       </Box>
       {s.repeat_unit === 'week' && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 2, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>↳ on</Typography>
+          <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>on</Typography>
           {WEEKDAY_LABEL.map((label, idx) => {
             const active = s.on_days.includes(idx);
             return (
@@ -209,7 +231,7 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
         </Box>
       )}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 2 }}>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>↳ at</Typography>
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>at</Typography>
         {/* 12-hour picker; backend stores 0..23 but the UI uses 1..12+AM/PM
             so users can't accidentally schedule "3" thinking it's 3pm and
             get a 3am run. */}
@@ -250,7 +272,7 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
           <MenuItem value="AM">AM</MenuItem>
           <MenuItem value="PM">PM</MenuItem>
         </Select>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost, ml: 1 }}>{s.timezone === 'local' ? 'system tz' : s.timezone}</Typography>
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost, ml: 1 }}>{friendlyTzLabel(s.timezone)}</Typography>
       </Box>
 
       {nextPreview && s.enabled && (
@@ -267,9 +289,9 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
           value={endKind}
           onChange={(e) => setEndKind(e.target.value as EndKind)}
           sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
-          <MenuItem value="forever">Forever</MenuItem>
+          <MenuItem value="forever">Until I turn it off</MenuItem>
           <MenuItem value="on_date">Until a date</MenuItem>
-          <MenuItem value="after_n">After N runs</MenuItem>
+          <MenuItem value="after_n">After a number of runs</MenuItem>
         </Select>
         {endKind === 'on_date' && (
           <InputBase
@@ -294,13 +316,36 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
           </Box>
         )}
       </Box>
+      {/* Inline warnings when the end condition is already satisfied; the
+          scheduler will auto-disable on the next tick which surprises
+          users who expected to arm a fresh schedule. */}
+      {(() => {
+        if (endKind === 'on_date' && s.ends_at) {
+          const ends = new Date(s.ends_at).getTime();
+          if (!Number.isNaN(ends) && ends <= Date.now()) {
+            return (
+              <Typography sx={{ fontSize: HINT_FS, color: c.status.warning || c.text.muted, pl: 2 }}>
+                This date is in the past. The schedule will turn itself off.
+              </Typography>
+            );
+          }
+        }
+        if (endKind === 'after_n' && s.max_runs != null && s.runs_count >= s.max_runs) {
+          return (
+            <Typography sx={{ fontSize: HINT_FS, color: c.status.warning || c.text.muted, pl: 2 }}>
+              This workflow has already run {s.runs_count}× (limit {s.max_runs}). Raise the number or reset the counter to re-arm.
+            </Typography>
+          );
+        }
+        return null;
+      })()}
 
       {/* Row 5: cost. Pass the live draft schedule so the row stays in
           sync with the "Next run" preview even before the user saves. */}
       <CostRow workflow={draft} draftSched={s} onCapChange={(v) => setDraft({ ...draft, cost_cap_usd_monthly: v })} />
 
       {/* Row 6: action surface (freeze). */}
-      <Typography sx={{ fontSize: BODY_FS, fontWeight: 700, color: c.text.primary, mt: 0.5 }}>Which actions can the agent use?</Typography>
+      <Typography sx={{ fontSize: BODY_FS, fontWeight: 700, color: c.text.primary, mt: 0.5 }}>What can the agent do while it runs?</Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pl: 2 }}>
         <Select
           size="small"
@@ -308,28 +353,30 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
           onChange={(e) => {
             const scoped = e.target.value === 'scoped';
             if (!scoped) {
-              const ok = window.confirm('"Full agent access" lets this scheduled run execute Bash, edit files, and use any installed action. Are you sure?');
+              const ok = window.confirm('Full access lets this scheduled run do anything an agent normally can: run commands, edit files, browse the web, send messages. Continue?');
               if (!ok) return;
             }
             setDraft({ ...draft, actions: { ...draft.actions, freeze: scoped } });
           }}
           sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.5 } }}>
-          <MenuItem value="scoped">Scoped to actions used in original chat (recommended)</MenuItem>
-          <MenuItem value="full">Full agent access (Bash, file write)</MenuItem>
+          <MenuItem value="scoped">Only what the original chat used (recommended)</MenuItem>
+          <MenuItem value="full">Anything an agent can do (run commands, edit files, browse)</MenuItem>
         </Select>
       </Box>
 
-      {/* Row 7: missed-run policy. */}
+      {/* Row 7: missed-run policy. Backend implements one catch-up only
+          today, so we don't expose a "run every missed time" option that
+          we couldn't honor. If the backend gains real replay support
+          later, add the third option back. */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pl: 2, mt: 0.25 }}>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>If a run was missed (computer asleep):</Typography>
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>If your computer was asleep when a run was due:</Typography>
         <Select
           size="small"
-          value={s.on_missed}
+          value={s.on_missed === 'run_all' ? 'run_once' : s.on_missed}
           onChange={(e) => setSched({ on_missed: e.target.value as ScheduleConfig['on_missed'] })}
           sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
-          <MenuItem value="skip">Skip it</MenuItem>
-          <MenuItem value="run_once">Run once when app reopens</MenuItem>
-          <MenuItem value="run_all">Run every missed slot</MenuItem>
+          <MenuItem value="skip">Skip the missed run</MenuItem>
+          <MenuItem value="run_once">Run once after I wake the app</MenuItem>
         </Select>
       </Box>
 
@@ -346,7 +393,7 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
         />
       ))}
       {canAddBackup && (
-        <Box onClick={addBackup} role="button" sx={{ fontSize: LABEL_FS, color: c.text.muted, cursor: 'pointer', mt: 0.5, fontWeight: 500, '&:hover': { color: c.accent.primary } }}>+ add a backup</Box>
+        <Box onClick={addBackup} role="button" sx={{ fontSize: LABEL_FS, color: c.text.muted, cursor: 'pointer', mt: 0.5, fontWeight: 500, '&:hover': { color: c.accent.primary } }}>+ Escalate if I don&apos;t respond</Box>
       )}
     </Box>
   );
@@ -365,11 +412,11 @@ function AppOpenStatusBadge({ info, hour, minute, onFix }: { info: AppOpenInfo; 
     }}>
       <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: good ? c.status.success : (c.status.warning || c.text.muted) }} />
       <Typography sx={{ flex: 1, fontSize: HINT_FS, color: c.text.primary }}>
-        {good ? 'Will fire even if OpenSwarm is closed.' : `Requires OpenSwarm to be open at ${fmt}.`}
+        {good ? 'Will run even if you close OpenSwarm.' : `OpenSwarm must be open at ${fmt} for this to run.`}
       </Typography>
       {!good && (
-        <Tooltip title="Enables launch-at-login and the menubar tray so the scheduler keeps running.">
-          <Box onClick={onFix} role="button" sx={{ fontSize: HINT_FS, color: c.accent.primary, cursor: 'pointer', fontWeight: 700 }}>Fix</Box>
+        <Tooltip title="One click: start OpenSwarm automatically when you log in, and keep a small icon in your menubar so it stays running when you close the window. You can undo both later in Settings.">
+          <Box onClick={onFix} role="button" sx={{ fontSize: HINT_FS, color: c.accent.primary, cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}>Always-on</Box>
         </Tooltip>
       )}
     </Box>
@@ -379,6 +426,7 @@ function AppOpenStatusBadge({ info, hour, minute, onFix }: { info: AppOpenInfo; 
 function CostRow({ workflow, draftSched, onCapChange }: { workflow: Workflow; draftSched: ScheduleConfig; onCapChange: (v: number | null) => void }) {
   const c = useClaudeTokens();
   const est = workflow.cost_estimate;
+  const connectionMode = useAppSelector((s) => (s as { settings?: { data?: { connection_mode?: string } } }).settings?.data?.connection_mode);
   // Compute fires/30-days live from the draft so the row matches the
   // "Next run" preview even before the user saves. Backend's cached
   // estimate is the saved-state value and would lie after a draft edit.
@@ -388,20 +436,46 @@ function CostRow({ workflow, draftSched, onCapChange }: { workflow: Workflow; dr
     const end = new Date(now.getTime() + 30 * 86400000);
     return fireTimesWithin({ schedule: draftSched } as Workflow, now, end, 200).length;
   }, [draftSched]);
+  const route = routingFor(workflow.model, connectionMode);
   const lastRun = est?.last_run_usd ?? 0;
   const monthly = lastRun * liveFires;
   const cap = workflow.cost_cap_usd_monthly;
+
+  // Subscription-routed workflows have no per-call cost we can project,
+  // so swap the row from "$X.XX/mo" copy to a usage-estimate sentence
+  // that tells the truth: covered by the plan, here's how often it fires.
+  if (route.kind === 'subscription') {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, pl: 2 }}>
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>
+          {liveFires > 0
+            ? `Will use about ${liveFires} run${liveFires === 1 ? '' : 's'} per month from your ${route.subLabel} plan. No per-run cost.`
+            : `Covered by your ${route.subLabel} plan. No upcoming runs yet.`}
+        </Typography>
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>
+          A monthly cost cap doesn&apos;t apply here. Your plan handles the usage limits.
+        </Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, pl: 2 }}>
       <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>
         {liveFires > 0 && lastRun > 0
-          ? `~$${monthly.toFixed(2)}/mo at last run's cost ($${lastRun.toFixed(4)} × ${liveFires} fires).`
+          ? `About $${monthly.toFixed(2)} per month at the last run's cost.`
           : liveFires > 0
-            ? `Will fire ${liveFires}× in the next 30 days. Run once to project a monthly cost.`
+            ? `Will run ${liveFires} time${liveFires === 1 ? '' : 's'} in the next 30 days. Run once to project a monthly cost.`
             : 'No upcoming runs.'}
       </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>Monthly cost cap:</Typography>
+      {liveFires > 0 && lastRun > 0 && (
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>
+          {`$${lastRun.toFixed(4)} × ${liveFires} runs`}
+        </Typography>
+      )}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>Monthly cap:</Typography>
+        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>$</Typography>
         <InputBase
           type="number"
           placeholder="none"
@@ -409,8 +483,10 @@ function CostRow({ workflow, draftSched, onCapChange }: { workflow: Workflow; dr
           onChange={(e) => onCapChange(e.target.value === '' ? null : Math.max(0, Number(e.target.value)))}
           sx={{ width: 72, fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.3 }}
         />
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>USD. Skips runs once exceeded; visible in History.</Typography>
       </Box>
+      <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>
+        We&apos;ll skip runs once you hit this for the month. You&apos;ll see the skip in History.
+      </Typography>
     </Box>
   );
 }

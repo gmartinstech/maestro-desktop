@@ -946,13 +946,24 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               )}
             </Box>
             {!isDraft && id && (
-              <Tooltip title="Schedule this chat as a recurring workflow">
-                <IconButton
-                  size="small"
-                  onClick={(e) => setScheduleAnchor(e.currentTarget)}
-                  sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
-                  <ScheduleIcon fontSize="small" />
-                </IconButton>
+              <Tooltip title="Turn this chat into a recurring workflow that runs on its own.">
+                <Box
+                  onClick={(e) => setScheduleAnchor(e.currentTarget as HTMLElement)}
+                  role="button"
+                  sx={{
+                    display: 'inline-flex', alignItems: 'center', gap: 0.4,
+                    fontSize: '0.78rem', fontWeight: 600,
+                    color: c.accent.primary,
+                    bgcolor: c.accent.primary + '14',
+                    border: `1px solid ${c.accent.primary}40`,
+                    px: 0.85, py: 0.35,
+                    borderRadius: `${c.radius.md}px`,
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: c.accent.primary + '22' },
+                  }}>
+                  <ScheduleIcon sx={{ fontSize: 14 }} />
+                  Schedule
+                </Box>
               </Tooltip>
             )}
             {!isDraft && id && (

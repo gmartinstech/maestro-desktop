@@ -37,6 +37,31 @@ def _resolve_allowed_tools(wf: Workflow) -> list[str]:
     return list(wf.actions.configured_sets)
 
 
+def _persist_run_fields(wf: Workflow, run_fields: dict, schedule_runs_count_delta: int = 0) -> None:
+    """Merge run-side fields into the current on-disk workflow.
+
+    The executor holds the `wf` it was launched with; meanwhile the user
+    may have PATCHed unrelated fields (title, schedule, permissions...).
+    Saving our captured `wf` would clobber those edits. Re-read the
+    authoritative record from storage and only mutate the run-side fields
+    we own. If the workflow has been deleted while we ran, silently skip
+    the save so we don't resurrect a deleted record.
+
+    schedule_runs_count_delta is a small int (0 or 1) that we add to the
+    on-disk schedule.runs_count to avoid the same race overwriting an
+    in-flight bump on the user's PATCH path.
+    """
+    fresh = storage.get_workflow(wf.id)
+    if fresh is None:
+        # Deleted while we ran. Don't resurrect.
+        return
+    for k, v in run_fields.items():
+        setattr(fresh, k, v)
+    if schedule_runs_count_delta:
+        fresh.schedule.runs_count = fresh.schedule.runs_count + schedule_runs_count_delta
+    storage.save_workflow(fresh)
+
+
 def _monthly_spend_so_far(wf: Workflow) -> float:
     """Sum cost_usd across runs of `wf` started in the last 30 days.
 
@@ -80,10 +105,11 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
             run.error = f"Monthly cost cap reached (${spent:.2f} / ${wf.cost_cap_usd_monthly:.2f})"
             run.finished_at = datetime.now()
             storage.record_run(run)
-            wf.last_run_at = run.finished_at
-            wf.last_run_status = "skipped"
-            wf.last_run_id = run.id
-            storage.save_workflow(wf)
+            _persist_run_fields(wf, {
+                "last_run_at": run.finished_at,
+                "last_run_status": "skipped",
+                "last_run_id": run.id,
+            })
             return run
 
     storage.record_run(run)
@@ -100,7 +126,11 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
     wf.last_run_at = run.started_at
     wf.last_run_status = "running"
     wf.last_run_id = run.id
-    storage.save_workflow(wf)
+    _persist_run_fields(wf, {
+        "last_run_at": run.started_at,
+        "last_run_status": "running",
+        "last_run_id": run.id,
+    })
 
     try:
         steps = [s.text for s in wf.steps if s.text and s.text.strip()]
@@ -158,11 +188,13 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
             wf.last_run_status = "success"
         # Bump runs_count for scheduled fires that reached a terminal state
         # other than "skipped". Manual runs don't count against max_runs.
-        if triggered_by == "schedule" and run.status in ("success", "ran_late", "failure"):
-            wf.schedule.runs_count += 1
+        runs_delta = 1 if (triggered_by == "schedule" and run.status in ("success", "ran_late", "failure")) else 0
         storage.record_run(run)
         wf.last_run_at = run.finished_at
-        storage.save_workflow(wf)
+        _persist_run_fields(wf, {
+            "last_run_at": run.finished_at,
+            "last_run_status": wf.last_run_status,
+        }, schedule_runs_count_delta=runs_delta)
     except Exception as e:
         logger.exception("Workflow run failed: %s", e)
         run.status = "failure"
@@ -170,7 +202,10 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
         run.finished_at = datetime.now()
         storage.record_run(run)
         wf.last_run_status = "failure"
-        storage.save_workflow(wf)
+        _persist_run_fields(wf, {
+            "last_run_status": "failure",
+            "last_run_at": run.finished_at,
+        })
     finally:
         async with _running_lock:
             _running.pop(wf.id, None)

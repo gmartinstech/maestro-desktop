@@ -29,7 +29,7 @@ fail_count = 0
 created_ids: list[str] = []
 
 
-def http(method: str, path: str, body=None, raw: bool = False):
+def http(method: str, path: str, body=None, raw: bool = False, extra_headers=None):
     url = f"{BASE}{path}"
     if body is None:
         data = None
@@ -37,7 +37,10 @@ def http(method: str, path: str, body=None, raw: bool = False):
         data = body if isinstance(body, (bytes, bytearray)) else body.encode()
     else:
         data = json.dumps(body).encode()
-    req = urllib.request.Request(url, data=data, method=method, headers=HEADERS)
+    headers = dict(HEADERS)
+    if extra_headers:
+        headers.update(extra_headers)
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status, json.loads(resp.read() or b"null")
@@ -419,6 +422,43 @@ print(f"  {DIM}(info) ends_at=3 days from now produced fires_per_month={fires}{R
 # If we want to assert, we'd expect roughly 3 fires, not 30:
 ok("fires_per_month honors ends_at (~3 fires not ~30)", fires <= 5,
    info=f"got {fires}, want <= 5; if this fails it's a known gap in scheduler.fires_in_window")
+
+# ============ 20. If-Match optimistic concurrency ============
+section("20. PATCH with If-Match (optimistic concurrency)")
+code, r = http("POST", "/create", fresh_wf(title="if-match-test"))
+oc_id = r["id"]; created_ids.append(oc_id)
+stamp = r["updated_at"]
+# Stale If-Match -> 409
+code, _ = http("PATCH", f"/{oc_id}", {"title": "v2"}, extra_headers={"If-Match": "1999-01-01T00:00:00"})
+ok("stale If-Match returns 409", code == 409)
+# Fresh If-Match -> 200
+code, r = http("PATCH", f"/{oc_id}", {"title": "v2"}, extra_headers={"If-Match": stamp})
+ok("fresh If-Match returns 200", code == 200)
+# Missing If-Match -> still works (legacy back-compat)
+code, _ = http("PATCH", f"/{oc_id}", {"title": "v3"})
+ok("missing If-Match still accepted (legacy clients)", code == 200)
+
+# ============ 21. /run returns skipped status on cost cap ============
+section("21. /run surfaces cost-cap skipped status")
+code, r = http("POST", "/create", fresh_wf(title="cap-immediate", cost_cap_usd_monthly=0.01))
+cap_id = r["id"]; created_ids.append(cap_id)
+# Run once and produce a real-looking run via the legacy 0-cost path —
+# the cap is checked against actual recorded cost_usd. Without a way to
+# inject a $5 run here we just verify the field surfaces correctly when
+# the cap is 0 (which should always exceed). With 0 the executor's >=
+# check skips immediately because spent (0.0) >= 0.0.
+# (Using cap=0 forces the skip path on first run.)
+http("PATCH", f"/{cap_id}", {"cost_cap_usd_monthly": 0.0})
+code, r = http("POST", f"/{cap_id}/run")
+# It may take a tick for the executor to land the skipped row; the
+# endpoint already polls up to 250ms internally.
+ok("run response includes status field", "status" in r)
+ok("run response includes error field", "error" in r)
+if r.get("status") == "skipped":
+    ok("/run surfaces skipped status", True, info=r.get("error", ""))
+else:
+    ok("/run surfaces skipped status", False,
+       info=f"status was {r.get('status')!r} not skipped; may have raced")
 
 # ============ Done ============
 print()

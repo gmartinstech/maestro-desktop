@@ -2,6 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import Snackbar from '@mui/material/Snackbar';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import HistoryIcon from '@mui/icons-material/HistoryRounded';
@@ -12,6 +19,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import {
   closeWorkflowCard,
+  deleteWorkflow,
   fetchRuns,
   openWorkflowCard as openWorkflowCardAction,
   rekeyOpenCard,
@@ -27,7 +35,8 @@ import {
 } from '@/shared/state/dashboardLayoutSlice';
 import { AnimatePresence, motion } from 'framer-motion';
 import WorkflowEditViews from './WorkflowEditViews';
-import { HistoryDetail, HistoryList, PreviewView, SavedView, statusBg, statusColor } from './WorkflowCardSubviews';
+import { HistoryDetail, HistoryList, PreviewView, SavedView } from './WorkflowCardSubviews';
+import { StatusDot, RunSparkline, LastFiredHint, isStaleSinceLastRun } from './workflowVisuals';
 
 type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -91,14 +100,44 @@ const WorkflowCard: React.FC<Props> = ({
   // Transient "Starting…" label state on the Run button. See onClick handler
   // for the full rationale (avoid no-feedback flicker on fast manual runs).
   const [runStarting, setRunStarting] = useState(false);
+  const [runToast, setRunToast] = useState<string | null>(null);
+  const [editDirty, setEditDirty] = useState(false);
 
-  // ---- Lazy-load runs for the history view ----
+  // Lazy-load runs whenever a view that needs them is open. Saved view
+  // uses runs for the live-fill connector + step duration estimates;
+  // History views obviously need them too.
   useEffect(() => {
     if (!card) return;
-    if ((card.view === 'history' || card.view === 'history_detail') && workflow && !runs) {
+    const needsRuns = card.view === 'saved' || card.view === 'history' || card.view === 'history_detail';
+    if (needsRuns && workflow && !runs) {
       dispatch(fetchRuns(workflow.id));
     }
   }, [card?.view, workflow?.id, runs, dispatch]);
+
+  // Keep wheel-scroll inside the card body instead of letting it bubble
+  // up to the dashboard pan/zoom listener. Without this, scrolling the
+  // schedule/history list shifts the canvas underneath the card. Mirrors
+  // the chat-panel wheel guard in AgentChat.tsx. Ctrl/meta + wheel is
+  // intentionally allowed through so canvas zoom still works when the
+  // cursor is over a workflow card.
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = bodyScrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) return;
+      const atTop = el.scrollTop <= 0;
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+      const scrollingDown = e.deltaY > 0;
+      const scrollingUp = e.deltaY < 0;
+      if ((scrollingUp && atTop) || (scrollingDown && atBottom)) {
+        e.preventDefault();
+      }
+      e.stopPropagation();
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   const title = workflow?.title || card?.draft?.title || 'Workflow';
   const isDraft = card?.view === 'preview' && !workflow;
@@ -256,10 +295,33 @@ const WorkflowCard: React.FC<Props> = ({
   }, [computeResize, dispatch, workflowId]);
 
   // ---- Close: drop transient view state AND remove from layout ----
-  const onClose = useCallback(() => {
+  // Two-step when the schedule is on: a quiet X would make the workflow
+  // a "ghost" (still firing on a hidden timer) which surprises users who
+  // mentally model X as "throw away." Confirm-then-act lets them choose
+  // between hiding the card and actually killing the schedule.
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const hardClose = useCallback(() => {
     dispatch(closeWorkflowCard(workflowId));
     dispatch(removeWorkflowCard(workflowId));
   }, [dispatch, workflowId]);
+  const onClose = useCallback(() => {
+    if (workflow?.schedule?.enabled) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    hardClose();
+  }, [workflow?.schedule?.enabled, hardClose]);
+  const onConfirmHide = useCallback(() => {
+    setCloseConfirmOpen(false);
+    hardClose();
+  }, [hardClose]);
+  const onConfirmStopAndDelete = useCallback(async () => {
+    setCloseConfirmOpen(false);
+    if (workflow?.id) {
+      await dispatch(deleteWorkflow(workflow.id));
+    }
+    hardClose();
+  }, [dispatch, workflow?.id, hardClose]);
 
   // ---- Display calculations ----
   const mdDx = (!isDragging && isSelected && multiDragDelta) ? multiDragDelta.dx : 0;
@@ -336,14 +398,11 @@ const WorkflowCard: React.FC<Props> = ({
         }}
       >
         <DragIndicatorIcon sx={{ fontSize: 16, color: c.text.ghost }} />
+        <StatusDot status={workflow?.last_run_status} />
         <Typography sx={{ flex: 1, fontWeight: 700, fontSize: '0.95rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title}
         </Typography>
-        {workflow?.last_run_status && (
-          <Box sx={{ fontSize: '0.68rem', fontWeight: 700, color: statusColor(workflow.last_run_status, c), bgcolor: statusBg(workflow.last_run_status, c), px: 0.8, py: 0.3, borderRadius: 0.75 }}>
-            {workflow.last_run_status}
-          </Box>
-        )}
+        {runs && runs.length > 0 && <RunSparkline runs={runs} />}
         <IconButton
           size="small"
           data-no-drag
@@ -363,13 +422,24 @@ const WorkflowCard: React.FC<Props> = ({
             icon={<PlayArrowIcon sx={{ fontSize: 16 }} />}
             active={card.view === 'saved'}
             accent
+            breathe={!runStarting && isStaleSinceLastRun(workflow)}
+            breatheTooltip="Haven't run this in a few days. Click to run it now."
             onClick={async () => {
               if (runStarting) return;
               setRunStarting(true);
               dispatch(updateWorkflowCard({ workflowId, patch: { view: 'history' } }));
               try {
-                await dispatch(runWorkflowNow(workflow.id));
+                const result = await dispatch(runWorkflowNow(workflow.id));
                 await dispatch(fetchRuns(workflow.id));
+                // Detect skipped manual runs so the user gets a real
+                // explanation instead of a silent button-flicker. The
+                // most common skip today is the monthly cost cap.
+                if (runWorkflowNow.fulfilled.match(result)) {
+                  const payload = result.payload;
+                  if (payload.status === 'skipped' && payload.error) {
+                    setRunToast(`Run skipped: ${payload.error}`);
+                  }
+                }
               } finally {
                 // Hold the "Starting…" label briefly so the user sees the
                 // state change even on fast runs. Without this the button
@@ -382,6 +452,8 @@ const WorkflowCard: React.FC<Props> = ({
             label="Edit"
             icon={<EditIcon sx={{ fontSize: 16 }} />}
             active={card.view === 'edit'}
+            dot={editDirty}
+            dotTooltip="You have unsaved changes in this tab."
             onClick={() => dispatch(updateWorkflowCard({ workflowId, patch: { view: 'edit', editFacet: card.editFacet || 'General' } }))}
           />
           <TabBtn
@@ -407,7 +479,7 @@ const WorkflowCard: React.FC<Props> = ({
           Crossfades between Run/Edit/History tabs so the swap doesn't
           read as a "jump". Outer box is the scrollable viewport; the
           animated child changes per `card.view`. */}
-      <Box sx={{ flex: 1, p: 2, overflowY: 'auto', minHeight: 0, position: 'relative' }}>
+      <Box ref={bodyScrollRef} data-no-drag sx={{ flex: 1, p: 2, overflowY: 'auto', minHeight: 0, position: 'relative', overscrollBehavior: 'contain' }}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={card.view}
@@ -435,12 +507,20 @@ const WorkflowCard: React.FC<Props> = ({
             }}
           />
         )}
-        {card.view === 'saved' && workflow && <SavedView workflow={workflow} steps={steps} />}
+        {card.view === 'saved' && workflow && (
+          <SavedView
+            workflow={workflow}
+            steps={steps}
+            runs={runs}
+            activeRunId={(runs || []).find((r) => r.status === 'running')?.id || null}
+          />
+        )}
         {card.view === 'edit' && workflow && (
           <WorkflowEditViews
             workflow={workflow}
             facet={card.editFacet || 'General'}
             onChangeFacet={(f) => dispatch(updateWorkflowCard({ workflowId, patch: { editFacet: f } }))}
+            onDirtyChange={setEditDirty}
           />
         )}
         {card.view === 'history' && workflow && (
@@ -476,13 +556,38 @@ const WorkflowCard: React.FC<Props> = ({
           }}
         />
       ))}
+      {/* Toast for run outcomes that need explaining beyond the History
+          row (cost cap, "previous run still active," etc.). Auto-hides
+          after 6s; user can click anywhere to dismiss. */}
+      <Snackbar
+        open={Boolean(runToast)}
+        autoHideDuration={6000}
+        onClose={() => setRunToast(null)}
+        message={runToast || ''}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+      {/* Ghost-protection dialog: only opens when an enabled-schedule
+          card is X'd out. Cancel keeps the card; "Hide card" closes
+          but leaves the schedule alive; "Stop & delete" wipes the
+          workflow entirely. */}
+      <Dialog open={closeConfirmOpen} onClose={() => setCloseConfirmOpen(false)}>
+        <DialogTitle>Close this workflow card?</DialogTitle>
+        <DialogContent>
+          The schedule will keep firing in the background even after you close this card. Choose what you want to happen.
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCloseConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={onConfirmHide}>Hide card (schedule keeps running)</Button>
+          <Button color="error" onClick={onConfirmStopAndDelete}>Stop &amp; delete</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
-function TabBtn({ label, icon, active, accent, onClick }: { label: string; icon: React.ReactNode; active: boolean; accent?: boolean; onClick: () => void }) {
+function TabBtn({ label, icon, active, accent, breathe, breatheTooltip, dot, dotTooltip, onClick }: { label: string; icon: React.ReactNode; active: boolean; accent?: boolean; breathe?: boolean; breatheTooltip?: string; dot?: boolean; dotTooltip?: string; onClick: () => void }) {
   const c = useClaudeTokens();
-  return (
+  const btn = (
     <Box
       onClick={onClick}
       onPointerDown={(e) => e.stopPropagation()}
@@ -498,11 +603,36 @@ function TabBtn({ label, icon, active, accent, onClick }: { label: string; icon:
         borderRadius: `${c.radius.md}px`,
         cursor: 'pointer', userSelect: 'none',
         '&:hover': { bgcolor: c.accent.primary + '10' },
+        // Subtle "ready" breath when a stale workflow's Run button hasn't
+        // been touched in over 24h. ~3% scale + glow swell, slow enough
+        // to read as ambient rather than urgent. Tooltip is on so users
+        // don't think the button is malfunctioning.
+        ...(breathe && {
+          animation: 'workflow-run-breath 3.2s ease-in-out infinite',
+          '@keyframes workflow-run-breath': {
+            '0%, 100%': { boxShadow: `0 0 0 ${c.accent.primary}00`, transform: 'scale(1)' },
+            '50%': { boxShadow: `0 0 14px ${c.accent.primary}55`, transform: 'scale(1.03)' },
+          },
+        }),
       }}>
       {icon}
       {label}
+      {dot && (
+        <Box sx={{
+          width: 7, height: 7, borderRadius: '50%',
+          bgcolor: c.accent.primary,
+          ml: 0.25,
+        }} />
+      )}
     </Box>
   );
+  if (dot && dotTooltip) {
+    return <Tooltip title={dotTooltip}>{btn}</Tooltip>;
+  }
+  if (breathe && breatheTooltip) {
+    return <Tooltip title={breatheTooltip}>{btn}</Tooltip>;
+  }
+  return btn;
 }
 
 export default React.memo(WorkflowCard);

@@ -305,6 +305,122 @@ def test_escalation_schedules_and_ack_cancels():
     asyncio.new_event_loop().run_until_complete(runner())
 
 
+def test_executor_merge_does_not_clobber_concurrent_patch():
+    """Executor's final save must NOT overwrite unrelated fields that
+    were PATCHed while the run was in flight. We simulate this by
+    capturing a wf, mutating storage's record directly (acting as the
+    PATCH that landed mid-run), then asking the executor's persist
+    helper to flush its run-side bookkeeping. The patched fields must
+    survive.
+    """
+    from backend.apps.workflows import storage, executor
+    from datetime import datetime
+    wf = _make_wf(title="t-orig")
+    storage.save_workflow(wf)
+    # Simulate a user PATCH mid-run.
+    storage._workflow_cache[wf.id].title = "t-patched"
+    storage._workflow_cache[wf.id].description = "patched while running"
+    storage.save_workflow(storage._workflow_cache[wf.id])
+    # Executor uses the stale `wf` it captured before the patch. With
+    # the merge helper, the patched fields must remain.
+    executor._persist_run_fields(wf, {
+        "last_run_at": datetime.now(),
+        "last_run_status": "success",
+    })
+    after = storage.get_workflow(wf.id)
+    assert after.title == "t-patched", "title clobbered by executor"
+    assert after.description == "patched while running", "description clobbered"
+    assert after.last_run_status == "success"
+
+
+def test_executor_delete_during_run_does_not_resurrect():
+    """If the workflow was deleted mid-run, executor's persist must
+    silently no-op so the deleted record isn't re-written."""
+    from backend.apps.workflows import storage, executor
+    from datetime import datetime
+    wf = _make_wf(title="doomed")
+    storage.save_workflow(wf)
+    storage.delete_workflow(wf.id)
+    executor._persist_run_fields(wf, {
+        "last_run_at": datetime.now(),
+        "last_run_status": "success",
+    }, schedule_runs_count_delta=1)
+    assert storage.get_workflow(wf.id) is None
+
+
+def test_patch_if_match_rejects_stale_write():
+    """A PATCH with a stale If-Match must return 409. Without If-Match,
+    the request still succeeds (legacy clients keep working until they
+    roll out the header)."""
+    from backend.apps.workflows.workflows import update_workflow
+    from backend.apps.workflows.models import WorkflowUpdate
+    from backend.apps.workflows import storage
+    from fastapi import HTTPException
+
+    wf = _make_wf(title="optimistic-test")
+    storage.save_workflow(wf)
+    stale = "1999-01-01T00:00:00"
+
+    async def runner():
+        # Stale If-Match → 409.
+        try:
+            await update_workflow(wf.id, WorkflowUpdate(title="x"), if_match=stale)
+            return "no exception"
+        except HTTPException as he:
+            return he.status_code
+    code = asyncio.new_event_loop().run_until_complete(runner())
+    assert code == 409, f"stale If-Match should 409, got {code}"
+
+    # Fresh If-Match → 200.
+    fresh = storage.get_workflow(wf.id)
+    fresh_stamp = fresh.updated_at.isoformat()
+    async def runner_ok():
+        return await update_workflow(wf.id, WorkflowUpdate(title="y"), if_match=fresh_stamp)
+    result = asyncio.new_event_loop().run_until_complete(runner_ok())
+    assert result["title"] == "y"
+
+    # Missing If-Match → legacy path still works.
+    async def runner_legacy():
+        return await update_workflow(wf.id, WorkflowUpdate(title="z"), if_match=None)
+    result = asyncio.new_event_loop().run_until_complete(runner_legacy())
+    assert result["title"] == "z"
+
+
+def test_killed_by_restart_message_is_friendly():
+    """stuck-run reaper writes a user-facing string, not internal jargon."""
+    from backend.apps.workflows import storage, scheduler
+    from backend.apps.workflows.models import WorkflowRun
+    wf = _make_wf()
+    storage.save_workflow(wf)
+    storage.record_run(WorkflowRun(workflow_id=wf.id, status="running"))
+    scheduler._mark_stuck_runs_failed()
+    runs = storage.list_runs(wf.id, limit=10)
+    assert any(r.status == "failure" and "OpenSwarm closed" in (r.error or "") for r in runs)
+    assert not any("Killed by restart" in (r.error or "") for r in runs)
+
+
+def test_run_endpoint_surfaces_skipped_status():
+    """POST /workflows/{id}/run returns the skipped status + error when
+    a cost-cap or in-flight collision short-circuits the run."""
+    from backend.apps.workflows.workflows import run_workflow_now
+    from backend.apps.workflows import storage
+    from backend.apps.workflows.models import WorkflowRun
+    from datetime import datetime, timezone
+    wf = _make_wf(title="cap-immediate")
+    wf.cost_cap_usd_monthly = 0.01
+    storage.save_workflow(wf)
+    # Burn the cap with a single $5 historical run.
+    storage.record_run(WorkflowRun(workflow_id=wf.id, status="success", cost_usd=5.0,
+                                   started_at=datetime.now(timezone.utc),
+                                   finished_at=datetime.now(timezone.utc)))
+
+    async def runner():
+        return await run_workflow_now(wf.id)
+    res = asyncio.new_event_loop().run_until_complete(runner())
+    assert res.get("status") == "skipped"
+    assert "cost cap" in (res.get("error") or "").lower()
+
+
 def test_escalation_noop_for_single_tier():
     from backend.apps.workflows import escalation
     from backend.apps.workflows.models import Workflow, PermissionTier, WorkflowRun

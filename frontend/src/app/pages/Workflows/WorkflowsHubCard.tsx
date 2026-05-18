@@ -288,7 +288,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
           <AddIcon sx={{ fontSize: 14 }} />
           New
         </Box>
-        <Tooltip title={paused ? 'All scheduled workflows are paused. Toggle to resume.' : 'Pause every scheduled workflow without disabling them individually.'}>
+        <Tooltip title={paused ? 'Scheduled runs are paused. In-flight runs will finish; new fires are blocked until you resume.' : 'Stop all future scheduled runs without disabling them one-by-one. Any run already in flight will finish.'}>
           <Box
             onClick={togglePaused}
             role="button"

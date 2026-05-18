@@ -262,7 +262,12 @@ def _mark_stuck_runs_failed() -> None:
     for wf in storage.list_workflows():
         for r in storage.list_runs(wf.id, limit=200):
             if r.status == "running":
-                storage.update_run(r.id, status="failure", error="Killed by restart", finished_at=now)
+                storage.update_run(
+                    r.id,
+                    status="failure",
+                    error="OpenSwarm closed before this run finished.",
+                    finished_at=now,
+                )
 
 
 def reconcile_on_startup() -> None:

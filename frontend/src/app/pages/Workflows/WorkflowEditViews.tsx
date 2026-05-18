@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Select from '@mui/material/Select';
@@ -16,9 +16,12 @@ interface Props {
   workflow: Workflow;
   facet: 'General' | 'Actions' | 'Schedule';
   onChangeFacet: (facet: 'General' | 'Actions' | 'Schedule') => void;
+  // Lifted dirty state so the parent card can decorate the Edit tab with
+  // an unsaved-changes dot. Optional; older callers don't need to wire it.
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export default function WorkflowEditViews({ workflow, facet, onChangeFacet }: Props) {
+export default function WorkflowEditViews({ workflow, facet, onChangeFacet, onDirtyChange }: Props) {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const [draft, setDraft] = useState<Workflow>(workflow);
@@ -30,6 +33,12 @@ export default function WorkflowEditViews({ workflow, facet, onChangeFacet }: Pr
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(workflow), [draft, workflow]);
 
+  // Push the dirty flag up so the parent card can decorate the Edit tab.
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  // Clear the parent's flag on unmount so a closed editor doesn't leave
+  // a stale "you have unsaved changes" dot on the tab.
+  useEffect(() => () => { onDirtyChange?.(false); }, [onDirtyChange]);
+
   const onSave = useCallback(async () => {
     if (busy || !dirty) return;
     const reason = validateDraft(draft);
@@ -40,19 +49,28 @@ export default function WorkflowEditViews({ workflow, facet, onChangeFacet }: Pr
     setSaveError(null);
     setBusy(true);
     try {
-      const result = await dispatch(updateWorkflow({ id: workflow.id, patch: draft }));
+      // If-Match: pass the workflow's current updated_at so the backend
+      // can reject a stale write. Without this, two open windows or a
+      // mid-edit background fire silently clobber each other.
+      const result = await dispatch(updateWorkflow({
+        id: workflow.id,
+        patch: draft,
+        ifMatch: workflow.updated_at || null,
+      }));
       if (updateWorkflow.fulfilled.match(result)) {
         setSavedFlash(true);
         setTimeout(() => setSavedFlash(false), 1400);
+      } else if (result.payload?.kind === 'stale') {
+        setSaveError('This workflow was changed in another window or by a recent run. Discard to reload the latest, then re-apply your edits.');
       } else {
-        setSaveError('Save failed. Please try again.');
+        setSaveError(result.payload?.message || 'Save failed. Please try again.');
       }
     } catch (e) {
       setSaveError((e as Error)?.message || 'Save failed.');
     } finally {
       setBusy(false);
     }
-  }, [busy, dirty, dispatch, workflow.id, draft]);
+  }, [busy, dirty, dispatch, workflow.id, workflow.updated_at, draft]);
 
   const onDiscard = useCallback(() => {
     setDraft(workflow);

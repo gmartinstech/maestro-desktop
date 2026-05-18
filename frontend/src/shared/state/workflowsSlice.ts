@@ -139,16 +139,42 @@ export const createWorkflow = createAsyncThunk(
   },
 );
 
-export const updateWorkflow = createAsyncThunk(
+// Optimistic concurrency: PATCH sends If-Match with the workflow's
+// updated_at. If the backend's record changed since we read it (another
+// window, a mid-edit background fire), the server returns 409 and the
+// caller can prompt to reload. Thunk uses rejectWithValue so the FE can
+// distinguish stale-write from network errors.
+export const updateWorkflow = createAsyncThunk<
+  Workflow,
+  { id: string; patch: Partial<Workflow>; ifMatch?: string | null },
+  { rejectValue: { kind: 'stale' | 'network' | 'server'; message: string; current_updated_at?: string } }
+>(
   'workflows/update',
-  async ({ id, patch }: { id: string; patch: Partial<Workflow> }) => {
-    const res = await fetch(`${API}/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    if (!res.ok) throw new Error(`update failed ${res.status}`);
-    return (await res.json()) as Workflow;
+  async ({ id, patch, ifMatch }, { rejectWithValue }) => {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (ifMatch) headers['If-Match'] = ifMatch;
+      const res = await fetch(`${API}/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(patch),
+      });
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        const detail = (data && (data.detail || data)) || {};
+        return rejectWithValue({
+          kind: 'stale',
+          message: detail.message || 'This workflow changed elsewhere. Reload and try again.',
+          current_updated_at: detail.current_updated_at,
+        });
+      }
+      if (!res.ok) {
+        return rejectWithValue({ kind: 'server', message: `Update failed (${res.status}).` });
+      }
+      return (await res.json()) as Workflow;
+    } catch (e) {
+      return rejectWithValue({ kind: 'network', message: (e as Error)?.message || 'Network error.' });
+    }
   },
 );
 
@@ -161,7 +187,12 @@ export const runWorkflowNow = createAsyncThunk('workflows/run', async (id: strin
   const res = await fetch(`${API}/${id}/run`, { method: 'POST' });
   if (!res.ok) throw new Error(`run failed ${res.status}`);
   const data = await res.json();
-  return { id, run_id: data.run_id as string };
+  return {
+    id,
+    run_id: (data.run_id || '') as string,
+    status: (data.status || null) as string | null,
+    error: (data.error || null) as string | null,
+  };
 });
 
 export const fetchRuns = createAsyncThunk(

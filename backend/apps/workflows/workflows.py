@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Header, Request
 
 from backend.config.Apps import SubApp
 from backend.apps.workflows.models import (
@@ -183,10 +183,32 @@ async def get_workflow_audit(workflow_id: str, limit: int = 50):
 
 
 @workflows.router.patch("/{workflow_id}")
-async def update_workflow(workflow_id: str, body: WorkflowUpdate):
+async def update_workflow(
+    workflow_id: str,
+    body: WorkflowUpdate,
+    if_match: Optional[str] = Header(default=None, alias="If-Match"),
+):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    # Optimistic concurrency: if the client passed If-Match, verify it
+    # matches the current updated_at. Stale writes (another window or a
+    # mid-edit background fire) get a 409 so the FE can prompt to reload
+    # instead of silently clobbering the other actor's changes. Missing
+    # header = legacy client, allow through (back-compat with the
+    # frontend's pre-409 code path; FE rolls out If-Match immediately).
+    if if_match:
+        current_stamp = wf.updated_at.isoformat() if hasattr(wf.updated_at, "isoformat") else str(wf.updated_at)
+        # Strip quotes a well-behaved HTTP client might add per RFC 7232.
+        if if_match.strip().strip('"') != current_stamp:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "stale_update",
+                    "message": "This workflow changed in another window or by a recent run. Reload and try again.",
+                    "current_updated_at": current_stamp,
+                },
+            )
     before = wf.model_dump(mode="json")
     data = body.model_dump(exclude_unset=True)
     for k, v in data.items():
@@ -221,15 +243,20 @@ async def run_workflow_now(workflow_id: str):
     pre_ids = {r.id for r in storage.list_runs(wf.id, limit=10)}
     asyncio.create_task(executor.execute(wf, triggered_by="manual"))
 
-    # Poll briefly for the newly created run id (anything not already in
-    # the pre-fire snapshot). Falls back to empty if the executor hasn't
-    # written within 250ms — frontend reconciles via WS afterwards.
+    # Poll briefly for the newly created run id. We also surface the
+    # run's status + error string when it lands quickly (e.g. cost-cap
+    # short-circuit, _running collision) so the FE can render a toast
+    # instead of silently switching to History.
     for _ in range(25):
         for r in storage.list_runs(wf.id, limit=10):
             if r.id not in pre_ids and r.triggered_by == "manual":
-                return {"run_id": r.id}
+                return {
+                    "run_id": r.id,
+                    "status": r.status,
+                    "error": r.error,
+                }
         await asyncio.sleep(0.01)
-    return {"run_id": ""}
+    return {"run_id": "", "status": None, "error": None}
 
 
 @workflows.router.get("/{workflow_id}/runs")
