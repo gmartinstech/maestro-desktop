@@ -300,6 +300,11 @@ _AUTH_EXEMPT_EXACT = {
     # Without this exemption the redirect lands a 401 page in the user's
     # browser — see tools_lib.py:1156 where redirect_uri is constructed.
     "/api/tools/oauth/callback",
+    # Spotify OAuth uses its own callback path because our app credentials
+    # are local (backend/.env) and the redirect target is OpenSwarm's
+    # own backend on :8324, not the cloud OAuth proxy. The `state` param
+    # validates against _SPOTIFY_PENDING in tools_lib.py.
+    "/api/tools/credentials/spotify/callback",
     # Browser-redirect target for the proxied OAuth claim handoff. Browser
     # has no way to inject our bearer token; the install_id check inside
     # the handler is what binds the request to this user.
