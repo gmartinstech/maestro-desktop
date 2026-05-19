@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Re-verify DEAD_CODE_REPORT.md entries against the full repo.
+
+Vulture only sees Python, so FastAPI route handlers called from
+electron/main.js or the React frontend get false-flagged as unused.
+This script re-checks each entry by scanning the symbol name across
+backend/, electron/, frontend/src/ AND by scanning likely HTTP path
+strings for routes, then buckets findings.
+"""
+from __future__ import annotations
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+REPORT = ROOT / "DEAD_CODE_REPORT.md"
+OUT = ROOT / "DEAD_CODE_TRIAGE.md"
+
+SEARCH_ROOTS = ["backend", "electron", "frontend/src"]
+SKIP_DIRS = {"__pycache__", "node_modules", "dist", ".venv",
+             ".instagram-mcp.bak"}
+SKIP_PARTS = (".bak",)
+SOURCE_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
+
+SECTION_RE = re.compile(r"^### `([^`]+)`")
+ENTRY_RE = re.compile(r"^- \*\*([A-Za-z_][A-Za-z0-9_]*)\*\*")
+ROUTE_DECORATOR_RE = re.compile(
+    r"@[\w.]+\.(get|post|put|patch|delete|websocket)\(\s*['\"]([^'\"]+)['\"]"
+)
+
+
+def iter_source_files() -> list[Path]:
+    files: list[Path] = []
+    for root in SEARCH_ROOTS:
+        base = ROOT / root
+        if not base.exists():
+            continue
+        for path in base.rglob("*"):
+            if not path.is_file() or path.suffix not in SOURCE_EXTS:
+                continue
+            parts = set(path.parts)
+            if parts & SKIP_DIRS:
+                continue
+            if any(p.endswith(SKIP_PARTS) for p in path.parts):
+                continue
+            files.append(path)
+    return files
+
+
+_ALL_FILES_CACHE: list[tuple[Path, str]] = []
+
+
+def _load_corpus() -> list[tuple[Path, str]]:
+    global _ALL_FILES_CACHE
+    if _ALL_FILES_CACHE:
+        return _ALL_FILES_CACHE
+    corpus: list[tuple[Path, str]] = []
+    for path in iter_source_files():
+        try:
+            corpus.append((path, path.read_text(errors="ignore")))
+        except OSError:
+            continue
+    _ALL_FILES_CACHE = corpus
+    return corpus
+
+
+def file_count_matching(pattern: re.Pattern[str],
+                        exclude_file: str) -> int:
+    exclude = (ROOT / exclude_file).resolve()
+    n = 0
+    for path, text in _load_corpus():
+        if path.resolve() == exclude:
+            continue
+        if pattern.search(text):
+            n += 1
+    return n
+
+
+def extract_route_paths(source_file: Path, symbol: str) -> list[str]:
+    if not source_file.exists():
+        return []
+    try:
+        lines = source_file.read_text().splitlines()
+    except Exception:
+        return []
+    paths: list[str] = []
+    for i, line in enumerate(lines):
+        if f"def {symbol}(" in line or f"def {symbol} " in line:
+            for j in range(max(0, i - 5), i):
+                m = ROUTE_DECORATOR_RE.search(lines[j])
+                if m:
+                    paths.append(m.group(2))
+    return paths
+
+
+def classify(source_file: str, symbol: str) -> tuple[str, str]:
+    src_path = ROOT / source_file
+    route_paths = extract_route_paths(src_path, symbol)
+    if route_paths:
+        for p in route_paths:
+            pat = re.compile(re.escape(p))
+            if file_count_matching(pat, source_file) > 0:
+                return "HTTP_LIVE", f"route path '{p}' referenced elsewhere"
+        return "AMBIGUOUS", f"route handler but no callers for {route_paths}"
+    pat = re.compile(rf"\b{re.escape(symbol)}\b")
+    n = file_count_matching(pat, source_file)
+    if n == 0:
+        if symbol.startswith("_"):
+            return "VERIFIED_DEAD", "private symbol, zero external refs"
+        return "AMBIGUOUS", "zero refs but public symbol (manual review)"
+    return "AMBIGUOUS", f"{n} other file(s) reference symbol"
+
+
+def parse_report() -> list[tuple[str, str, str]]:
+    entries: list[tuple[str, str, str]] = []
+    current_file = ""
+    current_section = ""
+    for raw in REPORT.read_text().splitlines():
+        if raw.startswith("## "):
+            current_section = raw[3:].strip()
+            current_file = ""
+            continue
+        m = SECTION_RE.match(raw)
+        if m:
+            current_file = m.group(1)
+            continue
+        m = ENTRY_RE.match(raw)
+        if m and current_file and current_section in (
+            "Unused Functions", "Unused Consts"
+        ):
+            entries.append((current_file, m.group(1), current_section))
+    return entries
+
+
+def main() -> int:
+    if not REPORT.exists():
+        print(f"missing {REPORT}", file=sys.stderr)
+        return 1
+    buckets: dict[str, list[str]] = {
+        "VERIFIED_DEAD": [], "HTTP_LIVE": [], "AMBIGUOUS": []
+    }
+    for src, sym, section in parse_report():
+        bucket, evidence = classify(src, sym)
+        buckets[bucket].append(f"- `{src}` :: **{sym}** ({section}) {evidence}")
+    out = ["# Dead Code Triage", ""]
+    out.append("_Generated by `scripts/triage-deadcode.py`. "
+               "Source: `DEAD_CODE_REPORT.md`._")
+    out.append("")
+    for name in ("VERIFIED_DEAD", "HTTP_LIVE", "AMBIGUOUS"):
+        items = buckets[name]
+        out.append(f"## {name} ({len(items)})")
+        out.append("")
+        out.extend(items if items else ["_(none)_"])
+        out.append("")
+    OUT.write_text("\n".join(out))
+    for name in ("VERIFIED_DEAD", "HTTP_LIVE", "AMBIGUOUS"):
+        print(f"{name}: {len(buckets[name])}")
+    print(f"wrote {OUT.relative_to(ROOT)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
