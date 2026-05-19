@@ -206,6 +206,7 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { setMode: setThemeMode } = useThemeMode();
   const theme = useAppSelector((s) => s.settings.data.theme);
   const loaded = useAppSelector((s) => s.settings.loaded);
+  const allowExperimentalUpdates = useAppSelector((s) => s.settings.data.allow_experimental_updates);
   useEffect(() => {
     dispatch(fetchSettings());
     dispatch(fetchModels());
@@ -225,6 +226,11 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
   useEffect(() => {
     if (loaded) setThemeMode(theme as 'light' | 'dark');
   }, [loaded, theme, setThemeMode]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    (window as any).openswarm?.setAllowPrerelease?.(allowExperimentalUpdates);
+  }, [loaded, allowExperimentalUpdates]);
   return <>{children}</>;
 };
 

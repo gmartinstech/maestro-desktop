@@ -580,6 +580,8 @@ function setupAutoUpdater() {
   // Download on detect, install on quit: OS can't replace a running .app/.exe.
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  // Renderer pushes the user's experimental-updates setting via IPC right after settings load.
+  autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('update-available', (info) => {
     console.log(`Update available: ${info.version}`);
@@ -1080,6 +1082,20 @@ ipcMain.handle('download-update', async () => {
   } catch (err) {
     return { success: false, error: err?.message || String(err) };
   }
+});
+
+ipcMain.handle('set-allow-prerelease', async (_e, value) => {
+  if (!autoUpdater) return { success: false, error: 'Updater not available' };
+  const next = Boolean(value);
+  if (autoUpdater.allowPrerelease === next) return { success: true, changed: false };
+  autoUpdater.allowPrerelease = next;
+  if (!isPackaged) return { success: true, changed: true };
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    return { success: false, changed: true, error: err?.message || String(err) };
+  }
+  return { success: true, changed: true };
 });
 
 ipcMain.handle('install-update', async () => {

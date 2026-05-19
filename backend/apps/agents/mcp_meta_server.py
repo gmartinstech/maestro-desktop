@@ -178,8 +178,10 @@ def handle_tool_call(tool_name: str, arguments: dict) -> dict:
                     "type": "text",
                     "text": (
                         f"Activated `{server_name}`. Its tools (`mcp__{server_name}__*`) "
-                        f"will be callable on the NEXT turn. End this turn now and the user's "
-                        f"next message will see the new tools."
+                        f"are NOT callable in this turn; the transport snapshot is "
+                        f"already locked. This turn will end automatically and a "
+                        f"hidden continuation turn will fire with the new tools "
+                        f"loaded. Do not attempt any other tool call now."
                     ),
                 }],
             }

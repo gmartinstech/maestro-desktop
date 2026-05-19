@@ -37,6 +37,7 @@ const { contextBridge, ipcRenderer } = require('electron');
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     downloadUpdate: () => ipcRenderer.invoke('download-update'),
     installUpdate: () => ipcRenderer.invoke('install-update'),
+    setAllowPrerelease: (value) => ipcRenderer.invoke('set-allow-prerelease', value),
 
     onUpdateAvailable: (cb) => {
       const listener = (_event, info) => cb(info);

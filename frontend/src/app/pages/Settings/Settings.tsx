@@ -1884,7 +1884,7 @@ const Settings: React.FC = () => {
 
         <Typography sx={{ ...sectionSx, mt: 3 }}>Advanced</Typography>
 
-        <Box sx={inlineRowLastSx}>
+        <Box sx={inlineRowSx}>
           <Box sx={{ mr: 3 }}>
             <Typography sx={labelSx}>Developer mode</Typography>
             <Typography sx={descSx}>Show transport details, environment variables, raw configs, and other technical metadata throughout the app.</Typography>
@@ -1892,6 +1892,21 @@ const Settings: React.FC = () => {
           <Switch
             checked={form.dev_mode}
             onChange={(e) => setForm({ ...form, dev_mode: e.target.checked })}
+            sx={{
+              '& .MuiSwitch-switchBase.Mui-checked': { color: c.accent.primary },
+              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: c.accent.primary },
+            }}
+          />
+        </Box>
+
+        <Box sx={inlineRowLastSx}>
+          <Box sx={{ mr: 3 }}>
+            <Typography sx={labelSx}>Experimental updates</Typography>
+            <Typography sx={descSx}>Receive pre-release builds with new features earlier. These versions may be less stable than normal releases.</Typography>
+          </Box>
+          <Switch
+            checked={form.allow_experimental_updates}
+            onChange={(e) => setForm({ ...form, allow_experimental_updates: e.target.checked })}
             sx={{
               '& .MuiSwitch-switchBase.Mui-checked': { color: c.accent.primary },
               '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: c.accent.primary },

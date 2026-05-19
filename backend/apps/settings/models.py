@@ -53,6 +53,7 @@ class AppSettings(BaseModel):
     expand_new_chats_in_dashboard: bool = False
     auto_reveal_sub_agents: bool = True
     dev_mode: bool = False
+    allow_experimental_updates: bool = False
     claude_subscription_token: Optional[str] = None
     openai_subscription_token: Optional[str] = None
     gemini_subscription_token: Optional[str] = None

@@ -676,8 +676,10 @@ class AgentManager:
             "do not say 'I'll schedule it', do not call any scheduling tool."
         )
         sections.append(
-            "2. After MCPActivate returns, end the turn; a follow-up turn fires "
-            "automatically with the new tools available."
+            "2. After MCPActivate returns, do NOT make any more tool calls in "
+            "this turn. The transport snapshot is locked; calls against the "
+            "new server would hit a stale schema list. The turn ends "
+            "automatically and a hidden continuation fires with the new tools."
         )
         sections.append(
             "3. Don't ask 'should I activate X?' first; MCPActivate already "
@@ -1568,6 +1570,32 @@ class AgentManager:
                 "session_id": session_id,
                 "message": result_msg.model_dump(mode="json"),
             })
+
+            # Hard-stop the turn after a successful MCPActivate. The CLI snapshots
+            # mcp_servers at transport launch, so any mid-turn tool calls against
+            # the just-activated server would hit a stale schema list and the
+            # model would hallucinate names (e.g. "Notion: Searchpages" instead
+            # of "mcp__notion__search"). The auto-continuation hook below
+            # (pending_continuation) fires a hidden follow-up turn with a
+            # fresh-session restart, so by stopping here we get a clean
+            # transport relaunch with the new server's tools loaded. Without
+            # this stop, success depended on the model voluntarily ending the
+            # turn after reading the activation tool result; failure mode was
+            # the 10x-hallucinated-tool-call spiral.
+            if (
+                hook_tool_name == "mcp__openswarm-mcp-meta__MCPActivate"
+                and isinstance(content, str)
+                and content.startswith("Activated `")
+                and getattr(session, "pending_continuation", False)
+            ):
+                return {
+                    "continue_": False,
+                    "stopReason": (
+                        "MCP server activated; ending turn so its tool schemas "
+                        "load into a fresh transport. A hidden continuation "
+                        "turn fires automatically."
+                    ),
+                }
             return {"continue_": True}
 
         try:

@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import HTTPException, Query
+from fastapi import HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from backend.config.Apps import SubApp
@@ -291,21 +291,37 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
                 env["PRIVATE_APP_ACCESS_TOKEN"] = tool.oauth_tokens["access_token"]
             if tool.oauth_tokens.get("refresh_token"):
                 env["GOOGLE_WORKSPACE_REFRESH_TOKEN"] = tool.oauth_tokens["refresh_token"]
-            # google_workspace_mcp's auth/gauth.py requires all three of
-            # CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN at startup and does
-            # its own token refresh per API call; it ignores any
-            # pre-refreshed access_token. v1.0.29's cloud-proxy migration
-            # closes the OAuth-flow secret exposure, but the MCP still
-            # needs the local secret here. v1.0.30 should either fork the
-            # MCP to point token_uri at our cloud refresh proxy, or replace
-            # it with a thin in-house Gmail/Drive/Calendar wrapper that
-            # consumes a pre-refreshed access_token.
-            client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
-            client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "")
-            if client_id:
-                env["GOOGLE_WORKSPACE_CLIENT_ID"] = client_id
-            if client_secret:
-                env["GOOGLE_WORKSPACE_CLIENT_SECRET"] = client_secret
+            # google_workspace_mcp's gauth.py hardcodes token_uri to
+            # https://oauth2.googleapis.com/token and refreshes using the
+            # local CLIENT_ID/SECRET on every API call. The OAuth flow
+            # itself runs through the cloud's rotation pool, so the
+            # refresh_token is bound to whichever pool slot minted it,
+            # not the single client baked into the DMG. Mismatch -> Google
+            # returns unauthorized_client. We point token_uri at a local
+            # proxy that forwards the refresh to our cloud's pool-aware
+            # /api/oauth/google/refresh endpoint; CLIENT_ID/SECRET become
+            # unused placeholders (gauth.py only validates non-empty).
+            _port = os.environ.get("OPENSWARM_PORT", "8324")
+            env["GOOGLE_WORKSPACE_TOKEN_URI"] = (
+                f"http://127.0.0.1:{_port}/api/tools/google-oauth-token"
+            )
+            env.setdefault("GOOGLE_WORKSPACE_CLIENT_ID", "openswarm-proxy")
+            env.setdefault("GOOGLE_WORKSPACE_CLIENT_SECRET", "openswarm-proxy")
+
+    # Google Workspace MCP: redirect spawn through our shim that
+    # monkey-patches gauth.get_credentials before the worker registers
+    # tools, so token_uri points at our local proxy. Stays a stdio
+    # subprocess; google-workspace-mcp gets installed into uv's
+    # ephemeral env via --with, same way the upstream entry-point
+    # invocation used to do it.
+    if tool.name.lower() == "google workspace" and config.get("type") == "stdio":
+        shim_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "google_workspace_mcp_shim",
+            "run.py",
+        )
+        config["command"] = "uv"
+        config["args"] = ["run", "--with", "google-workspace-mcp", "python", shim_path]
 
     # Discord MCP runs as a small Python shim (backend.apps.discord_mcp_shim).
     # We pass install_id + base URL via env so the shim subprocess doesn't
@@ -1290,3 +1306,60 @@ async def refresh_airtable_token(tool: ToolDefinition) -> Optional[str]:
 async def refresh_hubspot_token(tool: ToolDefinition) -> Optional[str]:
     """Refresh an expired HubSpot OAuth access_token."""
     return await _refresh_via_proxy("hubspot", tool, default_expiry=1800)
+
+
+@tools_lib.router.post("/google-oauth-token")
+async def google_oauth_token_proxy(request: Request):
+    """Local mimic of Google's OAuth2 token endpoint for the
+    google-workspace-mcp subprocess.
+
+    google-workspace-mcp's google-auth library posts form-encoded
+    {grant_type, refresh_token, client_id, client_secret} on every
+    expired-token refresh. Because OAuth runs through a cloud-side
+    rotation pool, the local CLIENT_ID/SECRET don't match the pool slot
+    that minted the refresh_token, so a direct refresh against Google
+    returns unauthorized_client. We accept the form-encoded shape,
+    discard the (mismatched) local client creds, and forward the
+    refresh_token to api.openswarm.com/api/oauth/google/refresh which
+    walks the pool to find the issuing slot. The cloud's JSON envelope
+    is reshaped back to Google's native token-endpoint response so
+    google-auth keeps working transparently.
+    """
+    form = await request.form()
+    grant_type = form.get("grant_type") or ""
+    refresh_token = form.get("refresh_token") or ""
+    if grant_type != "refresh_token" or not refresh_token:
+        return Response(
+            content='{"error":"unsupported_grant_type"}',
+            status_code=400,
+            media_type="application/json",
+        )
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            upstream = await client.post(
+                f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/google/refresh",
+                json={"refresh_token": refresh_token},
+            )
+    except Exception as e:
+        return Response(
+            content=f'{{"error":"upstream_unreachable","error_description":"{e}"}}',
+            status_code=502,
+            media_type="application/json",
+        )
+    if upstream.status_code != 200:
+        return Response(
+            content=upstream.text,
+            status_code=upstream.status_code,
+            media_type="application/json",
+        )
+    tokens = (upstream.json() or {}).get("tokens") or {}
+    return Response(
+        content=json.dumps({
+            "access_token": tokens.get("access_token", ""),
+            "expires_in": tokens.get("expires_in", 3600),
+            "scope": tokens.get("scope", ""),
+            "token_type": tokens.get("token_type", "Bearer"),
+        }),
+        status_code=200,
+        media_type="application/json",
+    )
