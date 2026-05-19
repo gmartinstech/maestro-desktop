@@ -140,14 +140,6 @@ def _connection() -> Optional[tuple[str, dict]]:
     return None
 
 
-def _connected_phone() -> Optional[str]:
-    """Backwards-compat helper used by the user-account path."""
-    conn = _connection()
-    if conn and conn[0] == "user":
-        return conn[1].get("phone")
-    return None
-
-
 def _api_creds() -> tuple[Optional[int], Optional[str]]:
     api_id_raw = os.environ.get("OPENSWARM_TELEGRAM_API_ID", "").strip()
     api_hash = os.environ.get("OPENSWARM_TELEGRAM_API_HASH", "").strip()
