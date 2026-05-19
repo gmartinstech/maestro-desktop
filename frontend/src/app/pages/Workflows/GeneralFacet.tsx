@@ -1,16 +1,60 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import InputBase from '@mui/material/InputBase';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { useAppDispatch } from '@/shared/hooks';
+import { fetchSession, resumeSession } from '@/shared/state/agentsSlice';
+import {
+  DEFAULT_CARD_H,
+  DEFAULT_CARD_W,
+  placeCard,
+} from '@/shared/state/dashboardLayoutSlice';
+import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
+import { store } from '@/shared/state/store';
 import type { Workflow } from '@/shared/state/workflowsSlice';
 import { FieldRow, BODY_FS, LABEL_FS, HINT_FS, INPUT_FS } from './workflowEditCommon';
 
 export default function GeneralFacet({ draft, setDraft }: { draft: Workflow; setDraft: (w: Workflow) => void }) {
   const c = useClaudeTokens();
-  const [editingPrompt, setEditingPrompt] = useState(false);
+  const dispatch = useAppDispatch();
+  const sourceSessionId = draft.source_session_id || null;
+  // Open the source chat: fetch if missing, fall through to resume if
+  // it was closed, place a card if there isn't one. That's it. No pan
+  // animation, no focus pin, no dashboard_id patching, no auto-clear
+  // timers. Match the way any other chat opens on the canvas; let the
+  // user scroll to it.
+  const openSourceChat = React.useCallback(async () => {
+    if (!sourceSessionId) return;
+    const sid = sourceSessionId;
+    if (!store.getState().agents.sessions[sid]) {
+      try {
+        await dispatch(fetchSession(sid)).unwrap();
+      } catch {
+        try {
+          await dispatch(resumeSession({ sessionId: sid })).unwrap();
+        } catch {
+          return;
+        }
+      }
+    }
+    if (!store.getState().dashboardLayout.cards[sid]) {
+      dispatch(placeCard({
+        sessionId: sid,
+        x: 400, y: 200,
+        width: DEFAULT_CARD_W,
+        height: DEFAULT_CARD_H,
+      }));
+    }
+    // Pan the canvas to the chat card so the user can see it. Safe to
+    // do here because the active element is the Edit button, not a
+    // textarea: handleCardSelect's input-aware blur guard prevents the
+    // focus animation from killing typing focus in a separate flow.
+    dispatch(setPendingFocusAgentId(sid));
+  }, [sourceSessionId, dispatch]);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
       <FieldRow label="Title">
@@ -30,21 +74,16 @@ export default function GeneralFacet({ draft, setDraft }: { draft: Workflow; set
         />
       </FieldRow>
       <FieldRow label="System prompt">
-        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <Box sx={{ fontSize: LABEL_FS, color: c.accent.primary, cursor: 'pointer', fontWeight: 500 }} onClick={() => setEditingPrompt((v) => !v)}>
-            {editingPrompt ? 'Editing…' : 'Edit'}
-          </Box>
-          <Select
-            size="small"
-            value={draft.use_synced_prompt ? 'synced' : 'custom'}
-            onChange={(e) => setDraft({ ...draft, use_synced_prompt: e.target.value === 'synced' })}
-            sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.5 } }}>
-            <MenuItem value="synced">Synced to settings</MenuItem>
-            <MenuItem value="custom">Custom</MenuItem>
-          </Select>
-        </Box>
+        <Select
+          size="small"
+          value={draft.use_synced_prompt ? 'synced' : 'custom'}
+          onChange={(e) => setDraft({ ...draft, use_synced_prompt: e.target.value === 'synced' })}
+          sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.5 } }}>
+          <MenuItem value="synced">Synced to settings</MenuItem>
+          <MenuItem value="custom">Custom</MenuItem>
+        </Select>
       </FieldRow>
-      {editingPrompt && !draft.use_synced_prompt && (
+      {!draft.use_synced_prompt && (
         <InputBase
           multiline
           minRows={4}
@@ -54,7 +93,23 @@ export default function GeneralFacet({ draft, setDraft }: { draft: Workflow; set
           sx={{ fontSize: INPUT_FS, color: c.text.primary, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, p: 1, lineHeight: 1.5 }}
         />
       )}
-      <Typography sx={{ fontSize: BODY_FS, fontWeight: 700, color: c.text.primary, mt: 0.5 }}>Workflow</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+        <Typography sx={{ fontSize: BODY_FS, fontWeight: 700, color: c.text.primary, flex: 1 }}>Workflow</Typography>
+        {sourceSessionId && (
+          <Box
+            role="button"
+            onClick={openSourceChat}
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.4,
+              fontSize: LABEL_FS, fontWeight: 600,
+              color: c.text.muted, cursor: 'pointer',
+              '&:hover': { color: c.accent.primary },
+            }}>
+            <EditOutlinedIcon sx={{ fontSize: 14 }} />
+            Edit
+          </Box>
+        )}
+      </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {draft.steps.map((s, idx) => (
           <Box key={s.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>

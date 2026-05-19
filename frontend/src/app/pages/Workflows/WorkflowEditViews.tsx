@@ -97,19 +97,25 @@ export default function WorkflowEditViews({ workflow, facet, onChangeFacet, onDi
           Discard + Save are the same pill-style buttons used at the
           bottom of SavedView; placing them here gives the user a single
           place to commit OR throw away whatever they just edited. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'nowrap', minWidth: 0 }}>
-        <Typography sx={{ fontSize: LABEL_FS, color: c.text.secondary, fontWeight: 500, flexShrink: 0 }}>Currently Editing</Typography>
-        <Select
-          size="small"
-          value={facet}
-          onChange={(e) => onChangeFacet(e.target.value as Props['facet'])}
-          sx={{ fontSize: LABEL_FS, minWidth: 0, '& .MuiSelect-select': { py: 0.4 } }}>
-          <MenuItem value="General">General</MenuItem>
-          <MenuItem value="Actions">Actions</MenuItem>
-          <MenuItem value="Schedule">Schedule</MenuItem>
-        </Select>
-        <Box sx={{ flex: 1, minWidth: 0 }} />
-        <Box sx={{ display: 'inline-flex', flexShrink: 0 }}>
+      {/* Match target image #111: left cluster (label + facet picker)
+          flush-left, action pills flush-right, generous breathing room
+          between. Gap inside each cluster stays tight so the two read
+          as two distinct groups, not five evenly-spaced chips. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', minWidth: 0, py: 0.5 }}>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+          <Typography sx={{ fontSize: LABEL_FS, color: c.text.secondary, fontWeight: 500 }}>Currently Editing</Typography>
+          <Select
+            size="small"
+            value={facet}
+            onChange={(e) => onChangeFacet(e.target.value as Props['facet'])}
+            sx={{ fontSize: LABEL_FS, minWidth: 110, '& .MuiSelect-select': { py: 0.4 } }}>
+            <MenuItem value="General">General</MenuItem>
+            <MenuItem value="Actions">Actions</MenuItem>
+            <MenuItem value="Schedule">Schedule</MenuItem>
+          </Select>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 24 }} />
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
           <ActionBtn
             label="Discard"
             tone="danger"
@@ -117,15 +123,15 @@ export default function WorkflowEditViews({ workflow, facet, onChangeFacet, onDi
             disabled={!dirty || busy}
             onClick={onDiscard}
           />
-        </Box>
-        <Box sx={{ display: 'inline-flex', flexShrink: 0, minWidth: 80, justifyContent: 'center' }}>
-          <ActionBtn
-            label={busy ? 'Saving…' : 'Save'}
-            tone="success"
-            icon="check"
-            disabled={!dirty || busy || saveState === 'saved'}
-            onClick={onSave}
-          />
+          <Box sx={{ display: 'inline-flex', minWidth: 80, justifyContent: 'center' }}>
+            <ActionBtn
+              label={busy ? 'Saving…' : 'Save'}
+              tone="success"
+              icon="check"
+              disabled={!dirty || busy || saveState === 'saved'}
+              onClick={onSave}
+            />
+          </Box>
         </Box>
       </Box>
 

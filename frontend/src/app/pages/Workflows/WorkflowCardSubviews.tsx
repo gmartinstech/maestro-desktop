@@ -152,31 +152,27 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   }, [liveSteps]);
 
   return (
-    // minHeight: 100% so the bottom-right Discard/Save cluster pins to
-    // the bottom of the card body, not just below the last step. Without
-    // this, mt:auto has nothing to push against and the buttons floated
-    // up next to step 1 (image #68 bug).
+    // PreviewView visually matches SavedView (target image #107): same
+    // Scheduled / Permissions prose, same framed step boxes. Title +
+    // description come from the AI gen at save time; the user doesn't
+    // type a description here. Discard/Save sits in the bottom-right.
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
-      <InputBase
-        multiline
-        minRows={1}
-        value={description}
-        placeholder="Describe what this workflow does."
-        onChange={(e) => onChangeDescription(e.target.value)}
-        sx={{
-          fontSize: '0.92rem', color: c.text.secondary, lineHeight: 1.55,
-          border: `1px solid transparent`, borderRadius: `${c.radius.md}px`,
-          px: 0.5, py: 0.25,
-          '&:hover': { borderColor: c.border.subtle },
-          '&.Mui-focused': { borderColor: c.border.medium },
-          '& textarea::placeholder': { color: c.text.ghost, opacity: 1 },
-        }}
-      />
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.35 }}>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+          <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: c.text.primary }}>Scheduled:</Typography>
+          <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary }}>Not scheduled</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+          <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: c.text.primary }}>Permissions:</Typography>
+          <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary }}>Notify me in Open Swarm</Typography>
+        </Box>
+      </Box>
+      {description && (
+        <Typography sx={{ fontSize: '0.92rem', color: c.text.secondary, lineHeight: 1.55, mt: 0.5 }}>
+          {description}
+        </Typography>
+      )}
       <StepList steps={liveSteps} framed onChangeStep={onChangeStep} />
-      {/* Bottom-right cluster: Discard then Save, both pill-shaped with
-          their respective trash + check glyphs. Matches target #58 / #63.
-          mt:auto = pinned to the bottom of the flex column regardless of
-          how little content lives above. */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, mt: 'auto' }}>
         <ActionBtn label="Discard" tone="danger" icon="trash" onClick={onDiscard} />
         <ActionBtn label="Save" tone="success" icon="check" onClick={onSave} disabled={busy} />
@@ -222,36 +218,42 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
   const connectionMode = useAppSelector((s) => (s as { settings?: { data?: { connection_mode?: string } } }).settings?.data?.connection_mode);
   void c; void connectionMode;
 
-  // Inline step-1 edit per target image #63: the first framed step is
-  // editable in place; once the user touches it the Discard/Save buttons
-  // surface at the bottom right. Saving issues a steps PATCH against
-  // the workflow.
-  const [localFirstStep, setLocalFirstStep] = useState<string | null>(null);
+  // All steps editable inline. Each keystroke updates a local override
+  // map; Discard/Save surface as soon as any step diverges from the
+  // saved value. On Save we PATCH the full steps array, preserving ids.
+  const [localSteps, setLocalSteps] = useState<Record<number, string>>({});
   const [savingFirst, setSavingFirst] = useState(false);
-  const firstStepDirty = localFirstStep != null && steps[0] && localFirstStep !== steps[0].text;
-  const editableSteps = firstStepDirty && steps[0]
-    ? [{ ...steps[0], text: localFirstStep! }, ...steps.slice(1)]
-    : steps;
+  const firstStepDirty = useMemo(() => {
+    for (const k of Object.keys(localSteps)) {
+      const idx = Number(k);
+      const saved = steps[idx]?.text ?? '';
+      if (localSteps[idx] !== saved) return true;
+    }
+    return false;
+  }, [localSteps, steps]);
+  const editableSteps = useMemo(() => {
+    if (!firstStepDirty) return steps;
+    return steps.map((s, idx) => (idx in localSteps ? { ...s, text: localSteps[idx] } : s));
+  }, [firstStepDirty, steps, localSteps]);
   const onChangeFirstStep = useCallback((idx: number, text: string) => {
-    if (idx !== 0) return;
-    setLocalFirstStep(text);
+    setLocalSteps((prev) => ({ ...prev, [idx]: text }));
   }, []);
   const onSaveFirstStep = useCallback(async () => {
-    if (!firstStepDirty || savingFirst || !steps[0]) return;
+    if (!firstStepDirty || savingFirst) return;
     setSavingFirst(true);
     try {
-      const nextSteps = [{ ...steps[0], text: localFirstStep! }, ...steps.slice(1)];
+      const nextSteps = steps.map((s, idx) => (idx in localSteps ? { ...s, text: localSteps[idx] } : s));
       await dispatch(updateWorkflow({
         id: workflow.id,
         patch: { steps: nextSteps },
         ifMatch: workflow.updated_at || null,
       }));
-      setLocalFirstStep(null);
+      setLocalSteps({});
     } finally {
       setSavingFirst(false);
     }
-  }, [firstStepDirty, savingFirst, steps, localFirstStep, dispatch, workflow.id, workflow.updated_at]);
-  const onDiscardFirstStep = useCallback(() => setLocalFirstStep(null), []);
+  }, [firstStepDirty, savingFirst, steps, localSteps, dispatch, workflow.id, workflow.updated_at]);
+  const onDiscardFirstStep = useCallback(() => setLocalSteps({}), []);
   // Habit suggestion: 3+ manual runs in the last 7 days on a workflow
   // that isn't scheduled → quietly offer to schedule it. One click flips
   // the schedule on at the most common time. Auto-disappears once the

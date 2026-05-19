@@ -5,6 +5,7 @@
 
 import React from 'react';
 import Box from '@mui/material/Box';
+import TextareaAutosize from '@mui/material/TextareaAutosize';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -24,6 +25,10 @@ interface Props {
   framed?: boolean;
   // Callback when a step row is edited inline; only useful in Preview.
   onChangeStep?: (idx: number, text: string) => void;
+  // Callback when the trash icon next to a step is clicked. Pairs with
+  // onAddStep on the parent. Provide both when editing; omit for read-only.
+  onDeleteStep?: (idx: number) => void;
+  onAddStep?: () => void;
 }
 
 const CIRCLE_SIZE = 24;
@@ -89,12 +94,11 @@ export default function StepList({ workflow, steps, runs, activeRunId, framed, o
           // no run is in flight, nothing is "active" so all discs stay
           // outlined, including step 1.
           const firstStep = idx === 0;
-          const frameThis = framed && firstStep;
-          // Target image #54: in framed mode, step 1's disc is a solid
-          // accent fill with white text (it's the "entry point"), steps
-          // 2+ are quiet outlined discs. During a live run the activeStepIdx
-          // takes over and overrides this baseline.
-          const primary = frameThis || isActive;
+          // All steps look identical when framed; the orange disc on
+          // step 1 already does the "entry point" signaling. Singling
+          // out step 1 made 2+ read as static text.
+          const frameThis = framed;
+          const primary = (framed && firstStep) || isActive;
           return (
             <Box key={s.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, position: 'relative' }}>
               <Box sx={{
@@ -112,20 +116,42 @@ export default function StepList({ workflow, steps, runs, activeRunId, framed, o
               }}>
                 {Icon ? <Icon sx={{ fontSize: 13 }} /> : (idx + 1)}
               </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Box
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  // Hover + focus give 2+ steps a visible edge so the user
+                  // discovers they're editable. Step 1 already shows a
+                  // permanent frame; this just makes the rest discoverable.
+                  '& textarea:hover': {
+                    borderColor: `${c.border.medium} !important`,
+                    background: `${c.bg.surface} !important`,
+                  },
+                  '& textarea:focus': {
+                    borderColor: `${c.accent.primary} !important`,
+                    background: `${c.bg.surface} !important`,
+                  },
+                }}>
                 {onChangeStep ? (
-                  <Box
-                    component="textarea"
+                  <TextareaAutosize
                     value={s.text}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChangeStep(idx, e.target.value)}
-                    sx={{
-                      width: '100%', resize: 'vertical',
-                      fontFamily: 'inherit', fontSize: '0.92rem', color: c.text.primary,
-                      border: frameThis ? `1px solid ${c.border.medium}` : `1px solid transparent`,
+                    onChange={(e) => onChangeStep(idx, e.target.value)}
+                    minRows={1}
+                    style={{
+                      width: '100%',
+                      resize: 'none',
+                      boxSizing: 'border-box',
+                      fontFamily: 'inherit',
+                      fontSize: '0.92rem',
+                      color: c.text.primary,
+                      border: frameThis ? `1px solid ${c.border.medium}` : '1px solid transparent',
                       borderRadius: `${c.radius.md}px`,
-                      bgcolor: frameThis ? c.bg.surface : 'transparent',
-                      px: frameThis ? 1.25 : 0, py: frameThis ? 0.75 : 0.1, lineHeight: 1.45,
-                      '&:focus': { outline: 'none', borderColor: c.accent.primary },
+                      background: frameThis ? c.bg.surface : 'transparent',
+                      padding: '6px 10px',
+                      lineHeight: 1.45,
+                      outline: 'none',
+                      overflow: 'hidden',
+                      transition: 'border-color 0.12s ease, background 0.12s ease',
                     }}
                   />
                 ) : (

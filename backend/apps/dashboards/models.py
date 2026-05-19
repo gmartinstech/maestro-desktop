@@ -66,6 +66,15 @@ class WorkflowsHubPosition(BaseModel):
     height: float = 640
 
 
+class ConfigurePanelPosition(BaseModel):
+    """Floating Action-Library panel tethered to a workflow card."""
+    workflow_id: str
+    x: float = 0
+    y: float = 0
+    width: float = 580
+    height: float = 600
+
+
 class DashboardLayout(BaseModel):
     cards: dict[str, CardPosition] = Field(default_factory=dict)
     view_cards: dict[str, ViewCardPosition] = Field(default_factory=dict)
@@ -73,6 +82,7 @@ class DashboardLayout(BaseModel):
     workflow_cards: dict[str, WorkflowCardPosition] = Field(default_factory=dict)
     workflows_hub: Optional[WorkflowsHubPosition] = None
     notes: dict[str, NotePosition] = Field(default_factory=dict)
+    configure_panels: dict[str, ConfigurePanelPosition] = Field(default_factory=dict)
     expanded_session_ids: list[str] = Field(default_factory=list)
 
 

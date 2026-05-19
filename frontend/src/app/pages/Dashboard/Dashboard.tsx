@@ -67,6 +67,7 @@ import DirectionHints from './DirectionHints';
 import DashboardToolbar from './DashboardToolbar';
 import WorkflowCard from '@/app/pages/Workflows/WorkflowCard';
 import WorkflowsHubCard from '@/app/pages/Workflows/WorkflowsHubCard';
+import ConfigurePanelCard from '@/app/pages/Workflows/ConfigurePanelCard';
 import { captureDashboardThumbnail } from './captureDashboardThumbnail';
 import { useCanvasControls } from './useCanvasControls';
 import { useDashboardSelection } from './useDashboardSelection';
@@ -116,6 +117,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const workflowCards = useAppSelector((state) => state.dashboardLayout.workflowCards);
   const workflowItems = useAppSelector((state) => state.workflows.items);
   const workflowOpenCards = useAppSelector((state) => state.workflows.openCards);
+  const configurePanels = useAppSelector((state) => state.dashboardLayout.configurePanels);
   const workflowsHub = useAppSelector((state) => state.dashboardLayout.workflowsHub);
   const notes = useAppSelector((state) => state.dashboardLayout.notes);
   const pendingFocusNoteId = useAppSelector((state) => state.dashboardLayout.pendingFocusNoteId);
@@ -379,7 +381,16 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     setTimeout(() => {
       const rect = getCardRect(id, type);
       if (rect) canvas.actions.fitToCards([rect], 1.15, true, type === 'browser' ? 0.8 : undefined);
-      setTimeout(() => (document.activeElement as HTMLElement)?.blur?.(), 150);
+      setTimeout(() => {
+        // Don't blur if the focused element is an input/textarea/
+        // contentEditable inside the just-clicked card; the user is
+        // typing there and this blur kills the cursor mid-keystroke.
+        const active = document.activeElement as HTMLElement | null;
+        if (!active) return;
+        const tag = active.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || active.isContentEditable) return;
+        active.blur?.();
+      }, 150);
     }, 100);
   }, [selection, getCardRect, canvas.actions, dispatch, expandedSessionIds]);
 
@@ -455,7 +466,16 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     setTimeout(() => {
       const rect = getCardRect(id, type);
       if (rect) canvas.actions.fitToCards([rect], 1.15, true);
-      setTimeout(() => (document.activeElement as HTMLElement)?.blur?.(), 150);
+      setTimeout(() => {
+        // Don't blur if the focused element is an input/textarea/
+        // contentEditable inside the just-clicked card; the user is
+        // typing there and this blur kills the cursor mid-keystroke.
+        const active = document.activeElement as HTMLElement | null;
+        if (!active) return;
+        const tag = active.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || active.isContentEditable) return;
+        active.blur?.();
+      }, 150);
     }, 100);
   }, [getCardRect, canvas.actions, dispatch]);
 
@@ -819,7 +839,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       skipInitialSave.current = false;
       return;
     }
-    const payload = { dashboardId, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, expandedSessionIds };
+    const payload = { dashboardId, cards, viewCards, browserCards, workflowCards, configurePanels, workflowsHub, notes, expandedSessionIds };
     pendingSaveRef.current = payload;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
@@ -828,7 +848,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       saveTimerRef.current = null;
       captureNow();
     }, 500);
-  }, [isActive, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, expandedSessionIds, layoutInitialized, dashboardId, dispatch, captureNow]);
+  }, [isActive, cards, viewCards, browserCards, workflowCards, configurePanels, workflowsHub, notes, expandedSessionIds, layoutInitialized, dashboardId, dispatch, captureNow]);
 
   useEffect(() => {
     return () => {
@@ -1175,7 +1195,16 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       setTimeout(() => {
         const rect = getCardRect(target.id, target.type);
         if (rect) canvas.actions.fitToCards([rect], 1.15, true);
-        setTimeout(() => (document.activeElement as HTMLElement)?.blur?.(), 150);
+        setTimeout(() => {
+        // Don't blur if the focused element is an input/textarea/
+        // contentEditable inside the just-clicked card; the user is
+        // typing there and this blur kills the cursor mid-keystroke.
+        const active = document.activeElement as HTMLElement | null;
+        if (!active) return;
+        const tag = active.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || active.isContentEditable) return;
+        active.blur?.();
+      }, 150);
       }, 100);
     };
 
@@ -1775,9 +1804,58 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       });
     }
 
-    return [...agentTethers, ...browserTethers, ...workflowTethers];
+    // Configure-panel tethers: each open configure panel is anchored to its
+    // workflow card so the user always sees which workflow's action surface
+    // they're editing, even after dragging things around.
+    const configureTethers: Array<{ key: string; path: string; labelX: number; labelY: number; label: string; fading: boolean }> = [];
+    for (const p of Object.values(configurePanels)) {
+      const wc = workflowCards[p.workflow_id];
+      if (!wc) continue;
+      let srcX = wc.x, srcY = wc.y;
+      let dstX = p.x, dstY = p.y;
+      if (liveDragInfo) {
+        if (liveDragInfo.cardId === p.workflow_id) { srcX += liveDragInfo.dx; srcY += liveDragInfo.dy; }
+      }
+      const srcCx = srcX + wc.width / 2;
+      const dstCx = dstX + p.width / 2;
+      const srcAnchors: Anchor[] = [
+        { x: srcX + wc.width, y: srcY + wc.height * 0.5, side: 'right' },
+        { x: srcX, y: srcY + wc.height * 0.5, side: 'left' },
+        { x: srcCx, y: srcY, side: 'top' },
+        { x: srcCx, y: srcY + wc.height, side: 'bottom' },
+      ];
+      const dstAnchors: Anchor[] = [
+        { x: dstX, y: dstY + p.height * 0.5, side: 'left' },
+        { x: dstX + p.width, y: dstY + p.height * 0.5, side: 'right' },
+        { x: dstCx, y: dstY, side: 'top' },
+        { x: dstCx, y: dstY + p.height, side: 'bottom' },
+      ];
+      let bestSrc = srcAnchors[0], bestDst = dstAnchors[0];
+      let bestDist = Infinity;
+      for (const sa of srcAnchors) {
+        for (const da of dstAnchors) {
+          const d = Math.hypot(sa.x - da.x, sa.y - da.y);
+          if (d < bestDist) { bestDist = d; bestSrc = sa; bestDst = da; }
+        }
+      }
+      const x1 = bestSrc.x, y1 = bestSrc.y;
+      const x2 = bestDst.x, y2 = bestDst.y;
+      const pathD = elbowPath(x1, y1, x2, y2);
+      const midX = x1 + (x2 - x1) / 2;
+      const midY = y1 + (y2 - y1) / 2;
+      configureTethers.push({
+        key: `configure-${p.workflow_id}`,
+        path: pathD,
+        labelX: midX,
+        labelY: midY,
+        label: 'Configure',
+        fading: false,
+      });
+    }
+
+    return [...agentTethers, ...browserTethers, ...workflowTethers, ...configureTethers];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, workflowCards, workflowItems, workflowOpenCards, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList]);
+  }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, workflowCards, workflowItems, workflowOpenCards, configurePanels, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList]);
 
   const dotSize = Math.max(1, 1.5 * canvas.zoom);
   const dotSpacing = 24 * canvas.zoom;
@@ -2144,6 +2222,13 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
                 onDragEnd={handleCardDragEnd}
                 onDoubleClick={handleCardDoubleClick}
                 onBringToFront={handleBringToFront}
+              />
+            ))}
+            {Object.values(configurePanels).map((p) => (
+              <ConfigurePanelCard
+                key={`configure-${p.workflow_id}`}
+                panel={p}
+                zOrder={1}
               />
             ))}
             {Object.values(notes).map((n) => (

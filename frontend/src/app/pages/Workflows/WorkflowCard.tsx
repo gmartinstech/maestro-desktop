@@ -34,7 +34,6 @@ import {
 } from '@/shared/state/dashboardLayoutSlice';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
 import { fetchSession } from '@/shared/state/agentsSlice';
-import { AnimatePresence, motion } from 'framer-motion';
 import WorkflowEditViews from './WorkflowEditViews';
 import { HistoryDetail, HistoryList, PreviewView, SavedView } from './WorkflowCardSubviews';
 import { StatusDot, RunSparkline, LastFiredHint, isStaleSinceLastRun } from './workflowVisuals';
@@ -100,6 +99,7 @@ const WorkflowCard: React.FC<Props> = ({
   const workflow = useAppSelector((s) => s.workflows.items[workflowId]);
   const runs = useAppSelector((s) => s.workflows.runs[workflowId]);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
+
   // Transient "Starting…" label state on the Run button. See onClick handler
   // for the full rationale (avoid no-feedback flicker on fast manual runs).
   const [runStarting, setRunStarting] = useState(false);
@@ -465,6 +465,18 @@ const WorkflowCard: React.FC<Props> = ({
           action group rather than dropping Schedule onto a second line.
           Run is the only accent-colored button (it's the verb users
           actually do) but its border weight matches the siblings. */}
+      {isDraft && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, px: 2, pb: 1.25, pt: 0, flexShrink: 0, opacity: 0.45, pointerEvents: 'none' }}>
+          <TabBtn label="Run" icon={<PlayArrowIcon sx={{ fontSize: 16 }} />} active={false} accent onClick={() => {}} />
+          <TabBtn label="Edit" icon={<EditIcon sx={{ fontSize: 16 }} />} active={false} onClick={() => {}} />
+          <TabBtn label="History" icon={<HistoryIcon sx={{ fontSize: 16 }} />} active={false} onClick={() => {}} />
+          <Box sx={{ flex: 1 }} />
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4, fontSize: '0.82rem', fontWeight: 500, color: c.text.secondary }}>
+            <ScheduleIcon sx={{ fontSize: 14 }} />
+            Schedule this task
+          </Box>
+        </Box>
+      )}
       {!isDraft && workflow && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, px: 2, pb: 1.25, pt: 0, flexShrink: 0 }}>
           <TabBtn
@@ -514,38 +526,36 @@ const WorkflowCard: React.FC<Props> = ({
           />
           <Box sx={{ flex: 1 }} />
           {!workflow.schedule.enabled && (
-            <Box>
-              <TabBtn
-                label="Schedule this task"
-                icon={<ScheduleIcon sx={{ fontSize: 16 }} />}
-                active={false}
-                onClick={() => {
-                  // One-click arming: flip the master toggle ON with a
-                  // sensible default (daily 9am if there's nothing set
-                  // yet), then jump to the editor so the user can tweak.
-                  // Saves the extra "open editor → flip toggle → save"
-                  // dance for the common case.
-                  const sched = workflow.schedule;
-                  const next = {
-                    ...sched,
-                    enabled: true,
-                    // If the workflow has never had a schedule, day-1 9am
-                    // is the friendliest default. If we already had one
-                    // (re-enabling after a pause), keep the user's prior
-                    // settings untouched.
-                    repeat_unit: sched.repeat_unit || 'day',
-                    repeat_every: sched.repeat_every || 1,
-                    hour: sched.hour || 9,
-                    minute: sched.minute || 0,
-                  };
-                  dispatch(updateWorkflow({
-                    id: workflow.id,
-                    patch: { schedule: next as any },
-                    ifMatch: workflow.updated_at || null,
-                  }));
-                  dispatch(updateWorkflowCard({ workflowId, patch: { view: 'edit', editFacet: 'Schedule' } }));
-                }}
-              />
+            <Box
+              role="button"
+              data-no-drag
+              onClick={() => {
+                const sched = workflow.schedule;
+                const next = {
+                  ...sched,
+                  enabled: true,
+                  repeat_unit: sched.repeat_unit || 'day',
+                  repeat_every: sched.repeat_every || 1,
+                  hour: sched.hour || 9,
+                  minute: sched.minute || 0,
+                };
+                dispatch(updateWorkflow({
+                  id: workflow.id,
+                  patch: { schedule: next as any },
+                  ifMatch: workflow.updated_at || null,
+                }));
+                dispatch(updateWorkflowCard({ workflowId, patch: { view: 'edit', editFacet: 'Schedule' } }));
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              sx={{
+                display: 'inline-flex', alignItems: 'center', gap: 0.4,
+                fontSize: '0.82rem', fontWeight: 500,
+                color: c.text.secondary,
+                cursor: 'pointer',
+                '&:hover': { color: c.accent.primary },
+              }}>
+              <ScheduleIcon sx={{ fontSize: 14 }} />
+              Schedule this task
             </Box>
           )}
         </Box>
@@ -556,14 +566,13 @@ const WorkflowCard: React.FC<Props> = ({
           read as a "jump". Outer box is the scrollable viewport; the
           animated child changes per `card.view`. */}
       <Box ref={bodyScrollRef} data-no-drag sx={{ flex: 1, p: 2, overflowY: 'auto', minHeight: 0, position: 'relative', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' }}>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={card.view}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -2 }}
-            transition={{ duration: 0.14, ease: 'easeOut' }}
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {/* No AnimatePresence wrapper here on purpose: framer-motion's
+            crossfade was racing user-input events and stealing focus
+            from the title/description/step InputBases on every parent
+            re-render (Redux dispatches from selection/zOrder/etc.). The
+            tab body just swaps directly; the user doesn't notice the
+            missing crossfade. */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {card.view === 'preview' && (
           <PreviewView
             workflowId={workflowId}
@@ -636,8 +645,7 @@ const WorkflowCard: React.FC<Props> = ({
             onBack={() => dispatch(updateWorkflowCard({ workflowId, patch: { view: 'history' } }))}
           />
         )}
-          </motion.div>
-        </AnimatePresence>
+        </Box>
       </Box>
 
       {/* ===== Resize handles ===== */}
@@ -714,16 +722,19 @@ function TabBtn({ label, icon, active, accent, breathe, breatheTooltip, dot, dot
         whiteSpace: 'nowrap',
         color: accent ? c.accent.primary : c.text.secondary,
         bgcolor: accent ? c.accent.primary + '14' : 'transparent',
-        border: `1px solid ${accent ? c.accent.primary + '50' : c.border.medium}`,
+        // Only the Run (accent) tab carries a border; Edit/History sit as
+        // quiet text-with-icon affordances so the primary verb stands out.
+        border: accent ? `1px solid ${c.accent.primary}50` : '1px solid transparent',
         borderRadius: `${c.radius.md}px`,
         cursor: 'pointer', userSelect: 'none',
-        '&:hover': { bgcolor: accent ? c.accent.primary + '22' : c.bg.elevated, borderColor: accent ? c.accent.primary : c.text.muted },
-        // Active just nudges the border + bg, doesn't repaint the whole
-        // button. Mirrors macOS segmented-control behavior.
-        ...(active && {
+        '&:hover': { bgcolor: accent ? c.accent.primary + '22' : c.bg.elevated, borderColor: accent ? c.accent.primary : 'transparent' },
+        // Active state: nudge bg only when this is a non-accent tab so the
+        // user can still see "you're on this view". Run's accent styling
+        // already does that job; piling a darker bg on top reads as
+        // disabled.
+        ...(active && !accent && {
           color: c.text.primary,
           bgcolor: c.bg.elevated,
-          borderColor: c.border.medium,
         }),
         // Subtle "ready" breath when a stale workflow's Run button hasn't
         // been touched in over 24h. ~3% scale + glow swell, slow enough

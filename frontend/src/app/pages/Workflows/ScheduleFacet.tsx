@@ -14,8 +14,7 @@ import NotificationsIcon from '@mui/icons-material/NotificationsNoneRounded';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { fetchCloudSmsStatus, type Workflow, type ScheduleConfig, type PermissionTier } from '@/shared/state/workflowsSlice';
-import { WEEKDAY_LABEL, formatTime, fireTimesWithin } from './scheduleUtils';
-import { routingFor } from './workflowVisuals';
+import { WEEKDAY_LABEL, formatTime } from './scheduleUtils';
 import { nextTierAfter } from './permissionsUtils';
 import { BODY_FS, LABEL_FS, HINT_FS, INPUT_FS } from './workflowEditCommon';
 
@@ -183,9 +182,8 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-      {/* Row 1: master On/Off. Explicit so users never wonder if a stray
-          click armed a schedule. */}
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Master on/off. */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Switch size="small" checked={s.enabled} onChange={(e) => setSched({ enabled: e.target.checked })} />
         <Typography sx={{ fontSize: BODY_FS, fontWeight: 700, color: c.text.primary }}>
@@ -193,169 +191,166 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
         </Typography>
       </Box>
 
-      {/* Row 2: app-open status badge. Only render when the schedule is
-          actually on; an "OpenSwarm must be open at 9am" warning is
-          meaningless when nothing's scheduled. */}
       {s.enabled && (
         <AppOpenStatusBadge info={appOpen} hour={s.hour} minute={s.minute} onFix={fixAppOpen} />
       )}
 
-      {/* Row 3: repeat + timezone. Icon replaces the "When should this
-          workflow run?" prose; the inputs read self-evidently. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
-        <Tooltip title="How often this runs">
-          <RepeatIcon sx={{ fontSize: 16, color: c.text.muted }} />
-        </Tooltip>
-        <InputBase
-          type="number"
-          value={s.repeat_every}
-          onChange={(e) => setSched({ repeat_every: Math.max(1, Number(e.target.value) || 1) })}
-          sx={{ width: 48, fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.4 }}
-        />
-        <Select
-          size="small"
-          value={s.repeat_unit}
-          onChange={(e) => setSched({ repeat_unit: e.target.value as ScheduleConfig['repeat_unit'] })}
-          sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.5 } }}>
-          <MenuItem value="day">day</MenuItem>
-          <MenuItem value="week">week</MenuItem>
-          <MenuItem value="month">month</MenuItem>
-        </Select>
-      </Box>
-      {s.repeat_unit === 'week' && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 2.5, flexWrap: 'wrap' }}>
-          {WEEKDAY_LABEL.map((label, idx) => {
-            const active = s.on_days.includes(idx);
-            return (
-              <Box
-                key={idx}
-                onClick={() => setSched({ on_days: active ? s.on_days.filter((d) => d !== idx) : [...s.on_days, idx] })}
-                role="button"
-                sx={{ width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: LABEL_FS, fontWeight: 700, cursor: 'pointer', color: active ? '#fff' : c.text.muted, bgcolor: active ? c.accent.primary : 'transparent', border: `1px solid ${active ? c.accent.primary : c.border.subtle}` }}>{label}</Box>
-            );
-          })}
-        </Box>
-      )}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 2.5 }}>
-        {/* 12-hour picker; backend stores 0..23 but the UI uses 1..12+AM/PM
-            so users can't accidentally schedule "3" thinking it's 3pm and
-            get a 3am run. */}
-        <Select
-          size="small"
-          value={((s.hour + 11) % 12) + 1}
-          onChange={(e) => {
-            const h12 = Number(e.target.value);
-            const isPm = s.hour >= 12;
-            const next = (h12 % 12) + (isPm ? 12 : 0);
-            setSched({ hour: next });
-          }}
-          sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-            <MenuItem key={h} value={h}>{h}</MenuItem>
-          ))}
-        </Select>
-        <Typography sx={{ fontSize: INPUT_FS, color: c.text.muted }}>:</Typography>
-        <Select
-          size="small"
-          value={s.minute}
-          onChange={(e) => setSched({ minute: Number(e.target.value) })}
-          sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
-          {[0, 15, 30, 45].map((m) => (
-            <MenuItem key={m} value={m}>{String(m).padStart(2, '0')}</MenuItem>
-          ))}
-        </Select>
-        <Select
-          size="small"
-          value={s.hour < 12 ? 'AM' : 'PM'}
-          onChange={(e) => {
-            const wasPm = s.hour >= 12;
-            const willBePm = e.target.value === 'PM';
-            if (wasPm === willBePm) return;
-            setSched({ hour: willBePm ? s.hour + 12 : s.hour - 12 });
-          }}
-          sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
-          <MenuItem value="AM">AM</MenuItem>
-          <MenuItem value="PM">PM</MenuItem>
-        </Select>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost, ml: 1 }}>{friendlyTzLabel(s.timezone)}</Typography>
-      </Box>
-
-      {nextPreview && s.enabled && (
-        <Typography sx={{ fontSize: HINT_FS, color: c.accent.primary, pl: 2, fontWeight: 500 }}>
-          Next run: {formatNextRun(nextPreview)}
+      {/* Section: When should this workflow run? */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Typography sx={{ fontSize: BODY_FS, fontWeight: 600, color: c.text.primary }}>
+          When should this workflow run?
         </Typography>
-      )}
-
-      {/* Row 4: end condition. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5, flexWrap: 'wrap' }}>
-        <Tooltip title="How long this should keep running">
-          <HourglassEmptyIcon sx={{ fontSize: 16, color: c.text.muted }} />
-        </Tooltip>
-        <Select
-          size="small"
-          value={endKind}
-          onChange={(e) => setEndKind(e.target.value as EndKind)}
-          sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
-          <MenuItem value="forever">Until I turn it off</MenuItem>
-          <MenuItem value="on_date">Until a date</MenuItem>
-          <MenuItem value="after_n">After a number of runs</MenuItem>
-        </Select>
-        {endKind === 'on_date' && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: LABEL_FS, color: c.text.secondary, minWidth: 96 }}>Repeat every</Typography>
           <InputBase
-            type="date"
-            value={s.ends_at ? s.ends_at.slice(0, 10) : ''}
-            onChange={(e) => {
-              const v = e.target.value;
-              setSched({ ends_at: v ? new Date(v + 'T23:59:59').toISOString() : null });
-            }}
-            sx={{ fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.4 }}
+            type="number"
+            value={s.repeat_every}
+            onChange={(e) => setSched({ repeat_every: Math.max(1, Number(e.target.value) || 1) })}
+            sx={{ width: 56, fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.4 }}
           />
-        )}
-        {endKind === 'after_n' && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <InputBase
-              type="number"
-              value={s.max_runs ?? 10}
-              onChange={(e) => setSched({ max_runs: Math.max(1, Number(e.target.value) || 1) })}
-              sx={{ width: 56, fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.4 }}
-            />
-            <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>runs ({s.runs_count} so far)</Typography>
+          <Select
+            size="small"
+            value={s.repeat_unit}
+            onChange={(e) => setSched({ repeat_unit: e.target.value as ScheduleConfig['repeat_unit'] })}
+            sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.5 } }}>
+            <MenuItem value="day">day</MenuItem>
+            <MenuItem value="week">week</MenuItem>
+            <MenuItem value="month">month</MenuItem>
+          </Select>
+        </Box>
+        {s.repeat_unit === 'week' && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pl: 12, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: LABEL_FS, color: c.text.muted }}>↳ on</Typography>
+            {WEEKDAY_LABEL.map((label, idx) => {
+              const active = s.on_days.includes(idx);
+              return (
+                <Box
+                  key={idx}
+                  onClick={() => setSched({ on_days: active ? s.on_days.filter((d) => d !== idx) : [...s.on_days, idx] })}
+                  role="button"
+                  sx={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: LABEL_FS, fontWeight: 700, cursor: 'pointer', color: active ? '#fff' : c.text.muted, bgcolor: active ? c.accent.primary : 'transparent', border: `1px solid ${active ? c.accent.primary : c.border.subtle}` }}>{label}</Box>
+              );
+            })}
           </Box>
         )}
-      </Box>
-      {/* Inline warnings when the end condition is already satisfied; the
-          scheduler will auto-disable on the next tick which surprises
-          users who expected to arm a fresh schedule. */}
-      {(() => {
-        if (endKind === 'on_date' && s.ends_at) {
-          const ends = new Date(s.ends_at).getTime();
-          if (!Number.isNaN(ends) && ends <= Date.now()) {
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: LABEL_FS, color: c.text.secondary, minWidth: 96 }}>At</Typography>
+          <Select
+            size="small"
+            value={((s.hour + 11) % 12) + 1}
+            onChange={(e) => {
+              const h12 = Number(e.target.value);
+              const isPm = s.hour >= 12;
+              const next = (h12 % 12) + (isPm ? 12 : 0);
+              setSched({ hour: next });
+            }}
+            sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+              <MenuItem key={h} value={h}>{h}</MenuItem>
+            ))}
+          </Select>
+          <Typography sx={{ fontSize: INPUT_FS, color: c.text.muted }}>:</Typography>
+          <Select
+            size="small"
+            value={s.minute}
+            onChange={(e) => setSched({ minute: Number(e.target.value) })}
+            sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
+            {[0, 15, 30, 45].map((m) => (
+              <MenuItem key={m} value={m}>{String(m).padStart(2, '0')}</MenuItem>
+            ))}
+          </Select>
+          <Select
+            size="small"
+            value={s.hour < 12 ? 'AM' : 'PM'}
+            onChange={(e) => {
+              const wasPm = s.hour >= 12;
+              const willBePm = e.target.value === 'PM';
+              if (wasPm === willBePm) return;
+              setSched({ hour: willBePm ? s.hour + 12 : s.hour - 12 });
+            }}
+            sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
+            <MenuItem value="AM">AM</MenuItem>
+            <MenuItem value="PM">PM</MenuItem>
+          </Select>
+          <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost, ml: 0.5 }}>{friendlyTzLabel(s.timezone)}</Typography>
+        </Box>
+        {nextPreview && s.enabled && (
+          <Typography sx={{ fontSize: HINT_FS, color: c.accent.primary, pl: 12, fontWeight: 500 }}>
+            Next run: {formatNextRun(nextPreview)}
+          </Typography>
+        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+          <Typography sx={{ fontSize: LABEL_FS, color: c.text.secondary, minWidth: 96 }}>Runs</Typography>
+          <Select
+            size="small"
+            value={endKind}
+            onChange={(e) => setEndKind(e.target.value as EndKind)}
+            sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
+            <MenuItem value="forever">Until I turn it off</MenuItem>
+            <MenuItem value="on_date">Until a date</MenuItem>
+            <MenuItem value="after_n">After a number of runs</MenuItem>
+          </Select>
+          {endKind === 'on_date' && (
+            <InputBase
+              type="date"
+              value={s.ends_at ? s.ends_at.slice(0, 10) : ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSched({ ends_at: v ? new Date(v + 'T23:59:59').toISOString() : null });
+              }}
+              sx={{ fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.4 }}
+            />
+          )}
+          {endKind === 'after_n' && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <InputBase
+                type="number"
+                value={s.max_runs ?? 10}
+                onChange={(e) => setSched({ max_runs: Math.max(1, Number(e.target.value) || 1) })}
+                sx={{ width: 56, fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.4 }}
+              />
+              <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>runs ({s.runs_count} so far)</Typography>
+            </Box>
+          )}
+        </Box>
+        {(() => {
+          if (endKind === 'on_date' && s.ends_at) {
+            const ends = new Date(s.ends_at).getTime();
+            if (!Number.isNaN(ends) && ends <= Date.now()) {
+              return (
+                <Typography sx={{ fontSize: HINT_FS, color: c.status.warning || c.text.muted, pl: 12 }}>
+                  This date is in the past. The schedule will turn itself off.
+                </Typography>
+              );
+            }
+          }
+          if (endKind === 'after_n' && s.max_runs != null && s.runs_count >= s.max_runs) {
             return (
-              <Typography sx={{ fontSize: HINT_FS, color: c.status.warning || c.text.muted, pl: 2 }}>
-                This date is in the past. The schedule will turn itself off.
+              <Typography sx={{ fontSize: HINT_FS, color: c.status.warning || c.text.muted, pl: 12 }}>
+                This workflow has already run {s.runs_count}× (limit {s.max_runs}). Raise the number or reset the counter to re-arm.
               </Typography>
             );
           }
-        }
-        if (endKind === 'after_n' && s.max_runs != null && s.runs_count >= s.max_runs) {
-          return (
-            <Typography sx={{ fontSize: HINT_FS, color: c.status.warning || c.text.muted, pl: 2 }}>
-              This workflow has already run {s.runs_count}× (limit {s.max_runs}). Raise the number or reset the counter to re-arm.
-            </Typography>
-          );
-        }
-        return null;
-      })()}
+          return null;
+        })()}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: LABEL_FS, color: c.text.secondary, minWidth: 96 }}>If missed</Typography>
+          <Select
+            size="small"
+            value={s.on_missed === 'run_all' ? 'run_once' : s.on_missed}
+            onChange={(e) => setSched({ on_missed: e.target.value as ScheduleConfig['on_missed'] })}
+            sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
+            <MenuItem value="skip">Skip the missed run</MenuItem>
+            <MenuItem value="run_once">Run once after I wake the app</MenuItem>
+          </Select>
+        </Box>
+      </Box>
 
-      {/* Row 5: cost. Pass the live draft schedule so the row stays in
-          sync with the "Next run" preview even before the user saves. */}
-      <CostRow workflow={draft} draftSched={s} onCapChange={(v) => setDraft({ ...draft, cost_cap_usd_monthly: v })} />
-
-      {/* Row 6: action surface (freeze). */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5 }}>
-        <Tooltip title="What the agent is allowed to do while it runs">
-          <LockOutlinedIcon sx={{ fontSize: 16, color: c.text.muted }} />
-        </Tooltip>
+      {/* Section: What can the agent do? */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Typography sx={{ fontSize: BODY_FS, fontWeight: 600, color: c.text.primary }}>
+          What can the agent do?
+        </Typography>
         <Select
           size="small"
           value={draft.actions.freeze ? 'scoped' : 'full'}
@@ -373,42 +368,25 @@ export default function ScheduleFacet({ draft, setDraft }: { draft: Workflow; se
         </Select>
       </Box>
 
-      {/* Row 7: missed-run policy. Backend implements one catch-up only
-          today, so we don't expose a "run every missed time" option that
-          we couldn't honor. If the backend gains real replay support
-          later, add the third option back. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
-        <Tooltip title="What to do if your computer was asleep when a run was due">
-          <BedtimeIcon sx={{ fontSize: 16, color: c.text.muted }} />
-        </Tooltip>
-        <Select
-          size="small"
-          value={s.on_missed === 'run_all' ? 'run_once' : s.on_missed}
-          onChange={(e) => setSched({ on_missed: e.target.value as ScheduleConfig['on_missed'] })}
-          sx={{ fontSize: LABEL_FS, '& .MuiSelect-select': { py: 0.4 } }}>
-          <MenuItem value="skip">Skip the missed run</MenuItem>
-          <MenuItem value="run_once">Run once after I wake the app</MenuItem>
-        </Select>
+      {/* Section: How should the agent ask for your permission? */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Typography sx={{ fontSize: BODY_FS, fontWeight: 600, color: c.text.primary }}>
+          How should the agent ask for your permission?
+        </Typography>
+        {(draft.permissions || []).map((tier, idx) => (
+          <PermissionRow
+            key={idx}
+            idx={idx}
+            tier={tier}
+            cloudSmsEnabled={Boolean(cloudSms)}
+            onChange={(patch) => setTier(idx, patch)}
+            onRemove={idx === 0 ? undefined : () => removeTier(idx)}
+          />
+        ))}
+        {canAddBackup && (
+          <Box onClick={addBackup} role="button" sx={{ fontSize: LABEL_FS, color: c.text.muted, cursor: 'pointer', mt: 0.5, fontWeight: 500, '&:hover': { color: c.accent.primary } }}>+ Escalate if I don&apos;t respond</Box>
+        )}
       </Box>
-
-      {/* Row 8: permission tiers. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-        <NotificationsIcon sx={{ fontSize: 16, color: c.text.muted }} />
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>When the agent needs your OK</Typography>
-      </Box>
-      {(draft.permissions || []).map((tier, idx) => (
-        <PermissionRow
-          key={idx}
-          idx={idx}
-          tier={tier}
-          cloudSmsEnabled={Boolean(cloudSms)}
-          onChange={(patch) => setTier(idx, patch)}
-          onRemove={idx === 0 ? undefined : () => removeTier(idx)}
-        />
-      ))}
-      {canAddBackup && (
-        <Box onClick={addBackup} role="button" sx={{ fontSize: LABEL_FS, color: c.text.muted, cursor: 'pointer', mt: 0.5, fontWeight: 500, '&:hover': { color: c.accent.primary } }}>+ Escalate if I don&apos;t respond</Box>
-      )}
     </Box>
   );
 }
@@ -433,74 +411,6 @@ function AppOpenStatusBadge({ info, hour, minute, onFix }: { info: AppOpenInfo; 
           <Box onClick={onFix} role="button" sx={{ fontSize: HINT_FS, color: c.accent.primary, cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}>Always-on</Box>
         </Tooltip>
       )}
-    </Box>
-  );
-}
-
-function CostRow({ workflow, draftSched, onCapChange }: { workflow: Workflow; draftSched: ScheduleConfig; onCapChange: (v: number | null) => void }) {
-  const c = useClaudeTokens();
-  const est = workflow.cost_estimate;
-  const connectionMode = useAppSelector((s) => (s as { settings?: { data?: { connection_mode?: string } } }).settings?.data?.connection_mode);
-  // Compute fires/30-days live from the draft so the row matches the
-  // "Next run" preview even before the user saves. Backend's cached
-  // estimate is the saved-state value and would lie after a draft edit.
-  const liveFires = useMemo(() => {
-    if (!draftSched.enabled) return 0;
-    const now = new Date();
-    const end = new Date(now.getTime() + 30 * 86400000);
-    return fireTimesWithin({ schedule: draftSched } as Workflow, now, end, 200).length;
-  }, [draftSched]);
-  const route = routingFor(workflow.model, connectionMode);
-  const lastRun = est?.last_run_usd ?? 0;
-  const monthly = lastRun * liveFires;
-  const cap = workflow.cost_cap_usd_monthly;
-
-  // Subscription-routed workflows have no per-call cost we can project,
-  // so swap the row from "$X.XX/mo" copy to a usage-estimate sentence
-  // that tells the truth: covered by the plan, here's how often it fires.
-  if (route.kind === 'subscription') {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, pl: 2 }}>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>
-          {liveFires > 0
-            ? `Will use about ${liveFires} run${liveFires === 1 ? '' : 's'} per month from your ${route.subLabel} plan. No per-run cost.`
-            : `Covered by your ${route.subLabel} plan. No upcoming runs yet.`}
-        </Typography>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>
-          A monthly cost cap doesn&apos;t apply here. Your plan handles the usage limits.
-        </Typography>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, pl: 2 }}>
-      <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>
-        {liveFires > 0 && lastRun > 0
-          ? `About $${monthly.toFixed(2)} per month at the last run's cost.`
-          : liveFires > 0
-            ? `Will run ${liveFires} time${liveFires === 1 ? '' : 's'} in the next 30 days. Run once to project a monthly cost.`
-            : 'No upcoming runs.'}
-      </Typography>
-      {liveFires > 0 && lastRun > 0 && (
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>
-          {`$${lastRun.toFixed(4)} × ${liveFires} runs`}
-        </Typography>
-      )}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.muted }}>Monthly cap:</Typography>
-        <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>$</Typography>
-        <InputBase
-          type="number"
-          placeholder="none"
-          value={cap == null ? '' : cap}
-          onChange={(e) => onCapChange(e.target.value === '' ? null : Math.max(0, Number(e.target.value)))}
-          sx={{ width: 72, fontSize: INPUT_FS, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 0.75, py: 0.3 }}
-        />
-      </Box>
-      <Typography sx={{ fontSize: HINT_FS, color: c.text.ghost }}>
-        We&apos;ll skip runs once you hit this for the month. You&apos;ll see the skip in History.
-      </Typography>
     </Box>
   );
 }

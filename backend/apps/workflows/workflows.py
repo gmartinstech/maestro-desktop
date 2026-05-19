@@ -138,63 +138,126 @@ async def create_workflow(body: WorkflowCreate):
         wf.icon = _derive_icon(wf)
     if wf.schedule.enabled:
         wf.next_run_at = scheduler.compute_next_fire(wf)
-    # AI-generated description when the caller didn't supply one. Best-
-    # effort via the user's configured aux model; on failure we leave
-    # description empty so the UI just hides the row rather than showing
-    # a fake placeholder. Doesn't block create — caller gets the workflow
-    # back, and a background task fills the description in seconds.
-    if not (wf.description or "").strip():
-        try:
-            wf.description = await _generate_description(wf)
-        except Exception:
-            pass
+    # Force-generate title + description from the steps in a single aux
+    # call. Previously we only filled missing description, leaving stale
+    # session names ("Inbox check") as titles. One round-trip, both
+    # fields, overwrites whatever shallow draft the FE sent.
+    try:
+        title, description = await _generate_title_and_description(wf)
+        if title:
+            wf.title = title
+        if description:
+            wf.description = description
+    except Exception:
+        pass
     storage.save_workflow(wf)
     scheduler.kick()
     return _enriched(wf)
 
 
-async def _generate_description(wf: Workflow) -> str:
-    """One aux-model call: summarize steps into a one-paragraph blurb.
+async def _generate_title_and_description(wf: Workflow) -> tuple[str, str]:
+    """Single aux-model call returning (title, description).
 
-    Returns "" on any failure so the caller can write the result back
-    unconditionally. Never raises.
+    Uses strict JSON output so both fields come back in one round-trip.
+    Returns ("", "") on any failure so the caller can write back
+    unconditionally without dropping the workflow create.
     """
     if not wf.steps:
-        return ""
+        return "", ""
     try:
         from backend.apps.agents.providers.registry import resolve_aux_model
         from backend.apps.agents.providers.registry import get_anthropic_client_for_model
         from backend.apps.settings.settings import load_settings as _ls
     except Exception:
-        return ""
+        return "", ""
     settings = _ls()
     try:
         aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku")
         client = get_anthropic_client_for_model(settings, aux_model)
     except Exception:
-        return ""
+        return "", ""
     steps_lines = "\n".join(f"{i+1}. {s.text}" for i, s in enumerate(wf.steps) if s.text)
     prompt = (
-        "Write one short paragraph (2-3 sentences, under 50 words) that "
-        "describes what this workflow does, in plain English. No bullet "
-        "points, no preamble like 'This workflow...'. Just the description.\n\n"
-        f"Title: {wf.title}\n\n"
+        "You name and describe a saved automation routine that the user "
+        "can re-run later. The routine is defined ONLY by the numbered "
+        "steps below; treat those as the user's instructions to the "
+        "agent.\n\n"
+        "Return STRICT JSON, nothing else, no code fence:\n"
+        "  {\"title\": string, \"description\": string}\n\n"
+        "title rules:\n"
+        "- 2 to 5 words, Title Case\n"
+        "- Starts with a verb-noun pair when possible (e.g. \"Summarize "
+        "Daily Emails\")\n"
+        "- No emoji, no quotes, no trailing punctuation\n\n"
+        "description rules:\n"
+        "- 1 to 2 sentences, under 30 words total\n"
+        "- Describes the concrete WORK the routine performs for the user, "
+        "not metadata about itself. Examples of GOOD output:\n"
+        "    \"Reads recent Gmail, ranks urgency, and emails you a PDF "
+        "digest each Sunday at 9am.\"\n"
+        "    \"Pulls today's calendar plus inbox, writes a Notion brief, "
+        "and texts you the link.\"\n"
+        "- Examples of BAD output you MUST AVOID verbatim:\n"
+        "    \"This is an AI-generated description...\"\n"
+        "    \"Auto-generated description used to wrap workflows...\"\n"
+        "    Any sentence that talks about the description itself\n"
+        "- Start with a verb. Do NOT start with \"This\", \"A\", \"An\", "
+        "\"The workflow\", \"This routine\".\n\n"
         f"Steps:\n{steps_lines}"
     )
+    import json
+    import re as _re
+
+    def _extract_json_object(s: str) -> Optional[dict]:
+        """Find the first {...} block and json.loads it. Handles code
+        fences, prose preambles, and trailing chatter that some aux
+        models like to add."""
+        s = s.strip()
+        if s.startswith("```"):
+            s = _re.sub(r"^```(?:json)?\s*", "", s, flags=_re.IGNORECASE)
+            s = _re.sub(r"\s*```\s*$", "", s)
+        # Greedy brace match; falls through to direct json.loads if no
+        # braces are visible at all.
+        start = s.find("{")
+        end = s.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            s = s[start : end + 1]
+        try:
+            return json.loads(s)
+        except Exception:
+            return None
+
     try:
+        # Prefill the assistant turn with `{` so the model is steered into
+        # emitting JSON from the first token. The Anthropic API treats a
+        # trailing assistant message as a prefill; we'll glue it back on
+        # before parsing.
         resp = await client.messages.create(
             model=aux_model,
-            max_tokens=160,
-            messages=[{"role": "user", "content": prompt}],
+            max_tokens=240,
+            messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": "{"},
+            ],
         )
         text = ""
         if isinstance(resp.content, list):
             for block in resp.content:
                 if getattr(block, "type", None) == "text":
                     text += getattr(block, "text", "")
-        return text.strip()[:500]
-    except Exception:
-        return ""
+        raw = "{" + text.strip() if not text.strip().startswith("{") else text.strip()
+        data = _extract_json_object(raw)
+        if not data:
+            logger.warning("description gen: failed to parse aux model output: %s", raw[:400])
+            return "", ""
+        title = (data.get("title") or "").strip()[:80]
+        description = (data.get("description") or "").strip()[:500]
+        if not description:
+            logger.warning("description gen: empty description from aux model. Raw: %s", raw[:400])
+        return title, description
+    except Exception as e:
+        logger.warning("description gen: aux model call failed: %s", e)
+        return "", ""
 
 
 def _last_run_cost(wid: str) -> float:
