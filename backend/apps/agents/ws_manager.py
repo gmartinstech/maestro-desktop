@@ -103,6 +103,7 @@ class ConnectionManager:
             # reconcile_on_startup also marks waiting_approval sessions as
             # stopped so there's nothing to answer anyway.
             events = self._filter_stale_approvals(events)
+            events = self._strip_replayed_closes(events)
             for s in events:
                 try:
                     await websocket.send_text(s)
@@ -129,6 +130,30 @@ class ConnectionManager:
             "replayed": 0,
             "current_seq": newest if newest is not None else 0,
         }
+
+    def _strip_replayed_closes(self, events: list[str]) -> list[str]:
+        """Drop `agent:closed` events from a replay buffer.
+
+        agent:closed is a transition event ("session JUST closed") whose
+        frontend reducer (closeSessionFromWs) destructively deletes the
+        session from state.sessions. Replaying it on a fresh client (e.g.
+        a user who just clicked the closed chat in history) deletes the
+        session they're trying to open. The current closed state is
+        already conveyed by the REST hydrate (status=stopped, closed_at
+        set) and by the latest agent:status event in the replay, so
+        suppressing the transition replay is non-lossy.
+        """
+        out: list[str] = []
+        for payload_str in events:
+            try:
+                parsed = json.loads(payload_str)
+            except (ValueError, TypeError):
+                out.append(payload_str)
+                continue
+            if parsed.get("event") == "agent:closed":
+                continue
+            out.append(payload_str)
+        return out
 
     def _filter_stale_approvals(self, events: list[str]) -> list[str]:
         """Return events minus any `agent:approval_request` whose request_id

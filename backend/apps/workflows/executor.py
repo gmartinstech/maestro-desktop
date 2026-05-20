@@ -132,6 +132,7 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
         "last_run_id": run.id,
     })
 
+    session = None
     try:
         steps = [s.text for s in wf.steps if s.text and s.text.strip()]
         if not steps:
@@ -207,6 +208,16 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
             "last_run_at": run.finished_at,
         })
     finally:
+        # Close the workflow's agent session so closed_at is set and the
+        # run shows up in chat history (get_history sorts by closed_at;
+        # sessions with closed_at=None sort to the bottom and fall off
+        # the first page). close_session also drops in-memory state and
+        # persists the final snapshot to disk.
+        if session is not None:
+            try:
+                await agent_manager.close_session(session.id)
+            except Exception:
+                logger.exception("close_session failed for workflow run %s", run.id)
         async with _running_lock:
             _running.pop(wf.id, None)
 

@@ -517,11 +517,38 @@ async def mcp_meta(action: str, request: Request):
 
         # Auto-continue: read at turn boundary in _run_agent_loop (race-free); collapses the typical 3-prompt flow into 1.
         session.pending_continuation = True
+        # Enumerate the just-activated server's callable tool names so the
+        # continuation turn can call them directly. Without this the model
+        # often burns a turn on tool-discovery guesses (Bash "mcp list",
+        # Ls /toolbox, ToolSearch fallbacks) before landing on the right
+        # mcp__server__action name. Cap at 16 + clip descriptions so the
+        # prompt stays bounded for kitchen-sink servers (google-workspace
+        # exposes ~30 tools). Best-effort; any lookup failure silently
+        # falls back to the same prompt this code shipped with before.
+        tool_hint = ""
+        try:
+            for t in load_all_tools():
+                if _sanitize_server_name(t.name) != server_name:
+                    continue
+                descs = (t.tool_permissions or {}).get("_tool_descriptions", {}) or {}
+                if not descs:
+                    break
+                lines: list[str] = []
+                for sub_name, desc in list(descs.items())[:16]:
+                    short = (desc or "").strip().split("\n", 1)[0][:120]
+                    visible = f"mcp__{server_name}__{sub_name}"
+                    lines.append(f"- `{visible}`: {short}" if short else f"- `{visible}`")
+                if lines:
+                    more = "" if len(descs) <= 16 else f"\n(+ {len(descs) - 16} more; call ToolSearch with the server name for the rest)"
+                    tool_hint = "\n\nCallable tools on this server:\n" + "\n".join(lines) + more
+                break
+        except Exception:
+            logger.exception("activate: failed to build tool hint for %s", server_name)
         session.pending_continuation_prompt = (
             "[mcp:auto-continue] The MCP server you requested has been "
             f"activated (`{server_name}`). Continue with the user's original "
             "request now using the newly-available tools; do NOT ask "
-            "for confirmation."
+            "for confirmation." + tool_hint
         )
 
         return JSONResponse({"status": "activated", "server_name": server_name, "auto_continue": True})

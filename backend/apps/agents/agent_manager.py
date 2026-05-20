@@ -4614,7 +4614,12 @@ class AgentManager:
         session.closed_at = None
         self.sessions[session_id] = session
 
-        _delete_session_file(session_id)
+        # Do NOT delete the disk file here. The history list (get_history)
+        # reads from disk; deleting on resume meant every click on a past
+        # chat permanently removed it from history on the next restart.
+        # The disk copy stays as the durable record; subsequent turn
+        # completions and close_session calls overwrite it via
+        # _save_session, so memory and disk stay in sync.
 
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
