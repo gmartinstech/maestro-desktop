@@ -81,9 +81,7 @@ Write-Host "Verifying claude-agent-sdk..."
 & $PythonBin -c "import claude_agent_sdk; print('claude-agent-sdk installed')"
 if ($LASTEXITCODE -ne 0) { throw "claude-agent-sdk verification failed" }
 
-# Cleanup. Drop test packages and any stale __pycache__/.pyc from the
-# upstream tarball — we want our own freshly-compiled bytecode (next
-# step), not whatever the upstream build happened to ship.
+# Drop test packages + stale __pycache__/.pyc; we recompile our own bytecode next.
 Write-Host "Cleaning up..."
 Get-ChildItem -Path $PythonEnvDir -Recurse -Force -Directory `
     | Where-Object { $_.Name -in @('__pycache__','tests','test') } `
@@ -95,24 +93,36 @@ Get-ChildItem -Path $PythonEnvDir -Recurse -Force -Filter '*.pyc' `
 # Each removal here has been individually verified.
 Write-Host "Stripping unused Python distribution files..."
 $ToStrip = @(
-    (Join-Path $PythonEnvDir 'include'),                          # C headers — never used at runtime
-    (Join-Path $PythonEnvDir 'lib\python3.13\idlelib'),           # IDLE editor — headless backend has no GUI
-    (Join-Path $PythonEnvDir 'lib\python3.13\tkinter'),           # Tk GUI toolkit — same
-    (Join-Path $PythonEnvDir 'lib\python3.13\ensurepip'),         # Pip bootstrap — backend never installs at runtime
+    (Join-Path $PythonEnvDir 'include'),                          # C headers, not used at runtime
+    (Join-Path $PythonEnvDir 'lib\python3.13\idlelib'),           # IDLE editor, headless backend has no GUI
+    (Join-Path $PythonEnvDir 'lib\python3.13\tkinter'),           # Tk GUI toolkit, same
+    (Join-Path $PythonEnvDir 'lib\python3.13\ensurepip'),         # Pip bootstrap, backend never installs at runtime
     (Join-Path $PythonEnvDir 'lib\python3.13\turtledemo'),        # Educational drawing examples
+    (Join-Path $PythonEnvDir 'lib\python3.13\pydoc_data'),        # pydoc topics/keywords; only `help()` reads them
+    (Join-Path $PythonEnvDir 'lib\python3.13\_pyrepl'),           # Python 3.13 interactive REPL, never started in packaged app
     (Join-Path $PythonEnvDir 'share')                             # Man pages / desktop integration
 )
 foreach ($p in $ToStrip) {
     if (Test-Path $p) { Remove-Item -Recurse -Force $p -ErrorAction SilentlyContinue }
 }
+$Sp = Join-Path $PythonEnvDir 'lib\python3.13\site-packages'
+# pip itself: nothing in the packaged backend invokes it. uvx (used by
+# MCPs) is a self-contained installer; the App Builder picks SYSTEM
+# python via shutil.which (view_builder_templates.py:382), never this
+# bundled one; backend code only mentions "pip install" in error strings.
+Remove-Item -Recurse -Force (Join-Path $Sp 'pip') -ErrorAction SilentlyContinue
+Get-ChildItem -Path $Sp -Directory -Filter 'pip-*.dist-info' -ErrorAction SilentlyContinue `
+    | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+# Launcher .exe shims for the now-removed tools. Windows installs them under
+# Scripts\; ignore missing.
+foreach ($exe in @('pip.exe','pip3.exe','pip3.13.exe','idle3.exe','idle3.13.exe','pydoc3.exe','pydoc3.13.exe')) {
+    $p = Join-Path $PythonEnvDir "Scripts\$exe"
+    if (Test-Path $p) { Remove-Item -Force $p -ErrorAction SilentlyContinue }
+}
 
 # ----- Babel locale-data trim (~30 MB / ~900 files) -----
 # Babel ships 1,084 CLDR locale .dat files. Trafilatura's transitive dep
-# courlan/filters.py:184 calls Locale.parse(seg) on URL path segments —
-# UnknownLocaleError IS caught at line 188 (graceful degradation: that URL
-# just doesn't get language-filtered). Keeping the 20 most common base
-# languages preserves filtering for the URLs we'll actually see.
-$Sp = Join-Path $PythonEnvDir 'lib\python3.13\site-packages'
+# courlan/filters.py:184 calls Locale.parse(seg) on URL path segments. UnknownLocaleError IS caught at line 188, so stripped locales just skip language-filtering for that URL.
 $LocaleDir = Join-Path $Sp 'babel\locale-data'
 if (Test-Path $LocaleDir) {
     Write-Host "Trimming babel/locale-data..."
@@ -143,7 +153,7 @@ foreach ($pattern in @('RECORD','INSTALLER','WHEEL','top_level.txt','entry_point
 # Pre-compile bytecode so cold backend startup skips parse+compile on
 # every imported .py. Worth ~5-10s on Windows under Defender (parsing
 # Python source is parser-bound; loading .pyc is just bytes). We cap
-# concurrency at 4 — `-j 0` (all cores) is fine on dev boxes but
+# concurrency at 4; `-j 0` (all cores) is fine on dev boxes but
 # unstable on small CI runners. Missing .pyc is non-fatal at runtime
 # (Python falls back to in-memory compile), so we warn rather than fail.
 Write-Host "Pre-compiling bytecode..."

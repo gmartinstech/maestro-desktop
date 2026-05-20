@@ -15,8 +15,7 @@ export interface Output {
   files: Record<string, string>;
   permission: string;
   thumbnail?: string | null;
-  // Linkage so reopening App Builder reattaches to the in-progress session
-  // and reuses the on-disk workspace folder instead of seeding a fresh one.
+  /** Linkage so reopening App Builder reattaches to the in-progress session and workspace. */
   session_id?: string | null;
   workspace_id?: string | null;
   created_at: string;
@@ -60,10 +59,7 @@ export interface OutputExecuteResult {
   stdout: string | null;
   stderr: string | null;
   error: string | null;
-  // Present when the backend AST validator flagged risky imports/calls and
-  // the caller didn't pass force=true. UI shows these alongside `code_preview`
-  // in a "review and Run Anyway" dialog; resubmitting with force:true bypasses
-  // the gate. Absent (undefined) on the happy path.
+  /** Set when AST validator flagged risky code without force=true; resubmit with force to bypass. */
   warnings?: string[] | null;
   code_preview?: string | null;
 }
@@ -121,8 +117,7 @@ export const deleteOutput = createAsyncThunk('outputs/delete', async (id: string
 
 export const executeOutput = createAsyncThunk(
   'outputs/execute',
-  // `force` opts past the AST warnings gate — only set after the user has
-  // seen the code preview in the run dialog and clicked Run Anyway.
+  // `force` opts past the AST warnings gate (Run Anyway in the dialog).
   async (body: { output_id: string; input_data: Record<string, any>; force?: boolean }) => {
     const res = await fetch(`${OUTPUTS_API}/execute`, {
       method: 'POST',
@@ -136,7 +131,18 @@ export const executeOutput = createAsyncThunk(
 const outputsSlice = createSlice({
   name: 'outputs',
   initialState,
-  reducers: {},
+  reducers: {
+    /** Upsert an Output row from a server-pushed WS event (canvas-launched
+     * App Builder seeds the row on launch; meta-sync renames it at session
+     * end). Merges over existing fields so a row that already has agent-
+     * generated content doesn't lose anything from a partial server push.
+     */
+    upsertOutput(state, action: { payload: Output; type: string }) {
+      const incoming = action.payload;
+      const existing = state.items[incoming.id];
+      state.items[incoming.id] = existing ? { ...existing, ...incoming } : incoming;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchOutputs.pending, (state) => { state.loading = true; })
@@ -153,4 +159,5 @@ const outputsSlice = createSlice({
   },
 });
 
+export const { upsertOutput } = outputsSlice.actions;
 export default outputsSlice.reducer;

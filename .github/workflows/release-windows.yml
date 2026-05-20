@@ -110,6 +110,16 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $shouldPublish = ($env:GITHUB_EVENT_NAME -eq 'push') -or `
                            ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:PUBLISH_INPUT -eq 'true')
+          # electron-builder auto-detects prerelease from semver suffix in electron/package.json,
+          # but EP_PRE_RELEASE forces the GitHub Releases publisher to mark it Pre-release even
+          # when the runner's environment differs from local. Set it whenever the version has a "-" suffix.
+          $version = (Get-Content electron/package.json | ConvertFrom-Json).version
+          if ($version -match '-') {
+            $env:EP_PRE_RELEASE = 'true'
+            Write-Host "Version $version is EXPERIMENTAL; setting EP_PRE_RELEASE=true"
+          } else {
+            Write-Host "Version $version is STABLE"
+          }
           if ($shouldPublish) {
             Write-Host "Build mode: PUBLISH"
             pwsh -NoProfile -File scripts\build-app-win.ps1 -Publish

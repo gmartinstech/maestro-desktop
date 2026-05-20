@@ -14,6 +14,9 @@ import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
+import { shallowEqual } from 'react-redux';
+import { createSelector } from '@reduxjs/toolkit';
+import type { RootState } from '@/shared/state/store';
 import {
   handleApproval,
   stopAgent,
@@ -30,10 +33,6 @@ import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
 import ApprovalBar, { BatchApprovalBar, parseMcpToolName, useMcpToolMeta, getToolIcon } from '@/app/pages/AgentChat/ApprovalBar';
 import GlobalSearchPalette from '@/app/components/GlobalSearchPalette';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 type IslandState = 'idle' | 'compact' | 'compact-actionable' | 'expanded';
 
@@ -58,16 +57,8 @@ const STATUS_CONFIG: Record<string, { label: string; tokenKey?: string }> = {
   stopped:          { label: 'Stopped',  tokenKey: 'info' },
 };
 
-// ---------------------------------------------------------------------------
-// Spring configs
-// ---------------------------------------------------------------------------
-
 const SPRING_LAYOUT = { type: 'spring' as const, stiffness: 400, damping: 30 };
 const SPRING_BOUNCE = { type: 'spring' as const, stiffness: 500, damping: 25 };
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 const StatusDot: React.FC<{ status: string; c: ReturnType<typeof useClaudeTokens> }> = ({ status, c }) => {
   const cfg = STATUS_CONFIG[status];
@@ -169,10 +160,6 @@ const AgentStatusRow: React.FC<{
   );
 };
 
-// ---------------------------------------------------------------------------
-// Compact activity indicator — subtle breathing dot
-// ---------------------------------------------------------------------------
-
 const ActivityIndicator: React.FC<{ c: ReturnType<typeof useClaudeTokens> }> = ({ c }) => (
   <Box
     sx={{
@@ -190,9 +177,52 @@ const ActivityIndicator: React.FC<{ c: ReturnType<typeof useClaudeTokens> }> = (
   />
 );
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
+// Memoized session projection so identity persists across streamingMessage deltas; shallowEqual works.
+type DiSession = {
+  id: string;
+  name: string;
+  status: string;
+  dashboard_id?: string;
+  pending_approvals: AgentSession['pending_approvals'];
+};
+
+const _diSessionCache: Map<string, DiSession> = new Map();
+
+const selectDynamicIslandSessions = createSelector(
+  [(s: RootState) => s.agents.sessions],
+  (raw) => {
+    const out: Record<string, DiSession> = {};
+    const liveIds = new Set<string>();
+    for (const [sid, s] of Object.entries(raw)) {
+      liveIds.add(sid);
+      const prev = _diSessionCache.get(sid);
+      if (
+        prev
+        && prev.name === s.name
+        && prev.status === s.status
+        && prev.dashboard_id === s.dashboard_id
+        && prev.pending_approvals === s.pending_approvals
+      ) {
+        out[sid] = prev;
+      } else {
+        const next: DiSession = {
+          id: sid,
+          name: s.name,
+          status: s.status,
+          dashboard_id: s.dashboard_id,
+          pending_approvals: s.pending_approvals,
+        };
+        _diSessionCache.set(sid, next);
+        out[sid] = next;
+      }
+    }
+    // Evict cache entries for vanished sessions or refs accumulate during dashboard switching.
+    for (const cached of _diSessionCache.keys()) {
+      if (!liveIds.has(cached)) _diSessionCache.delete(cached);
+    }
+    return out;
+  },
+);
 
 const DynamicIsland: React.FC = () => {
   const c = useClaudeTokens();
@@ -200,14 +230,15 @@ const DynamicIsland: React.FC = () => {
   const navigate = useNavigate();
   const islandRef = useRef<HTMLDivElement>(null);
 
-  const sessions = useAppSelector((state) => state.agents.sessions);
-  const history = useAppSelector((state) => state.agents.history);
-  const trackedIds = useAppSelector((state) => state.agents.trackedNotificationIds);
+  // Memoized projection + shallowEqual; only re-renders when one of the four fields actually changes.
+  const sessions = useAppSelector(selectDynamicIslandSessions, shallowEqual);
+  const history = useAppSelector((state) => state.agents.history, shallowEqual);
+  const trackedIds = useAppSelector((state) => state.agents.trackedNotificationIds, shallowEqual);
 
   const [userExpanded, setUserExpanded] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // Global Cmd/Ctrl+K — open search palette from anywhere.
+  // Global Cmd/Ctrl+K opens search palette from anywhere.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
@@ -219,24 +250,13 @@ const DynamicIsland: React.FC = () => {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Global Cmd/Ctrl+L — clear the chat (Claude Code convention). Resolves
-  // the target session in priority order:
-  //   1) the session whose chat input currently has focus (when typing inside
-  //      a contentEditable card body, the data-session-id climbs the DOM)
-  //   2) state.agents.activeSessionId (last touched chat)
-  //   3) a single visible session if there's exactly one
-  // No-op if none of those resolve. Hits the same /clear endpoint as the
-  // /clear slash command and dispatches clearSessionMessages so the visible
-  // transcript matches the now-empty SDK context.
+  // Cmd/Ctrl+L: clear the chat (focused card > activeSessionId > sole session); same as /clear.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.shiftKey || e.altKey) return;
       if (e.key.toLowerCase() !== 'l') return;
 
-      // Walk up from activeElement looking for an agent-card marker.
-      // Falls back to Redux's activeSessionId, then to the only session
-      // if it's unambiguous.
       let target: string | null = null;
       const ae = document.activeElement as HTMLElement | null;
       if (ae) {
@@ -272,8 +292,6 @@ const DynamicIsland: React.FC = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [dispatch]);
-
-  // ---- Derived data ----
 
   const groups: SessionApprovalGroup[] = useMemo(() => {
     const result: SessionApprovalGroup[] = [];
@@ -355,8 +373,6 @@ const DynamicIsland: React.FC = () => {
     );
   }, [groups]);
 
-  // ---- Island state machine ----
-
   const islandState: IslandState = useMemo(() => {
     if (userExpanded && (hasAgents || hasApprovals)) return 'expanded';
     if (hasApprovals && hasOnlyQuestionApprovals) return 'expanded';
@@ -371,8 +387,6 @@ const DynamicIsland: React.FC = () => {
     }
   }, [hasAgents, hasApprovals]);
 
-  // ---- Click outside to collapse ----
-
   useEffect(() => {
     if (islandState !== 'expanded') return;
     const handler = (e: MouseEvent) => {
@@ -383,8 +397,6 @@ const DynamicIsland: React.FC = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [islandState]);
-
-  // ---- Callbacks ----
 
   const onApprove = useCallback(
     (requestId: string, updatedInput?: Record<string, any>) => {
@@ -450,8 +462,6 @@ const DynamicIsland: React.FC = () => {
     }
   }, [islandState]);
 
-  // ---- Styling — uses the same neutral palette as the rest of the UI ----
-
   const islandWidth = islandState === 'idle'
     ? 200
     : islandState === 'compact'
@@ -467,8 +477,6 @@ const DynamicIsland: React.FC = () => {
     : islandState === 'compact'
       ? c.shadow.sm
       : c.shadow.md;
-
-  // ---- Compact summary text ----
 
   const compactText = useMemo(() => {
     const parts: string[] = [];
@@ -487,8 +495,6 @@ const DynamicIsland: React.FC = () => {
       50% { box-shadow: 0 0 12px 3px ${c.status.warning}60; }
     }
   `, [c.status.warning]);
-
-  // ---- Render ----
 
   return (
     <>
@@ -581,10 +587,6 @@ const DynamicIsland: React.FC = () => {
   );
 };
 
-// ---------------------------------------------------------------------------
-// Idle pill — clickable search bar (opens GlobalSearchPalette).
-// ---------------------------------------------------------------------------
-
 const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 const SEARCH_HOTKEY = isMac ? '⌘K' : 'Ctrl+K';
 
@@ -639,10 +641,6 @@ const IdlePill: React.FC<{ c: ReturnType<typeof useClaudeTokens>; onClick: () =>
   </motion.div>
 );
 
-// ---------------------------------------------------------------------------
-// Compact pill
-// ---------------------------------------------------------------------------
-
 const CompactPill: React.FC<{
   c: ReturnType<typeof useClaudeTokens>;
   text: string;
@@ -694,10 +692,6 @@ const CompactPill: React.FC<{
     </Box>
   </motion.div>
 );
-
-// ---------------------------------------------------------------------------
-// Compact-actionable pill — single approval with icon + name + approve/deny
-// ---------------------------------------------------------------------------
 
 const CompactActionablePill: React.FC<{
   c: ReturnType<typeof useClaudeTokens>;
@@ -780,7 +774,7 @@ const CompactActionablePill: React.FC<{
             +{remainingCount - 1}
           </Typography>
         )}
-        <Tooltip title={isIntervention ? 'Done — continue' : 'Approve'} arrow>
+        <Tooltip title={isIntervention ? 'Done, continue' : 'Approve'} arrow>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); onApprove(request.id); }}
@@ -851,10 +845,6 @@ const CompactActionablePill: React.FC<{
     </motion.div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// Expanded card
-// ---------------------------------------------------------------------------
 
 const ExpandedCard: React.FC<{
   c: ReturnType<typeof useClaudeTokens>;

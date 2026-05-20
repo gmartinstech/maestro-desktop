@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
@@ -16,6 +16,9 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckIcon from '@mui/icons-material/Check';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import ScheduleThisPopover from '@/app/pages/Workflows/ScheduleThisPopover';
+import { detectSchedule } from '@/app/pages/Workflows/scheduleDetect';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
@@ -37,9 +40,11 @@ import {
   fetchSession,
   AgentMessage,
   clearSessionMessages,
+  clearMcpSuggestions,
 } from '@/shared/state/agentsSlice';
 import { fetchModes } from '@/shared/state/modesSlice';
 import { createSessionWs } from '@/shared/ws/WebSocketManager';
+import StreamingBubble from './StreamingBubble';
 import MessageBubble from './MessageBubble';
 import CompactionMarker from './CompactionMarker';
 import MessageActionBar from './MessageActionBar';
@@ -166,6 +171,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   };
   const { id: routeId } = useParams<{ id: string }>();
   const id = sessionIdProp || routeId;
+  const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const session = useAppSelector((state) => (id ? state.agents.sessions[id] : undefined));
   const modesMap = useAppSelector((state) => state.modes.items);
@@ -192,6 +198,34 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const isAtBottomRef = useRef(true);
+  const [scheduleAnchor, setScheduleAnchor] = useState<HTMLElement | null>(null);
+  // Auto-suggest chip: shows once per assistant message when time-words
+  // are detected. Dismissed by clicking it (opens the popover prefilled)
+  // or by the user explicitly closing it. State stores the messageId the
+  // chip was last shown/dismissed for, so it doesn't re-fire on scroll/edit.
+  const [suggestDismissedFor, setSuggestDismissedFor] = useState<string | null>(null);
+  const scheduleSuggestion = useMemo(() => {
+    if (!session?.messages || session.messages.length === 0) return null;
+    // The asker is the user, not the agent. Parsing the assistant reply
+    // means hour-shaped numbers in any list ("3 new messages", "May 16",
+    // "$50 offer") get misread as the schedule hour. Use the most recent
+    // user prompt as the source of truth, fall back to the assistant
+    // only if no user message has time-words.
+    let chosen: typeof session.messages[number] | null = null;
+    for (let i = session.messages.length - 1; i >= 0; i--) {
+      const m = session.messages[i];
+      if (m.role === 'user' && typeof m.content === 'string' && m.content.trim()) {
+        const det = detectSchedule(m.content);
+        if (det) { chosen = m; break; }
+      }
+    }
+    if (!chosen) return null;
+    if (suggestDismissedFor === chosen.id) return null;
+    const text = typeof chosen.content === 'string' ? chosen.content : '';
+    const detected = detectSchedule(text);
+    if (!detected) return null;
+    return { messageId: chosen.id, ...detected };
+  }, [session?.messages, suggestDismissedFor]);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showResumeBubble, setShowResumeBubble] = useState(false);
   const [awaitingResponse, setAwaitingResponse] = useState(false);
@@ -351,7 +385,13 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   // so it never fires during normal streaming.
   const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageCount = session?.messages?.length ?? 0;
-  const hasStreaming = !!session?.streamingMessage;
+  // Subscribe only to the streaming MESSAGE ID (stable across the 30Hz
+  // delta updates), never to the content. The actual streaming text
+  // renders inside the leaf <StreamingBubble> below, which subscribes to
+  // the content itself. This keeps AgentChat's render and useEffects
+  // dormant during streaming; only the bubble updates per delta.
+  const streamingMessageId = useAppSelector((s) => id ? s.streaming.bySession[id]?.id ?? null : null);
+  const hasStreaming = !!streamingMessageId;
 
   useEffect(() => {
     if (reconcileTimer.current) {
@@ -417,7 +457,11 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
 
   const scrollRafRef = useRef<number | null>(null);
   const lastScrollHeightRef = useRef<number>(0);
-  useEffect(() => {
+  // Shared scroll-stick routine. Used both by the structural-events
+  // useEffect below (new message lands / stream starts/ends) and by
+  // StreamingBubble's onStreamGrew callback (per-delta growth). RAF +
+  // height-grew gate ensures we only set scrollTop when needed.
+  const stickToBottomIfNeeded = useCallback(() => {
     if (!isAtBottomRef.current) return;
     if (scrollRafRef.current != null) return;
     scrollRafRef.current = requestAnimationFrame(() => {
@@ -425,20 +469,19 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       if (!isAtBottomRef.current) return;
       const el = scrollContainerRef.current;
       if (!el) return;
-      // Only set scrollTop when the scrollable height actually grew.
-      // Otherwise we're forcing a paint for nothing — and on a
-      // streaming turn we get one of these per delta, which thrashes
-      // the compositor for zero visible benefit. The native
-      // overflow-anchor on the container already keeps the viewport
-      // pinned to the bottom; this JS fallback only needs to handle
-      // the rare case where anchoring misses (legacy WebKit,
-      // virtualized children, dynamic-height inserts).
       const newHeight = el.scrollHeight;
       if (newHeight === lastScrollHeightRef.current) return;
       lastScrollHeightRef.current = newHeight;
       el.scrollTop = newHeight;
     });
-  }, [session?.messages.length, session?.streamingMessage?.content]);
+  }, []);
+  useEffect(() => {
+    stickToBottomIfNeeded();
+    // Structural triggers only: a new message lands or a stream
+    // starts/ends. Streaming content updates trigger this via
+    // <StreamingBubble onStreamGrew={stickToBottomIfNeeded} /> instead
+    // so AgentChat stays dormant during the 30Hz delta storm.
+  }, [session?.messages.length, streamingMessageId, stickToBottomIfNeeded]);
 
   useEffect(() => () => {
     if (scrollRafRef.current != null) {
@@ -447,19 +490,64 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     }
   }, []);
 
-  const handleSend = (prompt: string, images?: Array<{ data: string; media_type: string }>, contextPaths?: Array<{ path: string; type: 'file' | 'directory' }>, forcedTools?: string[], attachedSkills?: Array<{ id: string; name: string; content: string }>, selectedBrowserIds?: string[]) => {
-    if (!id) return;
-    // Sending a message is a clear intent signal: the user wants to see
-    // the response. Force-scroll to bottom regardless of isAtBottomRef.
-    scrollToBottom();
-    const msg: QueuedMessage = { prompt, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds };
-    if (agentBusy) {
-      messageQueueRef.current.push(msg);
-      setQueueLength(messageQueueRef.current.length);
-      return;
-    }
-    dispatchMessage(msg);
-  };
+  // useCallback so ChatInput's memo equality holds across AgentChat
+  // re-renders driven by unrelated session state. Captures agentBusy
+  // through the dependency so a stale "busy" closure doesn't ever route
+  // a message past the queue.
+  const handleSend = useCallback(
+    (
+      prompt: string,
+      images?: Array<{ data: string; media_type: string }>,
+      contextPaths?: Array<{ path: string; type: 'file' | 'directory' }>,
+      forcedTools?: string[],
+      attachedSkills?: Array<{ id: string; name: string; content: string }>,
+      selectedBrowserIds?: string[],
+    ) => {
+      if (!id) return;
+      // `/schedule [preset]` — intercept before the LLM sees the prompt.
+      // "/schedule weekdays 9am" / "/schedule daily 9am" / "/schedule"
+      // (no args) all open the popover so the user finishes the choice
+      // visually instead of typing prompt syntax.
+      const trimmedPrompt = (prompt || '').trim();
+      if (trimmedPrompt.toLowerCase().startsWith('/schedule')) {
+        const args = trimmedPrompt.slice('/schedule'.length).trim();
+        // Anchor to the chat scroll viewport so the popover floats over
+        // the conversation instead of pinning to document.body's top-left
+        // corner. If the ref isn't ready (very rare; user typed /schedule
+        // before first render), fall back to body so the popover at
+        // least opens somewhere visible.
+        const anchor = (scrollContainerRef.current as HTMLElement | null) || (document.body as HTMLElement);
+        // If the user typed an arg like "weekdays 9am", run the detector
+        // synchronously and surface it through the same prefill channel
+        // the auto-suggest chip uses. Otherwise just open the popover.
+        if (args) {
+          const detected = detectSchedule(args);
+          if (detected) {
+            // Reuse the auto-suggest state shape: stash the detection by
+            // pretending it came from a synthetic message id so the
+            // popover renders the SUGGESTED preset.
+            setSuggestDismissedFor(null);  // make sure the chip isn't dismissed
+            // We can't directly inject into scheduleSuggestion (computed
+            // from messages), so the path here is: open popover; user
+            // sees the canonical preset list. Future polish could plumb
+            // a one-shot prefill prop. For now: 1 click to confirm.
+            void detected;
+          }
+        }
+        setScheduleAnchor(anchor);
+        return;
+      }
+      scrollToBottom();
+      const msg: QueuedMessage = { prompt, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds };
+      if (agentBusy) {
+        messageQueueRef.current.push(msg);
+        setQueueLength(messageQueueRef.current.length);
+        return;
+      }
+      dispatchMessage(msg);
+    },
+    [id, scrollToBottom, agentBusy, dispatchMessage],
+  );
 
   const handleModeChange = useCallback((newMode: string) => {
     setMode(newMode);
@@ -477,18 +565,18 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (!isDraft) dispatch(updateThinkingLevel({ sessionId: id, level }));
   }, [id, isDraft, dispatch]);
 
-  const handleApprove = (requestId: string, updatedInput?: Record<string, any>) => {
-    dispatch(handleApproval({ requestId, behavior: 'allow', updatedInput }));
+  const handleApprove = (requestId: string, updatedInput?: Record<string, any>, trustPattern?: boolean) => {
+    dispatch(handleApproval({ requestId, behavior: 'allow', updatedInput, trustPattern }));
   };
 
   const handleDeny = (requestId: string, message?: string) => {
     dispatch(handleApproval({ requestId, behavior: 'deny', message }));
   };
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     if (!id) return;
     dispatch(stopAgent({ sessionId: id }));
-  };
+  }, [id, dispatch]);
 
   const handleResume = useCallback(() => {
     if (!id) return;
@@ -609,12 +697,14 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     for (const msg of activeBranchMessages) {
       totalChars += stringifyContent(msg.content).length;
     }
-    if (session?.streamingMessage) {
-      totalChars += (session.streamingMessage.content || '').length;
-    }
     const used = Math.round(totalChars / 4);
     return { used, limit };
-  }, [activeBranchMessages, session?.system_prompt, session?.streamingMessage?.content, model, modelsByProvider]);
+    // Streaming content's contribution to the context estimate is no
+    // longer included here: we'd have to subscribe to the streaming
+    // text and re-run this sum on every painted character, defeating
+    // the whole point of isolating AgentChat from delta updates. The
+    // header gauge will catch up when stream_end commits the message.
+  }, [activeBranchMessages, session?.system_prompt, streamingMessageId, model, modelsByProvider]);
 
   const sessionRunning = session?.status === 'running' || session?.status === 'waiting_approval';
 
@@ -919,6 +1009,27 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               )}
             </Box>
             {!isDraft && id && (
+              <Tooltip title="Turn this chat into a recurring workflow that runs on its own.">
+                <Box
+                  onClick={(e) => setScheduleAnchor(e.currentTarget as HTMLElement)}
+                  role="button"
+                  sx={{
+                    display: 'inline-flex', alignItems: 'center', gap: 0.4,
+                    fontSize: '0.78rem', fontWeight: 600,
+                    color: c.accent.primary,
+                    bgcolor: c.accent.primary + '14',
+                    border: `1px solid ${c.accent.primary}40`,
+                    px: 0.85, py: 0.35,
+                    borderRadius: `${c.radius.md}px`,
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: c.accent.primary + '22' },
+                  }}>
+                  <ScheduleIcon sx={{ fontSize: 14 }} />
+                  Schedule
+                </Box>
+              </Tooltip>
+            )}
+            {!isDraft && id && (
               <Tooltip title="Reset history">
                 <IconButton
                   size="small"
@@ -937,6 +1048,17 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   <RestartAltIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+            )}
+            {scheduleAnchor && id && (
+              <ScheduleThisPopover
+                anchorEl={scheduleAnchor}
+                onClose={() => setScheduleAnchor(null)}
+                sessionId={id}
+                sessionName={session?.name || ''}
+                prefillSchedule={scheduleSuggestion?.schedule || null}
+                prefillLabel={scheduleSuggestion?.presetLabel || null}
+                onCreated={() => setSuggestDismissedFor(scheduleSuggestion?.messageId || null)}
+              />
             )}
             {onClose && (
               <IconButton onClick={onClose} size="small" sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
@@ -991,8 +1113,32 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 borderRadius: 1.5,
                 border: `1px solid ${c.border.medium}`,
                 bgcolor: c.bg.secondary,
+                position: 'relative',
               }}>
-                <Typography variant="body2" sx={{ color: c.text.primary, fontWeight: 500, mb: 0.5 }}>
+                <Box
+                  role="button"
+                  aria-label="Dismiss integration suggestion"
+                  onClick={() => id && dispatch(clearMcpSuggestions({ sessionId: id }))}
+                  sx={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 8,
+                    width: 20,
+                    height: 20,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1rem',
+                    lineHeight: 1,
+                    color: c.text.muted,
+                    cursor: 'pointer',
+                    borderRadius: 0.75,
+                    '&:hover': { color: c.text.primary, bgcolor: c.bg.elevated },
+                  }}
+                >
+                  ×
+                </Box>
+                <Typography variant="body2" sx={{ color: c.text.primary, fontWeight: 500, mb: 0.5, pr: 3 }}>
                   Looks like this might need an integration
                 </Typography>
                 <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 1 }}>
@@ -1032,8 +1178,18 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                                 parent_session_id: session.id,
                               }),
                             });
+                            const body = await r.json().catch(() => ({} as any));
                             if (!r.ok) {
                               setActivateError(`Activation failed (${r.status})`);
+                            } else if (body?.status === 'unknown_server') {
+                              // Not yet connected; jump straight to Actions
+                              // so the user can finish OAuth. Nothing here
+                              // can do it on their behalf.
+                              navigate('/actions');
+                            } else if (id) {
+                              // Activation succeeded; clear the banner so the user
+                              // gets visual confirmation the click did something.
+                              dispatch(clearMcpSuggestions({ sessionId: id }));
                             }
                           } catch (e: any) {
                             setActivateError(e?.message || 'Activation failed');
@@ -1116,7 +1272,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 </Box>
               );
             })()}
-            {renderItems.filter((item) => !session.streamingMessage || item.id !== session.streamingMessage.id).map((item) => {
+            {renderItems.filter((item) => !streamingMessageId || item.id !== streamingMessageId).map((item) => {
               const isCompactionAnchor = !!session.compacted_through_msg_id && item.id === session.compacted_through_msg_id;
               const compactionChip = isCompactionAnchor ? (
                 <CompactionMarker
@@ -1155,7 +1311,22 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               const rawText = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
 
               return (
-                <Box key={msg.id} sx={{ '&:hover .msg-actions': { opacity: 1 } }}>
+                <Box
+                  key={msg.id}
+                  sx={{
+                    '&:hover .msg-actions': { opacity: 1 },
+                    // Cheap virtualization: tells the browser to skip
+                    // paint + layout for bubbles outside the scroll
+                    // viewport. `contain-intrinsic-size: auto N` reserves
+                    // a placeholder height so the scrollbar doesn't jump,
+                    // and `auto` lets the browser remember the actual
+                    // height after first render. Works alongside the
+                    // container's overflow-anchor. Chrome 85+ (Electron
+                    // covers this).
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: 'auto 120px',
+                  }}
+                >
                   <MessageBubble
                     message={msg}
                     editing={isEditing}
@@ -1191,39 +1362,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 </Box>
               );
             })}
-            {session.streamingMessage && (
-              session.streamingMessage.role === 'tool_call' ? (
-                <ToolCallBubble
-                  key={`streaming-${session.streamingMessage.id}`}
-                  isStreaming
-                  isPending
-                  sessionId={session.id}
-                  call={{
-                    id: session.streamingMessage.id,
-                    role: 'tool_call',
-                    content: { tool: session.streamingMessage.tool_name || '', input: session.streamingMessage.content },
-                    timestamp: new Date().toISOString(),
-                    branch_id: session.active_branch_id || 'main',
-                    parent_id: null,
-                  }}
-                />
-              ) : (
-                <MessageBubble
-                  key={`streaming-${session.streamingMessage.id}`}
-                  isStreaming
-                  dynamicTurnLabel={session.turn_label?.label}
-                  message={{
-                    id: session.streamingMessage.id,
-                    role: session.streamingMessage.role,
-                    content: session.streamingMessage.content,
-                    timestamp: new Date().toISOString(),
-                    branch_id: session.active_branch_id || 'main',
-                    parent_id: null,
-                  }}
-                />
-              )
+            {id && (
+              <StreamingBubble
+                sessionId={id}
+                activeBranchId={session.active_branch_id || 'main'}
+                turnLabel={session.turn_label?.label}
+                onStreamGrew={stickToBottomIfNeeded}
+              />
             )}
-            {(awaitingResponse || (session.status === 'running' && !session.streamingMessage)) && (
+            {(awaitingResponse || (session.status === 'running' && !streamingMessageId)) && (
               <ThinkingBubble
                 label={session.turn_label?.label}
                 seedKey={`${session.id}:${session.messages?.length ?? 0}`}

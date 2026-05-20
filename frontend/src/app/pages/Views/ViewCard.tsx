@@ -29,10 +29,12 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
         border: `1px solid ${c.border.subtle}`,
         bgcolor: c.bg.surface,
         overflow: 'hidden',
-        transition: 'all 0.2s ease',
+        // Own compositor layer so hover paint stays scoped (same fix as dashboard AgentCard).
+        willChange: 'transform',
+        // Animate only transform + border-color; `transition: all` triggers per-frame CPU paint for box-shadow blur.
+        transition: 'transform 0.15s ease, border-color 0.15s ease',
         '&:hover': {
           borderColor: c.border.strong,
-          boxShadow: c.shadow.md,
           transform: 'translateY(-2px)',
         },
         '&:hover .card-actions': { opacity: 1 },
@@ -56,6 +58,8 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
             component="img"
             src={output.thumbnail}
             alt={`${output.name} preview`}
+            loading="lazy"
+            decoding="async"
             sx={{
               width: '100%',
               height: '100%',
@@ -149,4 +153,5 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
   );
 };
 
-export default ViewCard;
+// Custom equality: parent re-renders pass new inline callbacks every time, so key on output identity only.
+export default React.memo(ViewCard, (prev, next) => prev.output === next.output);

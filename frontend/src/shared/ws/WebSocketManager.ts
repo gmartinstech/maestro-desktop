@@ -5,9 +5,6 @@ import {
   updateSessionName,
   updateGroupMeta,
   addMessage,
-  streamStart,
-  streamDelta,
-  streamEnd,
   addApprovalRequest,
   removeApprovalRequest,
   updateSessionStatus,
@@ -25,7 +22,11 @@ import {
   setTurnLabel,
   clearTurnLabel,
 } from '../state/agentsSlice';
+import { streamStart, streamDelta, streamEnd } from '../state/streamingSlice';
 import { addBrowserCardFromBackend, removeBrowserCard, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP } from '../state/dashboardLayoutSlice';
+import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard } from '../state/workflowsSlice';
+import { upsertOutput } from '../state/outputsSlice';
+import { addWorkflowCard } from '../state/dashboardLayoutSlice';
 import { getAuthToken } from '../config';
 import { notifyAgentCompletion } from '../notifications';
 
@@ -120,53 +121,6 @@ class WebSocketManager {
   private outboundQueue: QueuedFrame[] = [];
 
   private listeners: Map<string, Set<(data: any) => void>> = new Map();
-  // Per-message streaming state. Rate-based pacing tracks measured
-  // throughput so paint output is smooth even when the server emits in
-  // bursts (which Anthropic / 9Router / OS TCP all do). Each frame we
-  // paint a small uniform chunk sized so that we'd drain the backlog
-  // over the next ~burstWindowMs — when the next burst arrives, we
-  // adjust without ever going dry between bursts.
-  //
-  // Fields:
-  //   firstDeltaAt: timestamp of the very first delta. Used to compute
-  //     average chars/sec over the lifetime of the stream.
-  //   lastPaintAt: when we last actually dispatched. Frame loop reads
-  //     this to enforce minimum step-time even when RAF fires faster
-  //     than we want.
-  //   measuredCps: rolling chars-per-second estimate. Decays on idle so
-  //     a fast burst doesn't permanently inflate the rate.
-  //   underrunMs: how long we've been "caught up" (no backlog) since
-  //     the last paint. Used to detect we're rate-limited by the
-  //     server, not by our cadence — when this gets large, we slow
-  //     down to leave headroom for the next burst.
-  private interpolatorState: Map<string, {
-    sessionId: string;
-    messageId: string;
-    targetText: string;
-    displayedLength: number;
-    firstDeltaAt: number;
-    lastDeltaAt: number;
-    lastPaintAt: number;
-    measuredCps: number;
-  }> = new Map();
-  private interpolatorRafId: number | null = null;
-  // Initial paint delay (ms). We hold the first delta briefly so
-  // an inter-burst gap can land before painting starts. Without it
-  // the very first frame paints aggressively, then idles waiting
-  // for the next server burst — visible as a tiny boom-pause at
-  // the start of every stream. Imperceptible to humans (saccades
-  // run at ~250ms, well above this).
-  private static INITIAL_HOLD_MS = 150;
-  // Paint cadence in ms. ~30Hz — well above perceptual flicker,
-  // light enough on React reconciliation that it stays smooth on
-  // long messages.
-  private static PAINT_INTERVAL_MS = 33;
-  // Target painting throughput. 10 chars per 33ms = ~300 cps —
-  // the "fast comfortable typing" visual rate (20% slower than the
-  // previous 400 cps default). Still well above natural reading
-  // speed (~200 cps comfort threshold), still hides bursty upstream
-  // cadence, just feels less frantic. Tuned for legibility at speed.
-  private static TARGET_CHARS_PER_PAINT = 10;
   // Frame-aligned message coalescer. Buffers incoming WS messages from
   // all WebSocketManager instances and flushes them in ONE batched
   // React render per animation frame. Without this, N concurrent agents
@@ -204,18 +158,6 @@ class WebSocketManager {
     });
   };
 
-  // When a backlog accumulates, allow up to this many chars/paint to
-  // drain it. ~1.6× the target keeps catch-up imperceptible — the
-  // eye can't tell 10 from 16 in a fluid stream. Caps the worst-case
-  // visual jump on a giant burst.
-  private static MAX_CHARS_PER_PAINT = 16;
-  // Headroom buffer in ms. We try to keep at least this much "future
-  // paintable" content on hand at all times, so the next upstream
-  // burst can be coalesced into the visible stream without a pause.
-  // Adds a fixed latency budget — humans don't notice anything below
-  // ~250ms in continuous text, so 200ms is well-tuned.
-  private static HEADROOM_MS = 200;
-
   constructor(url: string, options?: WSManagerOptions) {
     this.url = url;
     this.skipStreamEvents = options?.skipStreamEvents ?? false;
@@ -232,132 +174,12 @@ class WebSocketManager {
     }
   }
 
-  private bufferDelta(sessionId: string, messageId: string, delta: string) {
-    const now = performance.now();
-    const existing = this.interpolatorState.get(messageId);
-    if (existing) {
-      existing.targetText += delta;
-      existing.lastDeltaAt = now;
-    } else {
-      this.interpolatorState.set(messageId, {
-        sessionId,
-        messageId,
-        targetText: delta,
-        displayedLength: 0,
-        firstDeltaAt: now,
-        lastDeltaAt: now,
-        // Seed lastPaintAt INITIAL_HOLD_MS in the future so the first
-        // tick won't paint until that delay has passed — gives the
-        // upstream a chance to land more bytes before we start, so
-        // we don't underrun on the very first frame.
-        lastPaintAt: now + WebSocketManager.INITIAL_HOLD_MS,
-        measuredCps: 0,
-      });
-    }
-    this.scheduleInterpolator();
-  }
-
-  private scheduleInterpolator() {
-    if (this.interpolatorRafId != null) return;
-    // Schedule on every frame — the time-throttle inside tickInterpolator
-    // decides whether this frame actually paints. RAF gives us frame-
-    // synced timing without the overhead of setInterval drift, and the
-    // throttle ensures we only dispatch once per PAINT_INTERVAL_MS even
-    // if RAF fires more often (which it does on 120Hz displays).
-    this.interpolatorRafId = requestAnimationFrame(() => this.tickInterpolator());
-  }
-
-  // Fixed-rate "extremely fast typing" pacing. Paints at a constant
-  // ~400 cps target regardless of upstream burstiness. The buffer
-  // grows when bursts land above target and drains during gaps —
-  // because most models stream below 400 cps on average, we keep up
-  // easily and the user sees smooth, uniform high-speed typing. No
-  // more boom-pause-boom: the buffer absorbs bursts and the constant
-  // paint rate hides them.
-  //
-  // Three behaviors:
-  //   1. Healthy backlog (>= TARGET): paint exactly TARGET chars.
-  //   2. Big backlog (more than HEADROOM_MS-worth queued): paint up
-  //      to MAX to slowly catch up. Capped low enough that the
-  //      acceleration is invisible.
-  //   3. Underflow (less than TARGET remaining, stream still active):
-  //      paint everything we have at the cadence and pause. Better
-  //      than artificially trickling — the natural pause is short
-  //      because the next burst from the server fills the buffer
-  //      again.
-  //
-  // Latency cost: HEADROOM_MS (~200ms) behind real time. Imperceptible.
-  private tickInterpolator() {
-    this.interpolatorRafId = null;
-    const now = performance.now();
-    let workRemaining = false;
-    for (const state of this.interpolatorState.values()) {
-      const remaining = state.targetText.length - state.displayedLength;
-      if (remaining <= 0) continue;
-      // Time-throttle: paint once per PAINT_INTERVAL_MS regardless of
-      // display refresh rate. The lastPaintAt was seeded with
-      // `now + INITIAL_HOLD_MS` in bufferDelta on first delta, so the
-      // first frame is naturally delayed.
-      const sincePaint = now - state.lastPaintAt;
-      if (sincePaint < WebSocketManager.PAINT_INTERVAL_MS) {
-        workRemaining = true;
-        continue;
-      }
-      // Headroom in ms = remaining / TARGET_CPS. If we have more than
-      // HEADROOM_MS of paintable content queued, drain slightly faster
-      // to bound visible latency. Otherwise paint at the steady target
-      // rate.
-      const targetCps = WebSocketManager.TARGET_CHARS_PER_PAINT * (1000 / WebSocketManager.PAINT_INTERVAL_MS);
-      const headroomMs = (remaining / targetCps) * 1000;
-      let step: number;
-      if (headroomMs > WebSocketManager.HEADROOM_MS * 2) {
-        // Big buffer — accelerate slightly to catch up. Bounded so
-        // the visible flow doesn't become unstably variable.
-        step = WebSocketManager.MAX_CHARS_PER_PAINT;
-      } else {
-        // Steady-state: paint exactly TARGET. This is the "fast
-        // typing" cadence that hides upstream bursts.
-        step = WebSocketManager.TARGET_CHARS_PER_PAINT;
-      }
-      // Don't paint past the end of the buffered text. When this
-      // shrinks the step, we're underflowing — the natural pause that
-      // follows is exactly what we want (better than trickling fake-
-      // slow chars). The next upstream burst will land and we'll
-      // resume painting at TARGET.
-      step = Math.min(step, remaining);
-      const nextLength = state.displayedLength + step;
-      const deltaSlice = state.targetText.slice(state.displayedLength, nextLength);
-      state.displayedLength = nextLength;
-      state.lastPaintAt = now;
-      store.dispatch(streamDelta({
-        sessionId: state.sessionId,
-        messageId: state.messageId,
-        delta: deltaSlice,
-      }));
-      if (state.displayedLength < state.targetText.length) workRemaining = true;
-    }
-    if (workRemaining) this.scheduleInterpolator();
-  }
-
-  // Flush remaining pending text synchronously. Pass a messageId to flush
-  // only that stream (used on stream_end so the tail isn't paced).
-  private flushInterpolator(messageId?: string) {
-    const drain = (state: { sessionId: string; messageId: string; targetText: string; displayedLength: number }) => {
-      if (state.displayedLength >= state.targetText.length) return;
-      const tail = state.targetText.slice(state.displayedLength);
-      state.displayedLength = state.targetText.length;
-      store.dispatch(streamDelta({ sessionId: state.sessionId, messageId: state.messageId, delta: tail }));
-    };
-    if (messageId) {
-      const state = this.interpolatorState.get(messageId);
-      if (state) {
-        drain(state);
-        this.interpolatorState.delete(messageId);
-      }
-    } else {
-      for (const state of this.interpolatorState.values()) drain(state);
-      this.interpolatorState.clear();
-    }
+  // Tokens render as they arrive (claude.ai feel). Per-frame WS batching
+  // in _enqueueMessage still coalesces N concurrent agents' messages into
+  // ONE React render per animation frame, so removing the pacing layer
+  // doesn't reintroduce the parallel-agent re-render storm.
+  private dispatchDelta(sessionId: string, messageId: string, delta: string) {
+    store.dispatch(streamDelta({ sessionId, messageId, delta }));
   }
 
   connect() {
@@ -403,9 +225,9 @@ class WebSocketManager {
         // render — dozens per frame, fanning out to every useSelector
         // subscriber, starving the main thread. Coalescing flips that
         // to ONE batched render per frame regardless of how many
-        // messages arrived. Stream-chunk dispatches are already paced
-        // by the interpolator, so this is purely additive throttling
-        // for non-stream events (status, tool_call, completion, etc).
+        // messages arrived. Stream deltas dispatch directly into Redux
+        // (no client-side pacing), so the typed-text rate matches what
+        // the server sends, the same way claude.ai feels.
         WebSocketManager._enqueueMessage(this, msg);
       } catch {
         // ignore malformed messages
@@ -447,11 +269,6 @@ class WebSocketManager {
       this.reconnectTimer = null;
     }
     this.stopHeartbeat();
-    if (this.interpolatorRafId != null) {
-      cancelAnimationFrame(this.interpolatorRafId);
-      this.interpolatorRafId = null;
-    }
-    this.flushInterpolator();
     this.ws?.close();
     this.ws = null;
   }
@@ -670,8 +487,17 @@ class WebSocketManager {
 
       case 'agent:message':
         if (session_id && data.message) {
-          if (this.interpolatorState.size > 0) this.flushInterpolator();
           store.dispatch(addMessage({ sessionId: session_id, message: data.message }));
+        }
+        break;
+
+      case 'agent:output_upserted':
+        // Emitted by the backend when an Output row is created (canvas-launched
+        // App Builder seed) or updated (post-session meta.json sync). The
+        // upsert reducer merges over an existing row so a UI that already
+        // loaded the row doesn't lose locally-applied fields.
+        if (data.output && data.output.id) {
+          store.dispatch(upsertOutput(data.output));
         }
         break;
 
@@ -684,8 +510,8 @@ class WebSocketManager {
         // because of `key={session.id}`), last_seq is 0, so the server
         // replays EVERY buffered stream_* event for the session.
         // Without this guard, opening any chat with prior streaming
-        // turns animates the entire history through the typewriter
-        // interpolator on every reopen.
+        // turns would replay every buffered delta as a live stream
+        // event, re-triggering the streaming UI on every reopen.
         //
         // The discriminator is `resumeAcked`: it flips to true when
         // server:hello arrives, which the server sends AFTER the replay
@@ -706,11 +532,10 @@ class WebSocketManager {
           }
         } else if (event === 'agent:stream_delta') {
           if (session_id && data.message_id) {
-            this.bufferDelta(session_id, data.message_id, data.delta);
+            this.dispatchDelta(session_id, data.message_id, data.delta);
           }
         } else if (event === 'agent:stream_end') {
           if (session_id && data.message_id) {
-            this.flushInterpolator(data.message_id);
             store.dispatch(streamEnd({
               sessionId: session_id,
               messageId: data.message_id,
@@ -729,6 +554,9 @@ class WebSocketManager {
               tool_name: data.tool_name,
               tool_input: data.tool_input,
               created_at: new Date().toISOString(),
+              sensitive_pattern: data.sensitive_pattern ?? null,
+              sensitive_label: data.sensitive_label ?? null,
+              sensitive_why: data.sensitive_why ?? null,
             },
           }));
         }
@@ -875,6 +703,77 @@ class WebSocketManager {
         }
         break;
 
+      case 'workflow:run':
+        if (data.run) {
+          store.dispatch(upsertRun(data.run));
+        }
+        break;
+
+      case 'workflow:notify':
+        try {
+          notifyAgentCompletion({
+            sessionId: data.session_id || data.workflow_id,
+            sessionName: data.workflow_title || 'Workflow',
+            status: data.status === 'success' ? 'completed' : 'error',
+          });
+        } catch { /* notifications are best-effort */ }
+        try {
+          // Fire a native OS notification too. Survives a closed window
+          // (the in-app toast doesn't), which is the whole point of
+          // promoting these to the OS layer for scheduled runs.
+          const w: any = (window as any).openswarm;
+          if (w?.notify) {
+            // Varied notification copy. Picks deterministically by
+            // workflow_id + minute so different workflows get different
+            // tones, while a single workflow's notifications stay
+            // consistent within a few minutes.
+            const seed = ((data.workflow_id || '').length + Math.floor(Date.now() / 60000)) | 0;
+            const SUCCESS_TITLES = [
+              `${data.workflow_title || 'Workflow'} — done`,
+              `${data.workflow_title || 'Workflow'} just wrapped up`,
+              `Heads up: ${data.workflow_title || 'Workflow'} finished`,
+              `${data.workflow_title || 'Workflow'} is ready`,
+            ];
+            const FAILURE_TITLES = [
+              `${data.workflow_title || 'Workflow'} hit a snag`,
+              `${data.workflow_title || 'Workflow'} couldn't finish`,
+              `Something went sideways on ${data.workflow_title || 'Workflow'}`,
+            ];
+            const LATE_TITLES = [
+              `${data.workflow_title || 'Workflow'} caught up late`,
+              `${data.workflow_title || 'Workflow'} ran late but made it`,
+            ];
+            const pool = data.status === 'success' ? SUCCESS_TITLES
+              : data.status === 'failure' ? FAILURE_TITLES
+              : data.status === 'ran_late' ? LATE_TITLES
+              : [`${data.workflow_title || 'Workflow'} • ${data.status}`];
+            const title = pool[Math.abs(seed) % pool.length];
+            // Body copy adapts to platform: macOS gets inline action
+            // buttons (Looks good / Re-run / Adjust), so the body just
+            // tells the story. Windows + Linux don't show action
+            // buttons natively, so the body invites the body-click that
+            // opens the workflow (routed as 'open' to ack-equivalent).
+            const isMac = (typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform));
+            const body = data.tier_kind && data.fallback
+              ? `Would have ${data.tier_kind === 'call' ? 'called' : 'texted'} you. (Cloud SMS not wired yet.)`
+              : data.status === 'success'
+                ? (isMac ? 'Tap to see what it did.' : 'Click to see what it did.')
+                : data.status === 'failure'
+                  ? (isMac ? 'Tap to see what went wrong.' : 'Click to see what went wrong.')
+                  : (isMac ? 'Tap to open the run.' : 'Click to open the run.');
+            const deepLink = data.workflow_id ? `openswarm://workflow/${data.workflow_id}/run/${data.run_id || ''}` : undefined;
+            // Inline action buttons. Looks good = ack (cancel escalation).
+            // Re-run = trigger another run immediately. Adjust = open editor.
+            const actions = [
+              { text: 'Looks good', outcome: 'ack' },
+              { text: 'Re-run', outcome: 'rerun' },
+              { text: 'Adjust', outcome: 'edit' },
+            ];
+            w.notify({ title, body, deepLink, runId: data.run_id, workflowId: data.workflow_id, actions });
+          }
+        } catch { /* native notif optional */ }
+        break;
+
       case 'dashboard:browser_card_added':
         if (data.browser_card) {
           store.dispatch(addBrowserCardFromBackend(data.browser_card));
@@ -971,6 +870,34 @@ class WebSocketManager {
 }
 
 import { WS_BASE } from '@/shared/config';
+
+// Subscribe once to native-notification action callbacks. The user
+// clicks "Looks good" → we cancel any pending escalation. "Re-run" →
+// fire a new manual run. "Adjust" → open the editor. "Open" (plain
+// notification click) → just open the workflow card. Subscription
+// happens at module import time so we never miss an early action.
+(() => {
+  try {
+    const w: any = (typeof window !== 'undefined') ? (window as any).openswarm : null;
+    if (!w?.onNotificationAction) return;
+    w.onNotificationAction(({ outcome, runId, workflowId }: { outcome: string; runId?: string; workflowId?: string }) => {
+      if (!workflowId) return;
+      if (outcome === 'ack' && runId) {
+        store.dispatch(ackRun(runId));
+        return;
+      }
+      if (outcome === 'rerun') {
+        store.dispatch(runWorkflowNow(workflowId));
+        return;
+      }
+      if (outcome === 'edit' || outcome === 'open') {
+        store.dispatch(addWorkflowCard({ workflowId }));
+        store.dispatch(openWorkflowCard({ workflowId, view: outcome === 'edit' ? 'edit' : 'saved', editFacet: outcome === 'edit' ? 'Schedule' : undefined }));
+        return;
+      }
+    });
+  } catch { /* native notifications optional */ }
+})();
 
 export const dashboardWs = new WebSocketManager(`${WS_BASE}/ws/dashboard`, { skipStreamEvents: true });
 

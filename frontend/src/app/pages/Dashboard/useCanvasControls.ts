@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo, RefObject } from 'react';
+import { setCanvasInteractionActive } from '@/shared/canvasInteractionState';
 
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 3.0;
@@ -6,8 +7,7 @@ const ZOOM_IN_FACTOR = 1.1;
 const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR;
 const FIT_PADDING = 200;
 
-// Maps the 1–100 user setting to an internal multiplier.
-// 50 (default) → 0.004, 1 → 0.0004, 100 → 0.008
+// Maps the 1 to 100 user setting to an internal multiplier (50 default = 0.004).
 function sensitivityToMultiplier(setting: number): number {
   return 0.00008 * setting;
 }
@@ -49,12 +49,9 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
   contentBoundsRef.current = contentBounds;
   const animFrameRef = useRef<number | null>(null);
   const inertiaFrameRef = useRef<number | null>(null);
-  // Pending fit-target settle timer (see fitToCards). Cancelled when
-  // any new pan/zoom/animation kicks off so a stale settle never
-  // overrides fresh user input or a back-to-back fitToCards call.
+  // Cancelled on any pan/zoom/animation so a stale settle never overrides fresh input or back-to-back fitToCards.
   const settleTimerRef = useRef<number | null>(null);
 
-  // ---- Velocity tracking for momentum panning ----
   const velocityHistoryRef = useRef<Array<{ x: number; y: number; t: number }>>([]);
   const FRICTION = 0.93;
   const MIN_VELOCITY = 0.5;
@@ -135,15 +132,12 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     }
   }, []);
 
-  // ---- Reusable animation helper ----
   const cancelAnimation = useCallback(() => {
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
     }
-    // Also kill any pending fit-target settle so a stale snap doesn't
-    // fire after the user has started panning or after a fresh
-    // fitToCards call has set a different target.
+    // Kill pending settle so a stale snap doesn't fire after the user pans or fitToCards is recalled.
     if (settleTimerRef.current !== null) {
       window.clearTimeout(settleTimerRef.current);
       settleTimerRef.current = null;
@@ -181,6 +175,60 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     const el = viewportRef.current;
     if (!el || !enabled) return;  // Skip wheel listener when canvas is hidden
 
+    // RAF-coalesce wheel state updates; trackpads at 120Hz would otherwise re-render Dashboard per event.
+    let pendingPanDx = 0;
+    let pendingPanDy = 0;
+    let pendingZoomDy = 0;
+    let pendingZoomCenter: { cx: number; cy: number } | null = null;
+    let wheelRafId: number | null = null;
+    // No "gestureend" on trackpads; 140ms idle declares the gesture over (short enough to feel snappy, long enough to span inter-burst gaps).
+    let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushWheel = () => {
+      wheelRafId = null;
+      const dx = pendingPanDx; const dy = pendingPanDy;
+      const zDy = pendingZoomDy; const zCenter = pendingZoomCenter;
+      pendingPanDx = 0; pendingPanDy = 0;
+      pendingZoomDy = 0; pendingZoomCenter = null;
+
+      if (zCenter && zDy !== 0) {
+        setState((prev) => {
+          const factor = Math.pow(2, -zDy * sensitivityToMultiplier(sensitivityRef.current));
+          const newZoom = clamp(prev.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+          const ratio = newZoom / prev.zoom;
+          return {
+            panX: zCenter.cx - (zCenter.cx - prev.panX) * ratio,
+            panY: zCenter.cy - (zCenter.cy - prev.panY) * ratio,
+            zoom: newZoom,
+          };
+        });
+      } else if (dx !== 0 || dy !== 0) {
+        setState((prev) => ({
+          ...prev,
+          panX: prev.panX - dx,
+          panY: prev.panY - dy,
+        }));
+      }
+    };
+
+    const scheduleWheelFlush = () => {
+      // Mark the canvas as actively-interacting and (re)arm the idle
+      // timer. Any ResizeObserver / streaming reconciler that checks the
+      // flag will bail until the user's gesture goes quiet for ~140ms.
+      setCanvasInteractionActive(true);
+      if (wheelIdleTimer != null) clearTimeout(wheelIdleTimer);
+      wheelIdleTimer = setTimeout(() => {
+        wheelIdleTimer = null;
+        setCanvasInteractionActive(false);
+      }, 140);
+      if (wheelRafId != null) return;
+      wheelRafId = requestAnimationFrame(flushWheel);
+    };
+
+    // Cache "is this element a scrollable child" decision per node. The
+    // Cache getComputedStyle ancestor walks; uncached was the dominant cost of trackpad two-finger nav. ResizeObserver below invalidates on scroll-capacity change.
+    const scrollableCache: WeakMap<HTMLElement, 'scrollable' | 'not'> = new WeakMap();
+
     const onWheel = (e: WheelEvent) => {
       // Pinch-to-zoom on trackpads sets ctrlKey; plain scroll does not
       const isPinchZoom = e.ctrlKey || e.metaKey;
@@ -191,19 +239,28 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       const dx = e.deltaMode === 1 ? e.deltaX * 40 : e.deltaX;
       let target = e.target as HTMLElement | null;
       while (target && target !== el) {
-        const style = getComputedStyle(target);
-        const overflowY = style.overflowY;
-        const overflowX = style.overflowX;
+        let cls = scrollableCache.get(target);
+        if (cls === undefined) {
+          const couldScroll =
+            target.scrollHeight > target.clientHeight ||
+            target.scrollWidth > target.clientWidth;
+          if (couldScroll) {
+            const style = getComputedStyle(target);
+            const oy = style.overflowY;
+            const ox = style.overflowX;
+            const isOverflowScrollable =
+              oy === 'auto' || oy === 'scroll' || ox === 'auto' || ox === 'scroll';
+            cls = isOverflowScrollable ? 'scrollable' : 'not';
+          } else {
+            cls = 'not';
+          }
+          scrollableCache.set(target, cls);
+        }
 
-        const canScrollY =
-          target.scrollHeight > target.clientHeight &&
-          (overflowY === 'auto' || overflowY === 'scroll');
-        const canScrollX =
-          target.scrollWidth > target.clientWidth &&
-          (overflowX === 'auto' || overflowX === 'scroll');
-
-        if ((canScrollY || canScrollX) && !isPinchZoom) {
-          // Check if at scroll boundary in the scroll direction
+        if (cls === 'scrollable' && !isPinchZoom) {
+          // Re-read scrollHeight/clientHeight; cached decision is structural, scroll position is dynamic.
+          const canScrollY = target.scrollHeight > target.clientHeight;
+          const canScrollX = target.scrollWidth > target.clientWidth;
           const atYBoundary = !canScrollY ||
             (dy > 0 && target.scrollTop + target.clientHeight >= target.scrollHeight - 1) ||
             (dy < 0 && target.scrollTop <= 1);
@@ -212,7 +269,6 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
             (dx < 0 && target.scrollLeft <= 1);
 
           if (atYBoundary && atXBoundary) {
-            // At boundary — fall through to canvas pan
             target = target.parentElement;
             continue;
           }
@@ -228,28 +284,19 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       }
 
       if (isPinchZoom) {
-        // Pinch gesture → zoom centered on cursor
+        // Pinch gesture → accumulate zoom deltas + last cursor position.
+        // factor = 2^(-Σdy·s) which equals the product of per-event
+        // factors, so accumulating dy is mathematically identical to
+        // applying each event one at a time.
         const rect = el.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
-
-        setState((prev) => {
-          const factor = Math.pow(2, -dy * sensitivityToMultiplier(sensitivityRef.current));
-          const newZoom = clamp(prev.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-          const ratio = newZoom / prev.zoom;
-          return {
-            panX: cx - (cx - prev.panX) * ratio,
-            panY: cy - (cy - prev.panY) * ratio,
-            zoom: newZoom,
-          };
-        });
+        pendingZoomDy += dy;
+        pendingZoomCenter = { cx: e.clientX - rect.left, cy: e.clientY - rect.top };
+        scheduleWheelFlush();
       } else {
-        // Two-finger scroll → pan
-        setState((prev) => ({
-          ...prev,
-          panX: prev.panX - dx,
-          panY: prev.panY - dy,
-        }));
+        // Two-finger scroll → accumulate pan deltas.
+        pendingPanDx += dx;
+        pendingPanDy += dy;
+        scheduleWheelFlush();
       }
     };
 
@@ -264,28 +311,26 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       const detail = (e as CustomEvent).detail || {};
       const dy = detail.deltaMode === 1 ? detail.deltaY * 40 : detail.deltaY;
       const rect = el.getBoundingClientRect();
-      const cx = (detail.clientX ?? 0) - rect.left;
-      const cy = (detail.clientY ?? 0) - rect.top;
       if (inertiaFrameRef.current) {
         cancelAnimationFrame(inertiaFrameRef.current);
         inertiaFrameRef.current = null;
       }
-      setState((prev) => {
-        const factor = Math.pow(2, -dy * sensitivityToMultiplier(sensitivityRef.current));
-        const newZoom = clamp(prev.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-        const ratio = newZoom / prev.zoom;
-        return {
-          panX: cx - (cx - prev.panX) * ratio,
-          panY: cy - (cy - prev.panY) * ratio,
-          zoom: newZoom,
-        };
-      });
+      pendingZoomDy += dy;
+      pendingZoomCenter = {
+        cx: (detail.clientX ?? 0) - rect.left,
+        cy: (detail.clientY ?? 0) - rect.top,
+      };
+      scheduleWheelFlush();
     };
     window.addEventListener('openswarm:canvas-wheel-zoom', onForwardedZoom);
 
     return () => {
       el.removeEventListener('wheel', onWheel);
       window.removeEventListener('openswarm:canvas-wheel-zoom', onForwardedZoom);
+      if (wheelRafId != null) cancelAnimationFrame(wheelRafId);
+      if (wheelIdleTimer != null) clearTimeout(wheelIdleTimer);
+      // Don't leave the flag stuck on if the canvas unmounts mid-gesture.
+      setCanvasInteractionActive(false);
     };
   }, [enabled]);
 
@@ -294,6 +339,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     cancelAnimation();
     cancelInertia();
     setIsPanning(true);
+    setCanvasInteractionActive(true);
     velocityHistoryRef.current = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
     panStartRef.current = {
       x: e.clientX,
@@ -303,26 +349,49 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     };
   }, [cancelAnimation, cancelInertia]);
 
+  // RAF-coalesce drag pan; setState per event caused "hop hop hop" feel. Velocity history still captures per-event for inertia accuracy.
+  const dragRafRef = useRef<number | null>(null);
+  const latestDragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const flushDrag = useCallback(() => {
+    dragRafRef.current = null;
+    const start = panStartRef.current;
+    const latest = latestDragRef.current;
+    if (!start || !latest) return;
+    setState((prev) => ({
+      ...prev,
+      panX: start.panX + latest.dx,
+      panY: start.panY + latest.dy,
+    }));
+  }, []);
+
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const start = panStartRef.current;
     if (!start) return;
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
 
-    // Track velocity (keep last 5 positions)
+    // Velocity history is per-event so inertia stays accurate on
+    // mouseup. Cheap; just pushes to a length-5 ring buffer.
     const now = performance.now();
     const history = velocityHistoryRef.current;
     history.push({ x: e.clientX, y: e.clientY, t: now });
     if (history.length > 5) history.shift();
 
-    setState((prev) => ({
-      ...prev,
-      panX: start.panX + dx,
-      panY: start.panY + dy,
-    }));
-  }, []);
+    latestDragRef.current = { dx, dy };
+    if (dragRafRef.current == null) {
+      dragRafRef.current = requestAnimationFrame(flushDrag);
+    }
+  }, [flushDrag]);
 
   const handleMouseUp = useCallback(() => {
+    // Apply any pending drag delta synchronously so the final position
+    // matches where the cursor was released, then drop the scheduled RAF.
+    if (dragRafRef.current != null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+      flushDrag();
+    }
+    latestDragRef.current = null;
     const wasPanning = !!panStartRef.current;
     let didInertia = false;
     if (wasPanning) {
@@ -345,6 +414,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     }
     panStartRef.current = null;
     setIsPanning(false);
+    setCanvasInteractionActive(false);
     // Only spring back if we were actually panning (not on simple clicks)
     if (wasPanning && !didInertia) {
       springBackIfNeeded();
@@ -357,6 +427,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       if (panStartRef.current) {
         panStartRef.current = null;
         setIsPanning(false);
+        setCanvasInteractionActive(false);
       }
     };
     window.addEventListener('mouseup', onUp);
@@ -486,10 +557,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     animateTo({ panX: newPanX, panY: newPanY, zoom: newZoom });
   }, [animateTo]);
 
-  // Pure target computation — extracted so we can re-run it after the
-  // animation settles and detect viewport-rect drift mid-flight (sidebar
-  // collapse, route switch, panel mount/unmount, etc). Returns null if
-  // the viewport is missing or the rect set is empty.
+  // Extracted so we can re-run after animation to detect viewport-rect drift (sidebar collapse, route switch).
   const computeFitTarget = useCallback(
     (
       cardRects: Array<{ x: number; y: number; width: number; height: number }>,
@@ -547,9 +615,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
 
       const target = computeFitTarget(cardRects, maxZoom, minZoom);
       if (!target) {
-        // Viewport unavailable / no content — keep current camera, don't
-        // snap to (0,0,1) which used to leave the minimap thinking it
-        // was centered when the canvas was anywhere.
+        // Keep current camera; snapping to (0,0,1) used to desync the minimap.
         if (cardRects.length === 0 || !viewportRef.current) {
           setState({ panX: 0, panY: 0, zoom: 1 });
         }
@@ -562,14 +628,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
         const dZoom = Math.abs(cur.zoom - target.zoom);
         if (dPan < 5 && dZoom < 0.01) return;
         animateTo(target);
-        // Settle pass — re-run the math one frame after the animation
-        // ends and snap-correct any drift from viewport changes during
-        // the flight (sidebar collapse, route switch, etc). Stored in
-        // a ref so cancelAnimation() can cancel it — without that,
-        // back-to-back fitToCards calls would race: first call's settle
-        // would fire 370ms later and overwrite the second call's
-        // result, leaving the camera on the WRONG target while the
-        // minimap accurately reflects the broken state.
+        // Settle pass: cancelAnimation() must be able to cancel it, else back-to-back fitToCards races and the first settle overwrites the second target.
         settleTimerRef.current = window.setTimeout(() => {
           settleTimerRef.current = null;
           const fresh = computeFitTarget(cardRects, maxZoom, minZoom);

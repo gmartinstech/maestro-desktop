@@ -298,8 +298,7 @@ try {
     Write-Host "[3b] Downloading $NodeUrl..."
     Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeZip -UseBasicParsing
     Expand-Archive -Path $NodeZip -DestinationPath $NodeExtract -Force
-    # Ship just node.exe — npm/npx are unused at runtime (router + MCP
-    # bundles are pre-built). Saves ~70 MB from the installer.
+    # Ship just node.exe; npm/npx are unused at runtime (saves ~70 MB).
     $SrcNode = Join-Path $NodeExtract "node-$NodeVersion-win-x64\node.exe"
     if (-not (Test-Path $SrcNode)) { throw "node.exe not found at $SrcNode after extract" }
     Copy-Item -Force $SrcNode (Join-Path $NodeStageDir 'node.exe')
@@ -328,7 +327,13 @@ function Copy-Excluded($Source, $Dest, $Exclude) {
 
 Copy-Excluded `
     (Join-Path $ProjectRoot 'backend') (Join-Path $Staging 'backend') `
-    @{ Dirs = @('__pycache__','.venv','tools','tests'); Files = @('*.pyc','.env','.env.*') }
+    @{ Dirs = @('__pycache__','.venv','data','uv-bin','tests'); Files = @('*.pyc','.env','.env.*') }
+# data: backend/config/paths.py points DATA_ROOT at %APPDATA%/OpenSwarm/data in
+# packaged mode and no code seeds from the bundle, so the entire shipped
+# backend/data/ tree was dead weight (and was leaking the dev machine's
+# auth.token + install_id + dev session artifacts).
+# uv-bin: source dir holds the binary so dev works; staged separately below
+# so extraResources can substitute ${arch} (matches the mac build).
 
 # Production .env: OAuth helper base URL + Google credentials. See
 # scripts/build-app.sh for the rationale; v1.0.29 cloud-proxied the OAuth flow,
@@ -354,7 +359,14 @@ New-Item -ItemType Directory -Force -Path (Split-Path $ShipEnvPath -Parent) | Ou
     "GOOGLE_OAUTH_CLIENT_SECRET=$GoogleClientSecretShip"
 ) | Set-Content -Path $ShipEnvPath
 Write-Host "Staged production .env"
-New-Item -ItemType Directory -Force -Path (Join-Path $Staging 'backend\data\tools') | Out-Null
+
+# Stage uv-bin into per-arch staging so package.json extraResources can
+# substitute ${arch} and ship only the matching slice. Windows is x64-only
+# today; matches the mac build's per-arch staging shape.
+$UvStageX64 = Join-Path $Staging 'uv-bin\x64'
+New-Item -ItemType Directory -Force -Path $UvStageX64 | Out-Null
+Copy-Item -Force (Join-Path $UvBinDir 'uv.exe')  (Join-Path $UvStageX64 'uv.exe')
+Copy-Item -Force (Join-Path $UvBinDir 'uvx.exe') (Join-Path $UvStageX64 'uvx.exe')
 
 Copy-Excluded `
     (Join-Path $ProjectRoot 'debugger') (Join-Path $Staging 'debugger') `

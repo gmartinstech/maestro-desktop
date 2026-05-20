@@ -45,6 +45,7 @@ const { contextBridge, ipcRenderer } = require('electron');
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     downloadUpdate: () => ipcRenderer.invoke('download-update'),
     installUpdate: () => ipcRenderer.invoke('install-update'),
+    setAllowPrerelease: (value) => ipcRenderer.invoke('set-allow-prerelease', value),
 
     onUpdateAvailable: (cb) => {
       const listener = (_event, info) => cb(info);
@@ -102,6 +103,22 @@ const { contextBridge, ipcRenderer } = require('electron');
       const listener = (_event, payload) => cb(payload);
       ipcRenderer.on('openswarm:window-focus', listener);
       return () => ipcRenderer.removeListener('openswarm:window-focus', listener);
+    },
+
+    // Workflow lifecycle IPCs. ScheduleFacet uses these to render the
+    // app-open status badge and the one-click "Fix" to enable launch-at-
+    // login (and the tray, which is enabled by default once setup runs).
+    getAppOpenInfo: () => ipcRenderer.invoke('workflows:get-app-open-info'),
+    setLoginItem: (value) => ipcRenderer.invoke('workflows:set-login-item', value),
+    enableTray: (_value) => Promise.resolve(true),
+    getActiveRuns: () => ipcRenderer.invoke('workflows:get-active'),
+    notify: (payload) => ipcRenderer.invoke('workflows:notify', payload),
+    // Subscribed by WebSocketManager so notification button clicks
+    // (Looks good / Re-run / Adjust / Open) route back into the app.
+    onNotificationAction: (cb) => {
+      const listener = (_event, payload) => cb(payload);
+      ipcRenderer.on('workflow:notification-action', listener);
+      return () => ipcRenderer.removeListener('workflow:notification-action', listener);
     },
 
     // OAuth popup callback. Fires when any child webContents navigates to

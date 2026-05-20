@@ -6,6 +6,9 @@ import TextField from '@mui/material/TextField';
 import Chip from '@mui/material/Chip';
 import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SendIcon from '@mui/icons-material/Send';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
@@ -22,10 +25,6 @@ import { ApprovalRequest } from '@/shared/state/agentsSlice';
 import { useAppSelector } from '@/shared/hooks';
 import { ToolDefinition } from '@/shared/state/toolsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-
-// ---------------------------------------------------------------------------
-// Integration metadata (icons, colors) for known MCP servers
-// ---------------------------------------------------------------------------
 
 interface IntegrationMeta {
   label: string;
@@ -54,10 +53,6 @@ const INTEGRATION_META: Record<string, IntegrationMeta> = {
   'Reddit': { label: 'Reddit', color: '#FF4500', icon: RedditIcon },
 };
 
-// ---------------------------------------------------------------------------
-// MCP tool name parser
-// ---------------------------------------------------------------------------
-
 export interface ParsedTool {
   isMcp: boolean;
   serverSlug: string;
@@ -81,10 +76,6 @@ export function parseMcpToolName(rawName: string): ParsedTool {
 function sanitizeServerName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
-
-// ---------------------------------------------------------------------------
-// Look up MCP tool metadata from the Redux tools store
-// ---------------------------------------------------------------------------
 
 interface McpToolMeta {
   integration: IntegrationMeta | null;
@@ -116,10 +107,6 @@ export function useMcpToolMeta(parsed: ParsedTool): McpToolMeta {
   }, [parsed, toolItems]);
 }
 
-// ---------------------------------------------------------------------------
-// Smart input summary for MCP tools
-// ---------------------------------------------------------------------------
-
 function getMcpInputSummary(actionName: string, toolInput: Record<string, any>): string {
   const lower = actionName.toLowerCase();
 
@@ -128,7 +115,7 @@ function getMcpInputSummary(actionName: string, toolInput: Record<string, any>):
     const to = toolInput.to || toolInput.recipient || '';
     const subject = toolInput.subject || '';
     if (query) return `Search: "${query}"`;
-    if (to && subject) return `To ${to} — ${subject}`;
+    if (to && subject) return `To ${to}: ${subject}`;
     if (to) return `To ${to}`;
     if (subject) return `Subject: ${subject}`;
   }
@@ -136,7 +123,7 @@ function getMcpInputSummary(actionName: string, toolInput: Record<string, any>):
   if (lower.includes('calendar') || lower.includes('event') || lower.includes('freebusy')) {
     const summary = toolInput.summary || toolInput.title || toolInput.event_name || '';
     const start = toolInput.start || toolInput.start_time || toolInput.date || '';
-    if (summary && start) return `${summary} — ${start}`;
+    if (summary && start) return `${summary}: ${start}`;
     if (summary) return summary;
     if (start) return `Date: ${start}`;
   }
@@ -174,13 +161,9 @@ function getMcpInputSummary(actionName: string, toolInput: Record<string, any>):
   return '';
 }
 
-// ---------------------------------------------------------------------------
-// Shared components
-// ---------------------------------------------------------------------------
-
 interface Props {
   request: ApprovalRequest;
-  onApprove: (requestId: string, updatedInput?: Record<string, any>) => void;
+  onApprove: (requestId: string, updatedInput?: Record<string, any>, trustPattern?: boolean) => void;
   onDeny: (requestId: string, message?: string) => void;
 }
 
@@ -310,10 +293,6 @@ const ToolPreview: React.FC<ToolPreviewProps> = ({ request, tokens: c }) => {
   }
 };
 
-// ---------------------------------------------------------------------------
-// QuestionForm (AskUserQuestion — unchanged)
-// ---------------------------------------------------------------------------
-
 function getOptionKey(opt: any): string {
   return opt.id || opt.value || opt.label || opt.text || String(opt);
 }
@@ -326,7 +305,7 @@ type Answers = Record<number, string | string[]>;
 
 export interface QuestionFormProps {
   request: ApprovalRequest;
-  onApprove: (requestId: string, updatedInput?: Record<string, any>) => void;
+  onApprove: (requestId: string, updatedInput?: Record<string, any>, trustPattern?: boolean) => void;
   onDeny: (requestId: string, message?: string) => void;
   compact?: boolean;
 }
@@ -580,21 +559,19 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
   );
 };
 
-// ---------------------------------------------------------------------------
-// GenericApprovalBar — redesigned for MCP tools
-// ---------------------------------------------------------------------------
-
 const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => {
   const c = useClaudeTokens();
   const [denyMessage, setDenyMessage] = useState('');
   const [showDenyInput, setShowDenyInput] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [trustPattern, setTrustPattern] = useState(false);
 
   const parsed = useMemo(() => parseMcpToolName(request.tool_name), [request.tool_name]);
   const meta = useMcpToolMeta(parsed);
 
   const accentColor = meta.integration?.color || c.status.warning;
   const summary = parsed.isMcp ? getMcpInputSummary(parsed.actionName, request.tool_input) : '';
+  const isSensitive = !!request.sensitive_pattern;
 
   if (!parsed.isMcp) {
     return (
@@ -613,7 +590,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             {getToolIcon(request.tool_name)}
           </Box>
           <Typography sx={{ color: c.status.warning, fontWeight: 700, fontSize: '0.85rem' }}>
-            Permission Required
+            {isSensitive ? 'Sensitive file' : 'Permission Required'}
           </Typography>
           <Chip
             label={request.tool_name}
@@ -630,9 +607,61 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
           />
         </Box>
 
+        {isSensitive && (
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1,
+              alignItems: 'flex-start',
+              bgcolor: 'rgba(181,51,51,0.08)',
+              border: '1px solid rgba(181,51,51,0.25)',
+              borderRadius: 1.5,
+              px: 1.25,
+              py: 1,
+              mb: 1.25,
+            }}
+          >
+            <WarningAmberIcon sx={{ fontSize: 18, color: c.status.error, mt: 0.1, flexShrink: 0 }} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography sx={{ color: c.text.primary, fontWeight: 600, fontSize: '0.82rem', lineHeight: 1.3 }}>
+                This file is sensitive: {request.sensitive_label}
+              </Typography>
+              {request.sensitive_why && (
+                <Typography sx={{ color: c.text.secondary, fontSize: '0.78rem', lineHeight: 1.35, mt: 0.3 }}>
+                  {request.sensitive_why} OpenSwarm asks every time because a bad change here is hard to undo. Approve only if you asked for this.
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        )}
+
         <Box sx={{ mb: 1.5 }}>
           <ToolPreview request={request} tokens={c} />
         </Box>
+
+        {isSensitive && (
+          <FormControlLabel
+            sx={{
+              mb: 1,
+              ml: 0,
+              alignItems: 'flex-start',
+              '& .MuiFormControlLabel-label': { fontSize: '0.78rem', color: c.text.secondary, lineHeight: 1.35, pt: 0.5 },
+            }}
+            control={
+              <Checkbox
+                size="small"
+                checked={trustPattern}
+                onChange={(e) => setTrustPattern(e.target.checked)}
+                sx={{ p: 0.5, color: c.text.tertiary, '&.Mui-checked': { color: c.status.warning } }}
+              />
+            }
+            label={
+              <>
+                Always allow files like this <strong>({request.sensitive_label})</strong>. You can change this later in Settings &rarr; Trusted file patterns.
+              </>
+            }
+          />
+        )}
 
         {showDenyInput && (
           <TextField
@@ -657,7 +686,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
           <Button
             variant="contained"
             startIcon={<CheckIcon />}
-            onClick={() => onApprove(request.id)}
+            onClick={() => onApprove(request.id, undefined, isSensitive && trustPattern)}
             sx={{ bgcolor: c.status.success, '&:hover': { bgcolor: '#1e4d15' }, fontWeight: 600, fontSize: '0.8rem' }}
           >
             Approve
@@ -698,7 +727,6 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
         overflow: 'hidden',
       }}
     >
-      {/* Header row */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, pt: 1.75, pb: 0.5 }}>
         <Box
           sx={{
@@ -752,7 +780,6 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
         </Box>
       </Box>
 
-      {/* Input summary / details */}
       <Box sx={{ px: 2, pt: 1, pb: 0.5 }}>
         {summary && (
           <Box
@@ -793,7 +820,6 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
         </Collapse>
       </Box>
 
-      {/* Deny reason input */}
       {showDenyInput && (
         <Box sx={{ px: 2, pb: 0.5 }}>
           <TextField
@@ -815,7 +841,6 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
         </Box>
       )}
 
-      {/* Action buttons */}
       <Box sx={{ display: 'flex', gap: 1, px: 2, pt: 1, pb: 1.75 }}>
         <Button
           variant="contained"
@@ -873,20 +898,12 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
   );
 };
 
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
-
 const ApprovalBar: React.FC<Props> = (props) => {
   if (props.request.tool_name === 'AskUserQuestion') {
     return <QuestionForm request={props.request} onApprove={props.onApprove} onDeny={props.onDeny} />;
   }
   return <GenericApprovalBar {...props} />;
 };
-
-// ---------------------------------------------------------------------------
-// BatchApprovalBar — grouped mass approve/deny when many approvals pending
-// ---------------------------------------------------------------------------
 
 interface ToolGroup {
   toolName: string;
@@ -896,7 +913,7 @@ interface ToolGroup {
 
 interface BatchApprovalBarProps {
   requests: ApprovalRequest[];
-  onApprove: (requestId: string, updatedInput?: Record<string, any>) => void;
+  onApprove: (requestId: string, updatedInput?: Record<string, any>, trustPattern?: boolean) => void;
   onDeny: (requestId: string, message?: string) => void;
 }
 
@@ -957,7 +974,6 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
             overflow: 'hidden',
           }}
         >
-          {/* Global actions bar */}
           <Box
             sx={{
               display: 'flex',
@@ -1011,7 +1027,6 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
             </Button>
           </Box>
 
-          {/* Per-group rows */}
           {groups.map((group) => (
             <GroupRow
               key={group.toolName}
@@ -1034,15 +1049,11 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
   );
 };
 
-// ---------------------------------------------------------------------------
-// GroupRow — a single tool-name group within the batch bar
-// ---------------------------------------------------------------------------
-
 interface GroupRowProps {
   group: ToolGroup;
   expanded: boolean;
   onToggle: () => void;
-  onApprove: (requestId: string, updatedInput?: Record<string, any>) => void;
+  onApprove: (requestId: string, updatedInput?: Record<string, any>, trustPattern?: boolean) => void;
   onDeny: (requestId: string, message?: string) => void;
   onApproveGroup: () => void;
   onDenyGroup: () => void;

@@ -150,4 +150,13 @@ const MessageActionBar: React.FC<Props> = ({
   );
 };
 
-export default MessageActionBar;
+// Callbacks are per-message inline arrows; compare by presence + branch-nav primitives since closures are msg-id-keyed.
+export default React.memo(MessageActionBar, (prev, next) => (
+  prev.role === next.role
+  && !!prev.onCopy === !!next.onCopy
+  && !!prev.onEdit === !!next.onEdit
+  && !!prev.onRegenerate === !!next.onRegenerate
+  && !!prev.onBranch === !!next.onBranch
+  && prev.branchNav?.currentIndex === next.branchNav?.currentIndex
+  && prev.branchNav?.totalBranches === next.branchNav?.totalBranches
+));

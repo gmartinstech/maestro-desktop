@@ -20,8 +20,10 @@ import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
 import { createSelector } from '@reduxjs/toolkit';
+import { shallowEqual } from 'react-redux';
 import { useAppSelector, useAppDispatch } from '@/shared/hooks';
 import { AgentMessage, AgentSession, fetchBrowserAgentChildren, handleApproval } from '@/shared/state/agentsSlice';
+import type { StreamingMessage } from '@/shared/state/streamingSlice';
 import { useClaudeTokens, useThemeMode } from '@/shared/styles/ThemeContext';
 import type { RootState } from '@/shared/state/store';
 
@@ -150,6 +152,9 @@ const lightFeedColors: FeedColors = {
   scrollThumb: '#ccc9c0',
 };
 
+// Stable ref keeps shallowEqual happy when there are no browser sessions yet.
+const EMPTY_STREAMING: Record<string, StreamingMessage> = Object.freeze({}) as Record<string, StreamingMessage>;
+
 const selectBrowserSessions = createSelector(
   [(state: RootState) => state.agents.sessions,
    (_: RootState, parentSessionId: string) => parentSessionId,
@@ -174,6 +179,23 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
   const browserSessions = useAppSelector((state) =>
     selectBrowserSessions(state, parentSessionId, browserId),
   );
+  // Subscribe only to this feed's sessions; reading the full streaming dict re-renders on every char from every agent.
+  const browserSessionIds = useMemo(
+    () => browserSessions.map((s) => s.id).sort().join(','),
+    [browserSessions],
+  );
+  const streamingBySession = useAppSelector(
+    (state) => {
+      if (!browserSessionIds) return EMPTY_STREAMING;
+      const out: Record<string, StreamingMessage> = {};
+      for (const id of browserSessionIds.split(',')) {
+        const entry = state.streaming.bySession[id];
+        if (entry) out[id] = entry;
+      }
+      return out;
+    },
+    shallowEqual,
+  );
 
   useEffect(() => {
     if (browserSessions.length === 0 && fetchedForSession.current !== parentSessionId) {
@@ -191,27 +213,24 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
         const entry = formatMessage(msg);
         if (entry) entries.push(entry);
       }
-      if (session.streamingMessage?.role === 'assistant' && session.streamingMessage.content) {
-        entries.push({ type: 'thought', text: session.streamingMessage.content });
+      const stream: StreamingMessage | undefined = streamingBySession[session.id];
+      if (stream?.role === 'assistant' && stream.content) {
+        entries.push({ type: 'thought', text: stream.content });
       }
       return { session, entries };
     });
-  }, [browserSessions]);
+  }, [browserSessions, streamingBySession]);
 
   const totalMessages = browserSessions.reduce(
-    (n, s) => n + s.messages.length + (s.streamingMessage ? 1 : 0),
+    (n, s) => n + s.messages.length + (streamingBySession[s.id] ? 1 : 0),
     0,
   );
 
-  // Sticky-to-bottom: auto-scroll to the latest content unless the user
-  // has manually scrolled up. Re-enable auto-scroll when the user scrolls
-  // back to the bottom (within a small threshold).
   const isStuckToBottom = useRef(true);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // "At bottom" = within 30px of the bottom edge
     isStuckToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
   }, []);
 
@@ -231,15 +250,11 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
       ref={scrollRef}
       onScroll={handleScroll}
       onWheel={(e) => {
-        // Capture wheel events so the feed scrolls on hover without
-        // needing to click/focus first. Without this, the parent chat
-        // scroll container eats the wheel events.
+        // Block wheel only while feed can still scroll; at boundaries let parent chat take over.
         const el = scrollRef.current;
         if (!el) return;
         const atTop = el.scrollTop <= 0 && e.deltaY < 0;
         const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 1 && e.deltaY > 0;
-        // Only stop propagation when the feed has room to scroll in this
-        // direction. At boundaries, let the parent scroll naturally.
         if (!atTop && !atBottom) e.stopPropagation();
       }}
       sx={{
@@ -297,10 +312,6 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
             <EntryRow key={i} entry={entry} accentColor={accentColor} fc={fc} />
           ))}
 
-          {/* Inline RequestHumanIntervention — matches the DynamicIsland
-              and BrowserAgentOverlay style (amber, hand icon, compact pill).
-              Same request_id → whichever surface the user responds from
-              first resolves the approval; the others auto-dismiss. */}
           {session.pending_approvals?.filter(
             (a) => a.tool_name === 'RequestHumanIntervention',
           ).map((intervention) => {
@@ -334,7 +345,7 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
                 >
                   {problem}
                 </Typography>
-                <Tooltip title="Done — continue" arrow>
+                <Tooltip title="Done, continue" arrow>
                   <IconButton
                     size="small"
                     onClick={() => dispatch(handleApproval({ requestId: intervention.id, behavior: 'allow' }))}

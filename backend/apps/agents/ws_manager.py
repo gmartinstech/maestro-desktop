@@ -9,19 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
-    """Manages WebSocket connections and bridges HITL approval requests.
-
-    Every outbound event flows through the seq log so reconnecting
-    clients can replay missed events. The send happens *under* the
-    per-session lock yielded by `seq_log.stamp(...)`, which guarantees
-    wire order matches seq order even under concurrent broadcasts.
-
-    A WS disconnect (`disconnect_session`) ONLY removes the socket
-    from the connection registry. It does NOT cancel the underlying
-    agent task. The task lives on `agent_manager.tasks`; only an
-    explicit `agent:stop`, REST `/close`, natural completion, or
-    process shutdown ends a run.
-    """
+    """Manages WebSocket connections and HITL approval bridging; events flow through seq_log so reconnects can replay."""
 
     def __init__(self):
         self.connections: dict[str, list[WebSocket]] = {}
@@ -53,19 +41,7 @@ class ConnectionManager:
         ]
 
     async def send_to_session(self, session_id: str, event: str, data: dict):
-        """Broadcast a session event with monotonic sequencing.
-
-        The send to every socket happens inside the seq_log lock so a
-        slow/dead WS doesn't reorder events on the fast ones. If a
-        single send raises (broken pipe, half-open socket), we log and
-        continue — the ring buffer still has the event so the client
-        will replay it on reconnect.
-
-        For terminal status events (completed/stopped/error) we also
-        atomically persist the payload to disk; a client that returns
-        after a process restart can then resolve the spinner via
-        `seq_log.load_terminal(...)` instead of being stuck.
-        """
+        """Broadcast a session event with monotonic sequencing; terminal statuses also persist to disk."""
         async with seq_log.stamp(session_id, event, data) as (seq, payload_str):
             for ws in list(self.connections.get(session_id, [])):
                 try:
@@ -77,38 +53,17 @@ class ConnectionManager:
                     await ws.send_text(payload_str)
                 except Exception:
                     logger.debug("send_to_session: global send failed", exc_info=True)
-            # Persist terminal events under the lock so a concurrent
-            # `agent:status: running` can't race past and overwrite
-            # the disk file with a stale state.
+            # Persist under the lock so a concurrent running status can't race past and overwrite with stale state.
             if event == "agent:status" and data.get("status") in TERMINAL_STATUSES:
                 seq_log.persist_terminal(session_id, payload_str)
 
     async def replay_to(
         self, session_id: str, websocket: WebSocket, last_seq: int
     ) -> dict:
-        """Replay buffered events with seq > last_seq to one socket.
-
-        Returns a small ack envelope describing what happened so the
-        caller (the WS handler) can send a `server:resume_ack` frame.
-
-        Three cases:
-          1. `events` non-empty: replay them in order; ack carries
-             `from_seq`, `to_seq`.
-          2. No buffer at all (process restarted, session evicted)
-             but a persisted terminal exists: send it; ack signals
-             `terminal_only=True`.
-          3. `last_seq` predates the oldest buffered seq: emit
-             `agent:gap_detected`; client REST-refreshes the session.
-        """
+        """Replay buffered events with seq > last_seq; returns ack envelope for the resume handshake."""
         oldest, newest, events = seq_log.replay(session_id, last_seq)
 
-        # Check for gap FIRST. If the client's last_seq is below the
-        # buffer's oldest seq, we can't deliver everything they
-        # missed — silently replaying only the in-buffer tail would
-        # leave a hole in their state. Tell them to REST-refresh
-        # instead, even if the tail looks safe to send.
-        # Treat last_seq=0 as "fresh client" — they want a full
-        # replay of whatever's in the buffer, not a gap signal.
+        # Gap-check first: if last_seq predates the buffer, signal REST-refresh; last_seq=0 means fresh client (full replay).
         if last_seq > 0 and oldest is not None and last_seq < oldest - 1:
             gap_payload = json.dumps({
                 "event": "agent:gap_detected",
@@ -132,6 +87,23 @@ class ConnectionManager:
             }
 
         if events:
+            # Drop already-resolved approval requests from the replay. The
+            # ring buffer holds every event we ever stamped, including the
+            # original `agent:approval_request`. Without this filter, a
+            # client that reconnects (e.g. after navigating away and back,
+            # which re-mounts AgentChat with last_seq=0) re-fires every
+            # past approval as if it were live, but the backing future was
+            # popped from pending_futures the moment the user answered, so
+            # the resurrected card is a dead no-op. Lifecycle is simple:
+            # send_approval_request() inserts into pending_futures BEFORE
+            # the event is stamped, and resolve_approval()/timeout/cancel
+            # all pop it; so "in pending_futures" is the authoritative
+            # is-still-live signal for the request_id. A process restart
+            # wipes pending_futures, which is correct because
+            # reconcile_on_startup also marks waiting_approval sessions as
+            # stopped so there's nothing to answer anyway.
+            events = self._filter_stale_approvals(events)
+            events = self._strip_replayed_closes(events)
             for s in events:
                 try:
                     await websocket.send_text(s)
@@ -145,7 +117,6 @@ class ConnectionManager:
                 "to_seq": newest,
             }
 
-        # Nothing in memory. Try a persisted terminal event.
         terminal = seq_log.load_terminal(session_id)
         if terminal is not None:
             try:
@@ -154,20 +125,60 @@ class ConnectionManager:
                 pass
             return {"ok": True, "replayed": 1, "terminal_only": True}
 
-        # Nothing missed, nothing to replay. Caller's caught up.
         return {
             "ok": True,
             "replayed": 0,
             "current_seq": newest if newest is not None else 0,
         }
 
-    async def broadcast_global(self, event: str, data: dict):
-        """Send a message to all global (dashboard) connections.
+    def _strip_replayed_closes(self, events: list[str]) -> list[str]:
+        """Drop `agent:closed` events from a replay buffer.
 
-        Dashboard-scoped events don't go through the per-session seq
-        log — they're not session-bound and the dashboard WS has its
-        own resume story (full state refetch on reconnect).
+        agent:closed is a transition event ("session JUST closed") whose
+        frontend reducer (closeSessionFromWs) destructively deletes the
+        session from state.sessions. Replaying it on a fresh client (e.g.
+        a user who just clicked the closed chat in history) deletes the
+        session they're trying to open. The current closed state is
+        already conveyed by the REST hydrate (status=stopped, closed_at
+        set) and by the latest agent:status event in the replay, so
+        suppressing the transition replay is non-lossy.
         """
+        out: list[str] = []
+        for payload_str in events:
+            try:
+                parsed = json.loads(payload_str)
+            except (ValueError, TypeError):
+                out.append(payload_str)
+                continue
+            if parsed.get("event") == "agent:closed":
+                continue
+            out.append(payload_str)
+        return out
+
+    def _filter_stale_approvals(self, events: list[str]) -> list[str]:
+        """Return events minus any `agent:approval_request` whose request_id
+        is no longer in pending_futures. JSON parse is per-event but replay
+        only runs on (re)connect, so it isn't a hot path.
+        """
+        alive = self.pending_futures
+        out: list[str] = []
+        for payload_str in events:
+            try:
+                parsed = json.loads(payload_str)
+            except (ValueError, TypeError):
+                out.append(payload_str)
+                continue
+            if parsed.get("event") != "agent:approval_request":
+                out.append(payload_str)
+                continue
+            data = parsed.get("data") or {}
+            request_id = data.get("request_id")
+            if request_id and request_id in alive:
+                out.append(payload_str)
+        return out
+
+    async def broadcast_global(self, event: str, data: dict):
+        """Send to all dashboard connections; bypasses seq_log (dashboard resumes via full state refetch)."""
         payload = json.dumps({"event": event, "data": data})
         for ws in list(self.global_connections):
             try:
@@ -178,21 +189,24 @@ class ConnectionManager:
     async def send_approval_request(
         self, session_id: str, request_id: str, tool_name: str, tool_input: dict,
         timeout: float = 600.0,
+        sensitive_pattern: str | None = None,
+        sensitive_label: str | None = None,
+        sensitive_why: str | None = None,
     ) -> dict:
-        """Send an approval request and wait for the user's response.
-
-        Returns the approval decision dict. Times out after `timeout`
-        seconds (default 10 minutes) so a forgotten request doesn't
-        permanently park the agent.
-        """
+        """Send an approval request and wait for the user's decision; 10-minute timeout prevents permanent park."""
         future = asyncio.get_event_loop().create_future()
         self.pending_futures[request_id] = future
 
-        await self.send_to_session(session_id, "agent:approval_request", {
+        payload: dict = {
             "request_id": request_id,
             "tool_name": tool_name,
             "tool_input": tool_input,
-        })
+        }
+        if sensitive_pattern:
+            payload["sensitive_pattern"] = sensitive_pattern
+            payload["sensitive_label"] = sensitive_label
+            payload["sensitive_why"] = sensitive_why
+        await self.send_to_session(session_id, "agent:approval_request", payload)
 
         try:
             result = await asyncio.wait_for(future, timeout=timeout)

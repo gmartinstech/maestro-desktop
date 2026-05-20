@@ -66,7 +66,7 @@ const RichPromptEditor: React.FC<RichPromptEditorProps> = ({
 
   const isLabelFloating = focused || hasContent;
 
-  // Sync external value → editor on mount / when value changes externally
+  // Sync external value to editor on mount / when value changes externally.
   const lastEmittedRef = useRef<string | null>(null);
   useEffect(() => {
     const editor = editorRef.current;
@@ -149,11 +149,25 @@ const RichPromptEditor: React.FC<RichPromptEditorProps> = ({
     if (result) {
       setPicker(result);
     } else {
-      setPicker((p) => ({ ...p, visible: false }));
+      // See ChatInput: bail when already hidden to avoid a per-keystroke
+      // re-render of the whole editor on every keypress.
+      setPicker((p) => p.visible ? { ...p, visible: false } : p);
     }
   }, []);
 
+  // See ChatInput.handleInput: paste skips the heavy DOM scans that
+  // paste can't invalidate (never adds skill pills, never starts a
+  // slash/at trigger). emitChange still runs because Modes settings
+  // is controlled and the parent needs the new value.
+  const justPastedRef = useRef(false);
+
   const handleInput = useCallback(() => {
+    if (justPastedRef.current) {
+      justPastedRef.current = false;
+      setHasContent(true);
+      emitChange();
+      return;
+    }
     updateHasContent();
     detectTrigger();
     syncAttachedSkills();
@@ -236,7 +250,10 @@ const RichPromptEditor: React.FC<RichPromptEditorProps> = ({
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
     const plain = e.clipboardData.getData('text/plain');
-    if (plain) document.execCommand('insertText', false, plain);
+    if (plain) {
+      justPastedRef.current = true;
+      document.execCommand('insertText', false, plain);
+    }
   }, []);
 
   return (

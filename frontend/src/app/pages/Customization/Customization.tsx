@@ -64,11 +64,9 @@ const Customization: React.FC = () => {
                 border: `1px solid ${c.border.subtle}`,
                 borderRadius: 2.5,
                 boxShadow: c.shadow.sm,
-                '&:hover': {
-                  borderColor: c.accent.primary,
-                  boxShadow: `0 0 0 1px ${c.accent.primary}22`,
-                },
-                transition: 'border-color 0.2s, box-shadow 0.2s',
+                willChange: 'transform',
+                '&:hover': { borderColor: c.accent.primary },
+                transition: 'border-color 0.2s',
               }}
             >
               <CardActionArea

@@ -14,7 +14,7 @@ from urllib.parse import urlencode
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import HTTPException, Query
+from fastapi import HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from backend.config.Apps import SubApp
@@ -27,7 +27,7 @@ OPENSWARM_OAUTH_BASE_URL = os.environ.get(
     "OPENSWARM_OAUTH_BASE_URL", "https://api.openswarm.com"
 ).rstrip("/")
 
-from backend.config.paths import BACKEND_DIR, DATA_ROOT, TOOLS_DIR as DATA_DIR, BUILTIN_PERMISSIONS_PATH as BUILTIN_PERMS_PATH
+from backend.config.paths import BACKEND_DIR, DATA_ROOT, TOOLS_DIR as DATA_DIR, BUILTIN_PERMISSIONS_PATH as BUILTIN_PERMS_PATH, TRUSTED_SENSITIVE_PATHS_PATH
 
 load_dotenv(os.path.join(BACKEND_DIR, ".env"))
 if os.environ.get("OPENSWARM_PACKAGED") == "1":
@@ -72,7 +72,7 @@ def _load(tool_id: str) -> ToolDefinition:
         tool = ToolDefinition(**json.load(f))
     # Migrate Discord tool configs from the old npx-based spawn (which
     # broke whenever the npx cache was partially populated) to the local
-    # Python shim. Idempotent — if it's already on the shim, no-op.
+    # Python shim. Idempotent; if it's already on the shim, no-op.
     if (
         tool.name.lower() == "discord"
         and tool.mcp_config
@@ -106,9 +106,49 @@ def save_builtin_permissions(perms: dict[str, str]):
         json.dump(perms, f, indent=2)
 
 
+def load_trusted_sensitive_paths() -> list[str]:
+    if not os.path.exists(TRUSTED_SENSITIVE_PATHS_PATH):
+        return []
+    try:
+        with open(TRUSTED_SENSITIVE_PATHS_PATH) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+    raw = data.get("patterns") if isinstance(data, dict) else None
+    if not isinstance(raw, list):
+        return []
+    return [p for p in raw if isinstance(p, str) and p]
+
+
+def save_trusted_sensitive_paths(patterns: list[str]):
+    os.makedirs(os.path.dirname(TRUSTED_SENSITIVE_PATHS_PATH), exist_ok=True)
+    seen: list[str] = []
+    for p in patterns:
+        if isinstance(p, str) and p and p not in seen:
+            seen.append(p)
+    with open(TRUSTED_SENSITIVE_PATHS_PATH, "w") as f:
+        json.dump({"patterns": seen}, f, indent=2)
+
+
 @tools_lib.router.get("/builtin/permissions")
 async def get_builtin_permissions():
     return {"permissions": load_builtin_permissions()}
+
+
+@tools_lib.router.get("/trusted-sensitive-paths")
+async def get_trusted_sensitive_paths():
+    """Patterns the user has opted into always-allow for sensitive-path writes."""
+    return {"patterns": load_trusted_sensitive_paths()}
+
+
+@tools_lib.router.put("/trusted-sensitive-paths")
+async def replace_trusted_sensitive_paths(body: dict):
+    """Replace the full list; Settings page uses this to revoke entries."""
+    incoming = body.get("patterns") or []
+    if not isinstance(incoming, list):
+        return {"patterns": load_trusted_sensitive_paths()}
+    save_trusted_sensitive_paths([p for p in incoming if isinstance(p, str) and p])
+    return {"patterns": load_trusted_sensitive_paths()}
 
 
 @tools_lib.router.put("/builtin/permissions")
@@ -225,7 +265,7 @@ def _resolve_command(command: str) -> str | None:
     if found:
         return found
     # Windows binaries need an extension. shutil.which() handles PATHEXT for
-    # PATH lookups, but we manually scan _extra_bin_dirs below — replicate
+    # PATH lookups, but we manually scan _extra_bin_dirs below; replicate
     # the suffix probing here so `uvx` finds `uvx.exe`, etc.
     if sys.platform == "win32":
         suffixes = [""] + os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").lower().split(os.pathsep)
@@ -292,21 +332,37 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
                 env["PRIVATE_APP_ACCESS_TOKEN"] = tool.oauth_tokens["access_token"]
             if tool.oauth_tokens.get("refresh_token"):
                 env["GOOGLE_WORKSPACE_REFRESH_TOKEN"] = tool.oauth_tokens["refresh_token"]
-            # google_workspace_mcp's auth/gauth.py requires all three of
-            # CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN at startup and does
-            # its own token refresh per API call; it ignores any
-            # pre-refreshed access_token. v1.0.29's cloud-proxy migration
-            # closes the OAuth-flow secret exposure, but the MCP still
-            # needs the local secret here. v1.0.30 should either fork the
-            # MCP to point token_uri at our cloud refresh proxy, or replace
-            # it with a thin in-house Gmail/Drive/Calendar wrapper that
-            # consumes a pre-refreshed access_token.
-            client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
-            client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "")
-            if client_id:
-                env["GOOGLE_WORKSPACE_CLIENT_ID"] = client_id
-            if client_secret:
-                env["GOOGLE_WORKSPACE_CLIENT_SECRET"] = client_secret
+            # google_workspace_mcp's gauth.py hardcodes token_uri to
+            # https://oauth2.googleapis.com/token and refreshes using the
+            # local CLIENT_ID/SECRET on every API call. The OAuth flow
+            # itself runs through the cloud's rotation pool, so the
+            # refresh_token is bound to whichever pool slot minted it,
+            # not the single client baked into the DMG. Mismatch -> Google
+            # returns unauthorized_client. We point token_uri at a local
+            # proxy that forwards the refresh to our cloud's pool-aware
+            # /api/oauth/google/refresh endpoint; CLIENT_ID/SECRET become
+            # unused placeholders (gauth.py only validates non-empty).
+            _port = os.environ.get("OPENSWARM_PORT", "8324")
+            env["GOOGLE_WORKSPACE_TOKEN_URI"] = (
+                f"http://127.0.0.1:{_port}/api/tools/google-oauth-token"
+            )
+            env.setdefault("GOOGLE_WORKSPACE_CLIENT_ID", "openswarm-proxy")
+            env.setdefault("GOOGLE_WORKSPACE_CLIENT_SECRET", "openswarm-proxy")
+
+    # Google Workspace MCP: redirect spawn through our shim that
+    # monkey-patches gauth.get_credentials before the worker registers
+    # tools, so token_uri points at our local proxy. Stays a stdio
+    # subprocess; google-workspace-mcp gets installed into uv's
+    # ephemeral env via --with, same way the upstream entry-point
+    # invocation used to do it.
+    if tool.name.lower() == "google workspace" and config.get("type") == "stdio":
+        shim_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "google_workspace_mcp_shim",
+            "run.py",
+        )
+        config["command"] = "uv"
+        config["args"] = ["run", "--with", "google-workspace-mcp", "python", shim_path]
 
     # Discord MCP runs as a small Python shim (backend.apps.discord_mcp_shim).
     # We pass install_id + base URL via env so the shim subprocess doesn't
@@ -321,7 +377,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         if guild_ids:
             env["OPENSWARM_DISCORD_GUILD_IDS"] = ",".join(guild_ids)
         # The shim runs as a subprocess and needs to import
-        # `backend.apps.discord_mcp_shim` — set PYTHONPATH to the project
+        # `backend.apps.discord_mcp_shim`; set PYTHONPATH to the project
         # root (parent of the backend/ dir) so that import resolves.
         _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
@@ -398,7 +454,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         if config.get("command"):
             # `python` (no version suffix) doesn't exist on a stock macOS,
             # so a tool config that asks for "python" silently fails to
-            # spawn — Claude Agent SDK then exposes zero tools from that
+            # spawn; Claude Agent SDK then exposes zero tools from that
             # MCP. We resolve to the actual interpreter running the
             # backend (sys.executable), which is guaranteed to exist and
             # have backend modules importable. `python3` and absolute
@@ -407,7 +463,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
                 resolved_python = sys.executable or shutil.which("python3") or shutil.which("python")
                 if resolved_python:
                     config["command"] = resolved_python
-            # Check for bundled npm MCP servers — use Electron's Node.js instead of npx
+            # Check for bundled npm MCP servers; use Electron's Node.js instead of npx
             if config["command"] in ("npx", "bunx"):
                 pkg_name = next((a for a in (config.get("args") or []) if not a.startswith("-")), None)
                 if pkg_name:
@@ -485,7 +541,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         env = config.setdefault("env", {})
         env.setdefault("PATH", _augmented_path())
         env.setdefault("PYTHONPATH", "")
-        # Point uv/uvx at our bundled Python — avoids macOS CLT popup on fresh Macs
+        # Point uv/uvx at our bundled Python; avoids macOS CLT popup on fresh Macs
         # and avoids downloading Python at runtime
         _is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
         _is_windows = sys.platform == "win32"
@@ -667,7 +723,7 @@ def _try_heal_npx_cache(stderr: str) -> str | None:
 
     Why: interrupted npx installs leave a `package-lock.json` in the cache dir so
     subsequent spawns reuse a partially-extracted node_modules tree, which dies at
-    import time. Scoped strictly to the extracted hash subdir — never touches
+    import time. Scoped strictly to the extracted hash subdir; never touches
     anything outside `~/.npm/_npx/`.
     """
     if "ERR_MODULE_NOT_FOUND" not in stderr:
@@ -789,7 +845,7 @@ async def _discover_mcp_tools_stdio(command: str, args: list[str] | None = None,
 
     except HTTPException as e:
         # Heal-on-corrupt-npx-cache still triggers from the EOF branch,
-        # which now includes the full stderr tail in `e.detail` — so the
+        # which now includes the full stderr tail in `e.detail`; so the
         # ERR_MODULE_NOT_FOUND signature is still discoverable here.
         if _attempt == 0 and _try_heal_npx_cache(str(e.detail) if e.detail is not None else ""):
             return await _discover_mcp_tools_stdio(command, args, env, _attempt=1)
@@ -797,10 +853,10 @@ async def _discover_mcp_tools_stdio(command: str, args: list[str] | None = None,
     except asyncio.TimeoutError:
         # Most common cause: cold npx cache on Windows. The npm install
         # persists across attempts, so a retry usually finishes against a
-        # warm cache. Surface npx's own progress line if we have one — it
+        # warm cache. Surface npx's own progress line if we have one; it
         # makes the cause obvious ("downloading X...") instead of opaque.
         tail_text = "".join(stderr_tail[-5:]).strip()
-        detail = "MCP discovery timed out — the server may still be downloading on first run"
+        detail = "MCP discovery timed out; the server may still be downloading on first run"
         if tail_text:
             preview = tail_text[-200:].replace("\n", " ").strip()
             detail += f" (last output: {preview})"
@@ -931,7 +987,7 @@ def _m365_server_script() -> str:
     backend/mcp-bundles/softeria-ms-365-mcp-server/dist/index.js (4.7MB).
     The new path mirrors the SDK's internal layout (dist/index.js + sibling
     package.json) because cli.js reads __dirname/../package.json for the
-    --version flag — see scripts/build-app.sh `build_mcp_bundle_dir`.
+    --version flag; see scripts/build-app.sh `build_mcp_bundle_dir`.
     """
     _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     bundle = os.path.join(
@@ -1015,7 +1071,7 @@ async def m365_device_login(tool_id: str):
                 login_state["status"] = "awaiting_auth"
             if url_match and "microsoft" in url_match.group(1).lower():
                 login_state["device_code_url"] = url_match.group(1)
-        # Process ended — check result
+        # Process ended; check result
         proc.wait()
         remaining_stderr = proc.stderr.read() if proc.stderr else ""
         login_state["output"] += remaining_stderr
@@ -1228,7 +1284,7 @@ async def oauth_cloud_claim(
     data = resp.json()
     tokens = data.get("tokens", {}) or {}
     tool = _load(tool_id)
-    # Google's token endpoint doesn't include the user's email — fetch it
+    # Google's token endpoint doesn't include the user's email; fetch it
     # from userinfo so the UI can show "you connected ericzeng@gmail.com"
     # rather than the generic "Google account" placeholder.
     if tool.name.lower() == "google" and tokens.get("access_token") and not tokens.get("email"):
@@ -1251,7 +1307,7 @@ def _persist_cloud_tokens(tool: ToolDefinition, tokens: dict) -> None:
     """Normalise the cloud's claim response into tool.oauth_tokens.
 
     Per-provider shaping mirrors what the v1.0.25 local-callback flow used
-    to write — the rest of the app (refresh helpers, MCP env injection)
+    to write; the rest of the app (refresh helpers, MCP env injection)
     expects exactly this shape.
     """
     name = tool.name.lower()
@@ -1307,7 +1363,7 @@ async def _refresh_via_proxy(provider: str, tool: ToolDefinition, default_expiry
                 json={"refresh_token": refresh_token},
             )
         if resp.status_code == 401:
-            # Provider rejected — user revoked at the provider's side. Mark
+            # Provider rejected; user revoked at the provider's side. Mark
             # as needing re-auth so the UI prompts a Reconnect.
             tool.auth_status = "expired"
             _save(tool)
@@ -1340,7 +1396,7 @@ async def _refresh_via_proxy(provider: str, tool: ToolDefinition, default_expiry
 async def refresh_google_token(tool: ToolDefinition) -> Optional[str]:
     """Refresh an expired Google access_token via the Fly cloud-proxy.
 
-    The client_secret never leaves Fly — desktop only POSTs the
+    The client_secret never leaves Fly; desktop only POSTs the
     refresh_token. Same pattern as Airtable/HubSpot. Pre-v1.0.29 builds
     held the secret in their bundled .env; v1.0.29 removed it.
     """
@@ -1896,3 +1952,60 @@ async def telegram_password(payload: dict) -> dict:
     await _tg_finalize_after_auth(tool, phone, client)
     _TG_PENDING.pop(tool_id, None)
     return {"ok": True}
+
+
+@tools_lib.router.post("/google-oauth-token")
+async def google_oauth_token_proxy(request: Request):
+    """Local mimic of Google's OAuth2 token endpoint for the
+    google-workspace-mcp subprocess.
+
+    google-workspace-mcp's google-auth library posts form-encoded
+    {grant_type, refresh_token, client_id, client_secret} on every
+    expired-token refresh. Because OAuth runs through a cloud-side
+    rotation pool, the local CLIENT_ID/SECRET don't match the pool slot
+    that minted the refresh_token, so a direct refresh against Google
+    returns unauthorized_client. We accept the form-encoded shape,
+    discard the (mismatched) local client creds, and forward the
+    refresh_token to api.openswarm.com/api/oauth/google/refresh which
+    walks the pool to find the issuing slot. The cloud's JSON envelope
+    is reshaped back to Google's native token-endpoint response so
+    google-auth keeps working transparently.
+    """
+    form = await request.form()
+    grant_type = form.get("grant_type") or ""
+    refresh_token = form.get("refresh_token") or ""
+    if grant_type != "refresh_token" or not refresh_token:
+        return Response(
+            content='{"error":"unsupported_grant_type"}',
+            status_code=400,
+            media_type="application/json",
+        )
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            upstream = await client.post(
+                f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/google/refresh",
+                json={"refresh_token": refresh_token},
+            )
+    except Exception as e:
+        return Response(
+            content=f'{{"error":"upstream_unreachable","error_description":"{e}"}}',
+            status_code=502,
+            media_type="application/json",
+        )
+    if upstream.status_code != 200:
+        return Response(
+            content=upstream.text,
+            status_code=upstream.status_code,
+            media_type="application/json",
+        )
+    tokens = (upstream.json() or {}).get("tokens") or {}
+    return Response(
+        content=json.dumps({
+            "access_token": tokens.get("access_token", ""),
+            "expires_in": tokens.get("expires_in", 3600),
+            "scope": tokens.get("scope", ""),
+            "token_type": tokens.get("token_type", "Bearer"),
+        }),
+        status_code=200,
+        media_type="application/json",
+    )

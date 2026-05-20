@@ -30,14 +30,14 @@ import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import CloseIcon from '@mui/icons-material/Close';
 import LinearProgress from '@mui/material/LinearProgress';
 import CircularProgress from '@mui/material/CircularProgress';
-// Settings is a global modal — lazy-load so its 2.3K LOC + Stripe / OAuth helpers
-// don't ship on first paint. Prefetched on idle so click-to-open feels instant.
+// Settings modal lazy-loaded so its 2.3K LOC + Stripe/OAuth helpers don't ship on first paint.
 const Settings = React.lazy(() => import('@/app/pages/Settings/Settings'));
 import DynamicIsland from '@/app/components/DynamicIsland';
 import Dashboard from '@/app/pages/Dashboard/Dashboard';
 import DashboardHost from '@/app/components/Layout/DashboardHost';
 import { useLastDashboardId } from '@/shared/hooks/useLastDashboardId';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
+import { shallowEqual } from 'react-redux';
 import { fetchDashboards, createDashboard, renameDashboard } from '@/shared/state/dashboardsSlice';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
 import { addBrowserCard, addBrowserTab } from '@/shared/state/dashboardLayoutSlice';
@@ -66,13 +66,7 @@ const AppShell: React.FC = () => {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const navigateRaw = useNavigate();
-  // Wrap navigation in startTransition so React treats the route swap
-  // as non-urgent: the click handler returns immediately and paint
-  // happens before the heavy unmount-old-page / mount-new-page work
-  // runs. Eliminates the "click → wait → page appears" gap on slow
-  // routes (Actions, Apps, Skills) when the main thread is busy with
-  // agent streaming dispatches. Same call signature as useNavigate's
-  // return so existing call sites stay untouched.
+  // startTransition wrapper: route swap becomes non-urgent so click handler returns immediately; eliminates the "click, wait, page appears" gap on slow routes.
   const navigate = useMemo(() => {
     const fn = (...args: Parameters<typeof navigateRaw>) => {
       startTransition(() => {
@@ -110,7 +104,6 @@ const AppShell: React.FC = () => {
   });
   const [snackbarDismissed, setSnackbarDismissed] = useState(false);
 
-  // ---- Warning banner: no internet / no model connected ----
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -124,19 +117,11 @@ const AppShell: React.FC = () => {
     };
   }, []);
 
-  // Derive "any model connected" from the /agents/models response (already
-  // fetched into Redux at app start via Main.tsx and re-fetched by
-  // Settings.tsx after every subscription connect/disconnect). That endpoint
-  // intersects BUILTIN_MODELS with both the user's API keys AND 9Router's
-  // live connection state, so a non-empty byProvider means there's at least
-  // one usable model — regardless of whether it came from a typed API key
-  // or an OAuth subscription flow. This replaces the previous approach of
-  // polling /agents/subscriptions/status in an effect keyed to anthropicKey,
-  // which didn't refresh when a non-Anthropic subscription was connected.
+  // /agents/models intersects BUILTIN_MODELS with API keys + 9Router state; non-empty means at least one usable model.
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
   const hasModelConnected = Object.keys(modelsByProvider).length > 0;
-  // Don't flash the banner while the initial /agents/models fetch is in flight
+  // Wait for initial fetch to land before flashing the banner.
   const showWarningBanner = !isOnline || (modelsLoaded && !hasModelConnected);
 
   const bannerDismissedForVersion = availableVersion != null && dismissedVersion === availableVersion;
@@ -163,13 +148,22 @@ const AppShell: React.FC = () => {
     (window as any).openswarm?.installUpdate();
   }, [installing, dispatch]);
 
-  const dashboardItems = useAppSelector((state) => state.dashboards.items);
-  const dashboardList = Object.values(dashboardItems).sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+  // shallowEqual on top-level Immer dicts: nested mutations bump the dict reference, causing AppShell to re-render on every rename/output bump despite identical structure.
+  const dashboardItems = useAppSelector(
+    (state) => state.dashboards.items,
+    shallowEqual,
+  );
+  const dashboardList = React.useMemo(
+    () => Object.values(dashboardItems).sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    ),
+    [dashboardItems],
   );
 
-  const outputItems = useAppSelector((state) => state.outputs.items);
-  // memo so the sort doesn't re-run on every AppShell re-render.
+  const outputItems = useAppSelector(
+    (state) => state.outputs.items,
+    shallowEqual,
+  );
   const appsList = React.useMemo(
     () => Object.values(outputItems).sort(
       (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
@@ -182,9 +176,7 @@ const AppShell: React.FC = () => {
     dispatch(fetchOutputs());
   }, [dispatch]);
 
-  // Idle-prefetch the lazy Settings chunk so click-to-open is instant.
-  // requestIdleCallback waits until the browser is genuinely idle so we
-  // don't fight first-paint work for the network slot.
+  // Idle-prefetch the lazy Settings chunk so click-to-open is instant; requestIdleCallback avoids fighting first-paint.
   useEffect(() => {
     const ric = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 1500));
     const handle = ric(() => {
@@ -269,9 +261,6 @@ const AppShell: React.FC = () => {
     try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); } catch {}
   }, [sidebarWidth]);
 
-  // Native notification click handler. The notification helper fires a
-  // window event with the session id + dashboard id; bring the user back
-  // to that dashboard and queue a card focus.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail || {};
@@ -321,8 +310,6 @@ const AppShell: React.FC = () => {
     ? location.pathname.split('/dashboard/')[1]
     : null;
 
-  // Sticky last-visited dashboard id — survives navigation away from /dashboard/:id
-  // so the Dashboard component can stay mounted with stable props.
   const [lastDashboardId, setLastDashboardId] = useLastDashboardId();
   const activeAppId = location.pathname.startsWith('/apps/')
     ? location.pathname.split('/apps/')[1]
@@ -380,7 +367,6 @@ const AppShell: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: c.bg.page }}>
-      {/* Draggable title bar */}
       <Box
         sx={{
           height: 38,
@@ -401,10 +387,7 @@ const AppShell: React.FC = () => {
           <IconButton
             size="small"
             onClick={() => setSidebarCollapsed((prev) => !prev)}
-            // Onboarding handle — the runtime reads aria-expanded to
-            // detect a collapsed sidebar and walks the user through
-            // clicking this toggle before targeting any sidebar-* item,
-            // mirroring the customization-collapse preflight.
+            // Onboarding runtime reads aria-expanded to detect a collapsed sidebar.
             data-onboarding="sidebar-toggle"
             aria-expanded={!sidebarCollapsed}
             sx={{
@@ -482,7 +465,6 @@ const AppShell: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Warning banner: no internet or no model connected */}
       <Collapse in={showWarningBanner} timeout={350} unmountOnExit>
         <Box
           sx={{
@@ -504,10 +486,10 @@ const AppShell: React.FC = () => {
           <ErrorSlime size={22} />
           <Typography sx={{ fontSize: '0.78rem', color: '#ef4444', flex: 1, fontWeight: 500, letterSpacing: '0.01em' }}>
             {!isOnline
-              ? 'No internet connection — agents cannot reach AI models or external services'
+              ? 'No internet connection; agents cannot reach AI models or external services'
               : (
                 <>
-                  No AI model connected —{' '}
+                  No AI model connected.{' '}
                   <Box
                     component="span"
                     onClick={() => dispatch(openSettingsModal('models'))}
@@ -636,16 +618,11 @@ const AppShell: React.FC = () => {
         }}
       >
         <Box sx={{ flex: 1, overflow: 'auto', pt: 0.5, '&::-webkit-scrollbar': { width: 0 } }}>
-          {/* Dashboards section */}
           <Box sx={{ px: 1, mb: 0.25 }}>
             <ListItemButton
               onClick={handleDashboardsClick}
               data-onboarding="sidebar-dashboards"
-              // Expose expanded state so the onboarding runtime can
-              // skip the sidebar-click step when the section is already
-              // open (clicking it again would collapse it — opposite
-              // of what we want). Read via element.dataset.expanded /
-              // aria-expanded in the runtime guard.
+              // Onboarding reads expanded so it skips the click step (re-click would collapse).
               data-expanded={dashboardsExpanded ? 'true' : 'false'}
               aria-expanded={dashboardsExpanded}
               sx={{
@@ -719,11 +696,7 @@ const AppShell: React.FC = () => {
                   return (
                     <Box
                       key={entry.id}
-                      // Onboarding targets: every row carries a stable id so
-                      // the AC can point at a specific dashboard, plus the
-                      // first row gets a generic "first" alias so the AC
-                      // can teach "click into a dashboard" without knowing
-                      // any specific id.
+                      // First row gets generic "first" alias so onboarding can teach "click into a dashboard" without a specific id.
                       data-onboarding={
                         idx === 0 ? 'dashboard-row-first' : `dashboard-row-${entry.id}`
                       }
@@ -798,10 +771,8 @@ const AppShell: React.FC = () => {
             </Collapse>
           </Box>
 
-          {/* Divider */}
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: `0.5px solid ${c.border.subtle}` }} />
 
-          {/* Customization section */}
           <Box sx={{ px: 1, mb: 0.25 }}>
             <ListItemButton
               onClick={() => {
@@ -850,18 +821,18 @@ const AppShell: React.FC = () => {
             <Collapse in={customizationExpanded} timeout={200}>
               <Box sx={{ ml: 2, mt: 0.25, mb: 0.5, borderLeft: `1px solid ${c.border.medium}` }}>
                 {CUSTOMIZATION_ITEMS.map((item) => {
-                  // Replaced NavLink with a manual click handler so the
-                  // wrapped (startTransition-aware) navigate runs.
-                  // react-router's NavLink calls its own internal
-                  // navigate which doesn't go through our wrapper,
-                  // bypassing the transition optimization that makes
-                  // Actions/Skills/Modes feel instant.
+                  // Manual click handler instead of NavLink: NavLink's internal navigate bypasses our startTransition wrapper.
                   const isActive = location.pathname === item.path;
                   return (
                     <Box
                       key={item.path}
                       data-onboarding={item.onboarding}
                       onClick={() => navigate(item.path)}
+                      onMouseEnter={() => {
+                        // Hover-prefetch lazy chunk so click is ~0ms (see Main.tsx for path -> import map).
+                        const fn = (window as any).__openswarmPrefetchRoute;
+                        if (typeof fn === 'function') fn(item.path);
+                      }}
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
@@ -871,12 +842,7 @@ const AppShell: React.FC = () => {
                         py: 0.5,
                         mx: 0.5,
                         cursor: 'pointer',
-                        // Rounded pill for the active item, same shape as
-                        // toolbar tabs. Use 25-percent accent alpha so
-                        // the warm brand color reads CLEARLY against
-                        // dark-mode bg.secondary; the earlier 10
-                        // percent value muddied to grey and lost the
-                        // selected affordance entirely.
+                        // 25% accent alpha needed for readable contrast on dark-mode bg.secondary; 10% muddied to grey.
                         borderRadius: `${c.radius.md}px`,
                         bgcolor: isActive ? `${c.accent.primary}40` : 'transparent',
                         '&:hover': { bgcolor: isActive ? `${c.accent.primary}55` : `${c.text.tertiary}0A` },
@@ -904,13 +870,15 @@ const AppShell: React.FC = () => {
             </Collapse>
           </Box>
 
-          {/* Divider */}
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: `0.5px solid ${c.border.subtle}` }} />
 
-          {/* Apps section */}
           <Box sx={{ px: 1, mb: 0.25 }}>
             <ListItemButton
               onClick={handleAppsClick}
+              onMouseEnter={() => {
+                const fn = (window as any).__openswarmPrefetchRoute;
+                if (typeof fn === 'function') fn('/apps');
+              }}
               data-onboarding="sidebar-apps"
               sx={{
                 borderRadius: 1.5,
@@ -992,12 +960,6 @@ const AppShell: React.FC = () => {
                         py: 0.5,
                         mx: 0.5,
                         cursor: 'pointer',
-                        // Rounded pill for the active item, same shape as
-                        // toolbar tabs. Use 25-percent accent alpha so
-                        // the warm brand color reads CLEARLY against
-                        // dark-mode bg.secondary; the earlier 10
-                        // percent value muddied to grey and lost the
-                        // selected affordance entirely.
                         borderRadius: `${c.radius.md}px`,
                         bgcolor: isActive ? `${c.accent.primary}40` : 'transparent',
                         '&:hover': { bgcolor: isActive ? `${c.accent.primary}55` : `${c.text.tertiary}0A` },
@@ -1027,7 +989,6 @@ const AppShell: React.FC = () => {
 
         </Box>
 
-        {/* Settings */}
         <Box
           sx={{
             px: 1,
@@ -1080,11 +1041,7 @@ const AppShell: React.FC = () => {
         onMouseDown={handleResizeStart}
         onDoubleClick={handleResizeDoubleClick}
         sx={{
-          // Hit-target is 6px for ergonomic drag but the handle is
-          // positioned at -3px so it overlaps the sidebar/content seam
-          // instead of occupying its own visible column. This kills the
-          // "chunky empty strip" that read as bad spacing without
-          // shrinking the actual drag region.
+          // 6px hit-target at -3px margin overlaps the seam so the drag region doesn't read as a visible empty strip.
           width: 6,
           marginLeft: '-3px',
           marginRight: '-3px',
@@ -1115,8 +1072,7 @@ const AppShell: React.FC = () => {
       )}
 
       <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: c.bg.page, position: 'relative' }}>
-        {/* Non-dashboard routes render here. Hidden when the dashboard view is active
-            so the persistent Dashboard layered above can take over the visible area. */}
+        {/* Hidden (not unmounted) when the dashboard view is active so the persistent Dashboard layered above can take over. */}
         <Box
           sx={{
             position: 'absolute',
@@ -1128,11 +1084,7 @@ const AppShell: React.FC = () => {
           <Outlet />
         </Box>
 
-        {/* Persistent Dashboard layer — always mounted once a dashboard has been visited.
-            Hidden via CSS when on other routes so webviews and dashboard state survive
-            route navigation. The Dashboard component reads its dashboardId from the
-            sticky lastDashboardId hook so its dashboardId useEffect doesn't re-fire on
-            incidental URL changes. */}
+        {/* CSS-hidden on other routes so webviews + state survive nav. */}
         {lastDashboardId && (
           <DashboardHost visible={isDashboardViewActive}>
             <Dashboard dashboardId={lastDashboardId} isActive={isDashboardViewActive} />
@@ -1214,7 +1166,7 @@ const AppShell: React.FC = () => {
           }}
         >
           {updateStatus === 'available' && `OpenSwarm ${availableVersion} is available`}
-          {updateStatus === 'downloaded' && `OpenSwarm ${availableVersion} downloaded — restart to update`}
+          {updateStatus === 'downloaded' && `OpenSwarm ${availableVersion} downloaded; restart to update`}
         </Alert>
       </Snackbar>
     </Box>

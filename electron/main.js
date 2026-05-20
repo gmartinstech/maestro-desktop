@@ -8,16 +8,11 @@ const fs = require('fs');
 const getPort = require('get-port');
 const http = require('http');
 const affiliateTracking = require('./affiliateTracking');
+const tray = require('./tray');
+const workflowsLifecycle = require('./workflowsLifecycle');
 
-// Prevent duplicate instances. Without this, double-clicking the app icon
-// (or macOS auto-launch + manual launch overlapping) spawns two independent
-// processes — each with its own backend on a different port — resulting in
-// one populated window and one empty window.
-// Register openswarm:// protocol handler BEFORE any gotLock branching.
-// Must happen synchronously at the top of main.js so the OS knows this
-// binary is the default handler even before whenReady fires.
+// openswarm:// protocol must register synchronously at top of main.js, before gotLock branching.
 if (process.defaultApp) {
-  // Dev run: `electron .` needs the entry-script path to re-launch cleanly.
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient('openswarm', process.execPath, [path.resolve(process.argv[1])]);
   }
@@ -25,30 +20,21 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('openswarm');
 }
 
-// Pending deep-link captured before mainWindow exists (cold-launch case).
-// Flushed to renderer once mainWindow is ready.
 let pendingDeepLink = null;
 
 function forwardDeepLinkToRenderer(url) {
   if (!url) return;
-  // openswarm:// URLs split by host: "auth" → subscription token,
-  // "oauth/{provider}/complete" → OAuth claim. Each goes to its own
-  // IPC channel so the renderer can route without parsing twice.
+  // openswarm:// splits by host: "auth" = subscription token, "oauth/{p}/complete" = OAuth claim.
   let channel = 'openswarm:auth-url';
   try {
     const u = new URL(url);
     if (u.host === 'oauth' && u.pathname.endsWith('/complete')) {
       channel = 'openswarm:oauth-claim';
     }
-  } catch (_) {
-    // Malformed URL — fall back to legacy channel; renderer ignores anything
-    // it doesn't recognise.
-  }
+  } catch (_) {}
   if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isLoading()) {
     mainWindow.webContents.send(channel, url);
   } else {
-    // Stash both URL and target channel so we can flush correctly when
-    // the renderer is ready. Replaces the simple string with a {channel,url}.
     pendingDeepLink = { channel, url };
   }
 }
@@ -62,9 +48,7 @@ if (!gotLock) {
   app.exit(0);
 } else {
   app.on('second-instance', (_event, argv) => {
-    // Windows/Linux: a `openswarm://...` click lands here because the OS
-    // re-launches the app with the URL as an argv. We swallow the second
-    // instance, focus the existing window, and forward the URL to renderer.
+    // Windows/Linux: openswarm:// click re-launches the app with the URL as argv.
     const url = extractOpenswarmUrl(argv);
     if (url) forwardDeepLinkToRenderer(url);
     if (mainWindow) {
@@ -74,14 +58,20 @@ if (!gotLock) {
   });
 }
 
-// macOS-only: clicks on openswarm:// links fire this event (instead of
-// relaunching the process).
+// macOS-only: openswarm:// clicks fire this event instead of relaunching the process.
 app.on('open-url', (event, url) => {
   event.preventDefault();
   forwardDeepLinkToRenderer(url);
   if (mainWindow) mainWindow.focus();
 });
 
+// Windows AppUserModelID: required so native toast notifications fire
+// instead of falling back to legacy balloon tips. Must be set BEFORE the
+// first Notification is created. electron-builder also injects this at
+// install time but setting it here defends against ad-hoc dev runs.
+if (process.platform === 'win32') {
+  try { app.setAppUserModelId('com.openswarm.app'); } catch (_) {}
+}
 app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
@@ -93,14 +83,10 @@ let backendProcess = null;
 let backendPort = null;
 let cachedUpdateStatus = { status: 'idle', info: null, error: null };
 
-// Splash boot UX. Opens immediately on app.whenReady so the user sees
-// motion within ~1s of double-click instead of a 30-60s frozen icon
-// while Python imports + Defender real-time scans warm up. Closed once
-// mainWindow is `ready-to-show`. See electron/splash/splash.html.
 let splashWindow = null;
 let mainWindowReady = false;
-let isQuittingFromSplash = false;  // guards against double-quit during error shutdown
-const recentBackendStderr = [];   // ring buffer (last ~60 lines) for splash error UI
+let isQuittingFromSplash = false;
+const recentBackendStderr = [];
 let splashDataUrlCache = null;
 
 const isPackaged = app.isPackaged;
@@ -108,13 +94,7 @@ const isDev = process.env.ELECTRON_DEV === '1';
 const iconPath = process.platform === 'win32'
   ? path.join(__dirname, 'build', 'icon.ico')
   : path.join(__dirname, 'build', 'icon.png');
-// PNG version of the icon for the splash. We ship a copy at splash/icon.png
-// because electron-builder's `build/` directory is its inputs folder (used
-// to GENERATE the .icns bundled icon) and is NOT included in the shipped
-// asar archive — so `build/icon.png` exists in dev but ENOENTs in packaged
-// builds. `splash/` IS shipped (alongside splash.html), so reading from
-// there works in both modes. See the kept-in-sync copy command in the
-// build scripts (or just commit both).
+// build/ is electron-builder input, not in the asar; splash uses splash/icon.png.
 const iconPngPath = path.join(__dirname, 'splash', 'icon.png');
 
 function loadSplashDataUrl() {
@@ -144,16 +124,14 @@ function createSplashWindow() {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    skipTaskbar: true,           // avoid duplicate taskbar entry next to mainWindow
+    skipTaskbar: true,
     show: true,
     center: true,
     backgroundColor: '#0a0a10',  // opaque to dodge Windows DWM transparency quirks
     title: 'OpenSwarm',
     icon: iconPath,
     webPreferences: {
-      // Splash content is fully self-contained (data URL, no remote
-      // resources) so nodeIntegration here is safe and lets the splash
-      // listen on ipcRenderer directly without a separate preload.
+      // Splash is fully self-contained (data URL), so nodeIntegration is safe.
       nodeIntegration: true,
       contextIsolation: false,
       sandbox: false,
@@ -162,18 +140,11 @@ function createSplashWindow() {
   });
   w.setMenuBarVisibility(false);
   w.loadURL(dataUrl);
-  // If the splash is dismissed BEFORE the main window has shown itself,
-  // treat that as the user intentionally bailing out of boot. Without
-  // this, splash.close() would silently leave a backend running with
-  // no UI, which is confusing and leaks the python process.
-  // The isQuittingFromSplash guard avoids a double-quit when the user
-  // clicked the splash's Quit button (which also calls app.quit) — that
-  // path closes the splash and would re-trigger this branch.
+  // Splash close before main window means user bailed; quit so backend doesn't leak.
   w.on('closed', () => {
     splashWindow = null;
     if (!mainWindowReady && !isQuittingFromSplash) {
       isQuittingFromSplash = true;
-      console.log('[splash] closed before main window appeared — quitting app');
       try { if (!isDev) killBackend(); } catch (_) {}
       app.quit();
     }
@@ -187,17 +158,12 @@ function emitSplashStatus(payload) {
   }
 }
 
-// OS-tailored status copy. The "first launch is slow" experience has very
-// different causes per platform (Defender on Windows, Gatekeeper +
-// XProtect notarization scan on macOS), and naming the actual culprit
-// helps users feel like the wait is intentional rather than the app being
-// broken. Used by the long-wait branches in waitForBackend below.
 function osStillStartingText() {
   if (process.platform === 'win32') {
-    return 'Still starting — Windows Defender is scanning files (first launch only)…';
+    return 'Still starting, Windows Defender is scanning files (first launch only)…';
   }
   if (process.platform === 'darwin') {
-    return 'Still starting — macOS is verifying the bundle (first launch only)…';
+    return 'Still starting, macOS is verifying the bundle (first launch only)…';
   }
   return 'Still starting (first launch is slower than subsequent launches)…';
 }
@@ -211,16 +177,10 @@ function osTakingTooLongText() {
   return 'Backend is taking longer than usual. You can wait, view logs, or restart.';
 }
 
-/**
- * macOS GUI apps launched from Finder/Dock inherit a minimal PATH from launchd
- * (/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin) — none of the user's shell
- * additions (nvm, volta, homebrew, bun, etc.) are present. Resolve the real
- * PATH by asking the user's default shell, then fall back to well-known dirs.
- */
+/** Resolves the user's real PATH; macOS GUI apps inherit only launchd's minimal PATH. */
 function getShellPath() {
   if (process.platform !== 'darwin' || isDev) return process.env.PATH || '';
 
-  // Strategy 1: ask the user's login shell for its PATH
   try {
     const userShell = process.env.SHELL || '/bin/zsh';
     const result = execFileSync(userShell, ['-ilc', 'echo $PATH'], {
@@ -230,9 +190,8 @@ function getShellPath() {
     });
     const resolved = result.trim();
     if (resolved) return resolved;
-  } catch (_) { /* fall through */ }
+  } catch (_) {}
 
-  // Strategy 2: read macOS system PATH config (/etc/paths + /etc/paths.d/*)
   const systemPaths = [];
   try {
     const base = fs.readFileSync('/etc/paths', 'utf8');
@@ -240,7 +199,7 @@ function getShellPath() {
       const p = line.trim();
       if (p) systemPaths.push(p);
     }
-  } catch (_) { /* ignore */ }
+  } catch (_) {}
   try {
     const pathsD = '/etc/paths.d';
     if (fs.existsSync(pathsD)) {
@@ -252,9 +211,8 @@ function getShellPath() {
         }
       }
     }
-  } catch (_) { /* ignore */ }
+  } catch (_) {}
 
-  // Strategy 3: well-known user-local bin directories
   const home = os.homedir();
   const fallbackDirs = [
     path.join(home, '.local/bin'),
@@ -274,14 +232,14 @@ function getShellPath() {
         fallbackDirs.unshift(path.join(nvmDir, versions[0], 'bin'));
       }
     }
-  } catch (_) { /* ignore */ }
+  } catch (_) {}
 
   const seen = new Set();
   const dirs = [];
   for (const d of [...fallbackDirs, ...systemPaths, ...(process.env.PATH || '').split(':')]) {
     if (!d || seen.has(d)) continue;
     seen.add(d);
-    try { if (fs.statSync(d).isDirectory()) dirs.push(d); } catch { /* skip */ }
+    try { if (fs.statSync(d).isDirectory()) dirs.push(d); } catch {}
   }
   return dirs.join(':');
 }
@@ -294,18 +252,7 @@ function getResourcePath(...segments) {
 }
 
 function getPythonPath() {
-  // python-build-standalone layout differs by OS:
-  //   macOS / Linux: <env>/bin/python3
-  //   Windows:       <env>\python.exe   (no bin/, no python3)
-  //
-  // macOS extra: invoke via Python.app/Contents/MacOS/python3 instead of
-  // bin/python3 so LaunchServices reads LSUIElement=1 from the wrapper
-  // bundle's Info.plist and skips the Dock entry. Without this, the
-  // bundleless python3.13 binary appears as a generic "exec" placeholder
-  // in the Dock on fresh user Macs, bouncing for the entire boot window.
-  // sys.prefix / sys.executable still resolve via realpath so all stdlib
-  // and site-packages discovery is unchanged. See scripts/build-python-env.sh
-  // for the wrapper layout invariants.
+  // macOS uses Python.app/Contents/MacOS/python3 so LSUIElement suppresses the Dock entry.
   if (isPackaged) {
     const envPath = path.join(process.resourcesPath, 'python-env');
     if (process.platform === 'win32') {
@@ -313,9 +260,6 @@ function getPythonPath() {
     }
     if (process.platform === 'darwin') {
       const wrapped = path.join(envPath, 'Python.app', 'Contents', 'MacOS', 'python3');
-      // Defensive fallback: if the wrapper is missing for any reason
-      // (e.g. older build cache), fall back to the bare binary so boot
-      // still succeeds — only the Dock-icon suppression is lost.
       if (fs.existsSync(wrapped)) return wrapped;
     }
     return path.join(envPath, 'bin', 'python3');
@@ -326,22 +270,7 @@ function getPythonPath() {
   return path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python3');
 }
 
-// Path to a real Node.js binary bundled in extraResources, or null if not
-// shipped (dev mode, or build that skipped the node-fetch step). Backend
-// reads OPENSWARM_NODE_PATH env var to prefer this over both system `node`
-// (which fresh user Macs lack) and the ELECTRON_RUN_AS_NODE fallback
-// (which has flaky Dock behavior + slow cold-start). Used by 9Router and
-// MCP bundle spawning.
-//
-// Layout shipped by scripts/build-app.sh:
-//   <resources>/node/arm64/bin/node
-//   <resources>/node/x64/bin/node
-// Both arches are staged so a single extraResources entry covers
-// publish-mode dual-arch builds without per-arch staging hooks; the
-// runtime picks the matching one by process.arch. Wasted ~25 MB per
-// DMG of cross-arch payload is the cost of avoiding electron-builder's
-// per-arch beforePack complexity. Windows uses node.exe at the root of
-// the per-arch subdir.
+// Both arches staged to avoid per-arch beforePack hooks.
 function getBundledNodePath() {
   if (!isPackaged) return null;
   const arch = process.arch === 'x64' ? 'x64' : (process.arch === 'arm64' ? 'arm64' : null);
@@ -454,12 +383,7 @@ function runInstagramBuddyCli(subcommand, extraEnv = {}) {
   });
 }
 
-// Polls /api/health/check until the backend answers 200, or the spawned
-// python process exits non-zero (real failure). Never times out by wall
-// clock — on a cold-Defender Windows install this can take several
-// minutes the first time, and silently calling app.quit() would leave
-// users staring at a vanished icon. Instead we surface progressive
-// warnings on the splash so the wait feels intentional.
+// Never wall-clock times out: cold-Defender Windows can take minutes.
 function waitForBackend(port, opts = {}) {
   const proc = opts.process || null;
   const start = Date.now();
@@ -471,7 +395,7 @@ function waitForBackend(port, opts = {}) {
 
     if (proc) {
       proc.once('exit', (code) => {
-        // exit with code === null means we killed it ourselves (normal shutdown).
+        // code === null = we killed it ourselves (normal shutdown).
         if (code !== 0 && code !== null) {
           finish(reject, new Error(`Backend process exited with code ${code} during startup`));
         }
@@ -511,13 +435,7 @@ function waitForBackend(port, opts = {}) {
   });
 }
 
-// Race a port-range search against a 3-second wall clock. On most machines
-// `getPort.makeRange(8324, 8424)` returns within milliseconds, but Windows
-// EDR / corp-firewall stacks can intercept the bind() probes and stall each
-// attempt for seconds — 100 attempts × multi-second stalls = "OpenSwarm is
-// hung at startup." The fallback `getPort({ port: 0 })` lets the OS pick
-// any free ephemeral port; we don't actually care about staying inside the
-// 8324-range — the renderer reads the port via IPC, no hardcoded assumption.
+// Windows EDR stalls each bind probe; if we don't get a preferred port in 3s, fall back to OS-assigned.
 async function pickBackendPort() {
   const PREFERRED_TIMEOUT_MS = 3000;
   const preferred = getPort({ port: getPort.makeRange(8324, 8424) });
@@ -528,7 +446,7 @@ async function pickBackendPort() {
   const winner = await Promise.race([preferred, timeout]);
   clearTimeout(timeoutHandle);
   if (winner !== null) return winner;
-  console.warn(`[boot] getPort.makeRange(8324,8424) stalled past ${PREFERRED_TIMEOUT_MS}ms — falling back to OS-assigned port`);
+  console.warn(`[boot] getPort.makeRange(8324,8424) stalled past ${PREFERRED_TIMEOUT_MS}ms, falling back to OS-assigned port`);
   return await getPort({ port: 0 });
 }
 
@@ -541,11 +459,6 @@ async function startBackend() {
 
   const shellPath = getShellPath();
 
-  // Identifies how this build was packaged. Read by the backend service
-  // client so the cloud can split installer-using customers from
-  // run-from-source developers in dashboards. Honors a build-time override
-  // (set in CI when producing platform installers) before falling back to
-  // OS-derived defaults.
   let installMethod = process.env.OPENSWARM_INSTALL_METHOD;
   if (!installMethod) {
     if (!isPackaged) {
@@ -555,8 +468,6 @@ async function startBackend() {
     } else if (process.platform === 'win32') {
       installMethod = 'windows-setup';
     } else if (process.platform === 'linux') {
-      // electron-builder produces AppImage by default for linux targets.
-      // Override at packaging time when building .deb / .rpm.
       installMethod = 'appimage';
     } else {
       installMethod = 'unknown';
@@ -570,43 +481,24 @@ async function startBackend() {
     OPENSWARM_PORT: String(backendPort),
     OPENSWARM_ELECTRON_PATH: process.execPath,
     OPENSWARM_INSTALL_METHOD: installMethod,
-    // Inject the app version so the Python backend can report it in the
-    // analytics envelope. Without this, _read_app_version() in
-    // service/service.py tries to read electron/package.json via a relative
-    // path that resolves correctly in `bash run.sh` dev mode but fails in
-    // packaged dmg/exe builds — which made every shipped install report
-    // app_version="unknown". The path-based fallback stays in place so this
-    // change is purely additive.
+    // Asar-relative reads fail in packaged builds, inject app version instead.
     OPENSWARM_APP_VERSION: app.getVersion(),
-    // Inject the user's BCP 47 locale + IANA timezone. The Python backend
-    // doesn't have reliable APIs for either: locale.getdefaultlocale() is
-    // deprecated and inconsistent across OSes, and Python's local-tz string
-    // sometimes returns "PDT" or "Romance (zomertijd)" rather than
-    // "America/Los_Angeles". Electron has both in canonical form via
-    // app.getLocale() and Intl.DateTimeFormat().resolvedOptions().timeZone.
+    // Python's stdlib locale/tz are unreliable cross-OS, inject canonical BCP 47 + IANA.
     OPENSWARM_LOCALE: app.getLocale(),
     OPENSWARM_TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
     PYTHONDONTWRITEBYTECODE: '1',
-    // PEP 540 UTF-8 mode: makes open() default to UTF-8 on Windows where
-    // the locale is otherwise cp1252. Many backend modules read UTF-8
-    // .md / .json files without an explicit encoding= argument.
+    // PEP 540: force open() to UTF-8 on Windows (cp1252 otherwise).
     PYTHONUTF8: '1',
   };
 
-  // Tell the backend where to find a real Node binary for 9Router and
-  // bundled MCP servers. Preferring this over ELECTRON_RUN_AS_NODE avoids
-  // (a) the second OpenSwarm-as-Node process briefly registering in the
-  // Dock on fresh Macs, and (b) the slow Electron cold-start tail (~5-15s)
-  // that Electron-as-Node adds vs. native node (~1-2s). Falls back to the
-  // existing system-node / Electron-as-Node chain in nine_router._find_node()
-  // if the env var is unset (dev mode, or build without node fetch).
+  // Bundled node avoids a second Dock entry on fresh Macs and ~5-15s cold-start tail vs ELECTRON_RUN_AS_NODE.
   const bundledNode = getBundledNodePath();
   if (bundledNode) {
     env.OPENSWARM_NODE_PATH = bundledNode;
   }
 
   if (isPackaged) {
-    // site-packages location differs by OS — Windows has no lib/python3.13/.
+    // Windows site-packages lives under Lib/, not lib/python3.13/.
     const pythonEnvSitePackages = process.platform === 'win32'
       ? path.join(process.resourcesPath, 'python-env', 'Lib', 'site-packages')
       : path.join(process.resourcesPath, 'python-env', 'lib', 'python3.13', 'site-packages');
@@ -630,9 +522,6 @@ async function startBackend() {
   backendProcess.stdout.on('data', (data) => {
     const text = data.toString();
     process.stdout.write(`[backend] ${text}`);
-    // uvicorn prints this exact phrase once the ASGI app is live and
-    // routes are mounted — perfect milestone for the splash to flip
-    // from "starting backend" to "loading components".
     if (text.indexOf('Application startup complete') !== -1) {
       emitSplashStatus('Loading components…');
     }
@@ -641,9 +530,6 @@ async function startBackend() {
   backendProcess.stderr.on('data', (data) => {
     const text = data.toString();
     process.stderr.write(`[backend] ${text}`);
-    // Buffer the most recent stderr lines for the splash error UI so
-    // when boot fails we can show actionable context inline instead of
-    // making the user dig through a log file.
     recentBackendStderr.push(text);
     while (recentBackendStderr.length > 60) recentBackendStderr.shift();
   });
@@ -661,26 +547,27 @@ async function startBackend() {
   await waitForBackend(backendPort, { process: backendProcess });
   console.log(`Backend ready on port ${backendPort}`);
 
-  // Backend writes a per-install auth token file at startup. Read it
-  // here so the renderer can include it in WS URLs (`?token=...`) and
-  // HTTP Authorization headers. Without this, any webpage loaded in
-  // any browser on the machine could hit our localhost API and
-  // impersonate the user. See backend/auth.py.
   await loadAuthToken();
+
+  // Tray must stay resident so schedules survive window close.
+  try {
+    tray.setup({ backendPort, authToken });
+    workflowsLifecycle.setBackend({ port: backendPort, token: authToken });
+    workflowsLifecycle.setActiveChangeListener((active) => {
+      const title = active.length ? (active[0].title || 'workflow') : null;
+      tray.setStatus({ activeTitle: title, paused: false });
+    });
+    workflowsLifecycle.startPolling();
+  } catch (e) {
+    console.warn('[tray] setup failed:', e?.message || e);
+  }
 }
 
-// Per-install auth token read from <data-root>/auth.token (backend
-// generates this at startup). Cached here so `get-auth-token` IPC
-// calls are fast. If reads fail initially (race with backend) we
-// retry a few times.
+// Per-install bearer token; mirrors backend/config/paths.py.
 let authToken = '';
 
+
 function getAuthTokenFilePath() {
-  // Mirrors backend/config/paths.py. On macOS the file lives at
-  // ~/Library/Application Support/OpenSwarm/data/auth.token; on
-  // Windows under %APPDATA%/OpenSwarm/data/; on Linux under
-  // ~/.local/share/OpenSwarm/data/. In dev the backend writes it to
-  // backend/data/auth.token instead.
   if (isPackaged) {
     if (process.platform === 'darwin') {
       return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'auth.token');
@@ -691,15 +578,12 @@ function getAuthTokenFilePath() {
       return path.join(xdg, 'OpenSwarm', 'data', 'auth.token');
     }
   }
-  // Dev: backend/data/auth.token relative to repo root.
   return path.join(__dirname, '..', 'backend', 'data', 'auth.token');
 }
 
 async function loadAuthToken() {
   const tokenPath = getAuthTokenFilePath();
-  // Retry up to 20 × 100ms = 2s in case backend is still writing the
-  // file. Backend writes BEFORE binding HTTP port though, so this
-  // usually returns on the first attempt.
+  // 20 * 100ms = 2s retry budget; backend writes the token before HTTP bind, so first-try almost always.
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
       const contents = fs.readFileSync(tokenPath, 'utf8').trim();
@@ -711,7 +595,7 @@ async function loadAuthToken() {
     } catch (_) {}
     await new Promise(r => setTimeout(r, 100));
   }
-  console.warn(`[auth] FAILED to load auth token from ${tokenPath} after 2s — WS/HTTP will be rejected`);
+  console.warn(`[auth] FAILED to load auth token from ${tokenPath} after 2s, WS/HTTP will be rejected`);
 }
 
 function createWindow() {
@@ -723,10 +607,7 @@ function createWindow() {
     title: 'OpenSwarm',
     icon: iconPath,
     titleBarStyle: 'hiddenInset',
-    // Stay hidden until the renderer fires `ready-to-show`. The splash
-    // is what the user looks at; we swap it out for this window only
-    // once React has actually painted, avoiding the white-flash that
-    // Electron windows do during initial layout.
+    // Hidden until ready-to-show so the splash-to-main swap doesn't white-flash.
     show: false,
     backgroundColor: '#1a1a1f',
     webPreferences: {
@@ -747,14 +628,7 @@ function createWindow() {
   mainWindow.webContents.on('will-attach-webview', (_event, webPreferences, params) => {
     webPreferences.plugins = true;
     webPreferences.enableBlinkFeatures = 'EncryptedMedia';
-    // Force our webview preload to attach for every <webview>, unconditionally.
-    // The alternative (reading window.openswarm.getWebviewPreloadPath() in
-    // BrowserCard's React code at module-eval time) raced against the
-    // preload's async contextBridge exposure — the resulting attribute on
-    // the <webview> element ended up empty, so no preload ran and our
-    // passkey shim never loaded. Setting webPreferences.preload here runs
-    // on every attach and can't be out-raced. Absolute path (not file://)
-    // is what webPreferences expects.
+    // Setting preload from React races contextBridge.expose and ends up empty, so force-attach here.
     webPreferences.preload = path.join(__dirname, 'webview-preload.js');
     try {
       console.log('[openswarm:attach-webview] forced preload=', webPreferences.preload, 'src=', params.src);
@@ -768,9 +642,7 @@ function createWindow() {
     mainWindow.webContents.send('webview-new-window', url, mainWindow.webContents.id);
   });
 
-  // Once the renderer has loaded, flush any deep-link URL we captured before
-  // the window existed (cold-launch via openswarm://). pendingDeepLink may
-  // be a string (legacy) OR a {channel, url} object (v1.0.26+ OAuth claims).
+  // Flush any cold-launch deep link captured before the window existed.
   mainWindow.webContents.once('did-finish-load', () => {
     if (pendingDeepLink) {
       if (typeof pendingDeepLink === 'string') {
@@ -786,16 +658,7 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Window-blur / window-focus tracking — analytics signal for "user
-  // switched to another app" (temp-churn). The renderer captures these
-  // through the existing report() pipeline; we just emit IPC notices
-  // here so the React layer can timestamp them and forward to the
-  // local backend's /api/service/submit endpoint.
-  //
-  // Cadence: at most once every 2 seconds per direction. Without that
-  // throttle, dragging a window across desktops or having a popup steal
-  // focus generates a burst of blur/focus pairs that pollute analytics
-  // with noise.
+  // Throttle to 1 per 2s per direction; window drags otherwise spam blur/focus.
   let _lastFocusEvent = 0;
   const FOCUS_THROTTLE_MS = 2000;
   const sendFocusEvent = (kind) => {
@@ -816,11 +679,11 @@ function sendToRenderer(channel, ...args) {
 
 function setupAutoUpdater() {
   if (!autoUpdater) return;
-  // Silent background updates: download on detect, install on next quit.
-  // The OS gates the install on main-process exit (can't replace a
-  // running .app / locked .exe), so an active session is never disrupted.
+  // Download on detect, install on quit: OS can't replace a running .app/.exe.
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  // Renderer pushes the user's experimental-updates setting via IPC right after settings load.
+  autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('update-available', (info) => {
     console.log(`Update available: ${info.version}`);
@@ -855,8 +718,7 @@ function setupAutoUpdater() {
     console.log('Update check skipped:', err.message);
   });
 
-  // Always-on users (lid never closes) miss the once-at-startup check
-  // above. Re-check every 4h; coalesces if a download is already cached.
+  // Always-on users (lid never closed) miss the once-at-startup check, so re-check every 4h.
   setInterval(() => {
     autoUpdater.checkForUpdates().catch((err) => {
       console.log('Periodic update check failed:', err.message);
@@ -868,16 +730,13 @@ function killBackend() {
   if (backendProcess) {
     console.log('Killing backend process...');
     if (process.platform === 'win32') {
-      // Windows: Node's child.kill() only terminates the direct child, leaving
-      // grandchildren (e.g. the router node process the Python backend
-      // spawned) as orphans. Use `taskkill /T /F` to walk the process tree.
+      // child.kill() leaves grandchildren orphaned; taskkill /T /F walks the tree.
       try {
         require('child_process').execFileSync(
           'taskkill', ['/PID', String(backendProcess.pid), '/T', '/F'],
           { stdio: 'ignore' },
         );
       } catch (_) {
-        // taskkill failed (process may have already exited) — fall back to kill().
         try { backendProcess.kill(); } catch (_) {}
       }
     } else {
@@ -893,10 +752,7 @@ function killBackend() {
 }
 
 app.whenReady().then(async () => {
-  // Cold-launch: if the OS opened us via openswarm:// (Windows/Linux it's
-  // in argv; macOS fires open-url AFTER whenReady which we handle above)
-  // route through forwardDeepLinkToRenderer so the URL gets stashed under
-  // its correct IPC channel (auth-url vs oauth-claim).
+  // Cold-launch openswarm:// arrives in argv on Windows/Linux (macOS uses open-url instead).
   const initialDeepLink = extractOpenswarmUrl(process.argv);
   if (initialDeepLink) forwardDeepLinkToRenderer(initialDeepLink);
 
@@ -923,8 +779,7 @@ app.whenReady().then(async () => {
     return allowed.includes(permission);
   });
 
-  // Read-only logging for DRM license requests — no modifying interceptors
-  // so the network stack can set Content-Type and other headers normally.
+  // Read-only logging; modifying interceptors break Widevine header set-up.
   session.defaultSession.webRequest.onSendHeaders(
     { urls: ['*://*/*widevine*license*'] },
     (details) => {
@@ -949,18 +804,9 @@ app.whenReady().then(async () => {
     },
   );
 
-  // Splash window opens immediately so the user sees motion within ~1s
-  // of double-clicking. Without this, on a cold-Defender Windows install
-  // the dock/taskbar icon flashes for 30-60s with nothing visible.
   splashWindow = createSplashWindow();
   emitSplashStatus('Starting OpenSwarm…');
 
-  // Widevine CDM and backend startup are independent — run them
-  // concurrently. Backend is the long pole on Windows (Defender + Python
-  // cold start), so we don't want a slow CDM download to add seconds to
-  // every boot. Webviews that need DRM still wait on `components.whenReady`
-  // before loading via the existing webview-preload flow, so parallelizing
-  // here is safe.
   let widevinePromise;
   if (components && typeof components.whenReady === 'function') {
     widevinePromise = components.whenReady().then(
@@ -973,7 +819,7 @@ app.whenReady().then(async () => {
       (err) => { console.warn('Widevine CDM not available:', err && err.message); }
     );
   } else {
-    console.log('CastLabs components API not available — using standard Electron (no DRM)');
+    console.log('CastLabs components API not available, using standard Electron (no DRM)');
     widevinePromise = Promise.resolve();
   }
 
@@ -986,10 +832,21 @@ app.whenReady().then(async () => {
       await startBackend();
     }
     emitSplashStatus('Almost ready…');
-    createWindow();
+    // Hidden-launch: --hidden arg (set by workflowsLifecycle.setLoginItem
+    // on Windows + Linux; macOS uses openAsHidden) means skip the main
+    // window so tray + scheduler run in background. User enabled
+    // "Always-on" -> app boots invisibly.
+    const launchedHidden = process.argv.includes('--hidden');
+    if (!launchedHidden) {
+      createWindow();
+    } else if (splashWindow && !splashWindow.isDestroyed()) {
+      isQuittingFromSplash = false;
+      try { splashWindow.destroy(); } catch (_) {}
+      splashWindow = null;
+    }
     if (!isDev) {
       setupAutoUpdater();
-      mainWindow.webContents.on('did-finish-load', () => {
+      if (mainWindow) mainWindow.webContents.on('did-finish-load', () => {
         if (cachedUpdateStatus.status === 'available') {
           sendToRenderer('update-available', cachedUpdateStatus.info);
         } else if (cachedUpdateStatus.status === 'downloaded') {
@@ -998,17 +855,13 @@ app.whenReady().then(async () => {
       });
     }
 
-    // Swap splash → main only once React has actually painted. ready-to-show
-    // fires after the renderer's first frame, eliminating the white-flash
-    // that would otherwise pop between splash close and React mount.
+    // Swap on ready-to-show (post-first-paint); avoids white-flash on mount.
     if (mainWindow) {
       const swapToMain = () => {
         if (mainWindowReady || mainWindow.isDestroyed()) return;
         mainWindowReady = true;
         try { mainWindow.show(); mainWindow.focus(); } catch (_) {}
-        // Tiny delay so the OS gets a chance to bring main to front
-        // before splash disappears — avoids a single-frame "no window"
-        // gap on Windows.
+        // 120ms gap lets the OS raise main before splash hides; avoids a single-frame gap on Windows.
         setTimeout(() => {
           if (splashWindow && !splashWindow.isDestroyed()) {
             splashWindow.destroy();
@@ -1017,25 +870,15 @@ app.whenReady().then(async () => {
         }, 120);
       };
       mainWindow.once('ready-to-show', swapToMain);
-      // Fallback: if the renderer fails to load (e.g. dev server not
-      // running on localhost:3000), `ready-to-show` never fires and
-      // the splash would hang forever. Show main anyway so the dev
-      // sees the load error in the window itself.
+      // ready-to-show never fires if renderer load fails (dev server down); swap anyway so error is visible.
       mainWindow.webContents.once('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
         console.warn('[boot] mainWindow load failed:', errorCode, errorDescription, validatedURL);
         if (isDev) swapToMain();
       });
     }
 
-    // Don't block on Widevine; it'll resolve in the background. Logged above.
     widevinePromise.catch(() => {});
 
-    // Affiliate / referral handshake. On the very first launch, opens the
-    // landing page's /welcome handler in the user's default browser so the
-    // browser (which holds the install_token from the click on the
-    // download CTA) can pair our app_install_id with the referral code.
-    // No-op on every subsequent launch, no-op in dev unless forced. Fire
-    // and forget, never blocks UI startup. See electron/affiliateTracking.js.
     affiliateTracking.maybeRunFirstLaunchHandshake({
       shell,
       userDataDir: app.getPath('userData'),
@@ -1046,36 +889,18 @@ app.whenReady().then(async () => {
     });
   } catch (err) {
     console.error('Failed to start:', err);
-    // Surface the failure on the splash instead of silently quitting.
-    // The user picks: view logs, restart, or quit. This eliminates the
-    // class of "I clicked OpenSwarm and nothing happened" reports.
+    // Do NOT app.quit(); user picks the next step from the splash actions.
     emitSplashStatus({
       text: "OpenSwarm couldn't start: " + (err && err.message ? err.message : String(err)),
       level: 'error',
       showActions: true,
       logs: recentBackendStderr.slice(-30).join(''),
     });
-    // Do NOT call app.quit() here — the user controls the next step
-    // through the splash action buttons.
   }
 });
 
 app.on('web-contents-created', (_event, contents) => {
-  // Override the user-agent on popup BrowserWindows (i.e. anything created
-  // via window.open from the renderer, which includes the OAuth popup for
-  // subscription connect flows). Electron's default UA includes an
-  // `Electron/X.Y.Z` token that accounts.google.com blacklists with a
-  // "browser not supported" page — and auth.openai.com is similarly picky.
-  // Spoofing a current Chrome UA makes those identity providers treat the
-  // popup like a real browser without changing the flow OpenSwarm uses to
-  // capture the callback (window.open + postMessage).
-  //
-  // This check runs synchronously during `new BrowserWindow()` construction.
-  // On the very first invocation (for mainWindow itself), `mainWindow` is
-  // still null because assignment happens after the constructor returns,
-  // so the `mainWindow &&` short-circuits and we leave the main window's
-  // UA alone. Webview tags report `getType() === 'webview'` and are also
-  // skipped — they render user-visited sites and must advertise the real UA.
+  // Google/OpenAI auth pages blacklist Electron UA, so spoof Chrome on popups.
   if (
     contents.getType() === 'window' &&
     mainWindow &&
@@ -1097,19 +922,7 @@ app.on('web-contents-created', (_event, contents) => {
       return { action: 'deny' };
     }
 
-    // Note on which providers still use this popup path:
-    // - Anthropic/Claude: still works here with the Chrome UA override above.
-    // - Google (Gemini, Antigravity): blocks embedded browsers wholesale
-    //   ("browser not supported"), even with UA spoofing + sandboxed
-    //   partition + navigator.webdriver patches. Routes through
-    //   shell.openExternal instead.
-    // - OpenAI/Codex: now also routes through shell.openExternal — the
-    //   embedded popup renders blank for some users (newer embed
-    //   detection + regional access checks), and the system browser
-    //   surfaces the actual error.
-    // See _EXTERNAL_BROWSER_PROVIDERS in backend/apps/nine_router.py.
-    // When Anthropic adds the same checks, add "claude" there too.
-
+    // Anthropic still works here; Google/OpenAI route via shell.openExternal (see _EXTERNAL_BROWSER_PROVIDERS).
     return {
       action: 'allow',
       overrideBrowserWindowOptions: {
@@ -1129,21 +942,12 @@ app.on('web-contents-created', (_event, contents) => {
   contents.on('did-create-window', (childWindow) => {
     if (mainWindow && !mainWindow.isDestroyed() && !childWindow.isDestroyed()) {
       childWindow.setParentWindow(mainWindow);
-      // Belt-and-suspenders: if the parent was fullscreen when window.open
-      // fired, Electron can still spawn the child fullscreen. Force it back.
+      // Electron can spawn child fullscreen if parent was; force out.
       if (childWindow.isFullScreen()) childWindow.setFullScreen(false);
     }
   });
 
-  // OAuth callback URL interception. The npm `9router` package's /callback
-  // page relays the code back via window.opener.postMessage — which
-  // silently no-ops on some flows (e.g. Anthropic's Claude Code auth pages
-  // that reset the opener chain across cross-origin redirects). Capturing
-  // the URL at the navigation layer is format-agnostic and works regardless
-  // of whether the relay via postMessage/BroadcastChannel/localStorage made
-  // it back to the renderer. Same code+state then gets forwarded to the
-  // main window via IPC, where Settings.tsx picks it up and calls
-  // /api/agents/subscriptions/exchange.
+  // postMessage relay fails on cross-origin redirects, intercept at the navigation layer.
   const forwardOauthCallback = (url) => {
     try {
       const u = new URL(url);
@@ -1157,7 +961,7 @@ app.on('web-contents-created', (_event, contents) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('openswarm:oauth-callback', { code, state, error });
       }
-    } catch { /* not a URL we care about */ }
+    } catch {}
   };
   contents.on('did-navigate', (_e, url) => forwardOauthCallback(url));
   contents.on('did-redirect-navigation', (_e, url) => forwardOauthCallback(url));
@@ -1175,24 +979,13 @@ app.on('web-contents-created', (_event, contents) => {
       }
     });
 
-    // -----------------------------------------------------------------
-    // CDP debugger auto-attach for browser sub-agent accessibility tree
-    // -----------------------------------------------------------------
-    // The browser sub-agent uses Chrome DevTools Protocol (specifically
-    // Accessibility.getFullAXTree, DOM.resolveNode, Input.dispatchMouseEvent)
-    // to perceive and act on hostile sites where CSS selectors fail. CDP
-    // commands require webContents.debugger.attach() which is only callable
-    // from the main process. We attach lazily on first use rather than at
-    // creation time — that avoids the "Another debugger is already attached"
-    // race when DevTools is opened on the webview.
+    // Lazy attach avoids races with DevTools.
     try {
       contents.debugger.on('detach', (_e, reason) => {
         console.log(`[cdp] detach on wcId ${contents.id}: ${reason}`);
         cdpAxIndexCache.delete(contents.id);
       });
-    } catch (e) {
-      // Older Electron may not have the listener API; non-fatal.
-    }
+    } catch (e) {}
 
     contents.on('destroyed', () => {
       cdpAxIndexCache.delete(contents.id);
@@ -1204,14 +997,7 @@ app.on('web-contents-created', (_event, contents) => {
       cdpQueueByWcId.delete(contents.id);
     });
 
-    // WebAuthn/passkey shim. Injected on every dom-ready in the main world
-    // via executeJavaScript (which uses V8's direct evaluation path and
-    // bypasses Trusted Types CSP — inline <script> injection from the
-    // webview preload was being blocked on accounts.google.com because of
-    // `require-trusted-types-for 'script'`). The shim overrides
-    // navigator.credentials so passkey calls reject cleanly and post a
-    // tagged message back; webview-preload.js listens and forwards to the
-    // embedder, which surfaces the "Passkeys aren't supported" dialog.
+    // Inject on dom-ready in main world; bypasses Trusted Types CSP that blocks inline <script>.
     contents.on('dom-ready', () => {
       contents.executeJavaScript(`
         (function() {
@@ -1275,7 +1061,6 @@ app.on('web-contents-created', (_event, contents) => {
               return resp;
             };
 
-            // Check EME availability
             if (navigator.requestMediaKeySystemAccess) {
               navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{
                 initDataTypes: ['cenc'],
@@ -1296,11 +1081,62 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.on('window-all-closed', () => {
+  // Scheduler must keep firing after windows close; quit only if tray init failed.
+  if (tray.isEnabled()) return;
   if (!isDev) killBackend();
   app.quit();
 });
 
+// Ask the backend to reap every per-app subprocess (bash run.sh / vite /
+// uvicorn descendants) BEFORE we SIGTERM the backend itself. SIGTERM on
+// the backend PID doesn't propagate to those children, so without this
+// they reparent to PID 1 and squat on the workspace's .env-pinned ports,
+// breaking the NEXT launch's app reload. Fire-and-forget with a hard
+// timeout so a wedged backend can't block quit indefinitely.
+function postShutdownAllApps(timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    if (!backendPort) return resolve();
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port: backendPort,
+      path: '/api/outputs/shutdown-all',
+      method: 'POST',
+      headers: authToken
+        ? { 'Authorization': `Bearer ${authToken}`, 'Content-Length': 0 }
+        : { 'Content-Length': 0 },
+      timeout: timeoutMs,
+    }, (res) => {
+      res.on('data', () => {});
+      res.on('end', resolve);
+    });
+    req.on('error', () => resolve());
+    req.on('timeout', () => { try { req.destroy(); } catch (_) {} resolve(); });
+    req.end();
+  });
+}
+
+let drainingForQuit = false;
+app.on('before-quit', async (event) => {
+  if (drainingForQuit) return;
+  event.preventDefault();
+  drainingForQuit = true;
+  try {
+    // Drain in-flight workflow runs (up to 30s) so we don't destroy paid LLM work.
+    const active = await workflowsLifecycle.getActive();
+    if (active && active.length > 0) {
+      tray.setStatus({ activeTitle: active[0]?.title || 'workflow', paused: false });
+      await workflowsLifecycle.drainOnQuit(30);
+    }
+  } catch (_) {}
+  try {
+    await postShutdownAllApps(2000);
+  } catch (_) {}
+  app.quit();
+});
+
 app.on('will-quit', () => {
+  workflowsLifecycle.stopPolling();
+  tray.destroy();
   if (!isDev) killBackend();
 });
 
@@ -1310,24 +1146,14 @@ app.on('activate', () => {
   }
 });
 
-// Splash window action buttons. Only meaningful while splashWindow is alive
-// (during boot or in the post-failure error state). Sent via ipcRenderer.send
-// from electron/splash/splash.html.
 ipcMain.on('splash:action', (_event, action) => {
   if (action === 'quit') {
     isQuittingFromSplash = true;
     app.quit();
   } else if (action === 'restart') {
-    // app.relaunch + app.exit is the canonical Electron restart pattern.
-    // killBackend runs via the will-quit listener so the python child
-    // gets cleaned up before we re-spawn ourselves.
     app.relaunch();
     app.exit(0);
   } else if (action === 'open-logs') {
-    // No backend log file is written to disk today; the next-best thing
-    // is opening the OpenSwarm data dir, where the user can see the
-    // auth.token file and any future log artifacts. Surfacing the dir
-    // also lets advanced users self-serve (clear data, etc).
     try {
       const dataDir = path.dirname(getAuthTokenFilePath());
       shell.openPath(dataDir).catch(() => {});
@@ -1337,10 +1163,7 @@ ipcMain.on('splash:action', (_event, action) => {
 
 ipcMain.handle('get-backend-port', () => backendPort);
 ipcMain.handle('get-auth-token', () => {
-  // Re-read the file every time. The backend rotates the token on each
-  // start, and during dev hot-reload the cached value could go stale
-  // while the renderer stays alive. Re-reading is cheap (small file,
-  // OS caches it) and guarantees the renderer never holds a dead token.
+  // Backend rotates token per start; cached value goes stale across dev hot-reload.
   try {
     const p = getAuthTokenFilePath();
     const current = fs.readFileSync(p, 'utf8').trim();
@@ -1354,6 +1177,18 @@ ipcMain.handle('get-webview-preload-path', () => {
 });
 
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);
+
+ipcMain.handle('workflows:get-app-open-info', () => ({
+  alwaysOn: workflowsLifecycle.getLoginItem() && tray.isEnabled(),
+  loginAtLaunch: workflowsLifecycle.getLoginItem(),
+  trayEnabled: tray.isEnabled(),
+}));
+ipcMain.handle('workflows:set-login-item', (_e, value) => workflowsLifecycle.setLoginItem(Boolean(value)));
+ipcMain.handle('workflows:get-active', () => workflowsLifecycle.getActive());
+ipcMain.handle('workflows:notify', (_e, payload) => {
+  workflowsLifecycle.showNativeNotification(payload || {});
+  return true;
+});
 
 ipcMain.handle('check-for-updates', async () => {
   if (!autoUpdater || !isPackaged) {
@@ -1382,9 +1217,35 @@ ipcMain.handle('download-update', async () => {
   }
 });
 
-ipcMain.handle('install-update', () => {
-  if (!autoUpdater) return;
+ipcMain.handle('set-allow-prerelease', async (_e, value) => {
+  if (!autoUpdater) return { success: false, error: 'Updater not available' };
+  const next = Boolean(value);
+  if (autoUpdater.allowPrerelease === next) return { success: true, changed: false };
+  autoUpdater.allowPrerelease = next;
+  if (!isPackaged) return { success: true, changed: true };
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    return { success: false, changed: true, error: err?.message || String(err) };
+  }
+  return { success: true, changed: true };
+});
+
+ipcMain.handle('install-update', async () => {
+  if (!autoUpdater) return { installed: false, queued: false };
+  // Veto while workflow is in flight; lifecycle poller fires deferred install once active drains.
+  const vetoEnabled = process.env.OPENSWARM_UPDATER_VETO !== '0';
+  if (vetoEnabled) {
+    try {
+      const vetoed = await workflowsLifecycle.maybeVetoInstall();
+      if (vetoed) {
+        sendToRenderer('update-queued', { reason: 'workflow_active' });
+        return { installed: false, queued: true };
+      }
+    } catch (_) {}
+  }
   autoUpdater.quitAndInstall(false, true);
+  return { installed: true, queued: false };
 });
 
 ipcMain.handle('capture-page', async (event, rect) => {
@@ -1398,9 +1259,6 @@ ipcMain.handle('open-external', (_event, url) => {
   }
 });
 
-// Affiliate install state. Returns the persisted install.json contents so
-// the renderer can attach the referral code to authenticated cloud calls
-// (Stripe checkout, sign-in events) for downstream attribution.
 ipcMain.handle('get-install-state', () => {
   try {
     return affiliateTracking._readState(app.getPath('userData'));
@@ -1409,19 +1267,10 @@ ipcMain.handle('get-install-state', () => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// CDP debugger bridge for the browser sub-agent
-// ---------------------------------------------------------------------------
-// Maintains a per-webContents AX index cache (numeric index → backendNodeId)
-// and serializes CDP commands per target so concurrent calls don't interleave.
-// The renderer calls window.openswarm.sendCdpCommand(wcId, method, params),
-// which routes through this handler to webContents.debugger.sendCommand().
-
-const cdpAxIndexCache = new Map(); // wcId -> Map<index, backendNodeId>
-const cdpQueueByWcId = new Map();  // wcId -> Promise (serialization tail)
+const cdpAxIndexCache = new Map();
+const cdpQueueByWcId = new Map();
 
 function getWebContentsById(wcId) {
-  // webContents is exposed as a top-level Electron API
   const { webContents } = require('electron');
   return webContents.fromId(wcId);
 }
@@ -1434,16 +1283,14 @@ async function ensureDebuggerAttached(wc) {
   try {
     wc.debugger.attach('1.3');
   } catch (err) {
-    // Re-raise as a clean error string for the renderer.
     throw new Error(`debugger.attach failed: ${err.message || err}`);
   }
 }
 
 async function sendCdpCommandSerialized(wcId, method, params) {
-  // Chain on the per-wcId queue so concurrent renderer calls run in order.
   const prev = cdpQueueByWcId.get(wcId) || Promise.resolve();
   const next = prev
-    .catch(() => {}) // never let a previous failure poison the chain
+    .catch(() => {})
     .then(async () => {
       const wc = getWebContentsById(wcId);
       if (!wc || wc.isDestroyed()) {
@@ -1456,7 +1303,6 @@ async function sendCdpCommandSerialized(wcId, method, params) {
   try {
     return await next;
   } finally {
-    // If we're still the tail of the queue, clear it so the map doesn't grow.
     if (cdpQueueByWcId.get(wcId) === next) {
       cdpQueueByWcId.delete(wcId);
     }
@@ -1472,9 +1318,6 @@ ipcMain.handle('send-cdp-command', async (_event, wcId, method, params) => {
   }
 });
 
-// Renderer-side AX index cache helpers — the renderer stores its own copy
-// keyed by (browser_id, tab_id). The main process only stores per-wcId for
-// invalidation purposes.
 ipcMain.handle('cdp-cache-set', (_event, wcId, indexMap) => {
   cdpAxIndexCache.set(wcId, indexMap || {});
   return { ok: true };
@@ -1505,9 +1348,7 @@ ipcMain.handle('connect-slack', async () => {
     },
   });
 
-  // Override the global window-open handler so new tabs/windows from Slack
-  // (e.g. workspace redirects) navigate this popup instead of getting
-  // hijacked into a dashboard browser card.
+  // Re-navigate popup instead of routing to dashboard browser cards.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       win.loadURL(url).catch(() => {});
@@ -1515,9 +1356,7 @@ ipcMain.handle('connect-slack', async () => {
     return { action: 'deny' };
   });
 
-  // Block slack:// deep-link attempts (they'd try to launch the native app
-  // and fail). Slack always falls through to a web URL after the deep link
-  // fails, so just swallow these.
+  // slack:// tries to launch the native app; swallow it so Slack falls through to a web URL.
   win.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith('slack://')) {
       event.preventDefault();
@@ -1561,16 +1400,13 @@ ipcMain.handle('connect-slack', async () => {
           const cookies = await win.webContents.session.cookies.get({ url: 'https://slack.com' });
           const dCookie = cookies.find((c) => c.name === 'd');
           if (dCookie && dCookie.value) {
-            // The d cookie value may or may not already include the xoxd- prefix
-            // depending on how Slack encodes it. Normalize it.
+            // Slack may or may not pre-prefix the d cookie with xoxd-, normalize.
             const raw = decodeURIComponent(dCookie.value);
             const cookie = raw.startsWith('xoxd-') ? raw : `xoxd-${raw}`;
             finish(resolve, { token, cookie });
           }
         }
-      } catch (_) {
-        // page navigating, ignore
-      }
+      } catch (_) {}
     }, 1000);
 
     const timeoutHandle = setTimeout(() => {

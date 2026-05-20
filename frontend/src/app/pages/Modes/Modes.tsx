@@ -279,8 +279,11 @@ const Modes: React.FC = () => {
                 border: `1px solid ${c.border.subtle}`,
                 borderRadius: 2,
                 boxShadow: c.shadow.sm,
-                '&:hover': { borderColor: mode.color, boxShadow: c.shadow.md },
-                transition: 'border-color 0.2s, box-shadow 0.2s',
+                // Own compositor layer per card so hover-cross re-paints one card, not the whole grid.
+                willChange: 'transform',
+                // Hover animates only border-color; box-shadow animation caused per-frame CPU paint.
+                '&:hover': { borderColor: mode.color },
+                transition: 'border-color 0.2s',
               }}
             >
               <CardContent sx={{ pb: 1 }}>
@@ -401,7 +404,6 @@ const Modes: React.FC = () => {
             maxRows={8}
           />
 
-          {/* Tools toggle + multi-select */}
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Checkbox
@@ -469,7 +471,6 @@ const Modes: React.FC = () => {
             </Select>
           </FormControl>
 
-          {/* Default Folder */}
           <Box>
             <Typography sx={{ color: c.text.secondary, fontSize: '0.85rem', mb: 0.75 }}>
               Default Folder

@@ -36,9 +36,7 @@ class BrowserCardPosition(BaseModel):
     y: float = 0
     width: float = 1280
     height: float = 800
-    # Agent session id that spawned this browser, or None for user-created.
-    # Used by the frontend to auto-remove the browser when its owner agent
-    # reaches a terminal completed/error state.
+    # Spawning agent session id; frontend auto-removes the browser when this agent reaches a terminal state.
     spawned_by: Optional[str] = None
 
 
@@ -52,11 +50,39 @@ class NotePosition(BaseModel):
     color: str = "yellow"
 
 
+class WorkflowCardPosition(BaseModel):
+    workflow_id: str
+    x: float = 0
+    y: float = 0
+    width: float = 440
+    height: float = 520
+    source_session_id: Optional[str] = None
+
+
+class WorkflowsHubPosition(BaseModel):
+    x: float = 0
+    y: float = 0
+    width: float = 1200
+    height: float = 640
+
+
+class ConfigurePanelPosition(BaseModel):
+    """Floating Action-Library panel tethered to a workflow card."""
+    workflow_id: str
+    x: float = 0
+    y: float = 0
+    width: float = 580
+    height: float = 600
+
+
 class DashboardLayout(BaseModel):
     cards: dict[str, CardPosition] = Field(default_factory=dict)
     view_cards: dict[str, ViewCardPosition] = Field(default_factory=dict)
     browser_cards: dict[str, BrowserCardPosition] = Field(default_factory=dict)
+    workflow_cards: dict[str, WorkflowCardPosition] = Field(default_factory=dict)
+    workflows_hub: Optional[WorkflowsHubPosition] = None
     notes: dict[str, NotePosition] = Field(default_factory=dict)
+    configure_panels: dict[str, ConfigurePanelPosition] = Field(default_factory=dict)
     expanded_session_ids: list[str] = Field(default_factory=list)
 
 

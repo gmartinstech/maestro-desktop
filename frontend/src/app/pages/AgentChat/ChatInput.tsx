@@ -40,11 +40,7 @@ import { getClipboardCards, clearClipboard } from '@/shared/dashboardClipboard';
 import { getWebview } from '@/shared/browserRegistry';
 import { API_BASE, getAuthToken } from '@/shared/config';
 
-// Slash command parser (Phase 2). Returns true if the command was handled
-// and the prompt should NOT be sent to the agent. Three commands:
-//   /context — toggle a drawer (purely UI, dispatched via window event)
-//   /compact — POST /sessions/{id}/compact, force compaction now
-//   /clear   — POST /sessions/{id}/clear, reset SDK session id (UI history kept)
+/** Handles /context, /compact, /clear; returns true if intercepted so the prompt isn't sent to the agent. */
 async function handleSlashCommand(cmd: string, sessionId: string): Promise<boolean> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
@@ -53,20 +49,17 @@ async function handleSlashCommand(cmd: string, sessionId: string): Promise<boole
     window.dispatchEvent(new CustomEvent('openswarm:context-drawer', { detail: { sessionId, open: true } }));
     return true;
   }
-  // Note: API_BASE already ends in `/api`, so don't double it up — the
-  // /compact and /clear handlers in main.py are mounted at the absolute
-  // path `/api/agents/sessions/{id}/compact` (not under the `agents`
-  // SubApp), so the request URL is `${API_BASE}/agents/...`.
+  // /compact and /clear mount at /api/agents/sessions/{id}/..., not under the agents SubApp.
   if (cmd === '/compact') {
     try {
       await fetch(`${API_BASE}/agents/sessions/${sessionId}/compact`, { method: 'POST', headers });
-    } catch { /* errors flow through context_status WS event */ }
+    } catch {}
     return true;
   }
   if (cmd === '/clear') {
     try {
       await fetch(`${API_BASE}/agents/sessions/${sessionId}/clear`, { method: 'POST', headers });
-    } catch { /* same */ }
+    } catch {}
     return true;
   }
   return false;
@@ -90,6 +83,8 @@ export interface AttachedImage {
   data: string;
   media_type: string;
   preview: string;
+  // Set when preview uses createObjectURL; handleSend reads via FileReader to avoid retaining base64 in memory.
+  _file?: File;
 }
 
 export interface ForcedToolGroup {
@@ -127,10 +122,21 @@ export interface ChatInputHandle {
   setContent: (prompt: string, contextPaths?: ContextPath[], forcedTools?: ForcedToolGroup[]) => void;
 }
 
-// Module-level draft store — survives component unmount/remount. Keyed by
-// sessionId (or a fallback owner id). Stores the raw innerHTML of the
-// contentEditable div so skill pills, formatting, etc. are preserved.
+// Module-level draft store keyed by sessionId; survives unmount/remount and preserves skill pills via innerHTML.
 const _draftStore = new Map<string, string>();
+// 200ms debounce coalesces fast typing; innerHTML reads do full DOM serialization.
+const _draftDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const DRAFT_DEBOUNCE_MS = 200;
+function scheduleDraftSave(ownerId: string, getHtml: () => string) {
+  const existing = _draftDebounceTimers.get(ownerId);
+  if (existing) clearTimeout(existing);
+  _draftDebounceTimers.set(ownerId, setTimeout(() => {
+    _draftDebounceTimers.delete(ownerId);
+    const html = getHtml();
+    if (html && html !== '<br>') _draftStore.set(ownerId, html);
+    else _draftStore.delete(ownerId);
+  }, DRAFT_DEBOUNCE_MS));
+}
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   smart_toy: <SmartToyOutlinedIcon sx={{ fontSize: 14 }} />,
@@ -182,9 +188,7 @@ const ContextRing: React.FC<{ used: number; limit: number; accentColor: string; 
   );
 };
 
-// Brand colors for provider headers in the model picker — these match
-// the SubscriptionCard colors in Settings and help users distinguish
-// groups at a glance.
+// Mirrors SubscriptionCard colors in Settings.
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: '#E8927A',
   openai: '#74AA9C',
@@ -196,7 +200,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   mistral: '#FF7000',
   qwen: '#A974FF',
   cohere: '#FF7759',
-  openrouter: '#64748B',  // OR brand is muted slate, not the bright teal we had.
+  openrouter: '#64748B',
 };
 
 const LS_RECENT_MODELS = 'openswarm.picker.recentModels';
@@ -215,12 +219,10 @@ function readLS<T>(key: string, fallback: T): T {
 }
 
 function writeLS(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota / private mode */ }
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
-// Heuristic 1-5 fallback for entries without a backend tier (only kicks in
-// for the FALLBACK_MODELS pre-load list). Cost buckets: <$0.50/1, <$2/2,
-// <$7/3, <$25/4, ≥$25/5.
+// Heuristic tiering for pre-load FALLBACK_MODELS only; backend provides real tiers post-load.
 type Tier = 1 | 2 | 3 | 4 | 5;
 const clampTier = (n: number): Tier => Math.max(1, Math.min(5, n)) as Tier;
 
@@ -251,8 +253,7 @@ function tierCost(opt: any): Tier {
   return _costBucket(opt.output_cost_per_1m ?? 0);
 }
 
-// Pull a version number from a label. Skips param counts (70B/120B/etc)
-// by clamping to <30. "Claude Opus 4.7" → 4.7, "GPT-5.5" → 5.5.
+/** Extract version number from a model label; clamps to <30 to skip param counts like 70B/120B. */
 function modelVersion(label: string): number {
   const matches = String(label).matchAll(/(\d+(?:\.\d+)?)/g);
   let bestVersion = 0;
@@ -263,7 +264,7 @@ function modelVersion(label: string): number {
   return bestVersion;
 }
 
-// Strip versions + route suffixes so "Claude Sonnet 4.6" and 4.5 share a key.
+/** Strip versions and route suffixes so "Claude Sonnet 4.6" and 4.5 share one key. */
 function modelFamilyKey(label: string): string {
   return String(label)
     .toLowerCase()
@@ -273,7 +274,7 @@ function modelFamilyKey(label: string): string {
     .trim();
 }
 
-// Sort: intelligence desc, family asc, version desc, label asc.
+/** Sort: intelligence desc, family asc, version desc, label asc. */
 function sortModelsForPicker<T extends { label: string }>(models: T[]): T[] {
   const intelOf = (opt: any): number => {
     if (Array.isArray(opt.tiers) && opt.tiers.length === 3) return opt.tiers[0];
@@ -308,13 +309,11 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     if (autoFocus) editorRef.current?.focus();
   }, [autoFocus]);
 
-  // Restore draft from the module-level store on mount.
   useEffect(() => {
     const saved = _draftStore.get(ownerId);
     const editor = editorRef.current;
     if (saved && editor && !editor.textContent?.trim()) {
       editor.innerHTML = saved;
-      // Move cursor to end
       const range = document.createRange();
       range.selectNodeContents(editor);
       range.collapse(false);
@@ -322,7 +321,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       sel?.removeAllRanges();
       sel?.addRange(range);
     }
-  // Only on mount — ownerId is stable for the component's lifetime
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -341,11 +339,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   const toolItems = useAppSelector((state) => state.tools.items);
 
 
-  // Build flat model list with provider grouping. Group names come from the
-  // backend's /agents/models response verbatim — "OpenSwarm Pro" for
-  // proxy-routed Claude, "Anthropic" for direct/subscription-routed Claude,
-  // plus the non-Anthropic providers. Only the pre-load fallback still needs
-  // to pick a label since no models have been fetched yet.
   const allModelOptions = useMemo(() => {
     if (!modelsLoaded || Object.keys(modelsByProvider).length === 0) {
       const key = connectionMode === 'openswarm-pro' ? 'OpenSwarm Pro' : 'Anthropic';
@@ -381,8 +374,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   const [modelSearch, setModelSearch] = useState('');
   const modelSearchRef = useRef<HTMLInputElement | null>(null);
 
-  // Recents + history persisted to localStorage. Trim on read so existing
-  // entries from when MAX was higher respect the current cap.
   const [recentModels, setRecentModels] = useState<string[]>(
     () => readLS<string[]>(LS_RECENT_MODELS, []).slice(0, RECENT_MODELS_MAX),
   );
@@ -409,7 +400,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     reasoning: false, subscription: false, apiKey: false,
   });
 
-  // Indexed sliders (idx 0 = Any).
   const CTX_STEPS = [0, 32_000, 128_000, 200_000, 500_000, 1_000_000];
   const CTX_LABELS = ['Any', '32K+', '128K+', '200K+', '500K+', '1M+'];
   const COST_STEPS = [Infinity, 50, 15, 5, 1, 0];
@@ -444,11 +434,9 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     });
   }, []);
 
-  // Probe is keyed by model value so stale results don't display.
+  // Keyed by model value so stale probe results don't display.
   const [probeResult, setProbeResult] = useState<{ value: string; ok: boolean; error?: string; latency_ms?: number } | null>(null);
 
-  // Search + capability filters + sliders. Empty/all-default returns the
-  // grouping unchanged so first-open is fast.
   const filteredModelGroups = useMemo(() => {
     const q = modelSearch.trim().toLowerCase();
     const minCtx = CTX_STEPS[ctxIdx] || 0;
@@ -459,16 +447,15 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     );
     const filterFn = (m: any): boolean => {
       if (capFilters.reasoning && !m.reasoning) return false;
-      // Subscription / API key chips are OR'd.
       if (capFilters.subscription || capFilters.apiKey) {
         const okSub = capFilters.subscription && m.billing_kind === 'subscription';
         const okApi = capFilters.apiKey && m.billing_kind === 'api_key';
         if (!okSub && !okApi) return false;
       }
       if (minCtx > 0 && (m.context_window ?? 0) < minCtx) return false;
-      // maxCost=0 means "Free only" — subscription passes (free to user),
-      // paid/api_key excluded regardless of $.
+      // maxCost=0 ("Free only") passes subscription (free to user); paid/api_key excluded regardless of price.
       if (maxCost !== Infinity) {
+
         if (maxCost === 0) {
           if (m.billing_kind !== 'free' && m.billing_kind !== 'subscription') return false;
         } else {
@@ -495,8 +482,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     return out;
   }, [modelSearch, allModelOptions.grouped, capFilters, ctxIdx, costIdx]);
 
-  // Footer summary — counts reflect what the user actually has access to
-  // right now (post-filter, post-credentials).
   const pickerSummary = useMemo(() => {
     let total = 0, free = 0, reasoning = 0, subscription = 0, apiKey = 0, paid = 0, longContext = 0;
     for (const ms of Object.values(filteredModelGroups)) {
@@ -513,7 +498,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     return { total, free, reasoning, subscription, apiKey, paid, longContext };
   }, [filteredModelGroups]);
 
-  // Recents materialised against current catalog so removed models drop out.
   const recentMaterialised = useMemo(() => {
     const flatByValue = new Map(allModelOptions.flat.map((m) => [m.value, m]));
     return recentModels
@@ -527,14 +511,11 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     && recentMaterialised.length > 0
   );
 
-  // Shared tooltip body for Recents + groups. Tiers come from backend; the
-  // local heuristic only kicks in for the pre-load FALLBACK_MODELS list.
   const buildModelTooltip = useCallback((opt: any): React.ReactNode => {
     const [intel, speed, cost] = (Array.isArray(opt.tiers) && opt.tiers.length === 3)
       ? opt.tiers
       : [tierIntelligence(opt), tierSpeed(opt), tierCost(opt)];
     const billingKind: 'paid' | 'subscription' | 'free' = opt.billing_kind || (opt.is_free ? 'free' : 'paid');
-    // 15 pixel cells, gradient palette per tier — matches Settings' PixelBarOuter.
     const Bars = ({ filled, palette }: { filled: number; palette: string[] }) => {
       const TOTAL_CELLS = 15;
       const filledCells = Math.round((filled / 5) * TOTAL_CELLS);
@@ -629,7 +610,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     );
   }, [c]);
 
-  // Match Settings stat-card surface (Settings.tsx cardSx).
   const tooltipSlotProps = useMemo(() => ({
     tooltip: {
       sx: {
@@ -648,6 +628,16 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   }), [c]);
 
   const [images, setImages] = useState<AttachedImage[]>([]);
+  // Ref so unmount cleanup revokes the latest blob: preview URLs.
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  useEffect(() => () => {
+    for (const img of imagesRef.current) {
+      if (img.preview?.startsWith('blob:')) {
+        try { URL.revokeObjectURL(img.preview); } catch {}
+      }
+    }
+  }, []);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -676,7 +666,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   const [modelAnchor, setModelAnchor] = useState<HTMLElement | null>(null);
   const [thinkingAnchor, setThinkingAnchor] = useState<HTMLElement | null>(null);
 
-  // Auto-focus search on menu open; reset search on close.
   useEffect(() => {
     if (modelAnchor) {
       const t = setTimeout(() => modelSearchRef.current?.focus(), 30);
@@ -685,7 +674,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     setModelSearch('');
   }, [modelAnchor]);
 
-  // Debounced 1-token probe to surface 401/402/etc before send.
+  // Debounced 1-token probe surfaces 401/402/etc before send.
   useEffect(() => {
     if (!model) return;
     let cancelled = false;
@@ -699,9 +688,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
         if (cancelled) return;
         const data = await res.json();
         setProbeResult({ value: model, ok: !!data.ok, error: data.error, latency_ms: data.latency_ms });
-      } catch {
-        // Non-blocking — chat send surfaces any real error.
-      }
+      } catch {}
     }, 350);
     return () => {
       cancelled = true;
@@ -758,18 +745,14 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   }, []);
 
   const addImageFiles = useCallback((files: FileList | File[]) => {
+    // Preview via blob: URL; base64 only materializes at send (saves ~2.7MB JS heap per attachment).
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        const base64 = result.split(',')[1];
-        setImages((prev) => [
-          ...prev,
-          { data: base64, media_type: file.type, preview: result },
-        ]);
-      };
-      reader.readAsDataURL(file);
+      const previewUrl = URL.createObjectURL(file);
+      setImages((prev) => [
+        ...prev,
+        { data: '', media_type: file.type, preview: previewUrl, _file: file } as AttachedImage,
+      ]);
     });
   }, []);
 
@@ -804,22 +787,11 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     let trimmed = serialized.trim();
     if (!trimmed) return;
 
-    // Onboarding bus signal — step 3 (launch agent), step 5/6 (agent uses
-    // browser / agent controls agents), step 8 (make an App) all wait for
-    // the user to actually send a message before the cursor advances.
     onboardingBus.emit('chat:message_sent');
-    // The App Builder chat lives inside ViewEditor (`/apps/new`) — when
-    // the user submits there, the underlying agent generates an app.
-    // Surface this as app:generation_started so step 8 can advance from
-    // its typing op to its "wait for app to land" op.
     if (window.location.hash.includes('/apps/')) {
       onboardingBus.emit('app:generation_started');
     }
 
-    // Slash commands (Phase 2). Parsed client-side so we don't pollute
-    // the agent loop with meta-actions; calls the corresponding backend
-    // endpoint and clears the input. /context is pure-frontend (toggle
-    // a drawer); /compact and /clear hit session endpoints.
     if (sessionId && trimmed.startsWith('/')) {
       const cmd = trimmed.split(/\s+/)[0].toLowerCase();
       const handled = await handleSlashCommand(cmd, sessionId);
@@ -832,9 +804,26 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     }
 
     const selectedEls = elementSelection?.elementsByOwner?.[ownerId] ?? [];
-    let allImages = images.length > 0
-      ? images.map(({ data, media_type }) => ({ data, media_type }))
-      : [];
+    let allImages: Array<{ data: string; media_type: string }> = [];
+    if (images.length > 0) {
+      allImages = await Promise.all(images.map(async (img) => {
+        if (img.data) return { data: img.data, media_type: img.media_type };
+        if (img._file) {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const r = reader.result as string;
+              resolve(r.split(',')[1] ?? '');
+            };
+            reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+            reader.readAsDataURL(img._file!);
+          });
+          return { data: base64, media_type: img.media_type };
+        }
+        return { data: '', media_type: img.media_type };
+      }));
+      allImages = allImages.filter((i) => i.data);
+    }
 
     if (selectedEls.length > 0) {
       const lines: string[] = ['\n\n---\nSelected UI Elements:\n'];
@@ -908,6 +897,11 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     );
     editor.innerHTML = '';
     _draftStore.delete(ownerId);
+    for (const img of images) {
+      if (img.preview?.startsWith('blob:')) {
+        try { URL.revokeObjectURL(img.preview); } catch {}
+      }
+    }
     setImages([]);
     setContextPaths([]);
     setForcedTools([]);
@@ -921,24 +915,25 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     if (result) {
       setPicker(result);
     } else {
-      setPicker((p) => ({ ...p, visible: false }));
+      // Bailout when already hidden; otherwise spreading a new object re-renders all of ChatInput on every keystroke (~199ms input delay).
+      setPicker((p) => p.visible ? { ...p, visible: false } : p);
     }
   }, []);
 
+  // Set by handlePaste before the synthetic input fires so handleInput skips post-input scans paste can't invalidate.
+  const justPastedRef = useRef(false);
+
   const handleInput = useCallback(() => {
+    if (justPastedRef.current) {
+      justPastedRef.current = false;
+      setHasContent(true);
+      scheduleDraftSave(ownerId, () => editorRef.current?.innerHTML ?? '');
+      return;
+    }
     updateHasContent();
     detectTrigger();
     syncAttachedSkills();
-    // Persist draft so it survives unmount/remount (card collapse, navigation)
-    const editor = editorRef.current;
-    if (editor) {
-      const html = editor.innerHTML;
-      if (html && html !== '<br>') {
-        _draftStore.set(ownerId, html);
-      } else {
-        _draftStore.delete(ownerId);
-      }
-    }
+    scheduleDraftSave(ownerId, () => editorRef.current?.innerHTML ?? '');
   }, [updateHasContent, detectTrigger, syncAttachedSkills, ownerId]);
 
   const handleEditorClick = useCallback(() => {
@@ -1018,13 +1013,10 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       e.preventDefault();
       return;
     }
-    // Cmd/Ctrl+L → clear the chat (matches Claude Code's convention).
-    // Empties the editor + visible transcript, and resets the SDK
-    // session id server-side so the next message starts in fresh context.
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && !e.shiftKey && !e.altKey) {
       e.preventDefault();
       if (sessionId) {
-        handleSlashCommand('/clear', sessionId).catch(() => { /* surfaced via context_status */ });
+        handleSlashCommand('/clear', sessionId).catch(() => {});
         dispatch(clearSessionMessages(sessionId));
       }
       const editor = editorRef.current;
@@ -1092,7 +1084,10 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     }
     e.preventDefault();
     const plain = e.clipboardData.getData('text/plain');
-    if (plain) document.execCommand('insertText', false, plain);
+    if (plain) {
+      justPastedRef.current = true;
+      document.execCommand('insertText', false, plain);
+    }
   }, [addImageFiles, elementSelection, ownerId]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -1122,7 +1117,13 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   }, [addImageFiles, uploadAndAttachFiles]);
 
   const removeImage = useCallback((idx: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== idx));
+    setImages((prev) => {
+      const removed = prev[idx];
+      if (removed?.preview?.startsWith('blob:')) {
+        try { URL.revokeObjectURL(removed.preview); } catch {}
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
   }, []);
 
   const menuPaperProps = {
@@ -1131,10 +1132,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       border: `1px solid ${c.border.subtle}`,
       borderRadius: '10px',
       minWidth: 180,
-      // Hard cap so a long unbreakable error string in the probe
-      // banner can't stretch the menu wider than its sensible
-      // content. 380px fits the longest model label comfortably
-      // (≈ 56 chars at 0.8rem) without sprawling across the screen.
       maxWidth: 380,
       maxHeight: 400,
       boxShadow: c.shadow.lg,
@@ -1282,13 +1279,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       {contextPaths.length > 0 && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, px: 1.5, pt: images.length > 0 ? 0.25 : 1, pb: 0 }}>
           {contextPaths.map((cp, idx) => {
-            // Friendlier label for the App Builder's auto-attached
-            // workspace directory. Without this special-case, the chip
-            // shows `outputs_workspace/ws-mp3pasq6` — a path the user
-            // never typed and has no idea what it means. The full path
-            // still lives in the tooltip for any agent/dev who needs
-            // it. Pattern is stable: every App Builder workspace path
-            // ends in `outputs_workspace/ws-<random>`.
             const isAppWorkspace = /\/outputs_workspace\/ws-[^/]+\/?$/.test(cp.path);
             const label = isAppWorkspace
               ? 'App files'
@@ -1438,9 +1428,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
           contentEditable={!disabled}
           suppressContentEditableWarning
           spellCheck
-          // autoCorrect/autoCapitalize are no-ops on Chromium but harmless,
-          // and make the input behave correctly if anyone runs the web build
-          // on iOS Safari.
           autoCorrect="on"
           autoCapitalize="sentences"
           onInput={handleInput}
@@ -1479,7 +1466,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
               userSelect: 'none',
             }}
           >
-            {disabled ? 'Agent is working...' : autoRunMode ? 'Describe what data to generate…' : isRunning ? (queueLength > 0 ? `${queueLength} queued — type another or wait…` : 'Agent is working — messages will queue…') : `${modeConf.label}, @ for context, / for commands`}
+            {disabled ? 'Agent is working...' : autoRunMode ? 'Describe what data to generate…' : isRunning ? (queueLength > 0 ? `${queueLength} queued, type another or wait…` : 'Agent is working, messages will queue…') : `${modeConf.label}, @ for context, / for commands`}
           </div>
         )}
       </Box>
@@ -1580,13 +1567,10 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
           anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
           transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           slotProps={{ paper: menuPaperProps }}
-          // We focus our own search input (effect above), so don't let
-          // the Menu auto-focus the first MenuItem — that would steal
-          // focus and block typing.
           autoFocus={false}
           MenuListProps={{ autoFocusItem: false }}
         >
-          {/* Sticky header. Stops click+key so Menu doesn't typeahead while typing. */}
+          {/* Sticky header stops click+key so Menu doesn't typeahead while user types. */}
           <Box
             onKeyDown={(e) => {
               if (e.key !== 'Escape') e.stopPropagation();
@@ -1668,9 +1652,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
               </Tooltip>
             </Box>
             <Collapse in={filtersExpanded} timeout={180} unmountOnExit>
-            {/* Boolean capability chips — Reasoning / Free / Subscription.
-                "Cheap" + "≥200K" got promoted to the slider rows below,
-                where they're continuous rather than discrete. */}
             <Box sx={{
               px: 1.25, height: 28,
               display: 'flex', alignItems: 'center', gap: 0.5,
@@ -1787,7 +1768,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
             </Collapse>
           </Box>
 
-          {/* Probe warning, capped to one line — full text on hover. */}
           {probeResult && probeResult.value === model && !probeResult.ok && (
             <Tooltip title={probeResult.error || 'health check failed'} placement="bottom-start" enterDelay={400}>
               <Box
@@ -1904,11 +1884,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
             const isOpenSwarmPro = prov === 'OpenSwarm Pro';
             const isOR = prov.startsWith('OpenRouter');
             const ms = models as any[];
-            // Every group is collapsible — chevron + member-count
-            // badge appear on every header for consistency. OR vendor
-            // groups with >12 entries auto-collapse on first open;
-            // everything else starts expanded. Search disables auto-
-            // collapse so matches stay visible while typing.
+            // OR vendor groups with >12 entries auto-collapse on first open; search disables this.
             const collapsible = true;
             const searchActive = modelSearch.trim().length > 0;
             const userToggle = collapsedGroups[prov];
@@ -1986,7 +1962,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
                   </Typography>
                 </Box>
               </MenuItem>,
-              // 180ms matches the Filters tray for visual consistency.
               <Collapse
                 key={`coll-${prov}`}
                 in={!collapsed}
@@ -2055,7 +2030,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
             }}
           >
             <Box component="span" sx={{ flexShrink: 0, pointerEvents: 'none' }}>
-              Type to search · Esc to close
+              Type to search, Esc to close
             </Box>
             {(() => {
               const breakdown: Array<[string, number]> = ([
@@ -2112,7 +2087,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
           </Box>
         </Menu>
 
-        {/* Thinking-level picker — only rendered for reasoning-capable models */}
         {(() => {
           const currentModel = allModelOptions.flat.find((m: any) => m.value === model) as any;
           if (!currentModel?.reasoning || !onThinkingLevelChange) return null;
@@ -2157,11 +2131,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
                     Thinking Level
                   </Typography>
                 </MenuItem>
-                {/* Gemini 3 preview models conflict with web search when
-                    thinking is on — Gemini's API rejects with "thought
-                    signature is not valid" the next turn after a tool call.
-                    Surface a note here so users hit on search issues know
-                    which toggle to flip. */}
+                {/* Gemini 3 preview rejects "thought signature" on tool-call turns when thinking is on; warn search users. */}
                 {(() => {
                   const isGemini3 = typeof model === 'string' && (model.includes('gemini-3') || (allModelOptions.flat.find((m: any) => m.value === model)?.label || '').toLowerCase().includes('gemini 3'));
                   if (!isGemini3 || thinkingLevel === 'off') return null;
@@ -2395,4 +2365,5 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
 
 ChatInput.displayName = 'ChatInput';
 
-export default ChatInput;
+// Shallow memo: AgentChat re-renders from unrelated session-local state shouldn't churn ChatInput.
+export default React.memo(ChatInput);

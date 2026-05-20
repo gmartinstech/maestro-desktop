@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -9,8 +9,9 @@ import { fetchOutputs, deleteOutput, Output } from '@/shared/state/outputsSlice'
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ViewCard from './ViewCard';
 import { Skeleton } from '@/app/components/Loading';
-import ViewEditor from './ViewEditor';
 import ViewRunDialog from './ViewRunDialog';
+// Lazy: pulls CodeMirror (~600KB) + 1600 lines of form scaffolding, only needed when an editor opens.
+const ViewEditor = lazy(() => import('./ViewEditor'));
 
 const Views: React.FC = () => {
   const c = useClaudeTokens();
@@ -66,7 +67,11 @@ const Views: React.FC = () => {
   };
 
   if (editorOpen) {
-    return <ViewEditor key={editingOutput?.id ?? 'new'} output={editingOutput} onClose={handleEditorClose} />;
+    return (
+      <Suspense fallback={<Box sx={{ p: 4, color: c.text.muted }}>Loading editor...</Box>}>
+        <ViewEditor key={editingOutput?.id ?? 'new'} output={editingOutput} onClose={handleEditorClose} />
+      </Suspense>
+    );
   }
 
   return (
