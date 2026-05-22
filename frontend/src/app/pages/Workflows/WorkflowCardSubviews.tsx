@@ -5,6 +5,8 @@ import Popover from '@mui/material/Popover';
 import Tooltip from '@mui/material/Tooltip';
 import InputBase from '@mui/material/InputBase';
 import HistoryIcon from '@mui/icons-material/HistoryToggleOffRounded';
+import CalendarTodayRounded from '@mui/icons-material/CalendarTodayRounded';
+import EditOutlined from '@mui/icons-material/EditOutlined';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import {
@@ -283,54 +285,14 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
       ifMatch: workflow.updated_at || null,
     }));
   }, [habitSuggestion, dispatch, workflow.id, workflow.schedule, workflow.updated_at]);
-  // Audit trigger lazy-loads the edit log; only show it when the
-  // workflow has actually been edited. Skips the noisy "0 edits" link
-  // on freshly created cards. We trigger the fetch on mount once so the
-  // "edits"/no-edits decision is honest by the time the user reads.
-  // minHeight: 100% lets the bottom-right cluster pin to the bottom of
-  // the card body via mt:auto below.
+  const openEdit = useCallback(() => {
+    dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'edit', editFacet: 'Schedule' } }));
+  }, [dispatch, workflow.id]);
+
+  const scheduleLine = workflow.schedule.enabled ? describeSchedule(workflow) : 'Schedule this workflow';
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
-      {/* Prose lines per target #54: "Scheduled:" + "Permissions:".
-          Reads like a sentence the user can skim instead of a pill row
-          that needs hovering to decode. Cost stays as a small inline
-          chip on the right when there's anything to say. */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.35 }}>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: c.text.primary }}>Scheduled:</Typography>
-          <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary }}>{describeSchedule(workflow)}</Typography>
-          <Box sx={{ flex: 1 }} />
-          {workflow.cost_estimate && workflow.cost_estimate.fires_per_month > 0 && (
-            <CostChip workflow={workflow} connectionMode={connectionMode} />
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
-          <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: c.text.primary }}>Permissions:</Typography>
-          <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary }}>{describePermissions(workflow)}</Typography>
-        </Box>
-      </Box>
-      <StreakBadgeRow runs={runs} />
-      {habitSuggestion && (
-        <Box sx={{
-          display: 'flex', alignItems: 'center', gap: 0.75,
-          px: 1, py: 0.5,
-          borderRadius: `${c.radius.md}px`,
-          bgcolor: c.accent.primary + '14',
-          border: `1px solid ${c.accent.primary}40`,
-        }}>
-          <Typography sx={{ flex: 1, fontSize: '0.78rem', color: c.text.primary }}>
-            You&apos;ve run this {habitSuggestion.count}× this week. Schedule it {habitSuggestion.label}?
-          </Typography>
-          <Box onClick={enableHabit} role="button" sx={{ fontSize: '0.74rem', fontWeight: 700, color: c.accent.primary, cursor: 'pointer', px: 0.5, '&:hover': { textDecoration: 'underline' } }}>
-            Yes
-          </Box>
-        </Box>
-      )}
-      {workflow.description && (
-        <Typography sx={{ fontSize: '0.92rem', color: c.text.secondary, lineHeight: 1.55, mt: 0.5 }}>
-          {workflow.description}
-        </Typography>
-      )}
       <StepList
         workflow={workflow}
         steps={editableSteps}
@@ -339,22 +301,43 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
         framed
         onChangeStep={onChangeFirstStep}
       />
-      {/* Bottom-right cluster matching target image #63. Discard + Save
-          only surface when the user has actually edited the first step
-          inline; otherwise we don't crowd the card with idle buttons. */}
-      {firstStepDirty ? (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, mt: 'auto' }}>
+      {firstStepDirty && (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
           <ActionBtn label="Discard" tone="danger" icon="trash" onClick={onDiscardFirstStep} />
           <ActionBtn label={savingFirst ? 'Saving…' : 'Save'} tone="success" icon="check" disabled={savingFirst} onClick={onSaveFirstStep} />
         </Box>
-      ) : (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 'auto' }}>
-          <AuditTraceLink workflowId={workflow.id} />
-        </Box>
       )}
+      <Box sx={{ flex: 1 }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.6, color: c.text.secondary, fontSize: '0.86rem', minWidth: 0 }}>
+          <CalendarTodayRounded sx={{ fontSize: 15, color: c.text.muted, flexShrink: 0 }} />
+          <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scheduleLine}</Box>
+        </Box>
+        <Box
+          onClick={openEdit}
+          role="button"
+          sx={{
+            display: 'inline-flex', alignItems: 'center', gap: 0.45,
+            fontSize: '0.82rem', fontWeight: 600,
+            px: 1.25, py: 0.5,
+            borderRadius: 999,
+            cursor: 'pointer',
+            color: c.text.secondary,
+            bgcolor: 'transparent',
+            border: `1px solid ${c.border.medium}`,
+            '&:hover': { bgcolor: c.bg.elevated, borderColor: c.border.strong || c.border.medium, color: c.text.primary },
+          }}>
+          <EditOutlined sx={{ fontSize: 15 }} />
+          Edit
+        </Box>
+      </Box>
     </Box>
   );
 }
+
+// kept on file for legacy uses; once the audit popover migrates, this and
+// the StreakBadge / habit-suggestion blocks above can be deleted entirely.
+void StreakBadgeRow;
 
 // Splits StreakBadge out so the SavedView body doesn't have to ferry
 // the runs array through both the chip row (gone) and the step list.
