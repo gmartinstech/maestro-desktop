@@ -18,11 +18,11 @@ function ChatBubbleTeardrop(props: { sx?: { fontSize?: number } }) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth={1.8}
+      fill="none" stroke="currentColor" strokeWidth={2}
       strokeLinecap="round" strokeLinejoin="round"
       style={{ display: 'block' }}
     >
-      <path d="M12 3 a8 8 0 0 1 8 8 v0 a8 8 0 0 1 -8 8 h-2 l-3.5 3 v-3.5 a8 8 0 0 1 -2.5 -7.5 a8 8 0 0 1 8 -8 z" />
+      <path d="M 7 3 H 15 A 6 6 0 0 1 21 9 V 13 A 6 6 0 0 1 15 19 H 11 L 5 23 V 19 A 6 6 0 0 1 1 13 V 9 A 6 6 0 0 1 7 3 Z" />
     </svg>
   );
 }

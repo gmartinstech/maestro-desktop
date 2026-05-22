@@ -296,19 +296,25 @@ const AgentCard: React.FC<Props> = ({
   const hasApiKey = !!useAppSelector((s) => s.settings.data.anthropic_api_key);
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
-  // If this session is a workflow's runner (executor.execute spawned it),
-  // hide the "Make workflow" button per user note on Image #44; the chat
-  // is already inside a workflow loop, converting it back into a fresh
-  // workflow would be a confusing identity collapse.
+  // Hide the "Convert to workflow" button when this chat is already
+  // entangled with a workflow (Image #44 note). Two cases:
+  //  (a) The session is one of a workflow's runner sessions, OR
+  //  (b) The session is the source the workflow was originally derived
+  //      from. Either way a fresh convert would just clone the workflow,
+  //      which is confusing identity collapse.
   const workflowRunsMap = useAppSelector((s) => s.workflows.runs);
+  const workflowItems = useAppSelector((s) => s.workflows.items);
   const isWorkflowRunnerSession = useMemo(() => {
     for (const arr of Object.values(workflowRunsMap || {})) {
       for (const r of arr || []) {
         if (r.session_id === session.id) return true;
       }
     }
+    for (const wf of Object.values(workflowItems || {})) {
+      if (wf.source_session_id === session.id) return true;
+    }
     return false;
-  }, [workflowRunsMap, session.id]);
+  }, [workflowRunsMap, workflowItems, session.id]);
   // Curated picker label with a tidy fallback for unknowns.
   const friendlyModelLabel = useMemo(() => {
     const value = session.model;
