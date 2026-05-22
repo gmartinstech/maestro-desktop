@@ -9,10 +9,10 @@ import { styled } from '@mui/material/styles';
 import AddRounded from '@mui/icons-material/AddRounded';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
 
-// Custom rounded speech bubble with a small tail at the bottom-left,
-// outlined in currentColor with the bubble interior knocked out so the
-// orange button fill shows through. Matches Image #57 exactly; MUI's
-// rounded chat icons are either filled or tail-less.
+// Custom near-circular speech bubble with a teardrop tail at the
+// bottom-left. The bubble body is a rounded square with corner radius
+// ~half the body size, so it reads as a circle. Matches Image #57; MUI
+// rounded chat glyphs either fill the bubble or omit the tail.
 function ChatBubbleTeardrop(props: { sx?: { fontSize?: number } }) {
   const size = props.sx?.fontSize ?? 18;
   return (
@@ -22,7 +22,7 @@ function ChatBubbleTeardrop(props: { sx?: { fontSize?: number } }) {
       strokeLinecap="round" strokeLinejoin="round"
       style={{ display: 'block' }}
     >
-      <path d="M7 3.5 h10 a4 4 0 0 1 4 4 v7 a4 4 0 0 1 -4 4 h-8 l-3.2 3 v-3.2 a4 4 0 0 1 -2.8 -3.8 v-7 a4 4 0 0 1 4 -4 z" />
+      <path d="M12 3 a8 8 0 0 1 8 8 v0 a8 8 0 0 1 -8 8 h-2 l-3.5 3 v-3.5 a8 8 0 0 1 -2.5 -7.5 a8 8 0 0 1 8 -8 z" />
     </svg>
   );
 }
@@ -406,52 +406,61 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
     return (
       <>
       {(inputOpen || historyOpen) && (
-        // Image #54: paired mode pills float above the composer/popover.
-        // `+ New Chat` is decorative-active while inputOpen; clicking it
-        // from history mode closes the popover and re-focuses the input.
-        // `History` toggles the SchedulePopover.
-        <Box sx={{ display: 'flex', gap: 0.75, mb: 1, pl: 0.5 }}>
+        // Image #54: paired mode pills above the composer/popover.
+        // The two states are mutually exclusive: opening one closes the
+        // other so the body underneath only renders one thing at a time.
+        <Box sx={{ display: 'flex', gap: 0.5, mb: 0.75, pl: 0.25 }}>
           <Box
             onClick={() => {
-              if (historyOpen) handleCloseHistory();
-              if (!inputOpen) onNewAgent();
+              if (historyOpen) {
+                handleCloseHistory();
+                onNewAgent();
+              }
+              // If already in inputOpen, this is a no-op (we're already
+              // in new chat). The visible active styling tells the user
+              // that. Clicking again does nothing intentionally.
             }}
             role="button"
             sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 0.4,
-              fontSize: '0.82rem', fontWeight: 600,
+              display: 'inline-flex', alignItems: 'center', gap: 0.3,
+              fontSize: '0.74rem', fontWeight: 600,
               color: c.text.primary,
               bgcolor: c.bg.surface,
               border: `1px solid ${inputOpen && !historyOpen ? c.border.medium : c.border.subtle}`,
               boxShadow: inputOpen && !historyOpen ? c.shadow.sm : 'none',
-              px: 1.1, py: 0.45, borderRadius: 999,
-              cursor: 'pointer',
-              '&:hover': { bgcolor: c.bg.elevated },
+              px: 0.85, py: 0.3, borderRadius: 999,
+              cursor: historyOpen ? 'pointer' : 'default',
+              '&:hover': historyOpen ? { bgcolor: c.bg.elevated } : {},
             }}>
-            <AddRounded sx={{ fontSize: 14 }} />
+            <AddRounded sx={{ fontSize: 12 }} />
             New Chat
           </Box>
           <Box
             onClick={() => {
-              if (historyOpen) handleCloseHistory();
-              else {
-                setPopoverMode('search');
-                setHistoryOpen(true);
+              if (historyOpen) {
+                handleCloseHistory();
+                return;
               }
+              // Close the composer first; inputOpen takes precedence in
+              // the render branch below so the popover would be hidden
+              // behind it otherwise.
+              if (inputOpen) onCancel();
+              setPopoverMode('search');
+              setHistoryOpen(true);
             }}
             role="button"
             sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 0.4,
-              fontSize: '0.82rem', fontWeight: 600,
+              display: 'inline-flex', alignItems: 'center', gap: 0.3,
+              fontSize: '0.74rem', fontWeight: 600,
               color: historyOpen ? c.text.primary : c.text.secondary,
               bgcolor: c.bg.surface,
               border: `1px solid ${historyOpen ? c.border.medium : c.border.subtle}`,
               boxShadow: historyOpen ? c.shadow.sm : 'none',
-              px: 1.1, py: 0.45, borderRadius: 999,
+              px: 0.85, py: 0.3, borderRadius: 999,
               cursor: 'pointer',
               '&:hover': { bgcolor: c.bg.elevated },
             }}>
-            <HistoryRounded sx={{ fontSize: 14 }} />
+            <HistoryRounded sx={{ fontSize: 12 }} />
             History
           </Box>
         </Box>
