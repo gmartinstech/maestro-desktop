@@ -119,24 +119,6 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   const [editedSteps, setEditedSteps] = useState<Workflow['steps'] | null>(null);
   const liveSteps = editedSteps || steps;
 
-  const onSave = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const result = await dispatch(createWorkflow({
-        title,
-        description,
-        steps: liveSteps.map((s) => ({ id: s.id, text: s.text })),
-        source_session_id: sourceSessionId,
-        use_synced_prompt: true,
-      } as Partial<Workflow>));
-      const wf = (result as unknown as { payload: Workflow }).payload;
-      if (wf?.id) onSaved(wf);
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, dispatch, title, description, liveSteps, sourceSessionId, onSaved]);
-
   const onDiscard = useCallback(() => {
     dispatch(closeWorkflowCard(workflowId));
     dispatch(removeWorkflowCard(workflowId));
@@ -153,31 +135,83 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
     setEditedSteps(next);
   }, [liveSteps]);
 
+  // The Save flow auto-creates the workflow, then prompts the user to schedule it
+  // (Image #7). Ignore = save without schedule. Schedule = open the scheduling
+  // composer (slice 3 wires this to the natural-language input).
+  const onSaveThenSchedule = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await dispatch(createWorkflow({
+        title,
+        description,
+        steps: liveSteps.map((s) => ({ id: s.id, text: s.text })),
+        source_session_id: sourceSessionId,
+        use_synced_prompt: true,
+      } as Partial<Workflow>));
+      const wf = (result as unknown as { payload: Workflow }).payload;
+      if (wf?.id) {
+        onSaved(wf);
+        dispatch(updateWorkflowCard({ workflowId: wf.id, patch: { view: 'edit', editFacet: 'Schedule' } }));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, dispatch, title, description, liveSteps, sourceSessionId, onSaved]);
+
+  void onChangeDescription;
   return (
-    // PreviewView visually matches SavedView (target image #107): same
-    // Scheduled / Permissions prose, same framed step boxes. Title +
-    // description come from the AI gen at save time; the user doesn't
-    // type a description here. Discard/Save sits in the bottom-right.
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.35 }}>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
-          <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: c.text.primary }}>Scheduled:</Typography>
-          <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary }}>Not scheduled</Typography>
+      <StepList steps={liveSteps} framed onChangeStep={onChangeStep} />
+      <Box sx={{ flex: 1 }} />
+      {/* Schedule prompt card. Soft accent tint + calendar icon, matching Image #7. */}
+      <Box sx={{
+        display: 'flex', alignItems: 'flex-start', gap: 1.25,
+        p: 1.5, borderRadius: `${c.radius.lg}px`,
+        bgcolor: c.accent.primary + '10',
+        border: `1px solid ${c.accent.primary}30`,
+      }}>
+        <Box sx={{
+          width: 32, height: 32, borderRadius: `${c.radius.md}px`,
+          bgcolor: c.accent.primary + '22', color: c.accent.primary,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <CalendarTodayRounded sx={{ fontSize: 16 }} />
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
-          <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: c.text.primary }}>Permissions:</Typography>
-          <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary }}>Notify me in Open Swarm</Typography>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: c.text.primary, lineHeight: 1.3 }}>
+            Schedule this workflow?
+          </Typography>
+          <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, mt: 0.25, lineHeight: 1.45 }}>
+            You can have workflows run on a recurring basis, automatically.
+          </Typography>
         </Box>
       </Box>
-      {description && (
-        <Typography sx={{ fontSize: '0.92rem', color: c.text.secondary, lineHeight: 1.55, mt: 0.5 }}>
-          {description}
-        </Typography>
-      )}
-      <StepList steps={liveSteps} framed onChangeStep={onChangeStep} />
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, mt: 'auto' }}>
-        <ActionBtn label="Discard" tone="danger" icon="trash" onClick={onDiscard} />
-        <ActionBtn label="Save" tone="success" icon="check" onClick={onSave} disabled={busy} />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
+        <Box
+          onClick={onDiscard}
+          role="button"
+          sx={{
+            fontSize: '0.86rem', fontWeight: 500, color: c.text.secondary,
+            cursor: 'pointer', px: 0.75, py: 0.5,
+            '&:hover': { color: c.text.primary },
+          }}>
+          Ignore
+        </Box>
+        <Box
+          onClick={onSaveThenSchedule}
+          role="button"
+          sx={{
+            display: 'inline-flex', alignItems: 'center', gap: 0.5,
+            fontSize: '0.88rem', fontWeight: 700,
+            px: 1.75, py: 0.6, borderRadius: 999,
+            color: '#fff', bgcolor: c.accent.primary,
+            cursor: busy ? 'wait' : 'pointer',
+            opacity: busy ? 0.6 : 1,
+            '&:hover': { bgcolor: c.accent.primary, filter: 'brightness(1.06)' },
+          }}>
+          Schedule Workflow
+        </Box>
       </Box>
     </Box>
   );
