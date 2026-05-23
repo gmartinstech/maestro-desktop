@@ -3,7 +3,7 @@ import SelectionOverlay from '@/app/components/SelectionOverlay';
 import { ElementSelectionProvider } from '@/app/components/ElementSelectionContext';
 import { useDomElementSelector } from '@/app/components/useDomElementSelector';
 import { useDashboardController } from './useDashboardController';
-import DashboardCanvas from './DashboardCanvas';
+import DashboardCanvas from './canvas/DashboardCanvas';
 
 const DashboardSelectionOverlay: React.FC = () => {
   const { overlay, dragRect, dragPreview } = useDomElementSelector();

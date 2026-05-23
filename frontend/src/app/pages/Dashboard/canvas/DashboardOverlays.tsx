@@ -1,16 +1,16 @@
 import React, { type RefObject } from 'react';
 import Box from '@mui/material/Box';
-import DashboardToolbar from './DashboardToolbar';
-import CanvasControls from './controls/CanvasControls';
-import CardSearchPalette from './controls/CardSearchPalette';
-import DirectionHints from './controls/DirectionHints';
+import DashboardToolbar from '../DashboardToolbar';
+import CanvasControls from '../controls/CanvasControls';
+import CardSearchPalette from '../controls/CardSearchPalette';
+import DirectionHints from '../controls/DirectionHints';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import type {
   CardPosition,
   ViewCardPosition,
   BrowserCardPosition,
 } from '@/shared/state/dashboardLayoutSlice';
-import type { useCanvasControls } from './useCanvasControls';
+import type { useCanvasControls } from '../useCanvasControls';
 
 type Canvas = ReturnType<typeof useCanvasControls>;
 type Direction = 'left' | 'right' | 'up' | 'down';

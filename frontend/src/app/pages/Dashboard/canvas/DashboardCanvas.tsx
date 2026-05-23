@@ -14,9 +14,9 @@ import type {
   NotePosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
-import type { CardType, useDashboardSelection } from './useDashboardSelection';
-import type { useCanvasControls } from './useCanvasControls';
-import type { Tether } from './geometry/dashboardTethers';
+import type { CardType, useDashboardSelection } from '../useDashboardSelection';
+import type { useCanvasControls } from '../useCanvasControls';
+import type { Tether } from '../geometry/dashboardTethers';
 
 type Selection = ReturnType<typeof useDashboardSelection>;
 type Canvas = ReturnType<typeof useCanvasControls>;

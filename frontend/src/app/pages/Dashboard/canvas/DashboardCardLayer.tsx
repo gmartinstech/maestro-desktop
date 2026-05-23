@@ -1,9 +1,9 @@
 import React, { type RefObject } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import AgentCard from './cards/AgentCard';
-import DashboardViewCard from './cards/DashboardViewCard';
-import BrowserCard from './cards/BrowserCard';
-import NoteCard from './cards/NoteCard';
+import AgentCard from '../cards/AgentCard';
+import DashboardViewCard from '../cards/DashboardViewCard';
+import BrowserCard from '../cards/BrowserCard';
+import NoteCard from '../cards/NoteCard';
 import {
   EXPANDED_CARD_MIN_H,
   DEFAULT_CARD_W,
@@ -14,7 +14,7 @@ import {
   type NotePosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
-import type { CardType, useDashboardSelection } from './useDashboardSelection';
+import type { CardType, useDashboardSelection } from '../useDashboardSelection';
 
 type Selection = ReturnType<typeof useDashboardSelection>;
 type SpawnOrigin = { x: number; y: number; type?: 'branch' };

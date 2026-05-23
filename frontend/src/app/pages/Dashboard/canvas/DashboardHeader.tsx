@@ -10,7 +10,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
-import type { CanvasActions } from './useCanvasControls';
+import type { CanvasActions } from '../useCanvasControls';
 
 interface DashboardHeaderProps {
   dashboardName: string | undefined;
