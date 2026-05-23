@@ -36,7 +36,7 @@ import AgentChat from '../AgentChat/AgentChat';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ViewPreview, { ViewPreviewHandle } from './ViewPreview';
 import TerminalPanel, { TerminalLine } from './TerminalPanel';
-import { getDefault } from './InputSchemaForm';
+import { getDefault } from '@/shared/inputSchemaDefaults';
 import CodeEditor from './CodeEditor';
 import { ElementSelectionProvider } from '@/app/components/ElementSelectionContext';
 import { captureViewThumbnail } from './captureViewThumbnail';

@@ -14,7 +14,7 @@ import { useAppDispatch } from '@/shared/hooks';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ViewPreview, { ViewPreviewHandle } from '@/app/pages/Views/ViewPreview';
-import { getDefault } from '@/app/pages/Views/InputSchemaForm';
+import { getDefault } from '@/shared/inputSchemaDefaults';
 import { useOverlayScrollPassthrough } from './useOverlayScrollPassthrough';
 import {
   useRuntimePreviewUrl,
