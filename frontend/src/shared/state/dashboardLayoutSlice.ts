@@ -25,6 +25,8 @@ export const GRID_GAP = 24;
 const GRID_ORIGIN = { x: 40, y: 100 };
 const GRID_COLS_FALLBACK = 4;
 
+export type CardType = 'agent' | 'view' | 'browser' | 'note';
+
 export interface CardPosition {
   session_id: string;
   x: number;
