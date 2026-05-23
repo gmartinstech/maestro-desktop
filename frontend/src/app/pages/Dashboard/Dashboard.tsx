@@ -75,6 +75,9 @@ import { useDomElementSelector } from '@/app/components/useDomElementSelector';
 import SelectionOverlay from '@/app/components/SelectionOverlay';
 import { setClipboardCards, getClipboardCards, type ClipboardCard } from '@/shared/dashboardClipboard';
 import { API_BASE } from '@/shared/config';
+import { useTethers } from './dashboardTethers';
+import TetherLayer from './TetherLayer';
+import { useArrowNav } from './useArrowNav';
 
 const SELECT_ATTR = 'data-select-type';
 
@@ -1037,172 +1040,17 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   }, [dispatch, dashboardId, expandedSessionIds, selection]);
 
   // ---- Arrow key card navigation (when zoomed in on a card) ----
-  const findNearestCard = useCallback((
-    currentId: string,
-    direction: 'left' | 'right' | 'up' | 'down',
-  ): { id: string; type: CardType } | null => {
-    const allCardEntries: Array<{ id: string; type: CardType; cx: number; cy: number }> = [];
-    for (const card of Object.values(cards)) {
-      allCardEntries.push({ id: card.session_id, type: 'agent', cx: card.x + card.width / 2, cy: card.y + card.height / 2 });
-    }
-    for (const vc of Object.values(viewCards)) {
-      allCardEntries.push({ id: vc.output_id, type: 'view', cx: vc.x + vc.width / 2, cy: vc.y + vc.height / 2 });
-    }
-    for (const bc of Object.values(browserCards)) {
-      allCardEntries.push({ id: bc.browser_id, type: 'browser', cx: bc.x + bc.width / 2, cy: bc.y + bc.height / 2 });
-    }
-
-    const current = allCardEntries.find((c) => c.id === currentId);
-    if (!current) return null;
-
-    let best: typeof allCardEntries[0] | null = null;
-    let bestScore = Infinity;
-
-    for (const card of allCardEntries) {
-      if (card.id === currentId) continue;
-      const dx = card.cx - current.cx;
-      const dy = card.cy - current.cy;
-
-      // Filter to the correct half-plane
-      let inDirection = false;
-      let primary = 0;
-      let secondary = 0;
-      switch (direction) {
-        case 'right': inDirection = dx > 20; primary = dx; secondary = Math.abs(dy); break;
-        case 'left':  inDirection = dx < -20; primary = -dx; secondary = Math.abs(dy); break;
-        case 'down':  inDirection = dy > 20; primary = dy; secondary = Math.abs(dx); break;
-        case 'up':    inDirection = dy < -20; primary = -dy; secondary = Math.abs(dx); break;
-      }
-      if (!inDirection) continue;
-
-      const score = primary + secondary * 0.3;
-      if (score < bestScore) {
-        bestScore = score;
-        best = card;
-      }
-    }
-
-    return best ? { id: best.id, type: best.type } : null;
-  }, [cards, viewCards, browserCards]);
-
-  // Compute which directions have neighbors from the focused card
-  const neighborDirections = useMemo(() => {
-    // Lowered the zoom floor from 0.9 to 0.4 so arrow nav still works
-    // when users zoom out to see the whole canvas. Below 0.4 the cards
-    // are too small to be a useful navigation target.
-    if (!focusedCardId || canvas.zoom < 0.4) return { left: false, right: false, up: false, down: false };
-    return {
-      left: !!findNearestCard(focusedCardId, 'left'),
-      right: !!findNearestCard(focusedCardId, 'right'),
-      up: !!findNearestCard(focusedCardId, 'up'),
-      down: !!findNearestCard(focusedCardId, 'down'),
-    };
-  }, [focusedCardId, canvas.zoom, findNearestCard]);
-
-  // Shake animation state: direction + timer
-  const [shakeDirection, setShakeDirection] = useState<'left' | 'right' | 'up' | 'down' | null>(null);
-  const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Use refs for values read inside the keydown handler to avoid stale closures
-  const focusedCardIdRef = useRef(focusedCardId);
-  focusedCardIdRef.current = focusedCardId;
-  const canvasZoomRef = useRef(canvas.zoom);
-  canvasZoomRef.current = canvas.zoom;
-
-  useEffect(() => {
-    // Helper: is the currently-focused element a text-entry field the
-    // user is actively editing? We only want to suppress dashboard
-    // navigation when the user is genuinely typing, not just because an
-    // input somewhere happens to have focus from a click long ago.
-    const isActivelyEditing = (target: EventTarget | null): boolean => {
-      const el = (target as HTMLElement) || (document.activeElement as HTMLElement | null);
-      if (!el) return false;
-      const tag = el.tagName;
-      const editable = (el as any).isContentEditable;
-      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !editable) return false;
-      // Only suppress when the input actually has content to navigate
-      // within. An empty input doesn't need arrow keys for cursor
-      // movement, so we can safely repurpose arrows for dashboard nav.
-      const val = (el as HTMLInputElement | HTMLTextAreaElement).value;
-      if (typeof val === 'string' && val.length === 0) return false;
-      if (editable && (el.textContent ?? '').length === 0) return false;
-      return true;
-    };
-
-    const handleKey = (e: KeyboardEvent) => {
-      if (!isActive) return;  // Don't fire shortcuts when dashboard is hidden
-
-      // Escape blurs any active input and restores focus to the canvas ,
-      // so you can quickly "unstick" keyboard focus and start navigating.
-      if (e.key === 'Escape') {
-        const active = document.activeElement as HTMLElement | null;
-        const tag = active?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || (active as any)?.isContentEditable) {
-          active?.blur?.();
-        }
-        return;
-      }
-
-      let direction: 'left' | 'right' | 'up' | 'down' | null = null;
-      switch (e.key) {
-        case 'ArrowLeft': direction = 'left'; break;
-        case 'ArrowRight': direction = 'right'; break;
-        case 'ArrowUp': direction = 'up'; break;
-        case 'ArrowDown': direction = 'down'; break;
-        default: return;
-      }
-
-      // Don't hijack arrows when the user is actually typing
-      if (isActivelyEditing(e.target)) return;
-
-      // Lowered zoom floor from 0.9 → 0.4 so nav still works zoomed out
-      if (canvasZoomRef.current < 0.4) return;
-
-      // If no card is focused, pick the front-most one as a fallback so
-      // nav works after the user clicked on empty canvas.
-      let currentFocused = focusedCardIdRef.current;
-      if (!currentFocused) {
-        const anyCardId = Object.keys(cards)[0] || Object.keys(viewCards)[0] || Object.keys(browserCards)[0];
-        if (!anyCardId) return;
-        currentFocused = anyCardId;
-        setFocusedCardId(anyCardId);
-      }
-
-      e.preventDefault();
-      const target = findNearestCard(currentFocused, direction);
-
-      if (!target) {
-        // No card in that direction , shake
-        if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
-        setShakeDirection(direction);
-        shakeTimerRef.current = setTimeout(() => {
-          setShakeDirection(null);
-          shakeTimerRef.current = null;
-        }, 400);
-        return;
-      }
-
-      // Expand + navigate to target + bring to front
-      report('dashboard', 'arrow_navigated', { direction, from_card: currentFocused, to_card: target.id });
-      if (target.type === 'agent') {
-        dispatch(expandSession(target.id));
-      }
-      dispatch(bringToFront({ id: target.id, type: target.type }));
-      setFocusedCardId(target.id);
-
-      setTimeout(() => {
-        const rect = getCardRect(target.id, target.type);
-        if (rect) canvas.actions.fitToCards([rect], 1.15, true);
-        setTimeout(() => (document.activeElement as HTMLElement)?.blur?.(), 150);
-      }, 100);
-    };
-
-    // Capture phase so we beat MUI Menus/Selects that also listen for
-    // arrows. We still bail early on isActivelyEditing, so this doesn't
-    // interfere with typing.
-    window.addEventListener('keydown', handleKey, true);
-    return () => window.removeEventListener('keydown', handleKey, true);
-  }, [findNearestCard, getCardRect, canvas.actions, dispatch, isActive, cards, viewCards, browserCards]);
+  const { neighborDirections, shakeDirection } = useArrowNav({
+    cards,
+    viewCards,
+    browserCards,
+    zoom: canvas.zoom,
+    isActive,
+    focusedCardId,
+    setFocusedCardId,
+    canvasActions: canvas.actions,
+    getCardRect,
+  });
 
   const handleBranchFromCard = useCallback(
     (sourceSessionId: string, newSessionId: string) => {
@@ -1539,195 +1387,17 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     }
   }, [isActive, glowingBrowserCards, browserCards, cards, dispatch]);
 
-  const TETHER_FADE_MS = 2500;
-
-  const tethers = useMemo(() => {
-    const ELBOW_RADIUS = 16;
-
-    function elbowPath(x1: number, y1: number, x2: number, y2: number): string {
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const midX = x1 + dx / 2;
-      const r = (Math.abs(dy) < 1 || Math.abs(dx) < ELBOW_RADIUS * 2)
-        ? 0
-        : Math.min(ELBOW_RADIUS, Math.abs(dy) / 2, Math.abs(dx) / 4);
-      const sy = dy >= 0 ? 1 : -1;
-      const sx = dx >= 0 ? 1 : -1;
-
-      return [
-        `M ${x1},${y1}`,
-        `H ${midX - sx * r}`,
-        `Q ${midX},${y1} ${midX},${y1 + sy * r}`,
-        `V ${y2 - sy * r}`,
-        `Q ${midX},${y2} ${midX + sx * r},${y2}`,
-        `H ${x2}`,
-      ].join(' ');
-    }
-
-    const agentTethers = Object.entries(glowingAgentCards).map(([copyId, { sourceId, fading, sourceYRatio, label }]) => {
-      const src = cards[sourceId];
-      const dst = cards[copyId];
-      if (!src || !dst) return null;
-
-      let srcX = src.x, srcY = src.y;
-      let dstX = dst.x, dstY = dst.y;
-      if (liveDragInfo) {
-        if (liveDragInfo.cardId === sourceId) { srcX += liveDragInfo.dx; srcY += liveDragInfo.dy; }
-        if (liveDragInfo.cardId === copyId) { dstX += liveDragInfo.dx; dstY += liveDragInfo.dy; }
-      }
-
-      const srcMeasured = measuredHeightsRef.current[sourceId];
-      const srcH = srcMeasured ?? (expandedSessionIds.includes(sourceId)
-        ? Math.max(EXPANDED_CARD_MIN_H, src.height)
-        : src.height);
-      const dstMeasured = measuredHeightsRef.current[copyId];
-      const dstH = dstMeasured ?? (expandedSessionIds.includes(copyId)
-        ? Math.max(EXPANDED_CARD_MIN_H, dst.height)
-        : dst.height);
-
-      const x1 = srcX + src.width;
-      const y1 = srcY + srcH * 0.54;
-      const x2 = dstX;
-      const y2 = dstY + dstH * (expandedSessionIds.includes(copyId) ? 0.54 : 0.79);
-      const midX = x1 + (x2 - x1) / 2;
-      const labelX = midX + (x2 - midX) * 0.15;
-      const labelY = y2;
-
-      return {
-        key: copyId,
-        path: elbowPath(x1, y1, x2, y2),
-        labelX,
-        labelY,
-        label: label || '',
-        fading,
-      };
-    }).filter(Boolean) as Array<{ key: string; path: string; labelX: number; labelY: number; label: string; fading: boolean }>;
-
-    // Build browser tethers from TWO sources and merge:
-    // 1. glowingBrowserCards , the short-lived "flash" when a browser is first assigned
-    // 2. Active browser-agent sessions , persistent as long as the agent runs
-    //
-    // Source #2 is the fix for tethers disappearing when the parent session
-    // completes a turn (which clears glowingBrowserCards even though the
-    // browser agent is still working). Source #1 covers the initial moment
-    // before the browser-agent session is fully created. Together they
-    // ensure the arrow is always visible when it should be.
-
-    type Anchor = { x: number; y: number; side: 'left' | 'right' | 'top' | 'bottom' };
-
-    function browserTether(
-      browserId: string,
-      sourceId: string,
-      fading: boolean,
-      label: string,
-    ) {
-      const src = cards[sourceId];
-      const dst = browserCards[browserId];
-      if (!src || !dst) return null;
-
-      let srcX = src.x, srcY = src.y;
-      let dstX = dst.x, dstY = dst.y;
-      if (liveDragInfo) {
-        if (liveDragInfo.cardId === sourceId) { srcX += liveDragInfo.dx; srcY += liveDragInfo.dy; }
-        if (liveDragInfo.cardId === browserId) { dstX += liveDragInfo.dx; dstY += liveDragInfo.dy; }
-      }
-
-      const srcMeasured = measuredHeightsRef.current[sourceId];
-      const srcH = srcMeasured ?? (expandedSessionIds.includes(sourceId)
-        ? Math.max(EXPANDED_CARD_MIN_H, src.height)
-        : src.height);
-      const dstH = dst.height;
-
-      const srcCx = srcX + src.width / 2;
-      const dstCx = dstX + dst.width / 2;
-
-      const srcAnchors: Anchor[] = [
-        { x: srcX + src.width, y: srcY + srcH * 0.54, side: 'right' },
-        { x: srcX, y: srcY + srcH * 0.54, side: 'left' },
-        { x: srcCx, y: srcY, side: 'top' },
-        { x: srcCx, y: srcY + srcH, side: 'bottom' },
-      ];
-      const dstAnchors: Anchor[] = [
-        { x: dstX, y: dstY + dstH * 0.54, side: 'left' },
-        { x: dstX + dst.width, y: dstY + dstH * 0.54, side: 'right' },
-        { x: dstCx, y: dstY, side: 'top' },
-        { x: dstCx, y: dstY + dstH, side: 'bottom' },
-      ];
-
-      let bestSrc = srcAnchors[0], bestDst = dstAnchors[0];
-      let bestDist = Infinity;
-      for (const sa of srcAnchors) {
-        for (const da of dstAnchors) {
-          const d = Math.hypot(sa.x - da.x, sa.y - da.y);
-          if (d < bestDist) { bestDist = d; bestSrc = sa; bestDst = da; }
-        }
-      }
-
-      const x1 = bestSrc.x, y1 = bestSrc.y;
-      const x2 = bestDst.x, y2 = bestDst.y;
-
-      const isVertical = (bestSrc.side === 'top' || bestSrc.side === 'bottom')
-        && (bestDst.side === 'top' || bestDst.side === 'bottom');
-
-      let pathD: string;
-      if (isVertical) {
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const midY = y1 + dy / 2;
-        const r = (Math.abs(dx) < 1 || Math.abs(dy) < ELBOW_RADIUS * 2)
-          ? 0
-          : Math.min(ELBOW_RADIUS, Math.abs(dx) / 2, Math.abs(dy) / 4);
-        const sx = dx >= 0 ? 1 : -1;
-        const sy = dy >= 0 ? 1 : -1;
-        pathD = [
-          `M ${x1},${y1}`,
-          `V ${midY - sy * r}`,
-          `Q ${x1},${midY} ${x1 + sx * r},${midY}`,
-          `H ${x2 - sx * r}`,
-          `Q ${x2},${midY} ${x2},${midY + sy * r}`,
-          `V ${y2}`,
-        ].join(' ');
-      } else {
-        pathD = elbowPath(x1, y1, x2, y2);
-      }
-
-      const midX = x1 + (x2 - x1) / 2;
-      const midY = y1 + (y2 - y1) / 2;
-      const labelX = isVertical ? midX : midX + (x2 - midX) * 0.15;
-      const labelY = isVertical ? midY + (y2 - midY) * 0.15 : y2;
-
-      return {
-        key: `browser-${browserId}`,
-        path: pathD,
-        labelX,
-        labelY,
-        label,
-        fading,
-      };
-    }
-
-    // Source 1: glow-based (covers the initial flash before browser-agent session exists)
-    const glowTethers = new Map<string, ReturnType<typeof browserTether>>();
-    for (const [browserId, { sourceId, fading, label }] of Object.entries(glowingBrowserCards)) {
-      const t = browserTether(browserId, sourceId, fading, label || '');
-      if (t) glowTethers.set(browserId, t);
-    }
-
-    // Source 2: active browser-agent sessions (persistent , survives parent turn completion)
-    for (const s of sessionList) {
-      if (s.mode !== 'browser-agent') continue;
-      if (s.status !== 'running' && s.status !== 'waiting_approval') continue;
-      if (!s.browser_id || !s.parent_session_id) continue;
-      if (glowTethers.has(s.browser_id)) continue; // glow already covers this one
-      const t = browserTether(s.browser_id, s.parent_session_id, false, '');
-      if (t) glowTethers.set(s.browser_id, t);
-    }
-
-    const browserTethers = Array.from(glowTethers.values()).filter(Boolean) as Array<{ key: string; path: string; labelX: number; labelY: number; label: string; fading: boolean }>;
-
-    return [...agentTethers, ...browserTethers];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList]);
+  const tethers = useTethers({
+    glowingAgentCards,
+    glowingBrowserCards,
+    cards,
+    browserCards,
+    expandedSessionIds,
+    liveDragInfo,
+    measuredHeightsRef,
+    measuredHeightsTick,
+    sessionList,
+  });
 
   const dotSize = Math.max(1, 1.5 * canvas.zoom);
   const dotSpacing = 24 * canvas.zoom;
@@ -1845,113 +1515,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
             }}
           >
             {/* Tether lines between branched cards */}
-            {tethers.length > 0 && (
-              <svg
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  width: 1,
-                  height: 1,
-                  overflow: 'visible',
-                  pointerEvents: 'none',
-                  zIndex: 10,
-                }}
-              >
-                <defs>
-                  <filter id="tether-glow-f" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                  <marker
-                    id="tether-arrow"
-                    viewBox="0 0 10 10"
-                    refX="10"
-                    refY="5"
-                    markerWidth="10"
-                    markerHeight="10"
-                    orient="auto"
-                  >
-                    <path d="M 0 1 L 10 5 L 0 9 z" fill={c.accent.primary} opacity={0.8} />
-                  </marker>
-                </defs>
-                <style>{`
-                  @keyframes tether-flow { to { stroke-dashoffset: -16; } }
-                  @keyframes tether-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-                `}</style>
-                {tethers.map((t) => (
-                  <g
-                    key={t.key}
-                    style={{
-                      opacity: t.fading ? 0 : 1,
-                      transition: `opacity ${TETHER_FADE_MS}ms ease-out`,
-                    }}
-                  >
-                    <path
-                      d={t.path}
-                      fill="none"
-                      stroke={c.accent.primary}
-                      strokeWidth={8}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity={0.2}
-                      filter="url(#tether-glow-f)"
-                    />
-                    <path
-                      d={t.path}
-                      fill="none"
-                      stroke={c.accent.primary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity={0.65}
-                      markerEnd="url(#tether-arrow)"
-                      style={{ animation: 'tether-pulse 2s ease-in-out infinite' }}
-                    />
-                    <path
-                      d={t.path}
-                      fill="none"
-                      stroke={c.accent.primary}
-                      strokeWidth={1.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray="8 8"
-                      opacity={0.9}
-                      style={{ animation: 'tether-flow 0.6s linear infinite' }}
-                    />
-                    {t.label && (
-                      <g transform={`translate(${t.labelX},${t.labelY})`}>
-                        <rect
-                          x={-4}
-                          y={-14}
-                          width={t.label.length * 7.5 + 8}
-                          height={20}
-                          rx={4}
-                          fill={c.bg.surface}
-                          stroke={c.accent.primary}
-                          strokeWidth={1}
-                          opacity={0.95}
-                        />
-                        <text
-                          x={t.label.length * 7.5 / 2}
-                          y={1}
-                          textAnchor="middle"
-                          fontSize={11}
-                          fontWeight={600}
-                          fontFamily="inherit"
-                          fill={c.accent.primary}
-                        >
-                          {t.label}
-                        </text>
-                      </g>
-                    )}
-                  </g>
-                ))}
-              </svg>
-            )}
+            <TetherLayer tethers={tethers} c={c} />
             <AnimatePresence>
             {Object.values(cards).map((card) => {
               const sid = card.session_id;
