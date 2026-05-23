@@ -470,7 +470,7 @@ async def browser_agent_run(request: Request):
     """Run one or more browser sub-agents in parallel.
     Called by the browser_agent_mcp_server stdio subprocess."""
     from backend.apps.settings.settings import load_settings
-    from backend.apps.agents.browser_agent import run_browser_agents
+    from backend.apps.agents.browser.browser_agent import run_browser_agents
 
     body = await request.json()
     tasks = body.get("tasks", [])

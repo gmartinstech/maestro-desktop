@@ -15,14 +15,14 @@ from uuid import uuid4
 
 import anthropic
 
-from backend.apps.agents import browser_history
-from backend.apps.agents.browser_history import (
+from backend.apps.agents.browser import browser_history
+from backend.apps.agents.browser.browser_history import (
     _MAX_HISTORY_MESSAGES,
     _trim_history_by_turns,
     _validate_message_pairing,
     clear_browser_history,
 )
-from backend.apps.agents.browser_loop import (
+from backend.apps.agents.browser.browser_loop import (
     _LOOP_DETECTION_EXCLUDED_TOOLS,
     _LOOP_HARD_CAP,
     _LOOP_WARNING_TEXT,
@@ -30,7 +30,7 @@ from backend.apps.agents.browser_loop import (
     _detect_loop,
     _hash_tool_call,
 )
-from backend.apps.agents.browser_schema import (
+from backend.apps.agents.browser.browser_schema import (
     _ACTION_TOOLS_REQUIRING_REPORT,
     ACTION_MAP,
     BROWSER_TOOLS_SCHEMA,
