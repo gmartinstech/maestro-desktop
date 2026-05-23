@@ -116,7 +116,6 @@
       "frontend/src/app/pages/Dashboard/useCanvasControls.ts",
       "frontend/src/app/pages/DashboardSelection/DashboardSelection.tsx",
       "frontend/src/app/pages/Modes/Modes.tsx",
-      "frontend/src/app/pages/Settings/Settings.tsx",
       "frontend/src/app/pages/Skills/SkillBuilderChat.tsx",
       "frontend/src/app/pages/Skills/Skills.tsx",
       "frontend/src/app/pages/Views/ViewEditor.tsx",
