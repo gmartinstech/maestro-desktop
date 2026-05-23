@@ -30,6 +30,7 @@ from uuid import uuid4
 import httpx
 
 from backend.apps.service import buffer
+from backend.apps.service.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -173,11 +174,7 @@ def _envelope() -> dict:
             env["locale"] = loc
     except Exception:
         pass
-    try:
-        from backend.apps.service.service import APP_VERSION
-        env["app_version"] = APP_VERSION
-    except Exception:
-        pass
+    env["app_version"] = APP_VERSION
     # How this build was packaged. Set by the platform-specific build script
     # (electron-builder afterPack hooks for dmg / exe / appimage / deb / rpm).
     # Defaults to "dev" when running from `bash run.sh` in a checked-out repo.

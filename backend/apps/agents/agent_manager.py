@@ -316,7 +316,7 @@ class AgentManager:
         _apply_context_window(session, global_settings)
         self.sessions[session_id] = session
 
-        from backend.apps.service.service import APP_VERSION
+        from backend.apps.service.version import APP_VERSION
 
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
