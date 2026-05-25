@@ -70,6 +70,18 @@ export function useDashboardSelection(
 
   const deselectAll = useCallback(() => setSelectedIds(new Map()), []);
 
+  // Cmd/Ctrl+A: select every card on the canvas so the user can wipe the
+  // board in one keystroke. Mirrors the per-type id keys the marquee uses.
+  const selectAll = useCallback(() => {
+    const next = new Map<string, CardType>();
+    for (const card of Object.values(cards)) next.set(card.session_id, 'agent');
+    for (const vc of Object.values(viewCards)) next.set(vc.output_id, 'view');
+    for (const bc of Object.values(browserCards)) next.set(bc.browser_id, 'browser');
+    for (const n of Object.values(notes)) next.set(n.note_id, 'note');
+    for (const wc of Object.values(workflowCards)) next.set(wc.workflow_id, 'workflow');
+    setSelectedIds(next);
+  }, [cards, viewCards, browserCards, notes, workflowCards]);
+
   const selectCard = useCallback(
     (id: string, type: CardType, shiftKey: boolean) => {
       setSelectedIds((prev) => {
@@ -285,6 +297,7 @@ export function useDashboardSelection(
     isSelected,
     selectCard,
     deselectAll,
+    selectAll,
     handleCanvasMouseDown,
     handleCanvasMouseMove,
     handleCanvasMouseUp,

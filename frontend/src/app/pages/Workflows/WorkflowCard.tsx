@@ -463,14 +463,14 @@ const WorkflowCard: React.FC<Props> = ({
             placeholder="New workflow"
             onChange={(e) => dispatch(updateWorkflowCard({ workflowId, patch: { draft: { ...(card?.draft || {}), title: e.target.value } } }))}
             sx={{
-              flex: 1, fontWeight: 700, fontSize: '1rem', color: c.text.primary,
+              flex: 1, fontWeight: 600, fontSize: '0.95rem', color: c.text.primary,
               letterSpacing: '-0.005em',
               '& input::placeholder': { color: c.text.muted, opacity: 1 },
             }}
           />
         ) : (
           <>
-            <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.005em' }}>
+            <Typography sx={{ fontWeight: 600, fontSize: '0.95rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.005em' }}>
               {title}
             </Typography>
             <StatusPill view={card.view} workflow={workflow} runs={runs} />

@@ -91,6 +91,21 @@ export function useDashboardShortcuts({
     return () => window.removeEventListener('keydown', handleDelete);
   }, [selection, dispatch]);
 
+  // Cmd/Ctrl+A selects every card so it can be deleted in one go. Skipped
+  // inside text fields so Cmd+A there still selects text, not cards.
+  useEffect(() => {
+    const handleSelectAll = (e: KeyboardEvent) => {
+      if (!isActive) return;
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'a') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
+      e.preventDefault();
+      selection.selectAll();
+    };
+    window.addEventListener('keydown', handleSelectAll);
+    return () => window.removeEventListener('keydown', handleSelectAll);
+  }, [selection, isActive]);
+
   // Cmd+F to open card search palette
   useEffect(() => {
     const handleSearch = (e: KeyboardEvent) => {

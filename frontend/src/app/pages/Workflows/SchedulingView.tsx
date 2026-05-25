@@ -133,9 +133,10 @@ export default function SchedulingView({ workflow, steps }: Props) {
   }, [pending, dispatch, workflow.id, workflow.updated_at]);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
       {/* Inline header replacement. Image #49: subtitle on LEFT, Cancel
-          on RIGHT. The default History/Run row is hidden for 'scheduling'. */}
+          on RIGHT. Cancel matches the subtitle's weight/size/color so the
+          row reads as peers, not a heavy CTA; it just reddens on hover. */}
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <InlineSubtitle workflow={workflow} />
         <Box sx={{ flex: 1 }} />
@@ -143,13 +144,12 @@ export default function SchedulingView({ workflow, steps }: Props) {
           onClick={onCancel}
           role="button"
           sx={{
-            display: 'inline-flex', alignItems: 'center', gap: 0.45,
-            fontSize: '0.82rem', fontWeight: 600,
-            color: c.text.secondary, cursor: 'pointer',
-            px: 0.75, py: 0.5,
+            display: 'inline-flex', alignItems: 'center', gap: 0.4,
+            fontSize: '0.82rem', fontWeight: 500,
+            color: c.text.muted, cursor: 'pointer',
             '&:hover': { color: c.status.error },
           }}>
-          <DeleteOutlineRounded sx={{ fontSize: 16 }} />
+          <DeleteOutlineRounded sx={{ fontSize: 15 }} />
           Cancel task scheduling
         </Box>
       </Box>
@@ -160,7 +160,6 @@ export default function SchedulingView({ workflow, steps }: Props) {
       {error && (
         <Typography sx={{ fontSize: '0.82rem', color: c.status.error }}>{error}</Typography>
       )}
-      <Box sx={{ flex: 1 }} />
       {/* Real ChatInput (same one the toolbar / agent chat use) so the
           composer matches Image #54 / #64 exactly: live model picker,
           mode picker, thinking level, paperclip + mic, the works. We
