@@ -1119,9 +1119,18 @@ const BrowserCard: React.FC<Props> = ({
           <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
             <iframe
               src={activeUrl}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              // No sandbox: a restrictive sandbox blocks some sites from rendering, and our renderer is already isolated by Electron's contextIsolation + sub_frame XFO/CSP frame-ancestors strip in main.js. onLoad/onError add definitive instrumentation so we can tell whether the iframe loaded successfully (with empty body from anti-iframe JS) or genuinely failed (network error, CSP block, etc.).
               style={{ width: '100%', height: '100%', border: 'none' }}
               title="Browser"
+              referrerPolicy="no-referrer-when-downgrade"
+              onLoad={() => {
+                // eslint-disable-next-line no-console
+                console.log('[diag][iframe:onLoad]', activeUrl);
+              }}
+              onError={(e) => {
+                // eslint-disable-next-line no-console
+                console.error('[diag][iframe:onError]', activeUrl, (e as any)?.message || e);
+              }}
             />
             <Box
               sx={{

@@ -24,6 +24,10 @@ import { report } from './telemetry';
 const PERSIST_DEBOUNCE_MS = 200;
 
 const OnboardingRoot: React.FC = () => {
+  // Windows nuclear ablation v1.1.58: the AgenticCursor motion.div gate in 1.1.57 was not sufficient — OnboardingPanel / OnboardingDirector / popups have additional Framer Motion + portal subtrees that segfault on commit. Return null on Windows so the entire onboarding UI is suppressed; user can still use the app normally without the guided tour. Mac unchanged.
+  if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')) {
+    return null;
+  }
   const acRef = useRef<AgenticCursorHandle | null>(null);
   const dispatch = useAppDispatch();
   const store = useStore<RootState>() as Store<RootState>;
