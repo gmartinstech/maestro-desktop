@@ -259,7 +259,14 @@ const AgenticCursor = forwardRef<AgenticCursorHandle>((_props, ref) => {
           zIndex: 10500,
           pointerEvents: 'none',
           transformOrigin: 'top left',
-          ...(IS_WIN ? { transform: `translate(${storePos.x}px, ${storePos.y}px)` } : null),
+          ...(IS_WIN
+            ? {
+                transform: `translate(${storePos.x}px, ${storePos.y}px)`,
+                // Closest CSS approximation of the Mac spring (stiffness 260, damping 26): a softly easing ~420ms cubic-bezier. Without this the cursor teleports because the shim strips Framer's spring runtime.
+                transition: 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+                willChange: 'transform',
+              }
+            : null),
         }}
       >
         {visible && (

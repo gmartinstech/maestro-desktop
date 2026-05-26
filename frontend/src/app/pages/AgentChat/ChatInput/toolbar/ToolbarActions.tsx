@@ -2,9 +2,6 @@ import React, { RefObject } from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
-
-// Windows ablation re-instated in v1.1.58: the file input AND the contentEditable were BOTH crashers. v1.1.57's restore of <input type="file"> brought back the AgentChat-children commit segfault (crash fires right after AgentChat:before-jsx without any child render logs). Drag-and-drop attach still works via AttachmentChips drop zone on Windows. Future: replace this button with an Electron native showOpenDialog IPC so the button is functional on Windows again without touching <input type="file">.
-const IS_WIN = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
 import MicNoneOutlinedIcon from '@mui/icons-material/MicNoneOutlined';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import StopIcon from '@mui/icons-material/Stop';
@@ -85,39 +82,34 @@ export const ToolbarActions: React.FC<Props> = ({
         );
       })()}
 
-      {/* Windows-only ablation: hidden <input type="file"> + attach button skipped on Windows to test whether IFileDialog COM init is the trigger for the Chromium 144 commit-phase segfault. Mac still renders both (drag/paste/click attach all work). On Windows, drag-and-drop attach still works via AttachmentChips drop zone. */}
-      {!IS_WIN && (
-        <input
-          ref={generalFileInputRef}
-          type="file"
-          multiple
-          hidden
-          onChange={(e) => {
-            if (!e.target.files) return;
-            const all = Array.from(e.target.files);
-            const imgs = all.filter((f) => f.type.startsWith('image/'));
-            const rest = all.filter((f) => !f.type.startsWith('image/'));
-            if (imgs.length > 0) addImageFiles(imgs);
-            if (rest.length > 0) uploadAndAttachFiles(rest);
-            e.target.value = '';
+      <input
+        ref={generalFileInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (!e.target.files) return;
+          const all = Array.from(e.target.files);
+          const imgs = all.filter((f) => f.type.startsWith('image/'));
+          const rest = all.filter((f) => !f.type.startsWith('image/'));
+          if (imgs.length > 0) addImageFiles(imgs);
+          if (rest.length > 0) uploadAndAttachFiles(rest);
+          e.target.value = '';
+        }}
+      />
+      <Tooltip title="Attach file">
+        <IconButton
+          size="small"
+          onClick={() => generalFileInputRef.current?.click()}
+          sx={{
+            color: c.text.tertiary,
+            p: 0.5,
+            '&:hover': { color: c.text.secondary, bgcolor: 'rgba(0,0,0,0.04)' },
           }}
-        />
-      )}
-      {!IS_WIN && (
-        <Tooltip title="Attach file">
-          <IconButton
-            size="small"
-            onClick={() => generalFileInputRef.current?.click()}
-            sx={{
-              color: c.text.tertiary,
-              p: 0.5,
-              '&:hover': { color: c.text.secondary, bgcolor: 'rgba(0,0,0,0.04)' },
-            }}
-          >
-            <AttachFileIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Tooltip>
-      )}
+        >
+          <AttachFileIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Tooltip>
       {!autoRunMode && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           {hasContent && (

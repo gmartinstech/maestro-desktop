@@ -71,7 +71,7 @@ export function useEditorHandlers(p: Params) {
   const updateHasContent = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) return;
-    const text = (editor.textContent || '').replace(/\u200B/g, '');
+    const text = readEditorText(editor).replace(/\u200B/g, '');
     const hasPills = editor.querySelector(`[${SKILL_PILL_ATTR}]`) !== null;
     setHasContent(text.trim().length > 0 || hasPills);
   }, []);
@@ -104,7 +104,7 @@ export function useEditorHandlers(p: Params) {
       const { [skillId]: _, ...rest } = prev;
       return rest;
     });
-    const text = (editor.textContent || '').replace(/\u200B/g, '');
+    const text = readEditorText(editor).replace(/\u200B/g, '');
     const hasPills = editor.querySelector(`[${SKILL_PILL_ATTR}]`) !== null;
     setHasContent(text.trim().length > 0 || hasPills);
     editor.focus();
