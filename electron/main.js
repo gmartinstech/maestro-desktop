@@ -1485,7 +1485,15 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.on('window-all-closed', () => {
-  if (!isDev) killBackend();
+  // Intentionally NOT killBackend() here. before-quit POSTs /shutdown-all
+  // so the backend reaps App Builder child processes (bundled node/vite,
+  // uvicorn) while it is still alive; will-quit kills the backend after.
+  // Killing it here first (on Windows that is taskkill /F, which skips
+  // uvicorn's graceful stop_all) orphans those children, and an orphaned
+  // vite node.exe keeps a lock on its own image at
+  // resources\node\x64\node.exe, blocking the next NSIS upgrade with
+  // "OpenSwarm cannot be closed". Mac's SIGTERM happened to run stop_all,
+  // which is why this never reproduced there.
   app.quit();
 });
 
@@ -1522,8 +1530,13 @@ app.on('before-quit', async (event) => {
   if (drainingForQuit) return;
   event.preventDefault();
   drainingForQuit = true;
+  // 10s, not 2s: stop_all() reaps runtimes in parallel but each can take up
+  // to ~8s on Windows (taskkill /T /F up to 5s + a 3s SIGTERM grace). At 2s
+  // the backend got hard-killed mid-reap, orphaning the vite node.exe. The
+  // ceiling is only reached when an App Builder app is actually running and
+  // slow to die; with none active stop_all returns instantly.
   try {
-    await postShutdownAllApps(2000);
+    await postShutdownAllApps(10000);
   } catch (_) {}
   app.quit();
 });
