@@ -98,6 +98,8 @@ interface Props {
 }
 
 export const ChatInputView: React.FC<Props> = (p) => {
+  // eslint-disable-next-line no-console
+  console.log('[diag][ChatInputView:render]', p.sessionId);
   const { c } = p;
   return (
     <Box

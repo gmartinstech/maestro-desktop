@@ -22,6 +22,8 @@ export const EditorSurface: React.FC<Props> = ({
   c, editorRef, disabled, hasContent, hasAttachments, autoRunMode, isRunning, queueLength,
   placeholderLabel, onInput, onClick, onKeyDown, onPaste,
 }) => {
+  // eslint-disable-next-line no-console
+  console.log('[diag][EditorSurface:render]', 'disabled=', disabled, 'hasContent=', hasContent);
   return (
     <Box sx={{ px: 1.5, pt: hasAttachments ? 0.5 : 1.25, pb: 0.25, position: 'relative' }}>
       <div
@@ -29,7 +31,7 @@ export const EditorSurface: React.FC<Props> = ({
         data-onboarding="chat-input"
         contentEditable={!disabled}
         suppressContentEditableWarning
-        spellCheck
+        spellCheck={false}
         onInput={onInput}
         onClick={onClick}
         onKeyDown={onKeyDown}
