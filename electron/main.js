@@ -153,7 +153,10 @@ app.on('open-url', (event, url) => {
 });
 
 app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
-// Removed ignore-gpu-blocklist + enable-gpu-rasterization + enable-zero-copy: Chromium maintains a blocklist of GPU drivers known to cause native segfaults (STATUS_ACCESS_VIOLATION 0xC0000005) when forced through the GPU pipeline, and Crashpad has been capturing exactly that exit code on every renderer crash with no JS-side cause; respecting the blocklist lets Chromium fall back to software rasterization on affected drivers while keeping GPU on safe ones. Widevine CDM still works in software mode.
+// Disable hardware acceleration entirely on Windows. Removing the override flags alone did not stop the 0xC0000005 (ACCESS_VIOLATION) renderer crashes that Crashpad captured on every chat / dashboard mount, so the native segfault is not just blocklist-bypass GPU work, it is somewhere in the GPU process itself. Software rasterization is slower but eliminates the entire class of GPU-side native crashes. We can scope this to win32 only since macOS users have never reported the issue.
+if (process.platform === 'win32') {
+  app.disableHardwareAcceleration();
+}
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 let mainWindow = null;
