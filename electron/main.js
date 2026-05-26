@@ -153,10 +153,7 @@ app.on('open-url', (event, url) => {
 });
 
 app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
-// Disable hardware acceleration entirely on Windows. Removing the override flags alone did not stop the 0xC0000005 (ACCESS_VIOLATION) renderer crashes that Crashpad captured on every chat / dashboard mount, so the native segfault is not just blocklist-bypass GPU work, it is somewhere in the GPU process itself. Software rasterization is slower but eliminates the entire class of GPU-side native crashes. We can scope this to win32 only since macOS users have never reported the issue.
-if (process.platform === 'win32') {
-  app.disableHardwareAcceleration();
-}
+// disableHardwareAcceleration() was tried as a fallback but did not stop the 0xC0000005 crashes, confirming the segfault is not GPU-side. Dev mode (http origin) never crashed, packaged (file:// origin) always crashed, so the embedded localhost HTTP server (see startFrontendServer below) is the real fix and we keep GPU acceleration on.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 let mainWindow = null;
@@ -176,6 +173,74 @@ const recentBackendStderr = [];   // ring buffer (last ~60 lines) for splash err
 let splashDataUrlCache = null;
 // Set to true around `new BrowserWindow()` for the top-level main window so the popup-UA spoofer in app.on('web-contents-created') doesn't accidentally rewrite the main window's UA. The web-contents-created event fires synchronously inside the BrowserWindow constructor, before mainWindow assignment returns; without this flag, the previous identity check (contents !== mainWindow.webContents) is racy across recreateMainWindow() because mainWindow still points to the OLD window during construction of the NEW one.
 let isCreatingMainWindow = false;
+
+// Embedded HTTP server that serves the packaged frontend bundle. The previous loadFile(...) path used file:// which on Windows Electron 40 CastLabs triggered a STATUS_ACCESS_VIOLATION (0xC0000005) renderer crash on every chat / dashboard mount; dev mode using http://localhost:3000 never crashed. Serving over http://127.0.0.1:<random> from the same in-process Node http server keeps the same packaged asset layout, costs no measurable perf (in-process loopback), and avoids the file:// quirk that Chromium 144 segfaults on.
+let frontendServerPort = null;
+async function startFrontendServer() {
+  const frontendDir = path.join(process.resourcesPath, 'frontend');
+  const mimeTypes = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.mjs': 'application/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.map': 'application/json; charset=utf-8',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.otf': 'font/otf',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.wasm': 'application/wasm',
+  };
+  const server = http.createServer((req, res) => {
+    try {
+      let pathname = decodeURIComponent((req.url || '/').split('?')[0]);
+      if (pathname === '/' || pathname === '') pathname = '/index.html';
+      const resolved = path.normalize(path.join(frontendDir, pathname));
+      // Defense-in-depth path-traversal guard; loopback-only listener already prevents external access but a misparsed URL must not escape the frontend dir.
+      if (!resolved.startsWith(frontendDir + path.sep) && resolved !== path.join(frontendDir, 'index.html')) {
+        res.writeHead(403); res.end(); return;
+      }
+      fs.readFile(resolved, (err, data) => {
+        if (err) {
+          // SPA fallback: unknown paths return index.html so client-side routing works even if some code uses BrowserRouter instead of HashRouter.
+          fs.readFile(path.join(frontendDir, 'index.html'), (err2, indexData) => {
+            if (err2) { res.writeHead(404); res.end(); return; }
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(indexData);
+          });
+          return;
+        }
+        const ext = path.extname(resolved).toLowerCase();
+        res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+        res.end(data);
+      });
+    } catch (err) {
+      console.error('[frontend-server] request handler threw:', err && err.message);
+      try { res.writeHead(500); res.end(); } catch (_) {}
+    }
+  });
+  return new Promise((resolve, reject) => {
+    server.on('error', (err) => {
+      console.error('[frontend-server] failed to start:', err && err.message);
+      reject(err);
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      frontendServerPort = typeof addr === 'object' && addr ? addr.port : null;
+      console.log(`[frontend-server] listening on 127.0.0.1:${frontendServerPort}`);
+      resolve(frontendServerPort);
+    });
+  });
+}
 
 const isPackaged = app.isPackaged;
 const isDev = process.env.ELECTRON_DEV === '1';
@@ -728,7 +793,10 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL(`http://localhost:3000`);
+  } else if (frontendServerPort) {
+    mainWindow.loadURL(`http://127.0.0.1:${frontendServerPort}/index.html`);
   } else {
+    // Fallback only if the embedded server failed to start; the file:// path is known to segfault on Windows CastLabs Electron 40 but it is better than a white screen.
     const frontendPath = getResourcePath('frontend', 'index.html');
     mainWindow.loadFile(frontendPath);
   }
@@ -1105,6 +1173,14 @@ app.whenReady().then(async () => {
         console.error('[boot] backend startup failed:', err && err.message);
         emitSplashStatus({ text: 'Backend failed to start', level: 'error', logs: recentBackendStderr.slice(-20).join('') });
       });
+    }
+    // Start the embedded frontend HTTP server before createWindow so loadURL has a real port. Only relevant in packaged mode; in dev, frontend lives on webpack-dev-server :3000.
+    if (!isDev) {
+      try {
+        await startFrontendServer();
+      } catch (err) {
+        console.error('[boot] frontend server failed to start, falling back to file://:', err && err.message);
+      }
     }
     emitSplashStatus('Almost ready…');
     createWindow();
