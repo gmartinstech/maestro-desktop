@@ -3,8 +3,9 @@ import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 
-// Windows-only ablation: mounting a hidden <input type="file"> on Windows initializes the IFileDialog COM shim which is implicated in the Chromium 144 + Electron 40 commit-phase segfault. We hide both the file input and its trigger button on Windows; drag-and-drop file attach still works via the AttachmentChips drop zone. Mac unchanged.
+// File input was ablated in v1.1.54 as a suspected crasher, but the actual crasher turned out to be contentEditable's TSF init (now replaced with textarea in EditorSurface). Restored on both platforms in v1.1.57. Keeping IS_WIN reference removal would require touching call sites; harmless left here as a constant.
 const IS_WIN = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+void IS_WIN;
 import MicNoneOutlinedIcon from '@mui/icons-material/MicNoneOutlined';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import StopIcon from '@mui/icons-material/Stop';
@@ -92,7 +93,7 @@ export const ToolbarActions: React.FC<Props> = ({
       })()}
 
       {/* Windows-only ablation: hidden <input type="file"> + attach button skipped on Windows to test whether IFileDialog COM init is the trigger for the Chromium 144 commit-phase segfault. Mac still renders both (drag/paste/click attach all work). On Windows, drag-and-drop attach still works via AttachmentChips drop zone. */}
-      {!IS_WIN && (
+      {true && (
         <input
           ref={generalFileInputRef}
           type="file"
@@ -109,7 +110,7 @@ export const ToolbarActions: React.FC<Props> = ({
           }}
         />
       )}
-      {!IS_WIN && (
+      {true && (
         <Tooltip title="Attach file">
           <IconButton
             size="small"

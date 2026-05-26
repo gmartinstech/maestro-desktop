@@ -29,7 +29,16 @@ export function useDraftLoad(editorRef: RefObject<HTMLDivElement>, ownerId: stri
   useEffect(() => {
     const saved = _draftStore.get(ownerId);
     const editor = editorRef.current;
-    if (saved && editor && !editor.textContent?.trim()) {
+    if (!saved || !editor) return;
+    // Textarea path (Windows ablation): drafts were saved as plain text in .value, so just restore as text. The div path below is for contentEditable on Mac where drafts are HTML with skill pills.
+    if (editor.tagName === 'TEXTAREA') {
+      const ta = editor as unknown as HTMLTextAreaElement;
+      if (ta.value.trim()) return;
+      ta.value = saved;
+      try { ta.selectionStart = ta.selectionEnd = ta.value.length; } catch (_) {}
+      return;
+    }
+    if (!editor.textContent?.trim()) {
       editor.innerHTML = saved;
       const range = document.createRange();
       range.selectNodeContents(editor);

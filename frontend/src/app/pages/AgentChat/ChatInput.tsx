@@ -178,7 +178,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       sendSkills,
       browserIds.length > 0 ? browserIds : undefined,
     );
-    editor.innerHTML = '';
+    if (editor.tagName === 'TEXTAREA') (editor as unknown as HTMLTextAreaElement).value = ''; else editor.innerHTML = '';
     deleteDraft(ownerId);
     for (const img of images) {
       if (img.preview?.startsWith('blob:')) {
