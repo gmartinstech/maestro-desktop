@@ -3,7 +3,7 @@
 // packaged build, no network, and no platform assumptions, so they are safe in
 // CI and on any dev machine. Phase tests that REQUIRE a packaged artifact, CI,
 // macOS hardware, or a real device fleet are intentionally not here (they can't
-// be hermetic); see RELEASE_CHECKLIST.md for those.
+// be hermetic); see docs/RELEASE_CHECKLIST.md for those.
 //
 //   node scripts/run-phase-tests.js
 //

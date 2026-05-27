@@ -4,7 +4,7 @@ name: Phase tests (hermetic)
 # CI gate on each push/PR. These need no packaged artifact, no secrets, and no
 # network, so this job is fast and always meaningful. Phase tests that REQUIRE a
 # packaged build, signing, or real devices are NOT here (they can't be hermetic)
-# — those live in the smoke job below (manual) and RELEASE_CHECKLIST.md.
+# — those live in the smoke job below (manual) and docs/RELEASE_CHECKLIST.md.
 
 on:
   push:
