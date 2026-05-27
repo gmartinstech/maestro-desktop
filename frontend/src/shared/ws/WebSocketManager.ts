@@ -25,7 +25,7 @@ import {
 import { streamStart, streamDelta, streamEnd } from '../state/streamingSlice';
 import { addBrowserCardFromBackend, removeBrowserCard, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, addWorkflowCard } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
-import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard } from '../state/workflowsSlice';
+import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard, upsertWorkflow, removeWorkflow } from '../state/workflowsSlice';
 import { getAuthToken } from '../config';
 import { notifyAgentCompletion } from '../notifications';
 
@@ -707,6 +707,18 @@ class WebSocketManager {
       case 'workflow:run':
         if (data.run) {
           store.dispatch(upsertRun(data.run));
+        }
+        break;
+
+      case 'workflow:updated':
+        if (data.workflow) {
+          store.dispatch(upsertWorkflow(data.workflow));
+        }
+        break;
+
+      case 'workflow:deleted':
+        if (data.workflow_id) {
+          store.dispatch(removeWorkflow(data.workflow_id));
         }
         break;
 

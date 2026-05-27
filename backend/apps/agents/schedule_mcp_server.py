@@ -12,6 +12,7 @@ the user before calling ScheduleWorkflow).
 import json
 import sys
 import os
+import uuid
 import urllib.request
 import urllib.error
 
@@ -129,8 +130,11 @@ TOOLS = [
             "when the user has accepted a proposed change during an Edit "
             "Agent conversation; the new prompt replaces the existing one "
             "and persists immediately. The next scheduled run uses the new "
-            "version. Always confirm the change with the user before "
-            "calling this; AskUserQuestion FIRST if there is any ambiguity."
+            "version. Always pass new_label too (a fresh 3-5 word summary) "
+            "so the workflow card visibly reflects the change instead of "
+            "showing the stale old label. Always confirm the change with the "
+            "user before calling this; AskUserQuestion FIRST if there is any "
+            "ambiguity."
         ),
         "inputSchema": {
             "type": "object",
@@ -138,8 +142,45 @@ TOOLS = [
                 "workflow_id": {"type": "string", "description": "The workflow to edit."},
                 "step_idx": {"type": "integer", "description": "0-based index of the step to modify."},
                 "new_text": {"type": "string", "description": "Full replacement prompt text for the step."},
+                "new_label": {"type": "string", "description": "Fresh 3-5 word at-a-glance label for the card (e.g. 'Greet (Victorian)'). Strongly recommended so the change shows."},
             },
             "required": ["workflow_id", "step_idx", "new_text"],
+        },
+    },
+    {
+        "name": "AddWorkflowStep",
+        "description": (
+            "Add a new step to an existing workflow. Use when the user wants "
+            "the workflow to do something more. The step persists immediately "
+            "and the next run includes it. Confirm with the user via "
+            "AskUserQuestion first if there's any ambiguity about what the "
+            "step should do or where it goes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string", "description": "The workflow to add to."},
+                "text": {"type": "string", "description": "Full prompt text for the new step."},
+                "label": {"type": "string", "description": "Short 3-5 word at-a-glance label for the card."},
+                "position": {"type": "integer", "description": "0-based insert index. Omit to append to the end."},
+            },
+            "required": ["workflow_id", "text"],
+        },
+    },
+    {
+        "name": "DeleteWorkflowStep",
+        "description": (
+            "Remove a step from an existing workflow. Persists immediately. "
+            "A workflow must keep at least one step. ALWAYS confirm via "
+            "AskUserQuestion before deleting; the user should pick which step."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string", "description": "The workflow to edit."},
+                "step_idx": {"type": "integer", "description": "0-based index of the step to delete."},
+            },
+            "required": ["workflow_id", "step_idx"],
         },
     },
     {
@@ -340,12 +381,63 @@ def handle_edit_step(args: dict) -> dict:
     steps = cur.get("steps") or []
     if idx < 0 or idx >= len(steps):
         return _err(f"step_idx {idx} out of range (workflow has {len(steps)} steps).")
+    # Refresh the at-a-glance label so the card reflects the edit; a preserved
+    # stale label left the step looking unchanged. Agent-supplied label wins,
+    # else clear it so the card falls back to the new text's first words.
+    new_label = (args.get("new_label") or "").strip()
     new_steps = list(steps)
-    new_steps[idx] = {**new_steps[idx], "text": new_text}
+    new_steps[idx] = {**new_steps[idx], "text": new_text, "label": new_label}
     r = _call("PATCH", f"/{wid}", {"steps": new_steps})
     if "_error" in r:
         return _err(r["_error"])
     return _ok(f"Step {idx + 1} updated. The next run uses the new prompt.")
+
+
+def handle_add_step(args: dict) -> dict:
+    wid = args.get("workflow_id") or ""
+    if not wid:
+        return _err("workflow_id is required.")
+    text = (args.get("text") or "").strip()
+    if not text:
+        return _err("text is required.")
+    label = (args.get("label") or "").strip()
+    cur = _call("GET", f"/{wid}")
+    if "_error" in cur:
+        return _err(cur["_error"])
+    steps = list(cur.get("steps") or [])
+    new_step = {"id": "s" + uuid.uuid4().hex[:8], "text": text, "label": label}
+    pos = args.get("position")
+    if isinstance(pos, int) and 0 <= pos <= len(steps):
+        steps.insert(pos, new_step)
+    else:
+        steps.append(new_step)
+    r = _call("PATCH", f"/{wid}", {"steps": steps})
+    if "_error" in r:
+        return _err(r["_error"])
+    return _ok(f"Step added ({len(steps)} total). The next run includes it.")
+
+
+def handle_delete_step(args: dict) -> dict:
+    wid = args.get("workflow_id") or ""
+    if not wid:
+        return _err("workflow_id is required.")
+    try:
+        idx = int(args.get("step_idx"))
+    except (TypeError, ValueError):
+        return _err("step_idx must be an integer.")
+    cur = _call("GET", f"/{wid}")
+    if "_error" in cur:
+        return _err(cur["_error"])
+    steps = list(cur.get("steps") or [])
+    if idx < 0 or idx >= len(steps):
+        return _err(f"step_idx {idx} out of range (workflow has {len(steps)} steps).")
+    if len(steps) <= 1:
+        return _err("Can't delete the last step; a workflow needs at least one. Edit it instead.")
+    steps.pop(idx)
+    r = _call("PATCH", f"/{wid}", {"steps": steps})
+    if "_error" in r:
+        return _err(r["_error"])
+    return _ok(f"Step {idx + 1} deleted ({len(steps)} remaining).")
 
 
 def handle_test_workflow(args: dict) -> dict:
@@ -368,6 +460,8 @@ HANDLERS = {
     "ResumeAllWorkflows": handle_resume_all,
     "RunWorkflowNow": handle_run_now,
     "EditWorkflowStep": handle_edit_step,
+    "AddWorkflowStep": handle_add_step,
+    "DeleteWorkflowStep": handle_delete_step,
     "TestWorkflow": handle_test_workflow,
 }
 

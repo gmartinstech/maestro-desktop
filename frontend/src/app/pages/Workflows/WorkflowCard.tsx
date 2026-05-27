@@ -50,6 +50,9 @@ const EDGE_THICKNESS = 6;
 const CORNER_SIZE = 14;
 const MIN_W = 360;
 const MIN_H = 280;
+// Chat-style views (edit/fix/scheduling) hold an expanded-agent-chat height so
+// they read like a real chat instead of shrink-wrapping to their short content.
+const CHAT_VIEW_H = 620;
 
 const CURSOR_MAP: Record<ResizeDir, string> = {
   n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
@@ -355,16 +358,11 @@ const WorkflowCard: React.FC<Props> = ({
   const displayX = localResize?.x ?? localDragPos?.x ?? (cardX + mdDx);
   const displayY = localResize?.y ?? localDragPos?.y ?? (cardY + mdDy);
   const displayW = localResize?.w ?? cardWidth;
-  const displayH = localResize?.h ?? cardHeight;
-  // Chat views embed a full AgentChat that needs a fixed scroll viewport;
-  // every other view should size to its content so nothing is cut off and
-  // there's no dead space below short content. While the user is actively
-  // resizing, honor the dragged height.
-  // Chat views host a composer + conversation, so they keep a bounded height
-  // (composer docked at the bottom, content scrolls) like a normal chat card.
-  // Everything else fits to its content. Scheduling is a chat too (you talk to
-  // it in natural language), so it belongs here, not in the fit-to-content set.
+  // edit/fix/scheduling embed a chat (composer docked, body scrolls), so they
+  // hold a bounded chat-sized height instead of shrink-wrapping to their short
+  // content. Everything else fits to content. A drag can still grow them.
   const isChatView = card?.view === 'edit_agent' || card?.view === 'fix_agent' || card?.view === 'scheduling';
+  const displayH = localResize?.h ?? (isChatView ? Math.max(CHAT_VIEW_H, cardHeight) : cardHeight);
   const autoHeight = !isChatView && !localResize && !isResizing;
   const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
 

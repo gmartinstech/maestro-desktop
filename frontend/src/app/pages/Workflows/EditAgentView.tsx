@@ -1,31 +1,22 @@
 // Image #38, #48: Edit Agent embedded in the workflow card.
 // Creates a real, sticky-per-workflow agent session via /workflows/{id}/
 // edit-agent-session and embeds AgentChat so tool calls render as their
-// normal cards (MCP Activation, Gmail Query, etc.). Header keeps the
-// subtitle on the left and Settings + Discard + Save on the right. In
-// fix mode (Image #48) the very first message in the session is a
-// failure-context prompt, and a red prefix card renders above the chat
-// so the user sees Why we're here at a glance.
+// normal cards (MCP Activation, Gmail Query, etc.). The card IS the chat:
+// a collapsible "Workflow" strip on top peeks at the live steps, the chat
+// fills the rest. In fix mode (Image #48) the first message is a
+// failure-context prompt and a red prefix card renders above the chat.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Dialog from '@mui/material/Dialog';
-import Tooltip from '@mui/material/Tooltip';
-import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
-import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import BuildRounded from '@mui/icons-material/BuildRounded';
-import TuneRounded from '@mui/icons-material/TuneRounded';
 import KeyboardArrowDownRounded from '@mui/icons-material/KeyboardArrowDownRounded';
-import ScienceOutlined from '@mui/icons-material/ScienceOutlined';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { clearFixSeed, setCardSidecar, updateWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
-import { DEFAULT_CARD_W, DEFAULT_CARD_H, placeCard } from '@/shared/state/dashboardLayoutSlice';
-import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
+import { clearFixSeed, updateWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
 import { fetchSession } from '@/shared/state/agentsSlice';
-import StepList from './StepList';
 import { API_BASE, getAuthToken } from '@/shared/config';
+import StepList from './StepList';
 import AgentChat from '@/app/pages/AgentChat/AgentChat';
 
 interface Props {
@@ -34,47 +25,12 @@ interface Props {
   isFixMode?: boolean;
 }
 
-function InlineSubtitle({ workflow }: { workflow: Workflow }) {
-  const c = useClaudeTokens();
-  const modelsByProvider = useAppSelector((s) => s.models.byProvider);
-  const runs = useAppSelector((s) => s.workflows.runs[workflow.id]);
-  const modelLabel = React.useMemo(() => {
-    if (!workflow?.model) return '';
-    for (const list of Object.values(modelsByProvider || {})) {
-      for (const m of (list as Array<{ value: string; label?: string }>) || []) {
-        if (m.value === workflow.model) return m.label || workflow.model;
-      }
-    }
-    return workflow.model;
-  }, [workflow?.model, modelsByProvider]);
-  const duration = React.useMemo(() => {
-    if (!runs || runs.length === 0) return '';
-    const last = runs.find((r) => r.finished_at);
-    if (!last || !last.finished_at) return '';
-    const ms = new Date(last.finished_at).getTime() - new Date(last.started_at).getTime();
-    if (ms <= 0) return '';
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
-    return `${Math.floor(ms / 60_000)}m`;
-  }, [runs]);
-  return (
-    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, fontSize: '0.82rem', color: c.text.muted, minWidth: 0, overflow: 'hidden' }}>
-      {modelLabel && <Box component="span" sx={{ whiteSpace: 'nowrap' }}>{modelLabel}</Box>}
-      {workflow.mode && <Box component="span" sx={{ whiteSpace: 'nowrap' }}>{workflow.mode}</Box>}
-      {duration && <Box component="span" sx={{ whiteSpace: 'nowrap' }}>{duration}</Box>}
-    </Box>
-  );
-}
-
 export default function EditAgentView({ workflow, steps, isFixMode = false }: Props) {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const card = useAppSelector((s) => s.workflows.openCards[workflow.id]);
-  const wfCardPos = useAppSelector((s) => s.dashboardLayout.workflowCards[workflow.id]);
-  const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
   const fixSeed = card?.fixSeed || null;
-  const [busy, setBusy] = useState(false);
-  const [showSaveBeforeTest, setShowSaveBeforeTest] = useState(false);
+  const [stepsOpen, setStepsOpen] = useState(true);
   const [fixPrefixExpanded, setFixPrefixExpanded] = useState(false);
   const [editSessionId, setEditSessionId] = useState<string | null>(workflow.edit_agent_session_id || null);
   const [seedSent, setSeedSent] = useState(false);
@@ -131,110 +87,47 @@ export default function EditAgentView({ workflow, steps, isFixMode = false }: Pr
     })();
   }, [editSessionId, editSession, seedSent, isFixMode, fixSeed]);
 
-  const onClose = useCallback(() => {
+  const onDone = useCallback(() => {
     dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'saved' } }));
   }, [dispatch, workflow.id]);
 
-  const onTest = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
-      const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(workflow.id)}/test-run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ steps: steps.map((s) => ({ id: s.id, text: s.text, label: s.label || null })) }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const sessionId = data?.session_id as string | undefined;
-      if (!sessionId) return;
-      try {
-        const { store } = await import('@/shared/state/store');
-        if (!store.getState().agents.sessions[sessionId]) {
-          try { await dispatch(fetchSession(sessionId)).unwrap(); } catch { /* not fatal */ }
-        }
-        if (!store.getState().dashboardLayout.cards[sessionId] && wfCardPos) {
-          dispatch(placeCard({
-            sessionId,
-            x: wfCardPos.x + wfCardPos.width + 60,
-            y: wfCardPos.y,
-            width: DEFAULT_CARD_W,
-            height: DEFAULT_CARD_H,
-            expandedSessionIds,
-          }));
-        }
-        dispatch(setPendingFocusAgentId(sessionId));
-      } catch { /* best-effort */ }
-      dispatch(setCardSidecar({ workflowId: workflow.id, sessionId, kind: 'testing' }));
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, workflow.id, steps, dispatch, wfCardPos, expandedSessionIds]);
-
-  const onTestClick = useCallback(() => {
-    // No local draft to warn about anymore (the Edit Agent's tool will
-    // mutate workflow.steps directly when wired). Skip the modal for now.
-    void onTest();
-  }, [onTest]);
-  void showSaveBeforeTest; void setShowSaveBeforeTest;
-
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <InlineSubtitle workflow={workflow} />
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title="Permissions, actions, cost cap">
+    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      {/* The "tab with the workflow inside": a collapsible strip that peeks
+          at the live steps (they update as the agent edits) without leaving
+          the chat. Done drops back to the compact workflow card. */}
+      <Box sx={{ flexShrink: 0, mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
           <Box
-            onClick={() => dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'edit', editFacet: 'Actions' } }))}
+            onClick={() => setStepsOpen((x) => !x)}
             role="button"
             sx={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28, borderRadius: 999,
-              color: c.text.secondary, cursor: 'pointer',
-              '&:hover': { color: c.text.primary, bgcolor: c.bg.elevated },
+              display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'pointer',
+              fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary,
+              '&:hover': { color: c.text.primary },
             }}>
-            <TuneRounded sx={{ fontSize: 16 }} />
+            <KeyboardArrowDownRounded sx={{ fontSize: 16, transform: stepsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s ease' }} />
+            Workflow ({steps.length} step{steps.length === 1 ? '' : 's'})
           </Box>
-        </Tooltip>
-        <Tooltip title="Spawn a Test Agent that runs the latest workflow next to this card with a Testing arrow chip.">
+          <Box sx={{ flex: 1 }} />
           <Box
-            onClick={onTestClick}
+            onClick={onDone}
             role="button"
-            sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 0.3,
-              fontSize: '0.78rem', fontWeight: 700,
-              color: c.accent.primary, bgcolor: 'transparent',
-              px: 1, py: 0.4, borderRadius: 999,
-              border: `1px solid ${c.accent.primary}55`,
-              cursor: busy ? 'not-allowed' : 'pointer',
-              opacity: busy ? 0.5 : 1,
-              '&:hover': { bgcolor: c.accent.primary + '14' },
-            }}>
-            <ScienceOutlined sx={{ fontSize: 14 }} />
-            Test
+            sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.muted, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>
+            Done
           </Box>
-        </Tooltip>
-        <HeaderBtn
-          label="Discard"
-          icon={<DeleteOutlineRounded sx={{ fontSize: 16 }} />}
-          onClick={onClose}
-          tone="muted"
-        />
-        <HeaderBtn
-          label="Save"
-          icon={<SaveOutlinedIcon sx={{ fontSize: 16 }} />}
-          onClick={onClose}
-          tone="filled"
-        />
+        </Box>
+        {stepsOpen && (
+          <Box sx={{ mt: 0.75 }}>
+            {isFixMode && fixSeed && <FixPrefixCard seed={fixSeed} expanded={fixPrefixExpanded} onToggle={() => setFixPrefixExpanded((x) => !x)} />}
+            <StepList steps={steps} />
+          </Box>
+        )}
       </Box>
-      <StepList steps={steps} />
-      {isFixMode && fixSeed && <FixPrefixCard seed={fixSeed} expanded={fixPrefixExpanded} onToggle={() => setFixPrefixExpanded((x) => !x)} />}
-      {/* Embedded real Edit Agent chat. AgentChat owns the composer +
-          message list + tool-call card rendering, matching Image #48
-          (MCP Activation, Gmail Query, etc.). embedded=true tells it to
-          skip its own dashboard chrome since we own the surrounding card. */}
-      <Box sx={{ flex: 1, minHeight: 280, display: 'flex', flexDirection: 'column', mx: -1, mb: -1 }}>
+      {/* The card IS the chat. AgentChat owns the composer + message list +
+          tool-call cards. Negative margins cancel the card body's p:2 so the
+          thread runs edge-to-edge like a normal chat (it supplies its own px). */}
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', mx: -2, mb: -2 }}>
         {editSessionId ? (
           <AgentChat sessionId={editSessionId} embedded autoFocus />
         ) : (
@@ -243,10 +136,6 @@ export default function EditAgentView({ workflow, steps, isFixMode = false }: Pr
           </Box>
         )}
       </Box>
-
-      <Dialog open={false} onClose={() => {}} maxWidth="sm" fullWidth>
-        <Box />
-      </Dialog>
     </Box>
   );
 }
@@ -299,25 +188,3 @@ function FixPrefixCard({ seed, expanded, onToggle }: { seed: { stepIdx: number; 
   );
 }
 
-function HeaderBtn({ label, icon, onClick, tone, disabled }: { label: string; icon: React.ReactNode; onClick: () => void; tone: 'muted' | 'filled'; disabled?: boolean }) {
-  const c = useClaudeTokens();
-  const filled = tone === 'filled';
-  return (
-    <Box
-      onClick={disabled ? undefined : onClick}
-      role="button"
-      sx={{
-        display: 'inline-flex', alignItems: 'center', gap: 0.4,
-        fontSize: '0.82rem', fontWeight: 700,
-        px: 1.1, py: 0.45, borderRadius: 999,
-        color: filled ? '#fff' : c.text.secondary,
-        bgcolor: filled ? c.text.primary : 'transparent',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        '&:hover': filled ? { filter: 'brightness(1.05)' } : { color: c.text.primary, bgcolor: c.bg.elevated },
-      }}>
-      {icon}
-      {label}
-    </Box>
-  );
-}

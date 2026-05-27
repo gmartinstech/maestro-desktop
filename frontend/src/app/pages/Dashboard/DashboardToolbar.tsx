@@ -7,7 +7,7 @@ import Tooltip, { tooltipClasses } from '@mui/material/Tooltip';
 import Icon from '@mui/material/Icon';
 import { styled } from '@mui/material/styles';
 import AddRounded from '@mui/icons-material/AddRounded';
-import HistoryRounded from '@mui/icons-material/HistoryRounded';
+import CalendarMonthRounded from '@mui/icons-material/CalendarMonthRounded';
 
 // Custom near-circular speech bubble with a teardrop tail at the
 // bottom-left. The bubble body is a rounded square with corner radius
@@ -253,20 +253,19 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
       setViewSearch('');
     }, [viewPickerOpen, dispatch]);
 
+    // Opens the schedule CALENDAR (scheduled workflows on a calendar). Chat
+    // search/resume lives in the global search palette (the OpenSwarm center
+    // at the top), not here, so this no longer dispatches a history search.
     const handleOpenHistory = useCallback(() => {
       if (historyOpen) {
         setHistoryOpen(false);
-        setHistoryQuery('');
-        dispatch(clearHistorySearch());
         return;
       }
       setViewPickerOpen(false);
       setViewSearch('');
+      setPopoverMode('schedule');
       setHistoryOpen(true);
-      setHistoryQuery('');
-      dispatch(clearHistorySearch());
-      dispatch(searchHistory({ q: '', limit: HISTORY_PAGE_SIZE, offset: 0, dashboardId }));
-    }, [historyOpen, dispatch, dashboardId]);
+    }, [historyOpen]);
 
     const handleHistorySelect = useCallback((sessionId: string) => {
       onHistoryResume(sessionId);
@@ -409,6 +408,65 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
 
     return (
       <>
+      {(inputOpen || historyOpen) && (
+        // Image #54: paired mode pills above the composer/popover.
+        // The two states are mutually exclusive: opening one closes the
+        // other so the body underneath only renders one thing at a time.
+        <Box sx={{ display: 'flex', gap: 0.5, mb: 0.75, pl: 0.25 }}>
+          <Box
+            onClick={() => {
+              if (historyOpen) {
+                handleCloseHistory();
+                onNewAgent();
+              }
+              // If already in inputOpen, this is a no-op (we're already
+              // in new chat). The visible active styling tells the user
+              // that. Clicking again does nothing intentionally.
+            }}
+            role="button"
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.3,
+              fontSize: '0.74rem', fontWeight: 600,
+              color: c.text.primary,
+              bgcolor: c.bg.surface,
+              border: `1px solid ${inputOpen && !historyOpen ? c.border.medium : c.border.subtle}`,
+              boxShadow: inputOpen && !historyOpen ? c.shadow.sm : 'none',
+              px: 0.85, py: 0.3, borderRadius: 999,
+              cursor: historyOpen ? 'pointer' : 'default',
+              '&:hover': historyOpen ? { bgcolor: c.bg.elevated } : {},
+            }}>
+            <AddRounded sx={{ fontSize: 12 }} />
+            New Chat
+          </Box>
+          <Box
+            onClick={() => {
+              // Schedule is a destination, not a toggle: clicking it always
+              // lands on (and stays on) the calendar. It used to call
+              // handleCloseHistory when already open, which read as "Schedule
+              // does nothing" because it closed the calendar you were viewing.
+              // Close the composer first; inputOpen takes precedence in the
+              // render branch below so the popover would hide behind it.
+              if (inputOpen) onCancel();
+              setPopoverMode('schedule');
+              if (!historyOpen) setHistoryOpen(true);
+            }}
+            role="button"
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.3,
+              fontSize: '0.74rem', fontWeight: 600,
+              color: historyOpen ? c.text.primary : c.text.secondary,
+              bgcolor: c.bg.surface,
+              border: `1px solid ${historyOpen ? c.border.medium : c.border.subtle}`,
+              boxShadow: historyOpen ? c.shadow.sm : 'none',
+              px: 0.85, py: 0.3, borderRadius: 999,
+              cursor: 'pointer',
+              '&:hover': { bgcolor: c.bg.elevated },
+            }}>
+            <CalendarMonthRounded sx={{ fontSize: 12 }} />
+            Schedule
+          </Box>
+        </Box>
+      )}
       <MotionBox
         ref={containerRef}
         layout
@@ -428,7 +486,11 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
           width: viewPickerOpen ? 580 : historyOpen ? undefined : isExpanded ? 540 : undefined,
         }}
       >
-        {inputOpen ? (
+        {inputOpen && !historyOpen ? (
+          // historyOpen wins over the composer: clicking Schedule closes the
+          // composer via onCancel(), but that's a parent-state update that
+          // lands a render late, so without this guard the composer kept
+          // covering the calendar (the "Schedule does nothing" bug).
           // data-onboarding-scope="dock" makes AC's per-agent resolver prefer this dock chat input over existing agent cards.
           <div
             data-onboarding-scope="dock"

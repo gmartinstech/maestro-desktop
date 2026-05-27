@@ -43,7 +43,9 @@ export default function SchedulePopover({
   hideTopChrome = false,
 }: Props) {
   const c = useClaudeTokens();
-  const [calendarView, setCalendarView] = useState<'Week' | 'Month' | 'List'>('Week');
+  // List leads: it's the at-a-glance "what's coming up" the user wants first,
+  // with Week/Month as the calendar grids behind it.
+  const [calendarView, setCalendarView] = useState<'Week' | 'Month' | 'List'>('List');
   const [refDate, setRefDate] = useState<Date>(() => new Date());
   const workflows = useAppSelector((s) => s.workflows.items);
 
@@ -167,7 +169,7 @@ export default function SchedulePopover({
         {mode === 'schedule' && (
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, pt: 1, pb: 0.5, flexShrink: 0 }}>
-              {(['Week', 'Month', 'List'] as const).map((v) => (
+              {(['List', 'Week', 'Month'] as const).map((v) => (
                 <Box key={v} onClick={() => setCalendarView(v)} role="button" sx={{ fontSize: '0.85rem', fontWeight: calendarView === v ? 700 : 500, px: 0.75, pt: 0.4, pb: 0.55, color: calendarView === v ? c.text.primary : c.text.muted, borderBottom: `2px solid ${calendarView === v ? c.accent.primary : 'transparent'}`, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>{v}</Box>
               ))}
               <Box sx={{ flex: 1 }} />

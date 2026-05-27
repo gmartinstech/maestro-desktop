@@ -393,7 +393,19 @@ async def update_workflow(
     storage.save_workflow(wf)
     audit.log_change(wf.id, "user", before, wf.model_dump(mode="json"))
     scheduler.kick()
-    return _enriched(wf)
+    # Push the change to every open dashboard so an agent-driven edit (the
+    # Edit Agent's add/delete/edit-step tools all PATCH here) refreshes the
+    # card live instead of looking stale until the next full refetch.
+    enriched = _enriched(wf)
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager
+        await ws_manager.broadcast_global("workflow:updated", {
+            "workflow_id": wf.id,
+            "workflow": enriched,
+        })
+    except Exception:
+        pass
+    return enriched
 
 
 @workflows.router.delete("/{workflow_id}")
@@ -402,6 +414,11 @@ async def delete_workflow(workflow_id: str):
     if not existed:
         raise HTTPException(status_code=404, detail="Workflow not found")
     scheduler.kick()
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager
+        await ws_manager.broadcast_global("workflow:deleted", {"workflow_id": workflow_id})
+    except Exception:
+        pass
     return {"ok": True}
 
 
@@ -561,15 +578,24 @@ async def edit_agent_session(workflow_id: str):
         "1. When the user describes a change, briefly confirm what you'll do.\n"
         "2. If you need to look at files / search / activate an MCP / etc. to "
         "verify your idea, use your tools.\n"
-        "3. Call EditWorkflowStep(workflow_id, step_idx, new_text) to apply a "
-        "prompt change to a specific step. The change persists immediately. "
-        "Confirm with the user via AskUserQuestion FIRST if there's any "
-        "ambiguity about what they want.\n"
+        "3. To change the workflow's steps, call the matching tool; each "
+        "persists immediately and refreshes the user's card live:\n"
+        "   - EditWorkflowStep(workflow_id, step_idx, new_text, new_label) to "
+        "rewrite a step. ALWAYS pass new_label (a fresh 3-5 word summary) so "
+        "the card reflects the change instead of the stale old label.\n"
+        "   - AddWorkflowStep(workflow_id, text, label) to add a step.\n"
+        "   - DeleteWorkflowStep(workflow_id, step_idx) to remove one.\n"
+        "   Confirm via AskUserQuestion FIRST if there's any ambiguity.\n"
         "4. Call TestWorkflow(workflow_id) to spawn a sibling Test Agent that "
         "runs the latest version end-to-end. Use this after a change to verify "
         "it works.\n\n"
         "Be brief in your replies. Don't restate the whole workflow back; the "
-        "user can see it. Just confirm what changed and what you're doing."
+        "user can see it. Just confirm what changed and what you're doing.\n"
+        "Write like a normal chat: plain conversational sentences. When you "
+        "suggest changes, describe them in prose (e.g. \"I could add a step "
+        "that...\"). Never dump raw JSON, arrays, or code blocks of step "
+        "objects at the user; that belongs in your EditWorkflowStep tool call, "
+        "not the message."
     )
     config = AgentConfig(
         name=f"Edit Agent: {wf.title}",

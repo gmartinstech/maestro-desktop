@@ -128,7 +128,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
     dispatch(setPausedAll(!paused));
   }, [dispatch, paused]);
 
-  const [view, setView] = useState<CalendarView>('Week');
+  const [view, setView] = useState<CalendarView>('List');
   const [viewOpen, setViewOpen] = useState(false);
   const [refDate, setRefDate] = useState(new Date());
   const [search, setSearch] = useState('');
@@ -414,7 +414,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
           </Box>
           {viewOpen && (
             <Box sx={{ position: 'absolute', top: '100%', right: 0, mt: 0.5, bgcolor: c.bg.surface, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, boxShadow: c.shadow.md, zIndex: 5, minWidth: 110 }}>
-              {(['Week', 'Month', 'List'] as const).map((v) => (
+              {(['List', 'Week', 'Month'] as const).map((v) => (
                 <Box
                   key={v}
                   data-no-drag

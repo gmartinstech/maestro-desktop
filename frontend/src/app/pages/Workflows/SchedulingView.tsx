@@ -9,7 +9,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Dialog from '@mui/material/Dialog';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch } from '@/shared/hooks';
@@ -133,7 +132,7 @@ export default function SchedulingView({ workflow, steps }: Props) {
   }, [pending, dispatch, workflow.id, workflow.updated_at]);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, flex: '1 0 auto' }}>
       {/* Inline header replacement. Image #49: subtitle on LEFT, Cancel
           on RIGHT. Cancel matches the subtitle's weight/size/color so the
           row reads as peers, not a heavy CTA; it just reddens on hover. */}
@@ -153,16 +152,56 @@ export default function SchedulingView({ workflow, steps }: Props) {
           Cancel task scheduling
         </Box>
       </Box>
-      <StepList steps={steps} />
-      <Typography sx={{ fontSize: '0.92rem', color: c.text.secondary, lineHeight: 1.45, mt: 0.5 }}>
-        When should this workflow run (e.g. every Wednesday at 1pm)
-      </Typography>
+      {/* Steps in a soft bubble so they read as a quoted "here's the workflow"
+          block inside the chat, not loose body text. */}
+      <Box sx={{ p: 1.5, borderRadius: `${c.radius.lg}px`, bgcolor: c.bg.elevated, border: `1px solid ${c.border.subtle}` }}>
+        <StepList steps={steps} />
+      </Box>
+      {/* Prompt in its own bubble, like an agent message asking for the cadence. */}
+      <Box sx={{ p: 1.5, borderRadius: `${c.radius.lg}px`, bgcolor: c.bg.surface, border: `1px solid ${c.border.subtle}` }}>
+        <Typography sx={{ fontSize: '0.92rem', color: c.text.secondary, lineHeight: 1.45 }}>
+          When should this workflow run (e.g. every Wednesday at 1pm)
+        </Typography>
+      </Box>
       {error && (
         <Typography sx={{ fontSize: '0.82rem', color: c.status.error }}>{error}</Typography>
       )}
-      {/* Spacer pushes the composer to the bottom of the card so the view
-          reads like a normal chat (prompt up top, input docked below). */}
-      <Box sx={{ flex: 1, minHeight: 40 }} />
+      {/* Spacer docks the composer (and the inline confirm) to the bottom of
+          the card so it reads like a chat: prompt up top, input below. */}
+      <Box sx={{ flex: 1 }} />
+      {/* Inline confirm (the HITL "always ask before scheduling" gate). Lives
+          in the card right above the composer instead of a screen-dimming
+          modal, so it feels native to the chat. */}
+      {pending && (
+        <Box sx={{
+          display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap',
+          p: 1.25, mb: 1, borderRadius: `${c.radius.lg}px`,
+          bgcolor: c.bg.elevated, border: `1px solid ${c.accent.primary}55`,
+        }}>
+          <Typography sx={{ flex: 1, minWidth: 180, fontSize: '0.86rem', color: c.text.secondary, lineHeight: 1.45 }}>
+            Set <b>{workflow.title}</b> to run <b>{describe(pending)}</b>?
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              onClick={() => setPending(null)}
+              role="button"
+              sx={{ fontSize: '0.84rem', color: c.text.secondary, px: 1, py: 0.5, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>
+              Cancel
+            </Box>
+            <Box
+              onClick={onConfirm}
+              role="button"
+              sx={{
+                fontSize: '0.84rem', fontWeight: 700,
+                color: '#fff', bgcolor: c.accent.primary,
+                px: 1.4, py: 0.5, borderRadius: 999, cursor: 'pointer',
+                '&:hover': { filter: 'brightness(1.05)' },
+              }}>
+              {busy ? 'Applying…' : 'Schedule it'}
+            </Box>
+          </Box>
+        </Box>
+      )}
       {/* Real ChatInput (same one the toolbar / agent chat use) so the
           composer matches Image #54 / #64 exactly: live model picker,
           mode picker, thinking level, paperclip + mic, the works. We
@@ -182,36 +221,6 @@ export default function SchedulingView({ workflow, steps }: Props) {
           disabled={busy}
         />
       </Box>
-
-      <Dialog open={!!pending} onClose={() => setPending(null)}>
-        <Box sx={{ p: 2.5, minWidth: 360, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: c.text.primary }}>
-            Schedule this workflow?
-          </Typography>
-          <Typography sx={{ fontSize: '0.9rem', color: c.text.secondary, lineHeight: 1.5 }}>
-            The agent wants to set <b>{workflow.title}</b> to run <b>{pending && describe(pending)}</b>. You can change or cancel this anytime.
-          </Typography>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5 }}>
-            <Box
-              onClick={() => setPending(null)}
-              role="button"
-              sx={{ fontSize: '0.86rem', color: c.text.secondary, px: 1, py: 0.6, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>
-              Cancel
-            </Box>
-            <Box
-              onClick={onConfirm}
-              role="button"
-              sx={{
-                fontSize: '0.86rem', fontWeight: 700,
-                color: '#fff', bgcolor: c.accent.primary,
-                px: 1.4, py: 0.55, borderRadius: 999, cursor: 'pointer',
-                '&:hover': { filter: 'brightness(1.05)' },
-              }}>
-              {busy ? 'Applying…' : 'Schedule it'}
-            </Box>
-          </Box>
-        </Box>
-      </Dialog>
     </Box>
   );
 }

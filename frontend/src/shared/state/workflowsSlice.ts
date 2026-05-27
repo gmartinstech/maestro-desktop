@@ -334,6 +334,17 @@ const slice = createSlice({
       const card = state.openCards[action.payload];
       if (card) card.fixSeed = null;
     },
+    // Live workflow changes pushed over WS (e.g. the Edit Agent's
+    // add/delete/edit-step tools). Keeps an open card in sync without a
+    // full refetch; idempotent, so a window receiving the echo of its own
+    // edit just re-sets the same data.
+    upsertWorkflow(state, action: { payload: Workflow }) {
+      state.items[action.payload.id] = action.payload;
+    },
+    removeWorkflow(state, action: { payload: string }) {
+      delete state.items[action.payload];
+      delete state.runs[action.payload];
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -370,5 +381,7 @@ export const {
   toggleExpandedStep,
   setCardSidecar,
   clearFixSeed,
+  upsertWorkflow,
+  removeWorkflow,
 } = slice.actions;
 export default slice.reducer;
