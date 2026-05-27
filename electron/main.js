@@ -34,6 +34,7 @@ const fs = require('fs');
 const getPort = require('get-port');
 const http = require('http');
 const affiliateTracking = require('./affiliateTracking');
+const workflowsLifecycle = require('./workflowsLifecycle');
 
 // Defender warmup: NSIS runs us with --prewarm right after install so Windows scans the bundled binaries while the user is already watching the installer instead of staring at a slow first launch.
 if (process.argv.includes('--prewarm') && process.platform === 'win32') {
@@ -729,6 +730,10 @@ function markBackendReady() {
   if (backendReady) return;
   backendReady = true;
   _backendReadyResolve();
+  try {
+    workflowsLifecycle.setBackend({ port: backendPort, token: authToken });
+    workflowsLifecycle.startPolling();
+  } catch (_) {}
 }
 
 function getAuthTokenFilePath() {
@@ -1229,8 +1234,8 @@ app.whenReady().then(async () => {
       backendPort = parseInt(process.env.OPENSWARM_PORT || '8324', 10);
       console.log(`Dev mode: using existing backend on port ${backendPort}`);
       emitSplashStatus('Connecting to dev backend…');
-      // Load the token before marking ready, same as prod, so renderer
-      // fetches get a real token instead of '' (else they 401).
+      // Load the token before marking ready, same as prod, so the workflow
+      // poller's setBackend() gets a real token instead of '' (else it 401s).
       await loadAuthToken();
       markBackendReady();
     } else {
@@ -1626,6 +1631,10 @@ app.on('before-quit', async (event) => {
   try {
     await postShutdownAllApps(10000);
   } catch (_) {}
+  // Give in-flight workflow runs up to 30s to land so we don't destroy paid LLM work.
+  try {
+    await workflowsLifecycle.drainOnQuit(30);
+  } catch (_) {}
   app.quit();
 });
 
@@ -1752,6 +1761,11 @@ ipcMain.handle('set-allow-prerelease', async (_e, value) => {
 
 ipcMain.handle('install-update', async () => {
   if (!autoUpdater) return;
+  // Veto while a workflow is in flight; lifecycle poller fires the deferred install once active drains.
+  try {
+    const vetoed = await workflowsLifecycle.maybeVetoInstall();
+    if (vetoed) return { vetoed: true };
+  } catch (_) {}
   autoUpdater.quitAndInstall(false, true);
 });
 
