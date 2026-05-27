@@ -79,10 +79,15 @@ if ! "$PYTHON_BIN" -m pip --version &>/dev/null; then
     "$PYTHON_BIN" -m ensurepip --upgrade
 fi
 
-# Install backend dependencies
-echo "Installing backend dependencies..."
+# Install backend dependencies from the fully-pinned, hash-locked file so the
+# shipped python-env is byte-for-byte reproducible (pillar 3). requirements.txt
+# is the human-edited source; regenerate the lock after editing it with:
+#   uv pip compile backend/requirements.txt --python-version 3.13 \
+#       --generate-hashes --output-file backend/requirements.lock
+# --require-hashes is implied because every entry carries a hash.
+echo "Installing backend dependencies (from requirements.lock)..."
 "$PYTHON_BIN" -m pip install --upgrade pip
-"$PYTHON_BIN" -m pip install -r "$PROJECT_ROOT/backend/requirements.txt"
+"$PYTHON_BIN" -m pip install -r "$PROJECT_ROOT/backend/requirements.lock"
 
 # Install the debugger module
 echo "Installing debugger module..."
@@ -128,6 +133,9 @@ rm -rf "$PYTHON_ENV_DIR/lib/python3.13/tkinter"
 rm -rf "$PYTHON_ENV_DIR/lib/python3.13/ensurepip"
 # Educational drawing examples that ship with stdlib — never imported.
 rm -rf "$PYTHON_ENV_DIR/lib/python3.13/turtledemo"
+# turtle itself: a Tk-based graphics module. It imports tkinter (stripped
+# above), so it's already non-functional here, and the backend never uses it.
+rm -rf "$PYTHON_ENV_DIR/lib/python3.13/turtle.py"
 # Man pages / desktop-integration files — embedded Python doesn't read these.
 rm -rf "$PYTHON_ENV_DIR/share"
 # pip itself + launcher shims. Verified the packaged backend never invokes

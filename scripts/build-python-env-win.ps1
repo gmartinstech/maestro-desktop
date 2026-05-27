@@ -67,10 +67,16 @@ if ($LASTEXITCODE -ne 0) {
     if ($LASTEXITCODE -ne 0) { throw "ensurepip failed" }
 }
 
-Write-Host "Installing backend dependencies..."
+# Install from the fully-pinned, hash-locked file so the shipped python-env is
+# byte-for-byte reproducible (pillar 3). requirements.txt is the human-edited
+# source; regenerate the lock after editing it with:
+#   uv pip compile backend/requirements.txt --python-version 3.13 `
+#       --generate-hashes --output-file backend/requirements.lock
+# --require-hashes is implied because every entry carries a hash.
+Write-Host "Installing backend dependencies (from requirements.lock)..."
 & $PythonBin -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed" }
-& $PythonBin -m pip install -r (Join-Path $ProjectRoot 'backend\requirements.txt')
+& $PythonBin -m pip install -r (Join-Path $ProjectRoot 'backend\requirements.lock')
 if ($LASTEXITCODE -ne 0) { throw "pip install requirements failed" }
 
 Write-Host "Installing debugger module..."
@@ -100,6 +106,7 @@ $ToStrip = @(
     (Join-Path $PythonEnvDir 'lib\python3.13\tkinter'),           # Tk GUI toolkit — same
     (Join-Path $PythonEnvDir 'lib\python3.13\ensurepip'),         # Pip bootstrap — backend never installs at runtime
     (Join-Path $PythonEnvDir 'lib\python3.13\turtledemo'),        # Educational drawing examples
+    (Join-Path $PythonEnvDir 'lib\python3.13\turtle.py'),         # Tk-based turtle graphics; imports stripped tkinter, backend never uses it
     (Join-Path $PythonEnvDir 'lib\python3.13\pydoc_data'),        # pydoc topics/keywords; only `help()` reads them
     (Join-Path $PythonEnvDir 'lib\python3.13\_pyrepl'),           # Python 3.13 interactive REPL, never started in packaged app
     (Join-Path $PythonEnvDir 'share')                             # Man pages / desktop integration
