@@ -84,10 +84,15 @@ async function main() {
       const authedPath = '/api/settings/default-system-prompt';
       const noTok = await httpStatus(port, authedPath, {});
       const withTok = await httpStatus(port, authedPath, { Authorization: `Bearer ${token}` });
+      // Wrong-token MUST be rejected too. Without this, a backend that accepts ANY
+      // Authorization header would pass no-token=401 + with-token=200 while auth is
+      // actually broken. This probe is what makes the 200 mean "validated".
+      const badTok = await httpStatus(port, authedPath, { Authorization: 'Bearer not-a-real-token-deadbeefcafe' });
       if (![401, 403].includes(noTok)) failures.push(`authed endpoint returned ${noTok} WITHOUT token (expected 401/403)`);
-      if ([401, 403, 0].includes(withTok)) failures.push(`authed endpoint returned ${withTok} WITH token (expected it honored)`);
-      if ([401, 403].includes(noTok) && ![401, 403, 0].includes(withTok)) {
-        process.stdout.write(`  bearer honored: no-token=${noTok}, with-token=${withTok}\n`);
+      if ([401, 403, 0].includes(withTok)) failures.push(`authed endpoint returned ${withTok} WITH the real token (expected it honored)`);
+      if (![401, 403].includes(badTok)) failures.push(`authed endpoint returned ${badTok} with a WRONG token (expected 401/403 - token is NOT actually validated)`);
+      if ([401, 403].includes(noTok) && ![401, 403, 0].includes(withTok) && [401, 403].includes(badTok)) {
+        process.stdout.write(`  bearer validated: no-token=${noTok}, wrong-token=${badTok}, real-token=${withTok}\n`);
       }
     }
 
