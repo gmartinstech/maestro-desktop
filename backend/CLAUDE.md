@@ -4,7 +4,7 @@ FastAPI orchestrator. Entry: `backend/main.py` (uvicorn `:8324`, REST `/api/*`, 
 
 ## Coding precedences
 
-Full precedences live in root [CLAUDE.md](../.claude/CLAUDE.md). Always: **understand the end goal before coding** (what does the user actually need?); **reuse before you write** (grep existing routes / SubApps / helpers, most needs already have one); ~300 LOC/file ceiling; downward-tree imports; no comments except WHY-non-obvious; **no em-dashes or en-dashes anywhere** (`—`, `–`); say IDK to the user when you don't know, then go find out; test after meaningful changes; weigh speed, efficiency, robustness, UX, and security on every change.
+Full precedences live in root [CLAUDE.md](../.claude/CLAUDE.md). Always: **understand the end goal before coding** (what does the user actually need?); **reuse before you write** (grep existing routes / SubApps / helpers, most needs already have one); ~300 LOC/file ceiling; downward-tree imports; comments only when necessary (the non-obvious WHY), one line each; **no em-dashes or en-dashes anywhere** (`—`, `–`); say IDK to the user when you don't know, then go find out; test after meaningful changes; weigh speed, efficiency, robustness, UX, and security on every change.
 
 ## Run / test
 

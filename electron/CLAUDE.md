@@ -4,7 +4,7 @@ Electron 40.x (CastLabs DRM build) desktop shell + auto-updater via GitHub Relea
 
 ## Coding precedences
 
-Full precedences live in root [CLAUDE.md](../.claude/CLAUDE.md). Always: **understand the end goal before coding** (what does the user actually need?); **reuse before you write** (grep existing IPC handlers / helpers in `main.js`, most needs already have one); ~300 LOC/file ceiling; downward-tree imports; no comments except WHY-non-obvious; **no em-dashes or en-dashes anywhere** (`—`, `–`); say IDK to the user when you don't know, then go find out; test the packaged build path after meaningful changes (not just dev); weigh speed (startup time), efficiency (memory), robustness (auto-updater, OAuth windows), UX, and security (signed binaries, no plaintext secrets) on every change.
+Full precedences live in root [CLAUDE.md](../.claude/CLAUDE.md). Always: **understand the end goal before coding** (what does the user actually need?); **reuse before you write** (grep existing IPC handlers / helpers in `main.js`, most needs already have one); ~300 LOC/file ceiling; downward-tree imports; comments only when necessary (the non-obvious WHY), one line each; **no em-dashes or en-dashes anywhere** (`—`, `–`); say IDK to the user when you don't know, then go find out; test the packaged build path after meaningful changes (not just dev); weigh speed (startup time), efficiency (memory), robustness (auto-updater, OAuth windows), UX, and security (signed binaries, no plaintext secrets) on every change.
 
 ## Build / release
 
