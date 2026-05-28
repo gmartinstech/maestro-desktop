@@ -106,6 +106,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # Per-test traces: playwright-trace.zip (open via `npx playwright show-trace`),
+      # events.jsonl (unified timestamped stream), mousepath.jsonl, backend.log.tail.
+      # Always-upload so a failed run is debuggable without re-running.
+      - name: Upload E2E visibility traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-traces-${{ matrix.os }}
+          path: e2e/traces/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # Real Windows 10 coverage. Skipped unless a self-hosted Win10 runner exists
   # and WIN10_SELF_HOSTED=true (repo variable). Mirrors the windows steps above.
   e2e-win10:
