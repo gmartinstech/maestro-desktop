@@ -1,20 +1,5 @@
 #!/usr/bin/env node
-// Deterministic "does the packaged app actually boot and serve" check — a plain
-// script, no browser/Electron automation (which is flaky: single-instance locks,
-// target-closed races). It launches the REAL built exe/app, waits for the backend,
-// and reads the same backend.log the shipped app writes to confirm the boot:
-//
-//   - [provenance] line present and its sha == git rev-parse HEAD (right build)
-//   - [perf] app-launch < first-paint < backend-http-ready (UI painted, ordered)
-//   - the backend answers /api/health/check with 200 (it actually serves)
-//
-// first-paint coming from the log means we prove the renderer painted WITHOUT
-// scraping the DOM. Reserve Playwright for genuine GUI-click regressions; this
-// covers "did the artifact boot and serve" far more robustly.
-//
-//   node scripts/ci/verify-packaged-app.js [--app <path>] [--timeout-ms 180000]
-//
-// Exit 0 = all good. Exit 1 = something didn't boot/serve/match (prints why).
+// Launches the built app and reads backend.log: provenance sha == git HEAD, perf marks ordered (proves first paint), health 200. No browser automation; Playwright is for GUI clicks.
 
 'use strict';
 const h = require('./lib/app-harness');

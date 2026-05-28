@@ -1,16 +1,5 @@
 #!/usr/bin/env node
-// "Test the tests" - mutation testing of the gate's own logic. For each guard in
-// the boot check, we feed a deliberately BROKEN backend.log and assert the guard
-// fires (and that a good log passes). If breaking the input doesn't turn the gate
-// red, the gate is theater; this script fails loudly when that happens.
-//
-// This covers the PURE, log-based assertions (provenance + perf). The live-process
-// guards (signature --require-signed, wrong-token auth, verify-all aggregation,
-// renderer paint) are fault-injected separately - see GATE_AUDIT.md.
-//
-//   node scripts/ci/selftest-gate.js
-//
-// Exit 0 = every guard discriminates good from broken. Exit 1 = a guard is fake.
+// Test-the-tests: feeds broken backend.logs to the boot check and asserts each guard fires (a good log passes); if a break stops going red, the gate is theater. Live-process guards: see GATE_AUDIT.md.
 
 'use strict';
 const h = require('./lib/app-harness');
@@ -43,8 +32,7 @@ check('degenerate all-zero marks -> caught', caught(
   '[provenance] OpenSwarm 1 sha=abc123def456 channel=stable\n[perf] app-launch t=0\n[perf] first-paint t=0\n[perf] backend-http-ready t=0',
   HEAD, /> 0|degenerate/));
 
-// And a stale build (old sha) must be caught even with all marks fine - the exact
-// real-world case we already saw fire live.
+// A stale build (old sha, all marks fine) must still be caught - the case we saw fire live.
 check('stale build (every mark fine, wrong sha) -> still caught', caught(GOOD.replace('abc123def456', 'deadbeef0000'), HEAD, /!= git HEAD/));
 
 process.stdout.write('\nparse-function edge cases:\n');

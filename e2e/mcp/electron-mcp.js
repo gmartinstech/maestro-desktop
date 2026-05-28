@@ -1,20 +1,5 @@
 #!/usr/bin/env node
-// A tiny MCP server that hands a Claude Code instance the "hand + eyes" to drive
-// the REAL packaged OpenSwarm app: launch it, click, type, screenshot, read the
-// live DOM/accessibility tree, run JS in the renderer, and tail backend.log.
-//
-// Why this exists: the deterministic scripts in scripts/ci/ cover boot/serve/
-// resilience/network/agent-turn (fast, free, the CI gate). This covers the part
-// scripts can't express - actual GUI behavior - by letting a CC instance you talk
-// to drive the app at Playwright (DOM) precision. The official @playwright/mcp is
-// browser-only, so we wrap Playwright's Electron (_electron) API ourselves.
-//
-// Register it (repo-root .mcp.json) and any CC instance auto-connects:
-//   { "mcpServers": { "openswarm-gui": { "command": "node",
-//       "args": ["e2e/mcp/electron-mcp.js"] } } }
-//
-// The launched ElectronApplication + main Page are held across calls, so a CC
-// session clicks through a single live app the way a person would.
+// MCP server giving a Claude Code instance a Playwright hand on the real packaged app (launch/click/type/screenshot/eval/read-log); wraps Electron _electron since @playwright/mcp is browser-only. App held across calls. See e2e/mcp/README.md.
 
 'use strict';
 const fs = require('fs');

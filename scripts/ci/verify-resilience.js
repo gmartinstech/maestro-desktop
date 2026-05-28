@@ -1,20 +1,5 @@
 #!/usr/bin/env node
-// Proves the packaged app survives the two machine-variance cases that most often
-// cause "worked on mine, broke on theirs" — both already handled in main.js, but
-// never verified:
-//
-//   --locked-port:    something else already holds the preferred backend port.
-//                     We bind 8324.. on 127.0.0.1, launch, and assert the app
-//                     still comes up on a DIFFERENT port and serves 200
-//                     (pickBackendPort fallback, main.js:551).
-//   --multi-instance: the user double-clicks / a deep link relaunches the app.
-//                     We launch one instance, then a second; the second must exit
-//                     cleanly (single-instance lock at main.js:117) while the
-//                     first keeps serving.
-//
-//   node scripts/ci/verify-resilience.js [--app <path>] [--locked-port] [--multi-instance]
-//
-// With no check flag, runs both. Exit 0 = all ran passed; exit 1 = a failure.
+// Proves the app survives a taken preferred port (--locked-port falls back, still serves 200) and a second launch (--multi-instance exits cleanly, first keeps serving). No flag runs both.
 
 'use strict';
 const net = require('net');

@@ -1,11 +1,5 @@
 #!/usr/bin/env node
-// Proves the openswarm-gui MCP server actually works, end-to-end, the way a CC
-// instance would use it: spawn the server over stdio, list its tools, then (unless
-// --no-launch) launch the real app, screenshot it, read the log, and close.
-//
-//   node e2e/mcp/selftest.js [--no-launch]
-//
-// Exit 0 = the hand works. Exit 1 = it doesn't (prints why).
+// Proves the openswarm-gui MCP server works: spawn over stdio, list tools, then (unless --no-launch) launch the app, screenshot, assert the renderer painted, and close.
 
 'use strict';
 const path = require('path');
@@ -41,8 +35,7 @@ async function main() {
   if (!isImage) throw new Error('screenshot did not return a PNG');
   process.stdout.write(`screenshot -> ${shot.content[0].data.length} base64 bytes\n`);
 
-  // A PNG of the right size could still be a BLANK window, so prove the renderer
-  // actually painted: assert the React root mounted children (the real render gate).
+  // A PNG of the right size could still be a blank window, so prove the renderer painted: assert #root mounted children.
   const root = await client.callTool({ name: 'eval', arguments: { expression: "document.getElementById('root').childElementCount" } });
   const childCount = Number(root.content?.[0]?.text);
   if (!(childCount > 0)) throw new Error(`renderer #root has ${root.content?.[0]?.text} children (blank window, not a real paint)`);

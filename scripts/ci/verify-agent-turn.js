@@ -1,23 +1,5 @@
 #!/usr/bin/env node
-// Drives a REAL agent turn end-to-end against the packaged app, using whatever
-// provider the app is already logged into on THIS machine (your subscription /
-// 9router / API key) — no separate key, no second agent. It proves the full
-// round-trip: session launch -> message -> the model actually generated a reply.
-//
-// Why this is gated: a real turn spends a sliver of your LLM quota. So it only
-// runs when OPENSWARM_E2E_AGENT=1; otherwise it prints a skip and exits 0, which
-// keeps CI from silently billing you.
-//
-// How it proves a real reply (not a fake pass): it launches with NO tools (so the
-// agent can't trip an approval gate and hang) and a trivial prompt, then polls the
-// session until status is terminal and asserts the model produced output tokens
-// (tokens.output > 0) with no error. Output tokens can only come from a live
-// provider answering — they can't be faked by the harness.
-//
-//   OPENSWARM_E2E_AGENT=1 node scripts/ci/verify-agent-turn.js [--app <path>] [--prompt "..."]
-//
-// Note: the [perf] first-agent-response mark is emitted by the RENDERER, so it is
-// asserted in the GUI walkthrough, not here (this path is API-driven by design).
+// Drives a REAL agent turn on the app's own login (gated by OPENSWARM_E2E_AGENT=1; spends quota, else skips). Launches tool-free (no approval-gate hang) and asserts terminal status + tokens.output>0, a live reply the harness cant fake.
 
 'use strict';
 const h = require('./lib/app-harness');

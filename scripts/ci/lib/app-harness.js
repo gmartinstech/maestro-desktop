@@ -1,11 +1,5 @@
 'use strict';
-// Shared plumbing for the packaged-app verifiers in scripts/ci/. Every verifier
-// needs the same things: find the built artifact for this OS, launch it, read the
-// backend.log it writes, and kill it cleanly. Keeping that here means each verifier
-// stays small and single-purpose (boot, resilience, signature, network).
-//
-// These helpers THROW on misuse and return data on success; the calling script
-// owns the pass/fail print + exit code so the harness has no opinion on policy.
+// Shared plumbing for the scripts/ci/ verifiers: locate the built artifact, launch it, read its backend.log, kill it cleanly. Helpers throw on misuse; callers own pass/fail.
 
 const fs = require('fs');
 const os = require('os');
@@ -29,11 +23,9 @@ function packagedAppPath(explicit) {
   return found;
 }
 
-// The on-disk binary the OS actually signs/scans: the .exe on win, the .app
-// bundle dir on mac (codesign/spctl assess the bundle, not the inner MachO).
+// The on-disk thing the OS signs/scans: the .exe on win, the .app bundle on mac.
 function signableTarget(appExecutable) {
   if (process.platform === 'darwin') {
-    // .../OpenSwarm.app/Contents/MacOS/OpenSwarm -> .../OpenSwarm.app
     const i = appExecutable.indexOf('.app');
     return i === -1 ? appExecutable : appExecutable.slice(0, i + 4);
   }
@@ -47,8 +39,7 @@ function backendLogPath() {
   return path.join(xdg, 'OpenSwarm', 'data', 'backend.log');
 }
 
-// The bearer token the shell writes before the HTTP bind; tests reuse it to call
-// the same authenticated API the app itself uses.
+// The bearer token the shell writes before bind; tests reuse it to call the authed API.
 function authTokenPath() {
   const dir = path.dirname(backendLogPath());
   return path.join(dir, 'auth.token');
@@ -62,8 +53,7 @@ function readFileSafe(p) { try { return fs.readFileSync(p, 'utf8'); } catch { re
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 function spawnApp(appPath, extraArgs = []) {
-  // detached on posix so we can SIGKILL the whole process group (the app spawns
-  // python + 9router children); on win we reap by image name instead.
+  // detached on posix so we can SIGKILL the whole process group (python + 9router children); on win we reap by image name.
   return spawn(appPath, extraArgs, { detached: process.platform !== 'win32', stdio: 'ignore', cwd: path.dirname(appPath) });
 }
 
@@ -86,8 +76,7 @@ function healthCode(port, timeoutMs = 3000) {
   });
 }
 
-// Authenticated JSON call to the running backend, the same way the app calls it.
-// Returns { status, json, text }; status 0 means the request never completed.
+// Authenticated JSON call to the running backend; returns { status, json, text } (status 0 = never completed).
 function apiRequest(port, { method = 'GET', path = '/', token = '', body = null, timeoutMs = 30000 } = {}) {
   return new Promise((resolve) => {
     const data = body != null ? Buffer.from(JSON.stringify(body)) : null;
@@ -106,9 +95,7 @@ function apiRequest(port, { method = 'GET', path = '/', token = '', body = null,
   });
 }
 
-// Find an already-running app to reuse (so we exercise the user's logged-in
-// creds) by reading the token off disk and the port out of the last backend.log,
-// then confirming it actually answers. Returns { port, token } or null.
+// Reuse an already-running app (the user's logged-in creds): read the token + last logged port and confirm it answers. Returns { port, token } or null.
 async function attachToRunning() {
   const token = readFileSafe(authTokenPath()).trim();
   const m = readFileSafe(backendLogPath()).match(/Backend ready on port (\d+)/g);
@@ -133,11 +120,7 @@ function parsePerfMarks(log) {
   return marks;
 }
 
-// Pure verdict on a backend.log: the log-based half of the boot check (provenance
-// matches HEAD, the three perf marks exist, are ordered, and are not degenerate).
-// Kept pure + exported so it can be mutation-tested (selftest-gate.js feeds it
-// crafted broken logs and proves each guard fires) without launching the app.
-// Returns { failures: string[], sha, marks }; empty failures == the log half passed.
+// Pure, mutation-testable verdict on a backend.log (provenance == HEAD, perf marks present/ordered/non-degenerate); returns { failures, sha, marks }, empty failures == passed.
 function bootFailures({ log, headShort } = {}) {
   const failures = [];
   const sha = parseProvenanceSha(log || '');
@@ -156,8 +139,7 @@ function bootFailures({ log, headShort } = {}) {
   return { failures, sha, marks };
 }
 
-// Launch the app and poll its backend.log until it reports HTTP-ready (or time out).
-// Returns { child, log, port }. Caller is responsible for killApp(child).
+// Launch the app and poll backend.log until HTTP-ready (or time out); returns { child, log, port }. Caller calls killApp.
 async function launchAndWait({ appPath, timeoutMs = 180000, freshLog = true } = {}) {
   const logPath = backendLogPath();
   if (freshLog) {

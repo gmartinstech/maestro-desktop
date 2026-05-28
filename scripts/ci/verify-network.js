@@ -1,22 +1,5 @@
 #!/usr/bin/env node
-// Exercises the network/auth plumbing the app depends on, using the SAME bearer
-// token and ports the running app uses (no mocks). Splits into two tiers:
-//
-//   LOCAL (always hard-asserted, deterministic):
-//     - auth.token exists on disk (the load-bearing pre-bind handshake, auth.py)
-//     - an authed endpoint rejects with no token (401/403) and accepts with it
-//       (proves the bearer wiring, not just that a port is open)
-//     - the bundled 9router subprocess is listening on :20128 (LLM routing + the
-//       OAuth authorize/exchange path both go through it)
-//
-//   EXTERNAL (best-effort; --strict makes them hard):
-//     - api.openswarm.com reachable (the fly-hosted proxy OAuth + sign-in use)
-//     - the GitHub Releases feed reachable (what the auto-updater reads)
-//
-// Completing a real OAuth flow is inherently interactive (a browser), so it lives
-// in the GUI walkthrough; here we prove its DEPENDENCIES are reachable.
-//
-//   node scripts/ci/verify-network.js [--app <path>] [--strict] [--timeout-ms 120000]
+// Exercises auth/network with the app's real bearer token: no-token and wrong-token rejected (401), real token 200, 9router on :20128. External reachability is best-effort unless --strict.
 
 'use strict';
 const fs = require('fs');
@@ -84,9 +67,7 @@ async function main() {
       const authedPath = '/api/settings/default-system-prompt';
       const noTok = await httpStatus(port, authedPath, {});
       const withTok = await httpStatus(port, authedPath, { Authorization: `Bearer ${token}` });
-      // Wrong-token MUST be rejected too. Without this, a backend that accepts ANY
-      // Authorization header would pass no-token=401 + with-token=200 while auth is
-      // actually broken. This probe is what makes the 200 mean "validated".
+      // Wrong-token must also be rejected: else a backend accepting ANY Authorization header passes no-token+real-token while auth is broken. This makes the 200 mean "validated".
       const badTok = await httpStatus(port, authedPath, { Authorization: 'Bearer not-a-real-token-deadbeefcafe' });
       if (![401, 403].includes(noTok)) failures.push(`authed endpoint returned ${noTok} WITHOUT token (expected 401/403)`);
       if ([401, 403, 0].includes(withTok)) failures.push(`authed endpoint returned ${withTok} WITH the real token (expected it honored)`);

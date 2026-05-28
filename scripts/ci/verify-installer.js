@@ -1,22 +1,5 @@
 #!/usr/bin/env node
-// Verifies the Windows NSIS installer (OpenSwarm-Setup-x64.exe). Two modes,
-// because the installer is oneClick + per-user to a FIXED dir
-// (%LOCALAPPDATA%\Programs\OpenSwarm), so a blind install/uninstall on a machine
-// that already has OpenSwarm would DESTROY the user's real install.
-//
-//   default (safe, observational): validate the Setup.exe artifact, and if an
-//     install is present, assert its invariants (dir layout, uninstaller registry
-//     entry whose target actually exists, shortcuts). Touches nothing.
-//
-//   --destructive: the real cycle - install /S, assert invariants, (optionally
-//     launch + verify-all), uninstall /S, assert removal AND that user data
-//     survived (deleteAppDataOnUninstall:false). REFUSES if an install already
-//     exists unless --force, so it only runs where there is nothing to clobber
-//     (a clean machine / CI runner). This is what the CI installer job runs.
-//
-//   node scripts/ci/verify-installer.js [--setup <path>] [--destructive] [--force]
-//
-// Exit 0 = invariants hold. Exit 1 = a real installer/install problem.
+// Verifies the Windows NSIS installer: default safely observes an existing install (dir, an uninstaller that exists, shortcuts); --destructive runs install->verify->uninstall but refuses to clobber an existing install unless --force (clean machine / CI).
 
 'use strict';
 const fs = require('fs');
@@ -47,8 +30,7 @@ function defaultSetup() {
   return exists(p) ? p : null;
 }
 
-// The shipped installer must be a real, complete PE - not a 0-byte stub or a
-// truncated upload (a real CI failure mode).
+// The shipped installer must be a real, complete PE (catch a 0-byte stub or truncated upload).
 function checkSetupArtifact(setup) {
   process.stdout.write(`Setup.exe: ${setup}\n`);
   if (!exists(setup)) { bad(`Setup.exe missing at ${setup}`); return; }
@@ -84,8 +66,7 @@ function findShortcuts() {
   return found;
 }
 
-// Assert the on-disk + registry state a correct install produces. Used both to
-// observe an existing install (safe) and to verify a fresh one (destructive).
+// Assert the on-disk + registry state a correct install produces (used by both observe and destructive).
 function assertInstalled() {
   if (!exists(INSTALL_DIR)) { bad(`install dir missing: ${INSTALL_DIR}`); return; }
   ok(`install dir present: ${INSTALL_DIR}`);
@@ -97,8 +78,7 @@ function assertInstalled() {
   else {
     ok(`uninstall registry entry: ${reg.split('|')[0]}`);
     const up = uninstallerPathFromReg(reg);
-    // A registered uninstaller whose target does not exist is an orphaned entry -
-    // a real, user-visible "can't uninstall" bug. Assert the target actually exists.
+    // A registered uninstaller whose target is missing is an orphaned "can't uninstall" bug, so assert it exists.
     if (!up) bad('uninstall entry has no parseable uninstaller path');
     else if (!exists(up)) bad(`uninstaller registered but missing on disk: ${up}`);
     else ok(`uninstaller exists: ${up}`);

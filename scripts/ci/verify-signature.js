@@ -1,17 +1,5 @@
 #!/usr/bin/env node
-// Reports — and, with --require-signed, ENFORCES — the code-signing state of a
-// built artifact. Local dev builds are intentionally unsigned
-// (CSC_IDENTITY_AUTO_DISCOVERY=false), so by default this only REPORTS so you
-// always know what you're holding. The release workflows pass --require-signed
-// AFTER Azure/Apple have signed, turning it into the SmartScreen/Gatekeeper gate:
-//
-//   Windows: Get-AuthenticodeSignature .Status == Valid  (Authenticode -> no SmartScreen block)
-//   macOS:   codesign --verify --deep --strict  AND  spctl --assess == accepted (Gatekeeper)
-//            plus a stapled notarization ticket (stapler validate)
-//
-//   node scripts/ci/verify-signature.js [--target <path>] [--require-signed]
-//
-// Exit 0 = reported ok (or signed when required). Exit 1 = required but not signed.
+// Reports code-signing state; --require-signed fails unless signed (release CI gate, post-sign). Local builds are unsigned by design. Win: Authenticode Valid; mac: codesign + spctl + staple.
 
 'use strict';
 const { execSync } = require('child_process');
