@@ -40,6 +40,25 @@ check('parseProvenanceSha reads a real line', h.parseProvenanceSha(GOOD) === 'ab
 check('parseProvenanceSha returns null on no marker', h.parseProvenanceSha('nothing here') === null);
 check('parsePerfMarks finds all three', Object.keys(h.parsePerfMarks(GOOD)).length === 3);
 
+process.stdout.write('\ndeps-pinned mutation tests:\n');
+const dp = require('./verify-deps-pinned');
+check('exact ==X.Y.Z is pinned', dp.isFullyPinned('anthropic==0.97.0') === true);
+check('bare name is NOT pinned', dp.isFullyPinned('jsonschema') === false);
+check('>= floor is NOT pinned (drift possible)', dp.isFullyPinned('httpx>=0.27.0') === false);
+check('~= compat is NOT pinned', dp.isFullyPinned('foo~=1.0') === false);
+check('hash-pinned wheel counts as pinned', dp.isFullyPinned('foo --hash=sha256:abc') === true);
+check('parseRequirements strips comments + blanks', dp.parseRequirements('# c\n\nanthropic==1\n').length === 1);
+check('parseRequirements ignores -r includes', dp.parseRequirements('-r other.txt\nfoo==1\n').length === 1);
+
+process.stdout.write('\nhost-leakage mutation tests:\n');
+const hl = require('./verify-host-leakage');
+const patterns = ['C:\\Users\\Alice', 'Alice'];
+check('a file containing the build-host path -> at least one hit', hl.scanBuffer('something file:///C:\\Users\\Alice/proj/x', patterns).length > 0);
+check('a clean file -> zero hits', hl.scanBuffer('nothing host-y in here at all', patterns).length === 0);
+check('a file with the bare username also catches', hl.scanBuffer('greetings Alice', ['Alice']).length > 0);
+check('DEFAULT_ALLOW skips PEP 610 direct_url.json', hl.DEFAULT_ALLOW.some((rx) => rx.test('Lib/site-packages/foo-0.1.dist-info/direct_url.json')));
+check('DEFAULT_ALLOW does NOT skip a random json under site-packages', !hl.DEFAULT_ALLOW.some((rx) => rx.test('Lib/site-packages/foo/data.json')));
+
 process.stdout.write(failed
   ? `\nGATE SELFTEST FAIL: ${failed} guard(s) did not discriminate - the gate has theater in it.\n`
   : '\nGATE SELFTEST PASS: every boot guard fires on a break and passes on good input.\n');
