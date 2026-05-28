@@ -48,10 +48,33 @@ function seedTestUserIfClean(): void {
   // re-seed in that case too. Only existing-with-real-user_id is left alone.
   let existing: any = {};
   try { existing = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { existing = {}; }
-  if (existing && typeof existing === 'object' && existing.user_id) return;
+  const merged: any = { ...existing };
+  if (!merged.user_id) {
+    merged.user_id = 'e2e-fake-user';
+    merged.user_email = 'e2e@openswarm.test';
+  }
+  // Provider keys: read from env each launch so a key never has to live on disk
+  // outside the per-user app-support dir (and so rotating just means a new shell).
+  const envKeys: Array<[string, string]> = [
+    ['ANTHROPIC_API_KEY', 'anthropic_api_key'],
+    ['OPENAI_API_KEY', 'openai_api_key'],
+    ['GOOGLE_API_KEY', 'google_api_key'],
+    ['OPENROUTER_API_KEY', 'openrouter_api_key'],
+  ];
+  for (const [envName, field] of envKeys) {
+    const v = process.env[envName];
+    if (v && v.trim()) merged[field] = v.trim();
+  }
   fs.mkdirSync(userData, { recursive: true });
-  const merged = { ...existing, user_id: 'e2e-fake-user', user_email: 'e2e@openswarm.test' };
   fs.writeFileSync(file, JSON.stringify(merged, null, 2));
+}
+
+// Public: lets specs ask whether at least one provider key is wired so they can
+// test.skip themselves on legs where no key is present, rather than try to drive
+// a real turn against an unconfigured backend.
+export function hasAnyProviderKey(): boolean {
+  return ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY']
+    .some((k) => !!(process.env[k] && process.env[k]!.trim()));
 }
 
 export async function launchApp(): Promise<ElectronApplication> {
