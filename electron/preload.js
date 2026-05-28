@@ -3,6 +3,17 @@ const { contextBridge, ipcRenderer } = require('electron');
 // eslint-disable-next-line no-console
 console.log('[diag][preload] start, ua=', navigator.userAgent);
 
+// E2E gate: set the renderer flag BEFORE any page script parses so the
+// production-build store-on-window expose fires deterministically when
+// Playwright launches with OPENSWARM_E2E=1. Read from the Chromium switch
+// the main process appended; no-op for normal user launches.
+try {
+  const args = (typeof process !== 'undefined' && process.argv) ? process.argv : [];
+  if (args.some((a) => /--openswarm-e2e(=1)?$/.test(a))) {
+    contextBridge.exposeInMainWorld('__OPENSWARM_E2E__', true);
+  }
+} catch (e) { console.log('[diag][preload] e2e-flag setup failed:', e && e.message); }
+
 // Synchronous exposure. The previous async IIFE (await ipcRenderer.invoke) raced React mount: any code reading window.openswarm during the gap (BrowserCard's Electron-detection falling back to iframe mode, AgentChat's auth-token call throwing) saw undefined. sendSync blocks the renderer for one IPC round-trip during preload before any user-visible paint, so window.openswarm is guaranteed to exist before the first frontend bundle evaluates.
 const port = ipcRenderer.sendSync('get-backend-port-sync');
 const webviewPreloadPath = ipcRenderer.sendSync('get-webview-preload-path-sync');

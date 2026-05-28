@@ -1,5 +1,14 @@
 const { app, components, BrowserWindow, ipcMain, shell, session, dialog, crashReporter } = require('electron');
 
+// E2E flag: when OPENSWARM_E2E=1, append a Chromium command-line switch the
+// renderer reads at startup to set window.__OPENSWARM_E2E__ = true BEFORE any
+// page script parses, so the production-build store-on-window gate fires
+// deterministically. Normal user launches never set the env var so this is a
+// no-op for them; only Playwright's electron.launch({env}) flips it on.
+if (process.env.OPENSWARM_E2E === '1') {
+  try { app.commandLine.appendSwitch('openswarm-e2e', '1'); } catch {}
+}
+
 // Local-only crash reporter. Captures native renderer crashes that escape JS-level error handlers and don't otherwise surface in Crashpad. uploadToServer=false keeps minidumps on disk under %APPDATA%/OpenSwarm/Crashpad so we can inspect them post-mortem without sending anywhere.
 try {
   crashReporter.start({

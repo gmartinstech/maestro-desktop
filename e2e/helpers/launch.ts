@@ -79,12 +79,17 @@ export function hasAnyProviderKey(): boolean {
 
 export async function launchApp(): Promise<ElectronApplication> {
   seedTestUserIfClean();
-  const app = await electron.launch({ executablePath: packagedAppPath(), args: [] });
-  // The frontend bundle gates `__OPENSWARM_STORE__` exposure on
-  // `__OPENSWARM_E2E__` being truthy at module-load time. Adding an init
-  // script BEFORE the main page navigates guarantees the flag is set before
-  // bundle.js parses, so specs that read the Redux store directly work
-  // against the production build.
+  // OPENSWARM_E2E=1 is read by electron/main.js BEFORE the renderer launches; it
+  // appends a Chromium switch the preload reads to set window.__OPENSWARM_E2E__
+  // before bundle.js parses, so the production store-on-window gate fires
+  // deterministically (no addInitScript race).
+  const app = await electron.launch({
+    executablePath: packagedAppPath(),
+    args: [],
+    env: { ...process.env, OPENSWARM_E2E: '1' },
+  });
+  // Belt-and-braces: addInitScript ALSO sets the flag in case a future Electron
+  // changes the cmdline propagation. If either path works, the spec succeeds.
   try { await app.context().addInitScript({ content: '(window).__OPENSWARM_E2E__ = true;' }); } catch { /* best effort */ }
   return app;
 }
