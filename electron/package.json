@@ -54,6 +54,7 @@
     "dmg": {
       "artifactName": "OpenSwarm-${arch}.${ext}",
       "title": "OpenSwarm ${version}",
+      "size": "5000000K",
       "contents": [
         {
           "x": 130,
