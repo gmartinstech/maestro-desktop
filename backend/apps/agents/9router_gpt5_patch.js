@@ -7,6 +7,38 @@
 const _https = require('https');
 const _http = require('http');
 
+// Pin 9router's listening socket to loopback. It carries the user's provider
+// API keys and auth.py's security model assumes localhost-only, but with no HOST
+// env the node server binds 0.0.0.0 (all interfaces): that exposes it to the LAN
+// AND trips the Windows firewall "allow Node.js" prompt. Rewrite server listen()
+// to force 127.0.0.1 when no real host is given; fully try/catched so any surprise
+// falls back to original behavior rather than breaking router boot.
+(function pinLoopback() {
+  try {
+    const net = require('net');
+    const _listen = net.Server.prototype.listen;
+    net.Server.prototype.listen = function patchedListen(...args) {
+      try {
+        const a0 = args[0];
+        const isPort = typeof a0 === 'number' || (typeof a0 === 'string' && /^\d+$/.test(a0));
+        if (isPort) {
+          const h = args[1];
+          const wildcard = h == null || typeof h === 'function' || h === '0.0.0.0' || h === '::';
+          if (wildcard) {
+            const rest = typeof h === 'function' ? args.slice(1) : args.slice(2);
+            return _listen.call(this, a0, '127.0.0.1', ...rest);
+          }
+        } else if (a0 && typeof a0 === 'object' && a0.port != null && a0.path == null) {
+          if (a0.host == null || a0.host === '0.0.0.0' || a0.host === '::') {
+            args[0] = Object.assign({}, a0, { host: '127.0.0.1' });
+          }
+        }
+      } catch (_) {}
+      return _listen.apply(this, args);
+    };
+  } catch (_) {}
+})();
+
 const TARGET_HOSTS = new Set(['api.openai.com']);
 const DEBUG = process.env.OPENSWARM_DEBUG_GPT5_PATCH === '1';
 
