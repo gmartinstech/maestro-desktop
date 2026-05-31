@@ -220,6 +220,7 @@ build_mcp_bundle_dir() {
 }
 
 build_mcp_bundle_single 'reddit-mcp-buddy'             'reddit-mcp-buddy/dist/index.js'             'reddit-mcp-buddy.js'
+build_mcp_bundle_single '@kirbah/mcp-youtube'           '@kirbah/mcp-youtube/dist/index.js'           'kirbah-mcp-youtube.js'
 build_mcp_bundle_dir    '@notionhq/notion-mcp-server'  '@notionhq/notion-mcp-server/bin/cli.mjs' \
                         'notionhq-notion-mcp-server' \
                         '@notionhq/notion-mcp-server/scripts/notion-openapi.json=scripts/notion-openapi.json' \
