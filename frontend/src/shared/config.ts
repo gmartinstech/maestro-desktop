@@ -23,6 +23,18 @@ export async function refreshAuthToken(): Promise<string> {
     } catch {
       _authTokenCache = '';
     }
+    return _authTokenCache;
+  }
+  // Dev (split-port, no Electron preload): the backend hands us the token over
+  // localhost. The route 404s in packaged builds, so this only fires under run.sh.
+  try {
+    const r = await fetch(`http://${host}:${port}/api/dev/token`);
+    if (r.ok) {
+      const data = await r.json();
+      _authTokenCache = typeof data?.token === 'string' ? data.token : '';
+    }
+  } catch {
+    _authTokenCache = '';
   }
   return _authTokenCache;
 }

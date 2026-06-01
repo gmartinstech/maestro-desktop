@@ -268,3 +268,26 @@ def test_signout_succeeds_even_when_cloud_unreachable(client, reset_settings):
     s2 = load_settings()
     assert s2.user_id is None
     assert s2.openswarm_bearer_token is None
+
+
+# ---------------------------------------------------------------------------
+# The dev-token handoff must be dev-only so it can't widen prod surface (#49).
+# ---------------------------------------------------------------------------
+
+def test_dev_token_is_dev_only():
+    """/api/dev/token hands the install token to the split-port dev frontend
+    without auth, but 404s in packaged builds where the preload supplies it."""
+    import os
+    import backend.auth as auth_mod
+    noauth = TestClient(app)  # deliberately no bearer header
+
+    os.environ.pop("OPENSWARM_PACKAGED", None)
+    r = noauth.get("/api/dev/token")
+    assert r.status_code == 200
+    assert r.json()["token"] == auth_mod._TOKEN
+
+    os.environ["OPENSWARM_PACKAGED"] = "1"
+    try:
+        assert noauth.get("/api/dev/token").status_code == 404
+    finally:
+        os.environ.pop("OPENSWARM_PACKAGED", None)

@@ -186,6 +186,9 @@ _AUTH_EXEMPT_EXACT = {
     # public api.openswarm.com/api/oauth/google/refresh doesn't already
     # do for any internet caller, so no new attack surface.
     "/api/tools/google-oauth-token",
+    # Dev-only token handoff for the split-port frontend (no Electron preload
+    # to read the token from). The route itself 404s in packaged builds.
+    "/api/dev/token",
 }
 
 _AUTH_EXEMPT_PREFIX = (

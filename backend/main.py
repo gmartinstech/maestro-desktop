@@ -386,6 +386,17 @@ async def websocket_dashboard(websocket: WebSocket):
         ws_manager.disconnect_global(websocket)
 
 
+@app.get("/api/dev/token")
+async def dev_token():
+    """Hand the per-install token to the dev frontend, which has no Electron
+    preload to read it from. Disabled in packaged builds (the preload exists
+    there); localhost binding is the only thing gating it in dev."""
+    if os.environ.get("OPENSWARM_PACKAGED") == "1":
+        return JSONResponse({"error": "not available"}, status_code=404)
+    from backend.auth import get_auth_token
+    return JSONResponse({"token": get_auth_token()})
+
+
 @app.post("/api/browser/command")
 async def browser_command(request: Request):
     """HTTP endpoint called by the browser MCP server subprocess.
