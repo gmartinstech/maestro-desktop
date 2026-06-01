@@ -177,10 +177,6 @@ export const ChatInputView: React.FC<Props> = (p) => {
         <SendBlockBanner
           sendBlock={p.sendBlock}
           c={c}
-          sessionId={p.sessionId}
-          setSendBlock={p.setSendBlock}
-          setContextPaths={p.setContextPaths}
-          setModelAnchor={p.setModelAnchor}
         />
       )}
 

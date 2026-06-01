@@ -175,8 +175,24 @@ export function useContextFiles(
     }
   }, [oversizeQueue, summarizingAll, currentModelCtx, model]);
 
+  // Auto-shrink: as soon as a file lands oversize, fire the shrink. No "this file is
+  // too big, what do you want to do?" prompt — there's no real choice, we KNOW the only
+  // reasonable answer is "shrink it". The popup becomes a status indicator ("Shrinking
+  // X") not a question, and disappears the moment shrinking finishes. If the user wanted
+  // the original unshrunk file they'd not have attached something bigger than the model's
+  // window in the first place; we still expose detach-on-chip if they change their mind.
+  const lastAutoShrinkSig = useRef('');
+  useEffect(() => {
+    if (oversizeQueue.length === 0) return;
+    if (summarizingAll || summarizingPath) return;
+    const sig = oversizeQueue.map((o) => o.path).sort().join('|');
+    if (sig === lastAutoShrinkSig.current) return;
+    lastAutoShrinkSig.current = sig;
+    summarizeAllOversize();
+  }, [oversizeQueue, summarizingAll, summarizingPath, summarizeAllOversize]);
+
   // Auto-retry: when the queue drains AND the user had a pending send, fire it.
-  // Zero extra clicks once they pick Shrink all / Remove all.
+  // Zero extra clicks; user types "hi" with attached files, the shrink happens, send fires.
   useEffect(() => {
     if (oversizeQueue.length === 0 && !summarizingAll && !summarizingPath && pendingSendRef.current) {
       const send = pendingSendRef.current;

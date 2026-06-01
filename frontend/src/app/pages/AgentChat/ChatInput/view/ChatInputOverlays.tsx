@@ -28,39 +28,25 @@ interface OversizePopupProps {
   oversizeQueue: Array<{ path: string; name: string; tokens: number }>;
   summarizingAll: boolean;
   summarizingPath: string | null;
-  summarizeOversize: (path: string) => void;
-  summarizeAllOversize: () => void;
-  detachOversize: (path: string) => void;
-  detachAllOversize: () => void;
 }
 
-/** Wrapper that delays unmount through MUI Fade so the popup eases out instead
- *  of snap-disappearing. Important because the auto-retry-send fires once the
- *  queue drains; without the fade-out the user sees "popup vanishes" → blank ms
- *  → "their message appears", which feels jumpy. With the fade it's a calm
- *  handoff. Visibility tracked via local `open` so we can decouple it from the
- *  queue-length React render. */
+/** Status indicator (NOT a prompt). When files land oversize they auto-shrink
+ *  via useContextFiles' useEffect — no click required. This box just tells the
+ *  user what's happening so the chat doesn't look frozen during the shrink. */
 const OversizePopup: React.FC<OversizePopupProps> = ({
   c, oversizeQueue, summarizingAll, summarizingPath,
-  summarizeOversize, summarizeAllOversize, detachOversize, detachAllOversize,
 }) => {
   const queued = oversizeQueue.length > 0;
-  // Remember the last non-empty snapshot so the fade-out renders the same content
-  // it had a moment ago, instead of going blank during the transition.
   const lastSnapshot = React.useRef(oversizeQueue);
   if (queued) lastSnapshot.current = oversizeQueue;
   const snap = lastSnapshot.current;
   const n = snap.length;
   if (n === 0) return null;
   const firstName = snap[0].name;
-  const headline = n === 1
-    ? <><strong>{firstName}</strong> is too big to send.</>
-    : <>{n} files are too big to send: <strong>{firstName}</strong>{n > 1 ? <> and {n - 1} other{n > 2 ? 's' : ''}</> : null}.</>;
-  const shrinkLabel = n === 1 ? 'Shrink it' : `Shrink all ${n}`;
-  const removeLabel = n === 1 ? 'Remove' : `Remove all ${n}`;
   const shrinking = summarizingAll || !!summarizingPath;
-  const onShrink = () => (n === 1 ? summarizeOversize(snap[0].path) : summarizeAllOversize());
-  const onRemove = () => (n === 1 ? detachOversize(snap[0].path) : detachAllOversize());
+  const label = n === 1
+    ? <>Shrinking <strong>{firstName}</strong> to fit</>
+    : <>Shrinking <strong>{firstName}</strong> and {n - 1} other{n > 2 ? 's' : ''} to fit</>;
   return (
     <Fade in={queued} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
       <Box
@@ -73,46 +59,22 @@ const OversizePopup: React.FC<OversizePopupProps> = ({
           zIndex: 5,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box component="span" sx={{
+            display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+            bgcolor: c.accent.primary,
+            animation: shrinking ? 'osw-pulse 1.2s ease-in-out infinite' : 'none',
+            '@keyframes osw-pulse': {
+              '0%, 100%': { opacity: 0.4 },
+              '50%': { opacity: 1 },
+            },
+            flexShrink: 0,
+          }} />
           <Box sx={{
             color: c.text.primary, fontSize: '0.88rem', lineHeight: 1.45,
             flex: '1 1 auto', minWidth: 0,
           }}>
-            {headline}
-          </Box>
-          <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
-            <Box
-              component="button"
-              disabled={shrinking}
-              onClick={onShrink}
-              sx={{
-                bgcolor: c.accent.primary, color: '#fff',
-                border: 'none', borderRadius: '6px',
-                px: 1.5, py: 0.7, fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'background 0.15s ease, opacity 0.15s ease',
-                '&:hover': { bgcolor: c.accent.hover },
-                '&:disabled': { opacity: 0.85, cursor: 'wait', bgcolor: c.accent.primary },
-              }}
-            >
-              {shrinking ? <ShrinkingLabel /> : shrinkLabel}
-            </Box>
-            <Box
-              component="button"
-              disabled={shrinking}
-              onClick={onRemove}
-              sx={{
-                bgcolor: 'transparent', color: c.text.secondary,
-                border: `1px solid ${c.border.medium}`, borderRadius: '6px',
-                px: 1.5, py: 0.7, fontSize: '0.82rem', cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'background 0.15s ease, color 0.15s ease',
-                '&:hover': { bgcolor: c.bg.secondary, color: c.text.primary },
-                '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
-              }}
-            >
-              {removeLabel}
-            </Box>
+            {label}
           </Box>
         </Box>
         <SlowHint active={shrinking} color={c.text.secondary} />
@@ -258,10 +220,6 @@ export const ChatInputOverlays: React.FC<Props> = ({
         oversizeQueue={oversizeQueue}
         summarizingAll={summarizingAll}
         summarizingPath={summarizingPath}
-        summarizeOversize={summarizeOversize}
-        summarizeAllOversize={summarizeAllOversize}
-        detachOversize={detachOversize}
-        detachAllOversize={detachAllOversize}
       />
 
       {/* Error toast also fades. 220ms exit keeps it from snap-disappearing on close. */}

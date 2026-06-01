@@ -9,6 +9,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useChatInputModel } from './ChatInput/hooks/useChatInputModel';
 import { useDraftLoad, deleteDraft, loadDraft } from './ChatInput/hooks/draftStore';
 import { handleSlashCommand } from './ChatInput/hooks/slashCommands';
+import { API_BASE, getAuthToken } from '@/shared/config';
 import { materializeImages, appendSelectedElements, computeSendBlock } from './ChatInput/sendHelpers';
 import { useImageAttachments } from './ChatInput/hooks/useImageAttachments';
 import { useContextFiles } from './ChatInput/hooks/useContextFiles';
@@ -147,7 +148,29 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       historyUsed: contextEstimate?.used ?? 0,
       contextPaths, sessionFrameworkOverhead,
     });
-    if (block) { setSendBlock(block); return; }
+    if (block) {
+      // Auto-compact instead of prompting. Conversation history is the only
+      // overflow source we can shrink without losing user content — files were
+      // already auto-shrunk above, the prompt itself is the message the user
+      // just wrote, MCPs are framework. So if we're over, hit /compact, capture
+      // the send intent, and let the next-message effect fire it after the
+      // server-side compaction acks. User did nothing; problem solved silently.
+      if (sessionId) {
+        pendingSendRef.current = () => { handleSend(); };
+        try {
+          const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (tok) headers['Authorization'] = `Bearer ${tok}`;
+          await fetch(`${API_BASE}/agents/sessions/${sessionId}/compact`, { method: 'POST', headers });
+        } catch (err) { console.error('[auto-compact] failed:', err); pendingSendRef.current = null; }
+      }
+      // Briefly flash the banner as a status (not a prompt) so the user sees
+      // something happened. Auto-clear after 2s; in 99% of cases the auto-retry
+      // send has already fired by then.
+      setSendBlock(block);
+      setTimeout(() => setSendBlock(null), 2000);
+      return;
+    }
 
     onboardingBus.emit('chat:message_sent');
     if (window.location.hash.includes('/apps/')) {
@@ -199,7 +222,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     setAttachedSkills({});
     setHasContent(false);
     elementSelection?.clearOwnerElements(ownerId);
-  }, [disabled, images, contextPaths, forcedTools, onSend, elementSelection, ownerId, summarizingPath, summarizingAll, oversizeQueue, pendingSendRef]);
+  }, [disabled, images, contextPaths, forcedTools, onSend, elementSelection, ownerId, summarizingPath, summarizingAll, oversizeQueue, pendingSendRef, sessionId, currentModelCtx, contextEstimate, sessionFrameworkOverhead, setSendBlock]);
 
   const {
     picker: editorPicker, setPicker,
