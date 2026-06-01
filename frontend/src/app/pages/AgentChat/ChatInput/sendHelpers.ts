@@ -35,7 +35,16 @@ export function computeSendBlock({ trimmed, currentModelCtx, historyUsed, contex
     for (const cp of contextPaths) {
       if ((cp.tokens || 0) > (largest?.tokens || 0)) largest = { path: cp.path, tokens: cp.tokens || 0 };
     }
+    // Distinguish "history is the culprit" (compaction can fix it) from "this one
+    // message is too big on its own" (compaction can't help: dropping all prior
+    // turns still leaves framework+files+prompt over the window). The latter only
+    // happens with a giant pasted prompt, since attached files auto-shrink on
+    // attach. We surface that as a hard block instead of a doomed compact loop.
+    const nonHistory = framework + filesSum + promptTokens + systemTokens;
+    const kind: 'compacting' | 'too_long' =
+      nonHistory > Math.floor(win * 0.95) ? 'too_long' : 'compacting';
     return {
+      kind,
       estimate, window: win,
       history, system: systemTokens, framework, files: filesSum, prompt: promptTokens,
       largestFile: largest,

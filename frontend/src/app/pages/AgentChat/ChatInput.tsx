@@ -149,12 +149,17 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       contextPaths, sessionFrameworkOverhead,
     });
     if (block) {
-      // Auto-compact instead of prompting. Conversation history is the only
-      // overflow source we can shrink without losing user content — files were
-      // already auto-shrunk above, the prompt itself is the message the user
-      // just wrote, MCPs are framework. So if we're over, hit /compact, capture
-      // the send intent, and let the next-message effect fire it after the
-      // server-side compaction acks. User did nothing; problem solved silently.
+      if (block.kind === 'too_long') {
+        // This one message is too big to send even with zero history, so
+        // compaction can't save it. Hard-block and tell the user plainly; they
+        // shorten it and the block clears on the next send attempt. Don't fire
+        // /compact (pointless) and don't queue a retry (it'd just re-block).
+        pendingSendRef.current = null;
+        setSendBlock(block);
+        return;
+      }
+      // kind === 'compacting': history is the overflow source, which we CAN
+      // shrink. Auto-compact, capture the send intent, flash a status banner.
       if (sessionId) {
         pendingSendRef.current = () => { handleSend(); };
         try {
@@ -164,13 +169,13 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
           await fetch(`${API_BASE}/agents/sessions/${sessionId}/compact`, { method: 'POST', headers });
         } catch (err) { console.error('[auto-compact] failed:', err); pendingSendRef.current = null; }
       }
-      // Briefly flash the banner as a status (not a prompt) so the user sees
-      // something happened. Auto-clear after 2s; in 99% of cases the auto-retry
-      // send has already fired by then.
       setSendBlock(block);
       setTimeout(() => setSendBlock(null), 2000);
       return;
     }
+
+    // Fits now (e.g. user shortened a too-long message): clear any lingering block banner.
+    setSendBlock(null);
 
     onboardingBus.emit('chat:message_sent');
     if (window.location.hash.includes('/apps/')) {

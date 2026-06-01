@@ -17,6 +17,9 @@ function shrinkThreshold(modelCtx: number): number {
 }
 
 export type SendBlock = null | {
+  // 'compacting' = history overflow, auto-compact can fix it.
+  // 'too_long'   = this single message exceeds the window on its own; hard block.
+  kind: 'compacting' | 'too_long';
   estimate: number;
   window: number;
   history: number;
