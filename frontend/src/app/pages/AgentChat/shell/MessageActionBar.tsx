@@ -11,7 +11,12 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ThumbUpOffAltIcon from '@mui/icons-material/ThumbUpOffAlt';
+import ThumbUpAltIcon from '@mui/icons-material/ThumbUpAlt';
+import ThumbDownOffAltIcon from '@mui/icons-material/ThumbDownOffAlt';
+import ThumbDownAltIcon from '@mui/icons-material/ThumbDownAlt';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import FeedbackDialog, { Sentiment } from './FeedbackDialog';
 
 interface BranchNavProps {
   currentIndex: number;
@@ -27,6 +32,8 @@ interface Props {
   onRegenerate?: () => void;
   onBranch?: () => void;
   branchNav?: BranchNavProps;
+  sessionId?: string;
+  messageId?: string;
 }
 
 const btnSx = (c: ReturnType<typeof useClaudeTokens>) => ({
@@ -43,9 +50,13 @@ const MessageActionBar: React.FC<Props> = ({
   onRegenerate,
   onBranch,
   branchNav,
+  sessionId,
+  messageId,
 }) => {
   const c = useClaudeTokens();
   const [copied, setCopied] = useState(false);
+  const [dialogSentiment, setDialogSentiment] = useState<Sentiment | null>(null);
+  const [submitted, setSubmitted] = useState<Sentiment | null>(null);
 
   const handleCopy = () => {
     onCopy();
@@ -54,6 +65,7 @@ const MessageActionBar: React.FC<Props> = ({
   };
 
   const isUser = role === 'user';
+  const canRate = !isUser && !!sessionId && !!messageId;
 
   return (
     <Box
@@ -130,6 +142,24 @@ const MessageActionBar: React.FC<Props> = ({
               {copied ? <CheckIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
             </IconButton>
           </Tooltip>
+          {canRate && (
+            <>
+              <Tooltip title="Give positive feedback" arrow>
+                <IconButton size="small" onClick={() => setDialogSentiment('up')} sx={btnSx(c)}>
+                  {submitted === 'up'
+                    ? <ThumbUpAltIcon sx={{ fontSize: 16, color: c.accent.primary }} />
+                    : <ThumbUpOffAltIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Give negative feedback" arrow>
+                <IconButton size="small" onClick={() => setDialogSentiment('down')} sx={btnSx(c)}>
+                  {submitted === 'down'
+                    ? <ThumbDownAltIcon sx={{ fontSize: 16, color: c.accent.primary }} />
+                    : <ThumbDownOffAltIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
           {onRegenerate && (
             <Tooltip title="Regenerate" arrow>
               <IconButton size="small" onClick={onRegenerate} sx={btnSx(c)}>
@@ -146,6 +176,16 @@ const MessageActionBar: React.FC<Props> = ({
           )}
         </>
       )}
+      {canRate && dialogSentiment && (
+        <FeedbackDialog
+          open
+          sentiment={dialogSentiment}
+          sessionId={sessionId!}
+          messageId={messageId!}
+          onClose={() => setDialogSentiment(null)}
+          onSubmitted={() => { setSubmitted(dialogSentiment); setDialogSentiment(null); }}
+        />
+      )}
     </Box>
   );
 };
@@ -159,4 +199,6 @@ export default React.memo(MessageActionBar, (prev, next) => (
   && !!prev.onBranch === !!next.onBranch
   && prev.branchNav?.currentIndex === next.branchNav?.currentIndex
   && prev.branchNav?.totalBranches === next.branchNav?.totalBranches
+  && prev.messageId === next.messageId
+  && prev.sessionId === next.sessionId
 ));
