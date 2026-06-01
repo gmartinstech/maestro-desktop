@@ -38,6 +38,12 @@ _NINEROUTER_MODEL_PREFIXES = ("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter
 # 9Router prefixes: cc/ Claude sub (dashes), cx/ Codex sub (dots), gc/ Gemini CLI.
 BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
     "Anthropic": [
+        # Opus 4.8 (released 2026-05-28): Anthropic's flagship, recommended for the
+        # most complex work. Adaptive thinking (not extended), effort param defaults
+        # to high. 1M ctx, 128k max output, $5/$25. Verified live on the cc sub route
+        # (this app runs on it) and the API.
+        {"value": "opus-4-8", "label": "Claude Opus 4.8", "context_window": 1_000_000,
+         "model_id": "claude-opus-4-8", "router_model_id": "cc/claude-opus-4-8", "api": "anthropic", "reasoning": True},
         # Opus 4.7: SDK currently strips plaintext thinking deltas (encrypted only)
         # so the live "Thought for Ns" pill loses mid-turn text. Final answer + tokens fine.
         {"value": "opus-4-7", "label": "Claude Opus 4.7", "context_window": 1_000_000,
@@ -49,6 +55,8 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "haiku", "label": "Claude Haiku 4.5", "context_window": 200_000,
          "model_id": "claude-haiku-4-5", "router_model_id": "cc/claude-haiku-4-5-20251001", "api": "anthropic", "reasoning": True},
         # cc/ pins the user's Claude sub regardless of connection_mode.
+        {"value": "opus-4-8-cc", "label": "Claude Opus 4.8", "context_window": 1_000_000,
+         "model_id": "claude-opus-4-8", "router_model_id": "cc/claude-opus-4-8", "api": "anthropic", "reasoning": True, "route": "cc"},
         {"value": "opus-4-7-cc", "label": "Claude Opus 4.7", "context_window": 1_000_000,
          "model_id": "claude-opus-4-7", "router_model_id": "cc/claude-opus-4-7", "api": "anthropic", "reasoning": True, "route": "cc"},
         {"value": "sonnet-cc", "label": "Claude Sonnet 4.6", "context_window": 1_000_000,
@@ -58,6 +66,8 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "haiku-cc", "label": "Claude Haiku 4.5", "context_window": 200_000,
          "model_id": "claude-haiku-4-5", "router_model_id": "cc/claude-haiku-4-5-20251001", "api": "anthropic", "reasoning": True, "route": "cc"},
 
+        {"value": "opus-4-8-api", "label": "Claude Opus 4.8 (API key)", "context_window": 1_000_000,
+         "model_id": "claude-opus-4-8", "router_model_id": "claude-opus-4-8", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "opus-4-7-api", "label": "Claude Opus 4.7 (API key)", "context_window": 1_000_000,
          "model_id": "claude-opus-4-7", "router_model_id": "claude-opus-4-7", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "sonnet-api", "label": "Claude Sonnet 4.6 (API key)", "context_window": 1_000_000,
@@ -120,27 +130,32 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
     # but tools and thinking work). 3-pro / 3-flash route via Antigravity when
     # the AG OAuth lane is active; gc/ otherwise.
     "Google": [
+        # Gemini 3.5 Flash (GA 2026-05-19): Google's current recommended flash, most
+        # intelligent for sustained agentic/coding work. New flagship flash slot.
+        {"value": "gemini-3.5-flash", "label": "Gemini 3.5 Flash",
+         "context_window": 1_000_000, "router_model_id": "gc/gemini-3.5-flash",
+         "api": "gemini-cli", "subscription_only": True, "reasoning": True},
         {"value": "gemini-3.1-pro", "label": "Gemini 3.1 Pro",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-pro-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
         {"value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-flash-lite-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
-        {"value": "gemini-3-pro", "label": "Gemini 3 Pro",
-         "context_window": 1_000_000, "router_model_id": "gc/gemini-3-pro-preview",
-         "api": "gemini-cli", "subscription_only": True, "reasoning": True},
+        # gemini-3-pro removed: gemini-3-pro-preview was shut down 2026-03-09 (dead on
+        # both the direct API and the Gemini CLI backend). gemini-3-flash kept: it's
+        # superseded on the direct API but still serves on the CLI subscription route.
         {"value": "gemini-3-flash", "label": "Gemini 3 Flash",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3-flash-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
         # API-key entries: bypass 9Router, call generativelanguage.googleapis.com.
+        {"value": "gemini-3.5-flash-api", "label": "Gemini 3.5 Flash (API key)",
+         "context_window": 1_000_000, "router_model_id": "gemini-3.5-flash", "model_id": "gemini-3.5-flash",
+         "api": "gemini", "reasoning": True, "route": "api"},
         {"value": "gemini-3.1-pro-api", "label": "Gemini 3.1 Pro (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.1-pro-preview", "model_id": "gemini-3.1-pro-preview",
          "api": "gemini", "reasoning": True, "route": "api"},
         {"value": "gemini-3.1-flash-lite-api", "label": "Gemini 3.1 Flash Lite (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.1-flash-lite-preview", "model_id": "gemini-3.1-flash-lite-preview",
-         "api": "gemini", "reasoning": True, "route": "api"},
-        {"value": "gemini-3-pro-api", "label": "Gemini 3 Pro (API key)",
-         "context_window": 1_000_000, "router_model_id": "gemini-3-pro-preview", "model_id": "gemini-3-pro-preview",
          "api": "gemini", "reasoning": True, "route": "api"},
         {"value": "gemini-3-flash-api", "label": "Gemini 3 Flash (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3-flash-preview", "model_id": "gemini-3-flash-preview",
@@ -399,6 +414,7 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     ("Anthropic", "sonnet"): (3.0, 15.0),
     ("Anthropic", "opus"): (5.0, 25.0),
     ("Anthropic", "opus-4-7"): (5.0, 25.0),
+    ("Anthropic", "opus-4-8"): (5.0, 25.0),
     ("Anthropic", "haiku"): (1.0, 5.0),
     # OpenAI; Codex subscription path, user pays nothing per token
     ("OpenAI", "gpt-5.5"): (0.0, 0.0),
@@ -408,9 +424,9 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     ("OpenAI", "gpt-5.3-codex-high"): (0.0, 0.0),
     ("OpenAI", "gpt-5.3-codex-xhigh"): (0.0, 0.0),
     # Google; Gemini CLI subscription path, user pays nothing per token
+    ("Google", "gemini-3.5-flash"): (0.0, 0.0),
     ("Google", "gemini-3.1-pro"): (0.0, 0.0),
     ("Google", "gemini-3.1-flash-lite"): (0.0, 0.0),
-    ("Google", "gemini-3-pro"): (0.0, 0.0),
     ("Google", "gemini-3-flash"): (0.0, 0.0),
     ("Google", "gemini-2.5-pro"): (0.0, 0.0),
     ("Google", "gemini-2.5-flash"): (0.0, 0.0),

@@ -29,6 +29,9 @@ from __future__ import annotations
 # open / strong sub, 3 solid mid, 2 small specialised, 1 nano.
 MODEL_TIERS: dict[str, tuple[int, int, int]] = {
     # Anthropic
+    "claude-opus-4-8":              (5, 2, 5),
+    "claude-opus-4.8":              (5, 2, 5),
+    "anthropic/claude-opus-4.8":    (5, 2, 5),
     "claude-opus-4-7":              (5, 2, 5),
     "claude-opus-4.7":              (5, 2, 5),
     "anthropic/claude-opus-4.7":    (5, 2, 5),
@@ -82,6 +85,8 @@ MODEL_TIERS: dict[str, tuple[int, int, int]] = {
     "openai/gpt-oss-20b":       (2, 4, 1),
 
     # Google
+    "gemini-3.5-flash":                 (4, 5, 2),
+    "google/gemini-3.5-flash":          (4, 5, 2),
     "gemini-3.1-pro-preview":           (5, 3, 4),
     "gemini-3.1-pro":                   (5, 3, 4),
     "google/gemini-3.1-pro":            (5, 3, 4),

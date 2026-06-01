@@ -56,6 +56,7 @@ import { setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCar
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
 const CONTEXT_WINDOWS: Record<string, number> = {
+  'opus-4-8': 1_000_000,
   'opus-4-7': 1_000_000,
   opus: 1_000_000,
   sonnet: 1_000_000,
