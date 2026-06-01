@@ -148,6 +148,15 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
     # refused with concrete recovery actions.
     b64_total = 0
 
+    # Combined char budget across inline TEXT attachments. The per-file
+    # 512K read cap doesn't stop a user dropping 20 huge txt files in one
+    # turn and silently blowing the context window; this caps total inline
+    # text chars and truncates the tail when we'd cross it. Picked to roughly
+    # match 1M-window models (~375K tokens at 4 chars/token) while still
+    # leaving room for prior conversation, the prompt, and tool turns.
+    text_total_chars = 0
+    text_total_cap = 1_500_000
+
     for cp in context_paths:
         path = cp.get("path", "") or ""
         cp_type = cp.get("type", "file")
@@ -170,10 +179,25 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
             kind, media_type = _sniff_file_kind(head, os.path.basename(path))
 
             if kind == "text":
+                room = max(0, text_total_cap - text_total_chars)
+                if room <= 0:
+                    refusals.append(
+                        f"[Attached text file {os.path.basename(path)} skipped: combined inline-text "
+                        f"budget of {text_total_cap // 1000}K chars already used by earlier attachments this turn. "
+                        f"Detach a file or split into separate turns.]"
+                    )
+                    continue
                 with open(path, "r", errors="replace") as f:
-                    content = f.read(512_000)
+                    content = f.read(min(512_000, room))
+                truncated_note = ""
+                if len(content) >= room and os.path.getsize(path) > room:
+                    truncated_note = (
+                        f"\n[truncated: only first {room} chars included; "
+                        f"combined text-attachment cap of {text_total_cap // 1000}K chars reached.]"
+                    )
+                text_total_chars += len(content)
                 sections.append(
-                    f"<context_file path=\"{path}\">\n{content}\n</context_file>"
+                    f"<context_file path=\"{path}\">\n{content}{truncated_note}\n</context_file>"
                 )
                 continue
 
