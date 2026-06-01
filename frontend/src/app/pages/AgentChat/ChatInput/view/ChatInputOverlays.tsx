@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Modal from '@mui/material/Modal';
@@ -6,33 +6,19 @@ import Snackbar from '@mui/material/Snackbar';
 import CloseIcon from '@mui/icons-material/Close';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
-const SHRINK_PROGRESS_MESSAGES = [
-  'Reading the file',
-  'Pulling out the key bits',
-  'Compressing',
-  'Almost done',
-];
-
 function ShrinkingLabel() {
-  const [idx, setIdx] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setIdx((i) => (i + 1) % SHRINK_PROGRESS_MESSAGES.length), 4000);
-    return () => clearInterval(t);
-  }, []);
   return (
-    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.6 }}>
       <Box component="span" sx={{
-        display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-        bgcolor: 'currentColor', opacity: 0.85,
+        display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+        bgcolor: 'currentColor',
         animation: 'osw-pulse 1.2s ease-in-out infinite',
         '@keyframes osw-pulse': {
-          '0%, 100%': { transform: 'scale(0.6)', opacity: 0.45 },
-          '50%': { transform: 'scale(1)', opacity: 0.95 },
+          '0%, 100%': { opacity: 0.4 },
+          '50%': { opacity: 1 },
         },
       }} />
-      <Box component="span" sx={{ minWidth: 130, textAlign: 'left' }}>
-        {SHRINK_PROGRESS_MESSAGES[idx]}…
-      </Box>
+      Shrinking
     </Box>
   );
 }

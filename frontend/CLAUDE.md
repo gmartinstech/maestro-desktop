@@ -48,6 +48,8 @@ This app ships to non-developers. Anything a user sees has to read like a person
 - **Match the app's design tokens.** Use `c.bg.surface`, `c.border.medium`, `c.accent.primary` from `claudeTokens`. Avoid raw MUI `Alert variant="filled"` blocks of saturated yellow/red — they read as dev-mode warnings, not user dialogs.
 - **No alarming colors for normal flow.** "This file is too big" is a routine choice, not a warning. Warning/error coloring is reserved for actual failures the user can't recover from.
 - **Friendly without being cute.** Conversational, not chirpy. "Want me to shrink it down to a summary?" not "Whoops! That file is huge!".
+- **Minimalist by default. Less is more.** One short message, one subtle animation, one verb. Do NOT add rotating progress messages, multi-line status text, percentage counters, or step-by-step explainers unless the user explicitly needs them. A pulsing dot + "Shrinking" beats a 4-message carousel + spinner + progress bar every time. The user knows what they clicked; we just need to confirm we're alive.
+- **Animations are subtle.** Pulse, fade, soft scale (≤1.0× to 0.6×). No bounce, no flashing, no harsh blinking, no rotating spinners with multiple emoji. Easing: `ease-in-out`. Duration: 1-1.5s for ambient states (loading), 150-250ms for state changes (hover, mode flip).
 
 ## Pitfalls
 
