@@ -1,10 +1,41 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Modal from '@mui/material/Modal';
 import Snackbar from '@mui/material/Snackbar';
 import CloseIcon from '@mui/icons-material/Close';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
+
+const SHRINK_PROGRESS_MESSAGES = [
+  'Reading the file',
+  'Pulling out the key bits',
+  'Compressing',
+  'Almost done',
+];
+
+function ShrinkingLabel() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setIdx((i) => (i + 1) % SHRINK_PROGRESS_MESSAGES.length), 4000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+      <Box component="span" sx={{
+        display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+        bgcolor: 'currentColor', opacity: 0.85,
+        animation: 'osw-pulse 1.2s ease-in-out infinite',
+        '@keyframes osw-pulse': {
+          '0%, 100%': { transform: 'scale(0.6)', opacity: 0.45 },
+          '50%': { transform: 'scale(1)', opacity: 0.95 },
+        },
+      }} />
+      <Box component="span" sx={{ minWidth: 130, textAlign: 'left' }}>
+        {SHRINK_PROGRESS_MESSAGES[idx]}…
+      </Box>
+    </Box>
+  );
+}
 
 interface Props {
   c: ClaudeTokens;
@@ -100,11 +131,12 @@ export const ChatInputOverlays: React.FC<Props> = ({
                 border: 'none', borderRadius: '6px',
                 px: 1.5, py: 0.7, fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer',
                 whiteSpace: 'nowrap',
+                transition: 'background 0.15s ease, opacity 0.15s ease',
                 '&:hover': { bgcolor: c.accent.hover },
-                '&:disabled': { opacity: 0.6, cursor: 'wait' },
+                '&:disabled': { opacity: 0.85, cursor: 'wait', bgcolor: c.accent.primary },
               }}
             >
-              {summarizingPath === oversizeQueue[0]?.path ? 'Shrinking…' : 'Shrink it'}
+              {summarizingPath === oversizeQueue[0]?.path ? <ShrinkingLabel /> : 'Shrink it'}
             </Box>
             <Box
               component="button"

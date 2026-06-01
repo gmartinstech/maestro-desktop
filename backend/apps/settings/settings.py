@@ -528,10 +528,15 @@ async def summarize_file(req: _SummarizeRequest):
         else:
             chunks = [raw[i:i + CHUNK_CHARS] for i in range(0, len(raw), CHUNK_CHARS)]
             per_chunk_budget = max(800, req.target_tokens // len(chunks) + 600)
-            partials = []
-            for i, ch in enumerate(chunks):
-                label = f"{os.path.basename(src)} (part {i + 1} of {len(chunks)})"
-                partials.append(await _summarize_block(ch, per_chunk_budget, label))
+            # Parallel summarization. Sequential was N chunks * ~60s each
+            # (5+ min wall time for a 4-chunk PDF on Haiku). Aux providers
+            # all handle parallel requests fine; the only ceiling is the
+            # provider's per-key rate limit, and a single user summarizing
+            # one file will never hit that.
+            partials = await asyncio.gather(*[
+                _summarize_block(ch, per_chunk_budget, f"{os.path.basename(src)} (part {i + 1} of {len(chunks)})")
+                for i, ch in enumerate(chunks)
+            ])
             merge_input = "\n\n".join(f"## Part {i + 1}\n{p}" for i, p in enumerate(partials))
             summary = await _summarize_block(merge_input, req.target_tokens, f"merged summary of {os.path.basename(src)}")
     except Exception as e:
