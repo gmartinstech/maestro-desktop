@@ -41,6 +41,7 @@ const OPENSWARM_GRADIENT =
 const DEFAULT_MODEL_FALLBACK = [
   { value: 'opus-4-8', label: 'Claude Opus 4.8' },
   { value: 'sonnet', label: 'Claude Sonnet 4.6' },
+  { value: 'opus', label: 'Claude Opus 4.6' },
   { value: 'haiku', label: 'Claude Haiku 4.5' },
 ];
 
