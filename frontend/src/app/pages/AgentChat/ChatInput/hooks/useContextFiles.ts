@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { ForcedToolGroup } from '../types';
@@ -27,8 +27,12 @@ export function useContextFiles(
   const [copiedPathIdx, setCopiedPathIdx] = useState<number | null>(null);
   const [oversizeQueue, setOversizeQueue] = useState<Array<{ path: string; name: string; tokens: number }>>([]);
   const [summarizingPath, setSummarizingPath] = useState<string | null>(null);
+  const [summarizingAll, setSummarizingAll] = useState(false);
   const [summarizeError, setSummarizeError] = useState<string | null>(null);
   const [sendBlock, setSendBlock] = useState<SendBlock>(null);
+  // Set when user clicked Send but oversize popup intercepted. Once the queue drains,
+  // we trigger the send automatically so the user doesn't have to click Send a second time.
+  const pendingSendRef = useRef<(() => void) | null>(null);
 
   const uploadAndAttachFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
@@ -79,6 +83,17 @@ export function useContextFiles(
     setOversizeQueue((q) => q.filter((o) => o.path !== path));
   }, []);
 
+  // Single-click batch: remove EVERY oversize file. The auto-retry effect below
+  // notices the queue went empty and fires the pending send (if any), so going
+  // from 5 too-big files to a sent message is 1 click instead of 6.
+  const detachAllOversize = useCallback(() => {
+    setOversizeQueue((q) => {
+      const paths = new Set(q.map((o) => o.path));
+      setContextPaths((prev) => prev.filter((cp) => !paths.has(cp.path)));
+      return [];
+    });
+  }, []);
+
   const summarizeOversize = useCallback(async (path: string) => {
     if (summarizingPath) return;  // another summarize is in flight; ignore
     setSummarizingPath(path);
@@ -112,6 +127,64 @@ export function useContextFiles(
     }
   }, [currentModelCtx, model, summarizingPath]);
 
+  // Single-click batch: shrink EVERY oversize file in parallel. Server-side each
+  // call already chunks-and-merges via asyncio.gather, so N files at once is bounded
+  // by the slowest one's chunk count, not N x single-file time. Errors from any
+  // one file land in summarizeError; others continue.
+  const summarizeAllOversize = useCallback(async () => {
+    if (summarizingAll) return;
+    const snapshot = oversizeQueue.slice();
+    if (snapshot.length === 0) return;
+    setSummarizingAll(true);
+    try {
+      const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (tok) headers['Authorization'] = `Bearer ${tok}`;
+      const target = Math.min(8_000, Math.max(1_000, Math.floor(currentModelCtx * 0.05)));
+      const results = await Promise.allSettled(snapshot.map(async (item) => {
+        const resp = await fetch(`${API_BASE}/settings/summarize-file`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ path: item.path, target_tokens: target, primary_model: model }),
+        });
+        if (!resp.ok) {
+          let detail = `summarize failed (${resp.status})`;
+          try { const j = await resp.json(); if (j?.detail) detail = String(j.detail); } catch {}
+          throw new Error(detail);
+        }
+        const data = await resp.json();
+        return { oldPath: item.path, newPath: data.path as string, newTokens: (data.tokens as number) || 0 };
+      }));
+      const succeeded = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{ oldPath: string; newPath: string; newTokens: number }>[];
+      const failed = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+      if (succeeded.length > 0) {
+        setContextPaths((prev) => prev.map((cp) => {
+          const hit = succeeded.find((r) => r.value.oldPath === cp.path);
+          return hit ? { ...cp, path: hit.value.newPath, tokens: hit.value.newTokens, kind: 'text' as const, media_type: 'text/plain' } : cp;
+        }));
+        const okPaths = new Set(succeeded.map((r) => r.value.oldPath));
+        setOversizeQueue((q) => q.filter((o) => !okPaths.has(o.path)));
+      }
+      if (failed.length > 0) {
+        failed.forEach((f) => { if (f.reason instanceof Error) console.error('[summarize-all] failed:', f.reason.message); });
+        setSummarizeError(failed.length === snapshot.length
+          ? 'Could not shrink the files. Try removing some, or pick a model with a bigger window in Settings.'
+          : `Could not shrink ${failed.length} of ${snapshot.length} files. Remove or retry the ones still flagged.`);
+      }
+    } finally {
+      setSummarizingAll(false);
+    }
+  }, [oversizeQueue, summarizingAll, currentModelCtx, model]);
+
+  // Auto-retry: when the queue drains AND the user had a pending send, fire it.
+  // Zero extra clicks once they pick Shrink all / Remove all.
+  useEffect(() => {
+    if (oversizeQueue.length === 0 && !summarizingAll && !summarizingPath && pendingSendRef.current) {
+      const send = pendingSendRef.current;
+      pendingSendRef.current = null;
+      send();
+    }
+  }, [oversizeQueue.length, summarizingAll, summarizingPath]);
+
   const pendingPayloadEstimate = useMemo(() => {
     const history = Math.max(0, contextEstimate?.used ?? 0);
     const filesSum = contextPaths.reduce((acc, cp) => acc + (cp.tokens || 0), 0);
@@ -133,12 +206,16 @@ export function useContextFiles(
     copiedPathIdx, setCopiedPathIdx,
     oversizeQueue,
     summarizingPath,
+    summarizingAll,
     summarizeError, setSummarizeError,
     sendBlock, setSendBlock,
     uploadAndAttachFiles,
     detachOversize,
+    detachAllOversize,
     summarizeOversize,
+    summarizeAllOversize,
     pendingPayloadEstimate,
     pendingKinds,
+    pendingSendRef,
   };
 }

@@ -90,8 +90,11 @@ interface Props {
   lightboxSrc: string | null;
   oversizeQueue: Array<{ path: string; name: string; tokens: number }>;
   summarizingPath: string | null;
+  summarizingAll: boolean;
   summarizeOversize: (path: string) => void;
+  summarizeAllOversize: () => void;
   detachOversize: (path: string) => void;
+  detachAllOversize: () => void;
   currentModelCtx: number;
   summarizeError: string | null;
   setSummarizeError: (v: string | null) => void;
@@ -258,8 +261,11 @@ export const ChatInputView: React.FC<Props> = (p) => {
         setLightboxSrc={p.setLightboxSrc}
         oversizeQueue={p.oversizeQueue}
         summarizingPath={p.summarizingPath}
+        summarizingAll={p.summarizingAll}
         summarizeOversize={p.summarizeOversize}
+        summarizeAllOversize={p.summarizeAllOversize}
         detachOversize={p.detachOversize}
+        detachAllOversize={p.detachAllOversize}
         currentModelCtx={p.currentModelCtx}
         summarizeError={p.summarizeError}
         setSummarizeError={p.setSummarizeError}

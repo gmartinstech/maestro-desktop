@@ -91,13 +91,17 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     copiedPathIdx, setCopiedPathIdx,
     oversizeQueue,
     summarizingPath,
+    summarizingAll,
     summarizeError, setSummarizeError,
     sendBlock, setSendBlock,
     uploadAndAttachFiles,
     detachOversize,
+    detachAllOversize,
     summarizeOversize,
+    summarizeAllOversize,
     pendingPayloadEstimate,
     pendingKinds,
+    pendingSendRef,
   } = useContextFiles(currentModelCtx, model, contextEstimate, sessionFrameworkOverhead);
 
   useImperativeHandle(ref, () => ({
@@ -124,8 +128,14 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   const handleSend = useCallback(async () => {
     const editor = editorRef.current;
     if (!editor || disabled) return;
-    if (summarizingPath) return;
-    if (oversizeQueue.length > 0) return;
+    if (summarizingPath || summarizingAll) return;
+    // If files are flagged too big, popup will appear above the input. Capture
+    // the user's intent to send so once they pick Shrink all / Remove all and
+    // the queue drains, the send fires automatically (zero extra clicks).
+    if (oversizeQueue.length > 0) {
+      pendingSendRef.current = () => { handleSend(); };
+      return;
+    }
     const serialized = editor.tagName === 'TEXTAREA'
       ? (editor as unknown as HTMLTextAreaElement).value
       : serializeEditorContent(editor, attachedSkillsRef.current);
@@ -189,7 +199,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     setAttachedSkills({});
     setHasContent(false);
     elementSelection?.clearOwnerElements(ownerId);
-  }, [disabled, images, contextPaths, forcedTools, onSend, elementSelection, ownerId]);
+  }, [disabled, images, contextPaths, forcedTools, onSend, elementSelection, ownerId, summarizingPath, summarizingAll, oversizeQueue, pendingSendRef]);
 
   const {
     picker: editorPicker, setPicker,
@@ -281,8 +291,11 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       lightboxSrc={lightboxSrc}
       oversizeQueue={oversizeQueue}
       summarizingPath={summarizingPath}
+      summarizingAll={summarizingAll}
       summarizeOversize={summarizeOversize}
+      summarizeAllOversize={summarizeAllOversize}
       detachOversize={detachOversize}
+      detachAllOversize={detachAllOversize}
       currentModelCtx={currentModelCtx}
       summarizeError={summarizeError}
       setSummarizeError={setSummarizeError}

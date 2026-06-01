@@ -28,16 +28,20 @@ interface Props {
   setLightboxSrc: (src: string | null) => void;
   oversizeQueue: Array<{ path: string; name: string; tokens: number }>;
   summarizingPath: string | null;
+  summarizingAll: boolean;
   summarizeOversize: (path: string) => void;
+  summarizeAllOversize: () => void;
   detachOversize: (path: string) => void;
+  detachAllOversize: () => void;
   currentModelCtx: number;
   summarizeError: string | null;
   setSummarizeError: (v: string | null) => void;
 }
 
 export const ChatInputOverlays: React.FC<Props> = ({
-  c, lightboxSrc, setLightboxSrc, oversizeQueue, summarizingPath, summarizeOversize,
-  detachOversize, currentModelCtx, summarizeError, setSummarizeError,
+  c, lightboxSrc, setLightboxSrc, oversizeQueue, summarizingPath, summarizingAll,
+  summarizeOversize, summarizeAllOversize, detachOversize, detachAllOversize,
+  currentModelCtx, summarizeError, setSummarizeError,
 }) => {
   // Auto-dismiss the error after 6s, matching the Snackbar behavior we replaced.
   React.useEffect(() => {
@@ -89,60 +93,75 @@ export const ChatInputOverlays: React.FC<Props> = ({
         </Box>
       </Modal>
 
-      {/* Scoped to the chat-input container (parent Box is the panel). position:absolute + bottom-anchored so it sits ABOVE the input instead of overlapping it, and shrinks to fit the chat panel width regardless of how the canvas is laid out. */}
-      {oversizeQueue.length > 0 && (
-      <Box
-        sx={{
-          position: 'absolute', left: 8, right: 8, bottom: 'calc(100% + 8px)',
-          display: 'flex', alignItems: 'center', gap: 1.5,
-          bgcolor: c.bg.surface, border: `1px solid ${c.border.medium}`,
-          boxShadow: c.shadow.md, borderRadius: '12px',
-          px: 2, py: 1.25,
-          whiteSpace: 'normal',
-          zIndex: 5,
-        }}
-      >
-          {oversizeQueue[0] ? (
+      {/* Single popup handles ALL over-size files. One click → all shrunk in parallel or all removed.
+          Auto-retry in useContextFiles fires the user's pending send after the queue drains, so going
+          from 5 too-big files to a sent message is 1 click instead of 6 (Shrink+Remove pairs * 5 + Send). */}
+      {oversizeQueue.length > 0 && (() => {
+        const n = oversizeQueue.length;
+        const firstName = oversizeQueue[0].name;
+        const headline = n === 1
+          ? <><strong>{firstName}</strong> is too big to send.</>
+          : <>{n} files are too big to send: <strong>{firstName}</strong>{n > 1 ? <> and {n - 1} other{n > 2 ? 's' : ''}</> : null}.</>;
+        const shrinkLabel = n === 1 ? 'Shrink it' : `Shrink all ${n}`;
+        const removeLabel = n === 1 ? 'Remove' : `Remove all ${n}`;
+        const shrinking = summarizingAll || !!summarizingPath;
+        const onShrink = () => (n === 1 ? summarizeOversize(oversizeQueue[0].path) : summarizeAllOversize());
+        const onRemove = () => (n === 1 ? detachOversize(oversizeQueue[0].path) : detachAllOversize());
+        return (
+          <Box
+            sx={{
+              position: 'absolute', left: 8, right: 8, bottom: 'calc(100% + 8px)',
+              display: 'flex', alignItems: 'center', gap: 1.5,
+              bgcolor: c.bg.surface, border: `1px solid ${c.border.medium}`,
+              boxShadow: c.shadow.md, borderRadius: '12px',
+              px: 2, py: 1.25,
+              whiteSpace: 'normal',
+              zIndex: 5,
+            }}
+          >
             <Box sx={{
               color: c.text.primary, fontSize: '0.88rem', lineHeight: 1.45,
               flex: '1 1 auto', minWidth: 0,
             }}>
-              This file is too big to send. Shrink it down to a summary, or remove it?
+              {headline}
             </Box>
-          ) : null}
-          <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
-            <Box
-              component="button"
-              disabled={summarizingPath === oversizeQueue[0]?.path}
-              onClick={() => oversizeQueue[0] && summarizeOversize(oversizeQueue[0].path)}
-              sx={{
-                bgcolor: c.accent.primary, color: '#fff',
-                border: 'none', borderRadius: '6px',
-                px: 1.5, py: 0.7, fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'background 0.15s ease, opacity 0.15s ease',
-                '&:hover': { bgcolor: c.accent.hover },
-                '&:disabled': { opacity: 0.85, cursor: 'wait', bgcolor: c.accent.primary },
-              }}
-            >
-              {summarizingPath === oversizeQueue[0]?.path ? <ShrinkingLabel /> : 'Shrink it'}
-            </Box>
-            <Box
-              component="button"
-              onClick={() => oversizeQueue[0] && detachOversize(oversizeQueue[0].path)}
-              sx={{
-                bgcolor: 'transparent', color: c.text.secondary,
-                border: `1px solid ${c.border.medium}`, borderRadius: '6px',
-                px: 1.5, py: 0.7, fontSize: '0.82rem', cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                '&:hover': { bgcolor: c.bg.secondary, color: c.text.primary },
-              }}
-            >
-              Remove
+            <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+              <Box
+                component="button"
+                disabled={shrinking}
+                onClick={onShrink}
+                sx={{
+                  bgcolor: c.accent.primary, color: '#fff',
+                  border: 'none', borderRadius: '6px',
+                  px: 1.5, py: 0.7, fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.15s ease, opacity 0.15s ease',
+                  '&:hover': { bgcolor: c.accent.hover },
+                  '&:disabled': { opacity: 0.85, cursor: 'wait', bgcolor: c.accent.primary },
+                }}
+              >
+                {shrinking ? <ShrinkingLabel /> : shrinkLabel}
+              </Box>
+              <Box
+                component="button"
+                disabled={shrinking}
+                onClick={onRemove}
+                sx={{
+                  bgcolor: 'transparent', color: c.text.secondary,
+                  border: `1px solid ${c.border.medium}`, borderRadius: '6px',
+                  px: 1.5, py: 0.7, fontSize: '0.82rem', cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.15s ease, color 0.15s ease',
+                  '&:hover': { bgcolor: c.bg.secondary, color: c.text.primary },
+                  '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
+                }}
+              >
+                {removeLabel}
+              </Box>
             </Box>
           </Box>
-      </Box>
-      )}
+        );
+      })()}
 
       {/* Same panel-scoped approach for the error toast. Auto-dismiss kept via useEffect timer below. */}
       {summarizeError && (
