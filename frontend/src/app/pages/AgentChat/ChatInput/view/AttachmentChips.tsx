@@ -112,7 +112,7 @@ export const AttachmentChips: React.FC<Props> = ({
             return (
               <Tooltip
                 key={`${cp.path}-${idx}`}
-                title={copiedPathIdx === idx ? 'Copied!' : cp.path}
+                title={copiedPathIdx === idx ? 'Copied!' : (cp.path.split('/').pop() || cp.path)}
                 arrow
                 placement="top"
                 slotProps={{
@@ -120,7 +120,7 @@ export const AttachmentChips: React.FC<Props> = ({
                     sx: {
                       fontFamily: c.font.mono,
                       fontSize: '0.7rem',
-                      maxWidth: 420,
+                      maxWidth: 280,
                       wordBreak: 'break-all',
                     },
                   },

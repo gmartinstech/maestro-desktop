@@ -744,6 +744,14 @@ const agentsSlice = createSlice({
       const session = state.sessions[action.payload.sessionId];
       if (!session) return;
       session.compacted_through_msg_id = action.payload.throughMsgId;
+      // The next preflight check looks at tokens.input to estimate "history used".
+      // After a compaction the real number is unknown until the next turn round-trips,
+      // but the OLD number is definitely wrong (it counts messages we just dropped).
+      // Zero it so preflight falls back to the char/4 estimate of remaining content,
+      // which is closer than holding the stale pre-compact value.
+      if (action.payload.throughMsgId) {
+        session.tokens = { input: 0, output: session.tokens?.output ?? 0 };
+      }
     },
 
     // Aux-LLM turn label; pill renderer prefers this over the static "Thinking..." verb.

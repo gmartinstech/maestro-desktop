@@ -16,17 +16,18 @@ interface Props {
 }
 
 export const SendBlockBanner: React.FC<Props> = ({ sendBlock, c, sessionId, setSendBlock, setContextPaths, setModelAnchor }) => {
-  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
-  const over = sendBlock.estimate - sendBlock.window;
+  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(0)}K` : String(n);
   return (
-    <Box sx={{ mx: 1.5, mt: 1, mb: 0.5, p: 1.25, borderRadius: '10px', border: `1px solid ${c.status.error}`, bgcolor: `${c.status.error}10` }}>
-      <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: c.status.error, mb: 0.5 }}>
-        This send would overflow the model's context window
+    <Box sx={{
+      mx: 1.5, mt: 1, mb: 0.5, px: 2, py: 1.5,
+      borderRadius: '12px',
+      bgcolor: c.bg.surface,
+      border: `1px solid ${c.border.medium}`,
+    }}>
+      <Typography sx={{ fontSize: '0.9rem', color: c.text.primary, lineHeight: 1.5, mb: 1 }}>
+        That's a lot to send at once. Pick one:
       </Typography>
-      <Typography sx={{ fontSize: '0.72rem', color: c.text.secondary, mb: 0.75, fontVariantNumeric: 'tabular-nums' }}>
-        ~{fmt(sendBlock.estimate)} of {fmt(sendBlock.window)} tokens ({over > 0 ? `${fmt(over)} over` : 'at cap'}). History {fmt(sendBlock.history)} · Files {fmt(sendBlock.files)} · Tools/MCPs {fmt(sendBlock.framework)} · This message {fmt(sendBlock.prompt)}.
-      </Typography>
-      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
         {sessionId && (
           <Box
             component="button"
@@ -40,11 +41,13 @@ export const SendBlockBanner: React.FC<Props> = ({ sendBlock, c, sessionId, setS
               } catch (err) { console.error(err); }
             }}
             sx={{
-              background: c.accent.primary, color: '#fff', border: 'none', borderRadius: '6px',
-              px: 1, py: 0.5, fontSize: '0.72rem', cursor: 'pointer', '&:hover': { opacity: 0.9 },
+              bgcolor: c.accent.primary, color: '#fff', border: 'none', borderRadius: '6px',
+              px: 1.5, py: 0.7, fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer',
+              transition: 'background 0.15s ease',
+              '&:hover': { bgcolor: c.accent.hover },
             }}
           >
-            Compact memory
+            Shrink history
           </Box>
         )}
         {sendBlock.largestFile && (
@@ -56,21 +59,25 @@ export const SendBlockBanner: React.FC<Props> = ({ sendBlock, c, sessionId, setS
               setSendBlock(null);
             }}
             sx={{
-              background: 'transparent', color: c.text.primary, border: `1px solid ${c.border.subtle}`,
-              borderRadius: '6px', px: 1, py: 0.5, fontSize: '0.72rem', cursor: 'pointer',
-              '&:hover': { background: c.bg.secondary },
+              bgcolor: 'transparent', color: c.text.secondary,
+              border: `1px solid ${c.border.medium}`, borderRadius: '6px',
+              px: 1.5, py: 0.7, fontSize: '0.82rem', cursor: 'pointer',
+              transition: 'background 0.15s ease, color 0.15s ease',
+              '&:hover': { bgcolor: c.bg.secondary, color: c.text.primary },
             }}
           >
-            Detach largest file (~{fmt(sendBlock.largestFile.tokens)})
+            Remove biggest file
           </Box>
         )}
         <Box
           component="button"
           onClick={(e) => { setModelAnchor(e.currentTarget as HTMLElement); setSendBlock(null); }}
           sx={{
-            background: 'transparent', color: c.text.primary, border: `1px solid ${c.border.subtle}`,
-            borderRadius: '6px', px: 1, py: 0.5, fontSize: '0.72rem', cursor: 'pointer',
-            '&:hover': { background: c.bg.secondary },
+            bgcolor: 'transparent', color: c.text.secondary,
+            border: `1px solid ${c.border.medium}`, borderRadius: '6px',
+            px: 1.5, py: 0.7, fontSize: '0.82rem', cursor: 'pointer',
+            transition: 'background 0.15s ease, color 0.15s ease',
+            '&:hover': { bgcolor: c.bg.secondary, color: c.text.primary },
           }}
         >
           Switch model
@@ -79,9 +86,10 @@ export const SendBlockBanner: React.FC<Props> = ({ sendBlock, c, sessionId, setS
           component="button"
           onClick={() => setSendBlock(null)}
           sx={{
-            background: 'transparent', color: c.text.muted, border: 'none',
-            borderRadius: '6px', px: 1, py: 0.5, fontSize: '0.72rem', cursor: 'pointer',
-            '&:hover': { background: c.bg.secondary },
+            bgcolor: 'transparent', color: c.text.muted, border: 'none',
+            borderRadius: '6px', px: 1.5, py: 0.7, fontSize: '0.82rem', cursor: 'pointer',
+            transition: 'color 0.15s ease',
+            '&:hover': { color: c.text.secondary },
           }}
         >
           Dismiss
