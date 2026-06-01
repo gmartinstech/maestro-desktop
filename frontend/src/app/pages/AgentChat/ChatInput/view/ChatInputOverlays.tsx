@@ -2,7 +2,6 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Modal from '@mui/material/Modal';
-import Snackbar from '@mui/material/Snackbar';
 import CloseIcon from '@mui/icons-material/Close';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
@@ -40,6 +39,12 @@ export const ChatInputOverlays: React.FC<Props> = ({
   c, lightboxSrc, setLightboxSrc, oversizeQueue, summarizingPath, summarizeOversize,
   detachOversize, currentModelCtx, summarizeError, setSummarizeError,
 }) => {
+  // Auto-dismiss the error after 6s, matching the Snackbar behavior we replaced.
+  React.useEffect(() => {
+    if (!summarizeError) return;
+    const t = setTimeout(() => setSummarizeError(null), 6000);
+    return () => clearTimeout(t);
+  }, [summarizeError, setSummarizeError]);
   return (
     <>
       <Modal
@@ -84,24 +89,22 @@ export const ChatInputOverlays: React.FC<Props> = ({
         </Box>
       </Modal>
 
-      <Snackbar
-        open={oversizeQueue.length > 0}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{ mb: 10, '& .MuiSnackbarContent-root': { p: 0, minWidth: 0, bgcolor: 'transparent', boxShadow: 'none' } }}
+      {/* Scoped to the chat-input container (parent Box is the panel). position:absolute + bottom-anchored so it sits ABOVE the input instead of overlapping it, and shrinks to fit the chat panel width regardless of how the canvas is laid out. */}
+      {oversizeQueue.length > 0 && (
+      <Box
+        sx={{
+          position: 'absolute', left: 8, right: 8, bottom: 'calc(100% + 8px)',
+          display: 'flex', alignItems: 'center', gap: 1.5,
+          bgcolor: c.bg.surface, border: `1px solid ${c.border.medium}`,
+          boxShadow: c.shadow.md, borderRadius: '12px',
+          px: 2, py: 1.25,
+          whiteSpace: 'normal',
+          zIndex: 5,
+        }}
       >
-        <Box
-          sx={{
-            display: 'flex', alignItems: 'center', gap: 2,
-            bgcolor: c.bg.surface, border: `1px solid ${c.border.medium}`,
-            boxShadow: c.shadow.md, borderRadius: '12px',
-            px: 2.5, py: 1.5,
-            width: 'min(560px, calc(100vw - 32px))',
-            whiteSpace: 'normal',
-          }}
-        >
           {oversizeQueue[0] ? (
             <Box sx={{
-              color: c.text.primary, fontSize: '0.9rem', lineHeight: 1.5,
+              color: c.text.primary, fontSize: '0.88rem', lineHeight: 1.45,
               flex: '1 1 auto', minWidth: 0,
             }}>
               This file is too big to send. Shrink it down to a summary, or remove it?
@@ -138,28 +141,24 @@ export const ChatInputOverlays: React.FC<Props> = ({
               Remove
             </Box>
           </Box>
-        </Box>
-      </Snackbar>
+      </Box>
+      )}
 
-      <Snackbar
-        open={!!summarizeError}
-        autoHideDuration={6000}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        onClose={() => setSummarizeError(null)}
-        sx={{ mb: 18, '& .MuiSnackbarContent-root': { p: 0, minWidth: 0, bgcolor: 'transparent', boxShadow: 'none' } }}
+      {/* Same panel-scoped approach for the error toast. Auto-dismiss kept via useEffect timer below. */}
+      {summarizeError && (
+      <Box
+        sx={{
+          position: 'absolute', left: 8, right: 8, bottom: 'calc(100% + 8px)',
+          display: 'flex', alignItems: 'center', gap: 1.5,
+          bgcolor: c.bg.surface, border: `1px solid ${c.border.medium}`,
+          boxShadow: c.shadow.md, borderRadius: '12px',
+          px: 2, py: 1.25,
+          whiteSpace: 'normal',
+          zIndex: 6,
+        }}
       >
-        <Box
-          sx={{
-            display: 'flex', alignItems: 'center', gap: 1.5,
-            bgcolor: c.bg.surface, border: `1px solid ${c.border.medium}`,
-            boxShadow: c.shadow.md, borderRadius: '12px',
-            px: 2.5, py: 1.5,
-            width: 'min(560px, calc(100vw - 32px))',
-            whiteSpace: 'normal',
-          }}
-        >
           <Box sx={{
-            color: c.text.primary, fontSize: '0.9rem', lineHeight: 1.5,
+            color: c.text.primary, fontSize: '0.88rem', lineHeight: 1.45,
             flex: '1 1 auto', minWidth: 0,
           }}>
             {summarizeError}
@@ -171,8 +170,8 @@ export const ChatInputOverlays: React.FC<Props> = ({
           >
             <CloseIcon sx={{ fontSize: 18 }} />
           </IconButton>
-        </Box>
-      </Snackbar>
+      </Box>
+      )}
     </>
   );
 };
