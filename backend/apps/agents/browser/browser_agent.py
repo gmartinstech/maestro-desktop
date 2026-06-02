@@ -9,6 +9,7 @@ Sub-agents appear as visible AgentSession cards on the dashboard.
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from uuid import uuid4
@@ -34,6 +35,7 @@ from backend.apps.agents.browser.browser_loop import (
 )
 from backend.apps.agents.browser.browser_validator import adjudicate_stuck
 from backend.apps.agents.browser import browser_metrics
+from backend.apps.agents.browser import browser_skills
 from backend.apps.agents.browser.browser_schema import (
     _ACTION_TOOLS_REQUIRING_REPORT,
     ACTION_MAP,
@@ -271,6 +273,7 @@ async def run_browser_agent(
     action_log: list[dict] = []
     final_screenshot: str | None = None
     metrics_started_at = time.time()  # wall-clock start for per-task timing
+    last_seen_url = initial_url or ""  # host source for skill record/replay
 
     # Loop detection state; sliding window of recent state-mutating tool calls
     recent_tool_calls: list[tuple[str, str, str]] = []
@@ -338,6 +341,75 @@ async def run_browser_agent(
         if cancel_event.is_set():
             return None
         return task.result()
+
+    # --- Fast path: replay a previously-learned skill with NO LLM round-trips.
+    # This is what gets a REPEAT task from ~50s (full agent loop) down to ~1s,
+    # i.e. faster than a human. Robust by construction: clicks re-resolve by
+    # (role,name), every step is verified, and ANY miss aborts to the full LLM
+    # agent below (which re-records), so a changed page can never ghost-succeed.
+    replay_host = browser_skills.host_of(initial_url) if initial_url else ""
+    if not replay_host:
+        m = re.search(r"https?://\S+", task)
+        if m:
+            replay_host = browser_skills.host_of(m.group(0))
+    skill = browser_skills.find_skill(replay_host, task) if replay_host else None
+    if skill:
+        logger.info(f"[browser-skills] REPLAY attempt: {len(skill['steps'])} steps on {replay_host}")
+        replay_log: list[dict] = []
+        replay_ok = True
+        for step in skill["steps"]:
+            if cancel_event.is_set():
+                replay_ok = False
+                break
+            st = time.time()
+            res = await _cancellable(execute_browser_tool(step["tool"], step.get("params", {}), browser_id, tab_id))
+            if res is None:
+                replay_ok = False
+                break
+            el_ms = int((time.time() - st) * 1000)
+            step_ok = "error" not in res
+            replay_log.append({
+                "tool": step["tool"], "input": step.get("params", {}),
+                "result_summary": str(res.get("text", res.get("error", "")))[:200],
+                "elapsed_ms": el_ms, "ok": step_ok,
+            })
+            browser_metrics.record_tool(
+                session_id, browser_id, -1, step["tool"], el_ms,
+                ok=step_ok, error=res.get("error", ""), is_loop=False,
+                stagnation_streak=0, result_len=len(str(res.get("text") or res.get("error") or "")),
+            )
+            if not step_ok:
+                logger.info(f"[browser-skills] replay step failed ({step['tool']}: {res.get('error')}), falling back to full agent")
+                replay_ok = False
+                break
+            if res.get("url"):
+                last_seen_url = res["url"]
+        if replay_ok and replay_log:
+            browser_skills.mark_replayed(replay_host, task)
+            summary = browser_metrics.record_task(
+                session_id, browser_id, task, "completed", metrics_started_at,
+                0, replay_log, session.tokens,
+            )
+            logger.info(f"[browser-skills] REPLAY SUCCEEDED in {summary['total_ms']}ms with 0 LLM calls")
+            try:
+                ss = await execute_browser_tool("BrowserScreenshot", {}, browser_id, tab_id)
+                if ss.get("image"):
+                    final_screenshot = ss["image"]
+            except Exception:
+                pass
+            session.status = "completed"
+            agent_manager._sync_session_close(session)
+            await ws_manager.send_to_session(session_id, "agent:status", {
+                "session_id": session_id, "status": "completed",
+                "session": session.model_dump(mode="json"),
+            })
+            return {
+                "session_id": session_id, "browser_id": browser_id,
+                "summary": f"Completed via learned skill replay ({len(skill['steps'])} steps, no LLM).",
+                "action_log": replay_log, "final_screenshot": final_screenshot,
+                "replayed": True,
+            }
+        # replay didn't fully succeed -> fall through to the full LLM agent
 
     text_parts = []  # initialized before loop so post-loop summary (line ~1294) has a default
     # Circuit breaker for ReportProgress violations. Some models get stuck
@@ -642,7 +714,13 @@ async def run_browser_agent(
                     "input": tu.input,
                     "result_summary": result.get("text", result.get("error", ""))[:200],
                     "elapsed_ms": elapsed_ms,
+                    # carried so a successful run distills into a replayable skill
+                    "ok": "error" not in result,
+                    "clicked_role": result.get("clickedRole"),
+                    "clicked_name": result.get("clickedName"),
                 })
+                if result.get("url"):
+                    last_seen_url = result["url"]
 
                 if tu.name == "BrowserScreenshot" and result.get("image"):
                     final_screenshot = result["image"]
@@ -799,6 +877,14 @@ async def run_browser_agent(
         session.status = "completed"
         browser_metrics.record_task(session_id, browser_id, task, "completed",
                                     metrics_started_at, turn + 1, action_log, session.tokens)
+        # Learn this task: distill the successful run into a replayable skill so
+        # the next identical task on this host runs via the no-LLM fast path.
+        try:
+            rec_host = browser_skills.host_of(last_seen_url)
+            if browser_skills.record_skill(rec_host, task, action_log):
+                logger.info(f"[browser-skills] learned skill for {rec_host} (future runs replay fast)")
+        except Exception:
+            pass
         agent_manager._sync_session_close(session)
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id,

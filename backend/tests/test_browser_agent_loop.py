@@ -92,6 +92,11 @@ def _install(monkeypatch, primary, aux):
         sent.append({"action": action, "params": params})
         if action == "list_interactives":
             return {"text": '1 interactive elements:\n[1]<button "Submit">', "url": DOC_URL}
+        if action == "click_index":
+            # frontend surfaces the clicked element's role/name for skill recording
+            return {"text": "Clicked index 1", "url": DOC_URL, "clickedRole": "button", "clickedName": "Submit"}
+        if action == "click_by_name":
+            return {"text": f'Clicked button "{params.get("name")}"', "url": DOC_URL}
         if action == "click":
             return {"error": "Element not found: '.submit'"}
         if action == "navigate":
@@ -197,6 +202,70 @@ def test_tier1_and_tier2_tools_drive_through_the_real_loop(monkeypatch):
     # the API response was fed back to the model on a later turn
     all_msgs = json.dumps([c["messages"] for c in primary.calls])
     assert "HTTP 200" in all_msgs
+
+
+def test_skill_is_recorded_then_replayed_with_zero_llm_calls(monkeypatch):
+    # Run 1: full LLM agent completes a click task -> records a skill.
+    # Run 2: same task/host -> replays via the no-LLM fast path (the speed win).
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear(); BH._domain_notes.clear()
+    primary = FakeLLM([
+        Resp([_rp("click submit"), _tu("BrowserListInteractives")]),
+        Resp([_rp("click it"), _tu("BrowserClickIndex", index=1)]),
+        Resp([Blk("text", "Done, clicked Submit.")], stop_reason="end_turn"),
+    ])
+    aux = FakeAux()
+    sent = _install(monkeypatch, primary, aux)
+
+    # Run 1 (learns). initial_url gives the host for record+replay keying.
+    r1 = asyncio.run(BA.run_browser_agent(
+        task="click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert not r1.get("replayed")
+    assert SK.find_skill("docs.google.com", "click the Submit button") is not None
+    calls_after_run1 = len(primary.calls)
+    assert calls_after_run1 > 0  # run 1 used the LLM
+
+    # Run 2 (replays). Must NOT call the LLM at all, and must use click_by_name.
+    sent.clear()
+    r2 = asyncio.run(BA.run_browser_agent(
+        task="Please click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert r2.get("replayed") is True
+    assert len(primary.calls) == calls_after_run1, "run 2 must make ZERO LLM calls"
+    assert any(c["action"] == "click_by_name" for c in sent), "replay should re-resolve by name"
+
+
+def test_replay_falls_back_to_full_agent_when_a_step_fails(monkeypatch):
+    # If the page changed and a replay step errors, we must abort replay and run
+    # the full LLM agent instead (never ghost-succeed on a stale skill).
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear()
+    # Pre-seed a skill whose click target no longer exists on the page.
+    SK.record_skill("docs.google.com", "click the Save button", [
+        {"tool": "BrowserClickIndex", "input": {"index": 1}, "ok": True,
+         "clicked_role": "button", "clicked_name": "Save"},
+    ])
+    primary = FakeLLM([Resp([Blk("text", "handled by full agent")], stop_reason="end_turn")])
+    aux = FakeAux()
+    sent = _install(monkeypatch, primary, aux)
+    # make click_by_name FAIL (target gone) so replay must fall back
+    orig = BA.ws_manager.send_browser_command
+    async def _fail_cbn(request_id, action, browser_id, params, tab_id=""):
+        if action == "click_by_name":
+            sent.append({"action": action, "params": params})
+            return {"error": 'No element matching name="Save" on this page.'}
+        return await orig(request_id, action, browser_id, params, tab_id)
+    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _fail_cbn, raising=False)
+
+    r = asyncio.run(BA.run_browser_agent(
+        task="click the Save button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert not r.get("replayed"), "must NOT report a replayed success when a step failed"
+    assert any(c["action"] == "click_by_name" for c in sent), "replay was attempted"
+    assert len(primary.calls) > 0, "fell back to the full LLM agent"
 
 
 def test_prior_domain_hint_is_seeded_into_system_prompt(monkeypatch):
