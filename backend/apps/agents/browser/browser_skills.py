@@ -111,6 +111,72 @@ def normalize_task(task: str) -> str:
     return " ".join(toks)
 
 
+# --- parameterization (reuse one skill for "the same task, different input") ---
+# A quoted value in the task is treated as a SLOT: it's abstracted out of the
+# skill key (so `search "shoes"` and `search "hats"` share one skill) and the
+# value is filled from the LIVE task at replay (so the value is never stored on
+# disk, a redaction win, and the skill generalizes). Quoting is the explicit,
+# high-precision signal that this token is a parameter; we never guess.
+_QUOTE_RE = re.compile(r'["“”‘’\']([^"“”‘’\']{1,200})["“”‘’\']')
+_SLOT_TOKEN = " slotvalue "
+
+
+def template_task(task: str) -> tuple[str, list[str]]:
+    """Replace each quoted span with a fixed token; return (templated, [values])."""
+    values: list[str] = []
+
+    def _repl(m):
+        values.append(m.group(1))
+        return _SLOT_TOKEN
+
+    return _QUOTE_RE.sub(_repl, task or ""), values
+
+
+def _sig(task: str) -> str:
+    """Skill key signature: template out quoted values, then normalize, so the
+    same task with different quoted inputs maps to the same key."""
+    templated, _ = template_task(task)
+    return normalize_task(templated)
+
+
+def _parameterize(steps: list[dict], task: str) -> list[dict]:
+    """Convert any BrowserType whose text is a quoted task value into a slot
+    step (value_slot index), so the value is sourced live at replay, not stored."""
+    _, values = template_task(task)
+    if not values:
+        return steps
+    vlower = [v.strip().lower() for v in values]
+    out = []
+    for s in steps:
+        if s["tool"] == "BrowserType":
+            t = (s["params"].get("text") or "").strip().lower()
+            if t and t in vlower:
+                out.append({"tool": "BrowserType", "params": {"selector": s["params"].get("selector"), "value_slot": vlower.index(t)}})
+                continue
+        out.append(s)
+    return out
+
+
+def rehydrate(skill: dict | None, task: str) -> list[dict] | None:
+    """Fill a skill's value_slot steps from the current task's quoted values.
+    Returns runnable steps, or None if any slot can't be filled (caller then
+    falls back to the full LLM agent, never a wrong value)."""
+    if not skill:
+        return None
+    _, values = template_task(task)
+    out = []
+    for s in skill["steps"]:
+        p = s.get("params", {})
+        if s["tool"] == "BrowserType" and "value_slot" in p:
+            idx = p["value_slot"]
+            if not isinstance(idx, int) or idx < 0 or idx >= len(values):
+                return None  # slot has no matching live value -> abort replay
+            out.append({"tool": "BrowserType", "params": {"selector": p.get("selector"), "text": values[idx]}})
+        else:
+            out.append({"tool": s["tool"], "params": dict(p)})
+    return out
+
+
 def host_of(url: str) -> str:
     """host:port of a url (so different sites/ports never share a skill)."""
     try:
@@ -312,9 +378,10 @@ def record_skill(host: str, task: str, action_log: list[dict]) -> bool:
         steps = distill_steps(action_log)
         if not steps:
             return False
-        sig = normalize_task(task)
+        sig = _sig(task)
         if not sig:
             return False
+        steps = _parameterize(steps, task)  # quoted values -> slots (not stored)
         persistable = steps_are_persistable(steps)
         skill = {
             "host": host, "task_sig": sig, "steps": steps,
@@ -340,7 +407,7 @@ def find_skill(host: str, task: str) -> dict | None:
     (no corpus scan). Returns the skill or None. Cheap + flat as the library grows."""
     if not host:
         return None
-    sig = normalize_task(task)
+    sig = _sig(task)
     if not sig:
         return None
     k = _key(host, sig)

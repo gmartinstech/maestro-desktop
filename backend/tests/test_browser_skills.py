@@ -191,3 +191,54 @@ def test_format_version_mismatch_is_ignored(_isolated_skills, monkeypatch):
     sk.clear(wipe_disk=False)
     monkeypatch.setattr(sk, "_SKILL_FORMAT_VERSION", 999)  # pretend the format moved on
     assert sk.find_skill("v.com", "do a thing now") is None
+
+
+# --- parameterization: "same task, different input" -----------------------
+def test_quoted_value_becomes_a_slot_and_reuses_across_inputs(_isolated_skills):
+    # learn from a task with a quoted value
+    log = [
+        {"tool": "BrowserNavigate", "input": {"url": "https://shop.com/search"}, "ok": True},
+        {"tool": "BrowserType", "input": {"selector": "#q", "text": "running shoes"}, "ok": True},
+        {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Search"},
+    ]
+    assert sk.record_skill("shop.com", 'search for "running shoes"', log) is True
+    # a DIFFERENT quoted input matches the SAME skill (templated key)
+    found = sk.find_skill("shop.com", 'search for "winter boots"')
+    assert found is not None
+    concrete = sk.rehydrate(found, 'search for "winter boots"')
+    type_step = next(s for s in concrete if s["tool"] == "BrowserType")
+    assert type_step["params"]["text"] == "winter boots"   # filled from the NEW task
+
+
+def test_parameterized_value_is_not_persisted(_isolated_skills):
+    log = [
+        {"tool": "BrowserType", "input": {"selector": "#q", "text": "running shoes"}, "ok": True},
+        {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Search"},
+    ]
+    sk.record_skill("shop.com", 'search for "running shoes"', log)
+    path = sk._skill_path("shop.com", sk._sig('search for "running shoes"'))
+    blob = open(path).read()
+    assert "running shoes" not in blob   # the quoted value never hits disk
+    assert '"value_slot": 0' in blob or '"value_slot":0' in blob
+
+
+def test_rehydrate_aborts_when_slot_cannot_be_filled(_isolated_skills):
+    log = [
+        {"tool": "BrowserType", "input": {"selector": "#q", "text": "shoes"}, "ok": True},
+        {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Go"},
+    ]
+    sk.record_skill("shop.com", 'search for "shoes"', log)
+    found = sk.find_skill("shop.com", "search for shoes")  # no quotes -> no value to fill
+    # find still matches if signatures align; rehydrate must refuse (no ghost)
+    if found is not None:
+        assert sk.rehydrate(found, "search for shoes") is None
+
+
+def test_unquoted_text_stays_literal_backward_compatible(_isolated_skills):
+    # no quotes -> behaves exactly as before (literal text, exact-ish key)
+    assert sk.record_skill("localhost:8901", "type hello and click Send", _log()) is True
+    found = sk.find_skill("localhost:8901", "Please type hello and click Send")
+    assert found is not None
+    concrete = sk.rehydrate(found, "Please type hello and click Send")
+    type_step = next(s for s in concrete if s["tool"] == "BrowserType")
+    assert type_step["params"]["text"] == "hello world"   # literal, unchanged

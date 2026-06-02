@@ -388,11 +388,18 @@ async def run_browser_agent(
         if m:
             replay_host = browser_skills.host_of(m.group(0))
     skill = browser_skills.find_skill(replay_host, task) if replay_host else None
-    if skill:
-        logger.info(f"[browser-skills] REPLAY attempt: {len(skill['steps'])} steps on {replay_host}")
+    # Fill any parameter slots from THIS task's quoted values (so one learned
+    # skill serves "do the same thing with a different input"). If a slot can't
+    # be filled, concrete_steps is None and we run the full agent instead.
+    concrete_steps = browser_skills.rehydrate(skill, task) if skill else None
+    if skill and not concrete_steps:
+        logger.info(f"[browser-skills] skill matched on {replay_host} but slots unfillable from task; running full agent")
+        skill = None
+    if skill and concrete_steps:
+        logger.info(f"[browser-skills] REPLAY attempt: {len(concrete_steps)} steps on {replay_host}")
         replay_log: list[dict] = []
         replay_ok = True
-        for step in skill["steps"]:
+        for step in concrete_steps:
             if cancel_event.is_set():
                 replay_ok = False
                 break
@@ -440,7 +447,7 @@ async def run_browser_agent(
             })
             return {
                 "session_id": session_id, "browser_id": browser_id,
-                "summary": f"Completed via learned skill replay ({len(skill['steps'])} steps, no LLM).",
+                "summary": f"Completed via learned skill replay ({len(concrete_steps)} steps, no LLM).",
                 "action_log": replay_log, "final_screenshot": final_screenshot,
                 "replayed": True,
             }
