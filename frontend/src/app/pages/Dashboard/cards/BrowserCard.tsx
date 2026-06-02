@@ -73,8 +73,29 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
   { dir: 'se', sx: { bottom: -EDGE_THICKNESS / 2, right: -EDGE_THICKNESS / 2, width: CORNER_SIZE, height: CORNER_SIZE } },
 ];
 
-// On Windows, force iframe fallback path: the <webview> tag mount segfaults the renderer during commit on Chromium 144 + this Electron 40 CastLabs build. iframe renders blank for sites with X-Frame-Options but does not crash. Mac keeps webview (full browser).
-const isElectron = navigator.userAgent.includes('Electron') && !navigator.userAgent.includes('Windows');
+// Windows forces the iframe fallback: the <webview> tag mount segfaults the
+// renderer during Chromium's commit phase on the CastLabs build (added 1.1.55,
+// same commit-phase crash family as the ablated <input type=file> and the
+// Onboarding Framer-Motion subtrees). The Electron 42 bump brought its own
+// Windows native crash (the en-US.pak locale fix) and never re-verified this
+// one, so the guard stays until a real Windows run proves the webview survives.
+//
+// One-shot trial switch to do exactly that test (can't be tested on Mac): in
+// DevTools run localStorage.setItem('openswarm_try_win_webview','1') then
+// reload. The flag is CONSUMED on read, so if the webview still segfaults on
+// commit the crash-reload lands back on the safe iframe path instead of
+// boot-looping. Mac is unaffected (always gets the full webview + CDP agent).
+function windowsWebviewTrialArmed(): boolean {
+  try {
+    if (localStorage.getItem('openswarm_try_win_webview') === '1') {
+      localStorage.removeItem('openswarm_try_win_webview');
+      return true;
+    }
+  } catch {}
+  return false;
+}
+const isWindows = navigator.userAgent.includes('Windows');
+const isElectron = navigator.userAgent.includes('Electron') && (!isWindows || windowsWebviewTrialArmed());
 
 const chromeUserAgent = navigator.userAgent
   .replace(/\s*Electron\/\S+/, '')
