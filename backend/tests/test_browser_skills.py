@@ -1,4 +1,7 @@
-"""Browser skill cache: task normalization, robust distillation, record/find."""
+"""Browser skill cache: normalization, distillation, record/find, persistence, redaction."""
+
+import os
+import tempfile
 
 import pytest
 
@@ -6,10 +9,13 @@ from backend.apps.agents.browser import browser_skills as sk
 
 
 @pytest.fixture(autouse=True)
-def _clear():
-    sk.clear()
-    yield
-    sk.clear()
+def _isolated_skills(monkeypatch):
+    # Persist to a throwaway dir so tests never touch the real DATA_ROOT.
+    d = tempfile.mkdtemp(prefix="skills_test_")
+    monkeypatch.setenv("OPENSWARM_BROWSER_SKILLS_DIR", d)
+    sk.clear(wipe_disk=True)
+    yield d
+    sk.clear(wipe_disk=True)
 
 
 def test_normalize_task_is_stable_across_rewordings():
@@ -110,3 +116,78 @@ def test_record_refuses_unrecordable_run():
     # navigate-only -> nothing stored
     assert sk.record_skill("h", "just go", [{"tool": "BrowserNavigate", "input": {"url": "http://h/"}, "ok": True}]) is False
     assert sk.find_skill("h", "just go") is None
+
+
+# --- persistence + redaction ----------------------------------------------
+def test_skill_persists_across_restart(_isolated_skills):
+    # record, then simulate a process restart by wiping ONLY the in-memory cache;
+    # find must re-load it from disk.
+    assert sk.record_skill("localhost:8901", "type hello and click Send", _log()) is True
+    sk.clear(wipe_disk=False)            # in-memory gone, disk intact (== restart)
+    assert not sk._skills                # cache truly empty
+    found = sk.find_skill("localhost:8901", "type hello and click Send")
+    assert found is not None and found.get("persisted") is True
+    assert [s["tool"] for s in found["steps"]] == ["BrowserNavigate", "BrowserType", "BrowserClickByName"]
+
+
+def test_sensitive_text_is_NOT_persisted(_isolated_skills):
+    # a skill that types an email/password must stay in-memory only (no disk file)
+    log = [
+        {"tool": "BrowserType", "input": {"selector": "#email", "text": "eric@example.com"}, "ok": True},
+        {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Submit"},
+    ]
+    assert sk.record_skill("site.com", "enter email and submit", log) is True   # stored in memory
+    # nothing on disk for this skill
+    path = sk._skill_path("site.com", sk.normalize_task("enter email and submit"))
+    assert path is not None and not os.path.exists(path)
+    # and after a "restart" it's gone (was never persisted)
+    sk.clear(wipe_disk=False)
+    assert sk.find_skill("site.com", "enter email and submit") is None
+
+
+def test_password_field_selector_blocks_persistence(_isolated_skills):
+    log = [
+        {"tool": "BrowserType", "input": {"selector": "input#password", "text": "hunter2"}, "ok": True},
+        {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Log in"},
+    ]
+    sk.record_skill("site.com", "log in", log)
+    assert not os.path.exists(sk._skill_path("site.com", sk.normalize_task("log in")))
+
+
+def test_sensitivity_detector():
+    assert sk._looks_sensitive("eric@example.com")
+    assert sk._looks_sensitive("4111 1111 1111 1111")          # card-shaped
+    assert sk._looks_sensitive("123-45-6789")                  # ssn
+    assert sk._looks_sensitive("sk-ant-api03-abc123")          # token prefix
+    assert sk._looks_sensitive("anything", selector="#pwd")    # password field
+    assert sk._looks_sensitive("aB3xK9mQ2pL7wR4tY8nZ")         # long high-entropy
+    assert not sk._looks_sensitive("hello world")
+    assert not sk._looks_sensitive("openswarm", selector="#search")
+
+
+def test_navigate_url_userinfo_and_fragment_stripped_on_disk(_isolated_skills):
+    log = [
+        {"tool": "BrowserNavigate", "input": {"url": "https://user:pw@site.com/app?q=1#frag"}, "ok": True},
+        {"tool": "BrowserType", "input": {"selector": "#q", "text": "shoes"}, "ok": True},
+    ]
+    # userinfo in the URL makes the whole skill non-persistable (credentialed URL)
+    sk.record_skill("site.com", "search shoes", log)
+    assert not os.path.exists(sk._skill_path("site.com", sk.normalize_task("search shoes")))
+    # but a clean URL with a fragment persists with the fragment stripped
+    log2 = [
+        {"tool": "BrowserNavigate", "input": {"url": "https://site.com/app#section"}, "ok": True},
+        {"tool": "BrowserType", "input": {"selector": "#q", "text": "shoes"}, "ok": True},
+    ]
+    assert sk.record_skill("site.com", "search for shoes here", log2) is True
+    sk.clear(wipe_disk=False)
+    found = sk.find_skill("site.com", "search for shoes here")
+    assert found is not None
+    nav = next(s for s in found["steps"] if s["tool"] == "BrowserNavigate")
+    assert "#section" not in nav["params"]["url"]
+
+
+def test_format_version_mismatch_is_ignored(_isolated_skills, monkeypatch):
+    sk.record_skill("v.com", "do a thing now", _log())
+    sk.clear(wipe_disk=False)
+    monkeypatch.setattr(sk, "_SKILL_FORMAT_VERSION", 999)  # pretend the format moved on
+    assert sk.find_skill("v.com", "do a thing now") is None

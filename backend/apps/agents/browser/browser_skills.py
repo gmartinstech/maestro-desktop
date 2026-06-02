@@ -1,35 +1,52 @@
 """
-Browser action-sequence skill cache (the "learn once, replay fast" layer).
+Browser action-sequence skill cache (the "learn once, replay fast" layer),
+now with cross-session persistence + text redaction.
 
 The first time the full LLM agent completes a task, we distill the productive
 action sequence and store it keyed by (host, normalized-task). A later identical
-task on the same host can then REPLAY that sequence with zero LLM round-trips,
-which is what gets a repeat task from ~50s down to ~1s (well under human time).
+task on the same host REPLAYS that sequence with zero LLM round-trips (a ~50s
+first run becomes ~1s on repeat, well under human time), and the library now
+survives restarts so it keeps getting better over time.
 
-Robustness is the whole game here (a stale replay that "succeeds" wrongly is the
-ghost-failure we must avoid), so:
-  - clicks are recorded by (role, name), NOT by ephemeral index, and re-resolved
-    fresh at replay time (handled by the click_by_name tool);
-  - a skill is only recorded if EVERY productive step is robustly replayable and
-    there is at least one real action (not just a navigate);
-  - the replay executor (in browser_agent) verifies each step and falls back to
-    the full LLM agent on any miss.
+Two properties we hold to extreme rigor:
 
-IN-MEMORY ONLY by design: a `type` step carries the typed text, which can be
-sensitive, so we never write skills to disk. Cross-session persistence with
-text redaction is future work. Process-lifetime, capped.
+1. CONTEXT ROT / TTFT: skills are RETRIEVAL-AS-EXECUTION, never
+   retrieval-as-context. A matched skill is *run*, it is never injected into the
+   prompt, so the skill library can grow to thousands of entries with ZERO
+   effect on prompt size, TTFT, or context rot. Lookups are O(1) exact-key file
+   reads (no corpus scan at boot or at lookup), with an in-memory hot cache, so
+   cold-start and per-request latency stay flat as the library grows. And since
+   a replay has zero LLM turns, it strictly REDUCES total context generated.
+
+2. SECRETS NEVER HIT DISK: a `type` step carries the typed text, which can be a
+   password / email / card / token. Any skill that touches sensitive-looking
+   text (or a password-shaped field, or a tokenized URL) is kept IN-MEMORY ONLY
+   and never persisted. Only fully non-sensitive skills are written to disk;
+   URL userinfo + fragments are stripped before persisting regardless.
+
+Robustness (a stale replay that "succeeds" wrongly is the ghost-failure we must
+avoid): clicks are recorded by (role, name) and re-resolved fresh at replay; a
+skill is only recorded if every productive step is robustly replayable; the
+replay executor (in browser_agent) verifies each step and falls back to the full
+LLM agent on any miss, which re-records.
 """
 
+import hashlib
+import json
 import logging
+import os
 import re
+import tempfile
 import time
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
-# key "host::task_sig" -> skill dict
+# In-memory hot cache: key "host::task_sig" -> skill dict. Bounded.
 _skills: dict[str, dict] = {}
-_MAX_SKILLS = 200
+_MAX_MEM_SKILLS = 200
+_MAX_DISK_SKILLS = 1000          # bound the on-disk library; evict oldest by mtime
+_SKILL_FORMAT_VERSION = 1
 
 # Tools that change page state (worth replaying). Reads/meta are never recorded.
 _PRODUCTIVE = {"BrowserType", "BrowserClickIndex", "BrowserClick", "BrowserPressKey", "BrowserScroll"}
@@ -37,18 +54,56 @@ _PRODUCTIVE = {"BrowserType", "BrowserClickIndex", "BrowserClick", "BrowserPress
 _URL_RE = re.compile(r"https?://\S+")
 _WS_RE = re.compile(r"\s+")
 _PUNCT_RE = re.compile(r"[^a-z0-9 ]+")
-# Filler words that don't change task identity; dropping them makes the
-# signature robust to trivial rewordings of the same request.
 _STOP = {
     "the", "a", "an", "to", "into", "on", "this", "that", "page", "please",
     "then", "and", "go", "open", "browser", "tell", "me", "whether", "it",
     "of", "in", "for", "with", "your", "after", "if", "you", "can",
 }
 
+# --- sensitivity detection (gate for what may touch disk) ------------------
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+_CARD_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+_PHONE_RE = re.compile(r"\b(?:\+?\d[ -]?){10,15}\b")
+_TOKEN_PREFIX_RE = re.compile(r"\b(sk-|ghp_|gho_|pk_|xox[bap]-|AIza|eyJ)")
+_SENSITIVE_FIELD_RE = re.compile(r"pass|pwd|secret|otp|cvv|cvc|ssn|card|token|api[_-]?key|security", re.I)
+
+
+def _looks_sensitive(text: str, selector: str = "") -> bool:
+    """Conservative: err toward 'sensitive' so secrets never persist. Catches
+    emails, SSNs, card/phone-shaped digit runs, known key prefixes, long
+    high-entropy tokens, and anything typed into a password-shaped field."""
+    if selector and _SENSITIVE_FIELD_RE.search(selector):
+        return True
+    if not text:
+        return False
+    if _EMAIL_RE.search(text) or _SSN_RE.search(text) or _CARD_RE.search(text):
+        return True
+    if _TOKEN_PREFIX_RE.search(text):
+        return True
+    if _PHONE_RE.search(text):
+        return True
+    # long high-entropy token: >=20 chars with both letters and digits
+    stripped = text.strip()
+    if len(stripped) >= 20 and any(c.isdigit() for c in stripped) and any(c.isalpha() for c in stripped) and " " not in stripped:
+        return True
+    return False
+
+
+def _sanitize_url(url: str) -> str:
+    """Strip userinfo (user:pass@) and fragment from a URL before it persists."""
+    try:
+        p = urlparse(url)
+        netloc = p.hostname or ""
+        if p.port:
+            netloc = f"{netloc}:{p.port}"
+        return urlunparse((p.scheme, netloc, p.path, p.params, p.query, ""))
+    except Exception:
+        return url
+
 
 def normalize_task(task: str) -> str:
-    """Stable task signature: lowercase, drop urls/punct/filler, collapse ws.
-    Two phrasings of the same trivial task should map to the same signature."""
+    """Stable task signature: lowercase, drop urls/punct/filler, collapse ws."""
     t = (task or "").lower()
     t = _URL_RE.sub(" ", t)
     t = _PUNCT_RE.sub(" ", t)
@@ -67,18 +122,11 @@ def host_of(url: str) -> str:
 
 def distill_steps(action_log: list[dict]) -> list[dict]:
     """Turn a successful task's action_log into a robust replayable step list,
-    or [] if it can't be made safely replayable.
-
-    Each action_log entry is expected to carry: tool, input, ok, and for clicks
-    the resolved clicked_role / clicked_name. Returns steps as
-    {tool, params} pairs that execute_browser_tool understands.
-    """
+    or [] if it can't be made safely replayable."""
     steps: list[dict] = []
     productive_count = 0
 
     def _emit_simple(tool, inp):
-        """Append a robust step for a simple action, or return False if this
-        action can't be made robustly replayable (caller then bails)."""
         nonlocal productive_count
         if tool in ("BrowserType", "type") and inp.get("selector") is not None:
             steps.append({"tool": "BrowserType", "params": {"selector": inp.get("selector"), "text": inp.get("text", "")}})
@@ -96,25 +144,21 @@ def distill_steps(action_log: list[dict]) -> list[dict]:
             steps.append({"tool": "BrowserNavigate", "params": {"url": inp["url"]}})
             return True
         if tool in ("wait", "BrowserWait"):
-            return True  # waits are skipped, not fatal
-        return False  # unknown/unrobust -> signal bail
+            return True
+        return False
 
     for a in action_log:
         if not a.get("ok", True):
-            continue  # never replay a step that failed when recorded
+            continue
         tool = a.get("tool")
         inp = a.get("input") or {}
         if tool == "BrowserBatch":
-            # The agent's efficient path bundles sub-actions. Flatten them so the
-            # skill captures the real work. A batched click_index can't be made
-            # robust (its resolved name isn't recoverable here), so bail rather
-            # than record a flaky index-based step.
             subs = inp.get("actions") or []
             for sub in subs:
                 st = sub.get("type")
                 sp = sub.get("params") or {}
                 if st == "click_index":
-                    return []  # un-robustifiable batched click -> no skill
+                    return []
                 if not _emit_simple(st, sp):
                     return []
             continue
@@ -126,7 +170,7 @@ def distill_steps(action_log: list[dict]) -> list[dict]:
         elif tool == "BrowserClickIndex":
             name = a.get("clicked_name")
             if not name:
-                return []  # can't make this click robust -> don't record a flaky skill
+                return []
             steps.append({"tool": "BrowserClickByName", "params": {"role": a.get("clicked_role", ""), "name": name}})
             productive_count += 1
         elif tool == "BrowserClick" and inp.get("selector"):
@@ -138,16 +182,130 @@ def distill_steps(action_log: list[dict]) -> list[dict]:
         elif tool == "BrowserScroll":
             steps.append({"tool": "BrowserScroll", "params": {k: inp[k] for k in ("direction", "amount") if k in inp}})
             productive_count += 1
-        # everything else (reads, screenshots, waits, batch, evaluate) is dropped
-    # A skill is only worth replaying if it has a real action, not navigate-only.
     if productive_count == 0:
         return []
     return steps
 
 
+def steps_are_persistable(steps: list[dict]) -> bool:
+    """True only if NO step touches sensitive text / a password-shaped field /
+    a tokenized URL. Sensitive skills stay in-memory; they never hit disk."""
+    for s in steps:
+        p = s.get("params", {})
+        if s["tool"] == "BrowserType":
+            if _looks_sensitive(p.get("text", ""), p.get("selector", "")):
+                return False
+        elif s["tool"] == "BrowserNavigate":
+            url = p.get("url", "")
+            # a tokenized/credentialed URL is both sensitive and non-reproducible
+            if "@" in (urlparse(url).netloc or "") or _looks_sensitive(url):
+                return False
+    return True
+
+
+def _sanitized_steps_for_disk(steps: list[dict]) -> list[dict]:
+    """Copy of steps safe to persist: navigate URLs stripped of userinfo+fragment."""
+    out = []
+    for s in steps:
+        if s["tool"] == "BrowserNavigate":
+            out.append({"tool": "BrowserNavigate", "params": {"url": _sanitize_url(s["params"].get("url", ""))}})
+        else:
+            out.append({"tool": s["tool"], "params": dict(s.get("params", {}))})
+    return out
+
+
+# --- persistence ----------------------------------------------------------
+def _skills_dir() -> str | None:
+    override = os.environ.get("OPENSWARM_BROWSER_SKILLS_DIR")
+    base = override
+    if not base:
+        try:
+            from backend.config.paths import DATA_ROOT
+            base = os.path.join(DATA_ROOT, "browser_skills")
+        except Exception:
+            return None
+    try:
+        os.makedirs(base, exist_ok=True)
+    except Exception:
+        return None
+    return base
+
+
+def _key(host: str, sig: str) -> str:
+    return f"{host}::{sig}"
+
+
+def _skill_path(host: str, sig: str) -> str | None:
+    d = _skills_dir()
+    if not d:
+        return None
+    h = hashlib.sha256(_key(host, sig).encode("utf-8")).hexdigest()[:32]
+    return os.path.join(d, f"{h}.json")
+
+
+def _persist(host: str, sig: str, skill: dict) -> None:
+    """Atomic per-skill write. Best-effort; never raises. Evicts oldest on cap."""
+    path = _skill_path(host, sig)
+    if not path:
+        return
+    payload = {
+        "version": _SKILL_FORMAT_VERSION,
+        "host": host, "task_sig": sig,
+        "steps": _sanitized_steps_for_disk(skill["steps"]),
+        "recorded_at": skill.get("recorded_at", time.time()),
+        "replays": skill.get("replays", 0),
+    }
+    try:
+        d = os.path.dirname(path)
+        fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+        os.replace(tmp, path)  # atomic; a reader never sees a half-written file
+        _evict_disk_if_over_cap(d)
+    except Exception as e:
+        logger.debug(f"[browser-skills] persist failed: {e}")
+
+
+def _evict_disk_if_over_cap(d: str) -> None:
+    try:
+        files = [os.path.join(d, f) for f in os.listdir(d) if f.endswith(".json")]
+        if len(files) <= _MAX_DISK_SKILLS:
+            return
+        files.sort(key=lambda p: os.path.getmtime(p))  # oldest first
+        for p in files[: len(files) - _MAX_DISK_SKILLS]:
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _load_from_disk(host: str, sig: str) -> dict | None:
+    path = _skill_path(host, sig)
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("version") != _SKILL_FORMAT_VERSION:
+            return None  # format changed -> ignore stale file
+        if not data.get("steps"):
+            return None
+        return {
+            "host": data.get("host", host), "task_sig": data.get("task_sig", sig),
+            "steps": data["steps"], "recorded_at": data.get("recorded_at", 0),
+            "replays": data.get("replays", 0), "persisted": True,
+        }
+    except Exception as e:
+        logger.debug(f"[browser-skills] load failed: {e}")
+        return None
+
+
 def record_skill(host: str, task: str, action_log: list[dict]) -> bool:
-    """Record a replayable skill if the run distills to a safe sequence.
-    Returns True if stored. Best-effort; never raises into the caller."""
+    """Record a replayable skill. Non-sensitive skills persist to disk;
+    sensitive ones stay in-memory only. Returns True if a skill was stored
+    (memory or disk). Best-effort; never raises into the caller."""
     try:
         if not host:
             return False
@@ -157,15 +315,20 @@ def record_skill(host: str, task: str, action_log: list[dict]) -> bool:
         sig = normalize_task(task)
         if not sig:
             return False
-        key = f"{host}::{sig}"
-        _skills[key] = {
+        persistable = steps_are_persistable(steps)
+        skill = {
             "host": host, "task_sig": sig, "steps": steps,
-            "recorded_at": time.time(), "replays": 0,
+            "recorded_at": time.time(), "replays": 0, "persisted": persistable,
         }
-        if len(_skills) > _MAX_SKILLS:  # evict oldest
+        _skills[_key(host, sig)] = skill
+        if len(_skills) > _MAX_MEM_SKILLS:
             oldest = min(_skills, key=lambda k: _skills[k]["recorded_at"])
             _skills.pop(oldest, None)
-        logger.info(f"[browser-skills] recorded {len(steps)}-step skill for {key}")
+        if persistable:
+            _persist(host, sig, skill)
+            logger.info(f"[browser-skills] recorded + PERSISTED {len(steps)}-step skill for {host}")
+        else:
+            logger.info(f"[browser-skills] recorded {len(steps)}-step skill for {host} (in-memory only: sensitive)")
         return True
     except Exception as e:
         logger.debug(f"[browser-skills] record failed: {e}")
@@ -173,20 +336,42 @@ def record_skill(host: str, task: str, action_log: list[dict]) -> bool:
 
 
 def find_skill(host: str, task: str) -> dict | None:
-    """Return a matching skill for (host, task), or None."""
+    """Exact-key lookup: in-memory hot cache first, then a single lazy disk read
+    (no corpus scan). Returns the skill or None. Cheap + flat as the library grows."""
     if not host:
         return None
     sig = normalize_task(task)
     if not sig:
         return None
-    return _skills.get(f"{host}::{sig}")
+    k = _key(host, sig)
+    hit = _skills.get(k)
+    if hit:
+        return hit
+    loaded = _load_from_disk(host, sig)
+    if loaded:
+        _skills[k] = loaded  # warm the hot cache
+        return loaded
+    return None
 
 
 def mark_replayed(host: str, task: str) -> None:
     s = find_skill(host, task)
     if s:
         s["replays"] = s.get("replays", 0) + 1
+        if s.get("persisted"):
+            _persist(host, s["task_sig"], s)  # keep the on-disk count fresh
 
 
-def clear() -> None:
+def clear(wipe_disk: bool = False) -> None:
+    """Clear the in-memory cache. With wipe_disk, also remove persisted files
+    in the current skills dir (used by tests for isolation)."""
     _skills.clear()
+    if wipe_disk:
+        d = _skills_dir()
+        if d:
+            try:
+                for f in os.listdir(d):
+                    if f.endswith(".json"):
+                        os.remove(os.path.join(d, f))
+            except Exception:
+                pass
