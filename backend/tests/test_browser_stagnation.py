@@ -1,0 +1,101 @@
+"""Deterministic stagnation detection for the browser sub-agent."""
+
+from backend.apps.agents.browser.browser_loop import (
+    _STAGNATION_ESCALATION_AT,
+    _STAGNATION_MAX,
+    _looks_like_failure,
+    advance_stagnation,
+    is_unproductive,
+    stagnation_exhausted,
+    stagnation_nudge,
+)
+
+
+def _fail(url="https://a.com"):
+    return {"text": "Element not found: '.x'", "url": url}
+
+
+def test_looks_like_failure_positive():
+    assert _looks_like_failure("Element not found: '.foo'")
+    assert _looks_like_failure("Index 4 is no longer valid")
+    assert _looks_like_failure("Error: something broke")
+
+
+def test_looks_like_failure_negative():
+    assert not _looks_like_failure("Clicked element: button#submit")
+    assert not _looks_like_failure("Typed into: input#email")
+
+
+def test_error_result_is_unproductive():
+    assert is_unproductive("BrowserClick", {"error": "boom"}, "", "")
+
+
+def test_failure_text_is_unproductive():
+    r = {"text": "Element not found: '.x'", "url": "https://a.com"}
+    assert is_unproductive("BrowserClick", r, "https://a.com", "prev")
+
+
+def test_url_change_is_productive():
+    r = {"text": "Element not found", "url": "https://b.com"}
+    # even a failure-shaped message counts as progress if the URL moved
+    assert not is_unproductive("BrowserClick", r, "https://a.com", "prev")
+
+
+def test_success_without_url_change_gets_benefit_of_doubt():
+    r = {"text": "Clicked element: button#menu", "url": "https://a.com"}
+    assert not is_unproductive("BrowserClickIndex", r, "https://a.com", "prev")
+
+
+def test_identical_observation_is_unproductive():
+    r = {"text": "same observation", "url": "https://a.com"}
+    assert is_unproductive("BrowserScroll", r, "https://a.com", "same observation")
+
+
+def test_neutral_read_tools_never_count():
+    r = {"error": "whatever"}
+    assert not is_unproductive("BrowserScreenshot", r, "", "")
+    assert not is_unproductive("BrowserGetText", r, "", "")
+    assert not is_unproductive("BrowserListInteractives", r, "", "")
+
+
+def test_nudge_mentions_human_intervention_only_at_max():
+    assert "RequestHumanIntervention" not in stagnation_nudge(3)
+    assert "RequestHumanIntervention" in stagnation_nudge(_STAGNATION_MAX)
+    assert "ladder" in stagnation_nudge(3)
+
+
+def test_advance_increments_on_failures_and_nudges_at_threshold():
+    streak, url, text, nudge = 0, "", "", None
+    nudges = []
+    for _ in range(_STAGNATION_ESCALATION_AT):
+        streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", _fail())
+        nudges.append(nudge)
+    assert streak == _STAGNATION_ESCALATION_AT
+    assert nudges[-1] is not None  # nudge fires exactly when the threshold is hit
+    assert nudges[0] is None and nudges[1] is None
+
+
+def test_advance_resets_on_progress():
+    # two failures, then a navigation (URL change) clears the streak
+    streak, url, text, _ = advance_stagnation(0, "", "", "BrowserClick", _fail("https://a.com"))
+    streak, url, text, _ = advance_stagnation(streak, url, text, "BrowserClick", _fail("https://a.com"))
+    assert streak == 2
+    streak, url, text, _ = advance_stagnation(
+        streak, url, text, "BrowserNavigate", {"text": "Navigated", "url": "https://b.com"},
+    )
+    assert streak == 0
+
+
+def test_advance_neutral_tools_pass_through_unchanged():
+    streak, url, text, nudge = advance_stagnation(
+        2, "https://a.com", "prev", "BrowserScreenshot", {"image": "..."},
+    )
+    assert (streak, url, text, nudge) == (2, "https://a.com", "prev", None)
+
+
+def test_advance_fires_again_at_max():
+    streak, url, text = _STAGNATION_MAX - 1, "https://a.com", "prev different"
+    streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", _fail())
+    assert streak == _STAGNATION_MAX
+    assert nudge is not None and "RequestHumanIntervention" in nudge
+    assert stagnation_exhausted(streak)
