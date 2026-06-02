@@ -59,10 +59,19 @@ def ghost_verdict(task, events_for_task):
     productive = [t for t in tools if t in _PRODUCTIVE]
     errs = sum(1 for e in events_for_task if not e.get("ok"))
     total = len(events_for_task)
+    # A read/extract task legitimately has no state-changing action; its evidence
+    # is that a READ tool actually returned content. So "no productive action" is
+    # only a ghost when NO read returned data either (i.e. nothing real happened).
+    _READ = {"BrowserGetText", "BrowserGetElements", "BrowserListInteractives",
+             "BrowserListRoutes", "BrowserReplayRoute", "BrowserScreenshot", "BrowserEvaluate"}
+    read_with_content = any(
+        e["tool"] in _READ and e.get("ok") and (e.get("result_len", 0) or 0) > 0
+        for e in events_for_task
+    )
     if total == 0:
         reasons.append("completed with ZERO tool calls (model declared done without acting)")
-    if total and not productive:
-        reasons.append("no state-changing action ran (only reads/meta) yet marked completed")
+    if total and not productive and not read_with_content:
+        reasons.append("no state-changing action AND no read returned content, yet marked completed")
     if total and errs / total >= 0.5:
         reasons.append(f"{errs}/{total} tool calls errored but still marked completed")
     if any(e.get("is_loop") for e in events_for_task):
