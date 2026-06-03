@@ -34,6 +34,7 @@ from backend.apps.agents.browser.browser_loop import (
     advance_stagnation,
     card_is_unavailable,
     completion_is_honest,
+    deliverable_is_informational,
     replay_recheck_is_safe,
     stagnation_exhausted,
 )
@@ -1077,10 +1078,13 @@ async def run_browser_agent(
                                     metrics_started_at, turn + 1, action_log, session.tokens,
                                     path="llm_fallback" if replay_attempted else "llm",
                                     task_sig=browser_skills._sig(skill_key_task))
-        # Learn this task ONLY from a genuinely successful run: distill the action
-        # sequence into a replayable skill. A dishonest "completion" must never be
-        # recorded, or we'd persist a broken skill that ghosts on every replay.
-        if honest:
+        # Learn this task ONLY from a genuinely successful run whose deliverable a
+        # deterministic replay can actually reproduce. We skip recording when the
+        # run was dishonest (ghost) OR when its answer was gathered/judged content
+        # (a list/report): replay can redo the clicks but not regenerate the
+        # judgment, so recording it would create a thin shortcut that later ghosts.
+        informational = deliverable_is_informational(summary)
+        if honest and not informational:
             try:
                 rec_host = browser_skills.host_of(last_seen_url)
                 _distilled = browser_skills.distill_steps(action_log)
@@ -1095,6 +1099,9 @@ async def run_browser_agent(
                     logger.info(f"[browser-skills] NOT recorded (host empty or no robust steps)")
             except Exception as e:
                 logger.warning(f"[browser-skills] record raised: {e}")
+        elif honest and informational:
+            logger.info("[browser-skills] NOT recorded (deliverable was gathered/judged content; "
+                        "replay can't reproduce it, so no thin-shortcut ghost)")
         agent_manager._sync_session_close(session)
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id,

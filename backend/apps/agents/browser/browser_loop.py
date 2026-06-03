@@ -229,6 +229,24 @@ def replay_recheck_is_safe(action_log: list[dict]) -> bool:
     return not any(a.get("tool") in _REPLAY_DIRTYING_TOOLS for a in action_log)
 
 
+def deliverable_is_informational(summary: str) -> bool:
+    """True if the run's final answer is GATHERED CONTENT (a list/report the model
+    extracted or judged), not a short action confirmation. A deterministic replay
+    reproduces clicks and navigations but CANNOT regenerate judged/collected
+    information, so recording a skill for such a run would make a thin shortcut
+    that replays the mechanical scaffolding and then falsely claims the whole task
+    is done (the 'find me 10 X' ghost). Tool counts can't separate this from a
+    legit search (measured: both look read-heavy), but the deliverable shape can.
+    Conservative + FAIL-SAFE: when in doubt we DON'T record, so the worst case is
+    a lost speedup (re-run via the LLM), never a ghost completion."""
+    s = (summary or "").strip()
+    if len(s) > 300:
+        return True
+    if s.count("\n") >= 2:  # 3+ lines reads as a list/report, not a one-liner
+        return True
+    return False
+
+
 def completion_is_honest(action_log: list[dict]) -> tuple[bool, str]:
     """Reality-check a run the model declared done. Returns (honest, reason).
 

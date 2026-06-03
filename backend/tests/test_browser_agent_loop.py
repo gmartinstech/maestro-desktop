@@ -511,6 +511,29 @@ def test_unproven_skill_that_fails_is_quarantined_and_never_retried(monkeypatch)
         "a quarantined skill must never be replayed again (would be a ghost re-fail)"
 
 
+def test_informational_run_records_no_skill_to_avoid_thin_ghost(monkeypatch):
+    # The 'find me 10 X' guard: a run that did real productive actions AND
+    # succeeded, but whose deliverable is gathered/judged content (a list), must
+    # NOT record a replayable skill, because replay would redo the clicks and
+    # falsely claim the whole task done without regenerating the judged list.
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear()
+    ten = "\n".join(f"{i}. Engineer {i}, very cracked, at Startup{i}" for i in range(1, 11))
+    primary = FakeLLM([
+        Resp([_rp("search"), _tu("BrowserClickIndex", index=1)]),  # a real productive action
+        Resp([Blk("text", ten)], stop_reason="end_turn"),          # ...but the answer is a gathered list
+    ])
+    _install(monkeypatch, primary, FakeAux())
+    r = asyncio.run(BA.run_browser_agent(
+        task="find me 10 cracked design engineers", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    # the run itself completes honestly (it did real work + returned content)...
+    assert not r.get("error")
+    # ...but NO skill is recorded, so a later run can't ghost-replay a thin shortcut
+    assert SK.find_skill("docs.google.com", "find me 10 cracked design engineers") is None
+
+
 def test_ghost_completion_is_reported_as_error_not_completed(monkeypatch):
     # The measured ghost, end to end: the model does a bunch of failing clicks
     # then declares done. The honesty gate must report 'error' (not 'completed')

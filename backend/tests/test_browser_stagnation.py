@@ -7,6 +7,7 @@ from backend.apps.agents.browser.browser_loop import (
     advance_stagnation,
     card_is_unavailable,
     completion_is_honest,
+    deliverable_is_informational,
     is_unproductive,
     stagnation_exhausted,
     stagnation_nudge,
@@ -160,3 +161,21 @@ def test_card_is_unavailable_only_for_unrecoverable_errors():
     assert card_is_unavailable({"error": "No dashboard is connected. Open the dashboard to use browser tools."})
     assert not card_is_unavailable({"error": "Element not found: '.submit'"})
     assert not card_is_unavailable({"text": "ok", "url": "http://x"})
+
+
+# --- informational-deliverable gate (don't record a thin shortcut for a run
+# whose answer was gathered/judged content that replay can't reproduce) ---------
+
+def test_deliverable_informational_blocks_gathered_content_records_confirmations():
+    # a short action confirmation (the PROVEN Wikipedia case) -> safe to record
+    assert not deliverable_is_informational(
+        "Done. The search landed on the Alan Turing article: "
+        "https://en.wikipedia.org/wiki/Alan_Turing")
+    assert not deliverable_is_informational("Done, clicked Submit.")
+    # a gathered list/report (the 'find me 10 X' case) -> NOT safe to record
+    ten = "\n".join(f"{i}. Person {i} - Design Engineer at Co{i}" for i in range(1, 11))
+    assert deliverable_is_informational(ten)
+    # long single blob of extracted info also counts
+    assert deliverable_is_informational("Here is what I found: " + "x" * 400)
+    # empty / trivial -> not informational
+    assert not deliverable_is_informational("")
