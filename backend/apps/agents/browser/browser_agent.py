@@ -40,6 +40,7 @@ from backend.apps.agents.browser.browser_loop import (
 )
 from backend.apps.agents.browser.browser_validator import adjudicate_stuck
 from backend.apps.agents.browser import browser_metrics
+from backend.apps.agents.browser import browser_playbook
 from backend.apps.agents.browser import browser_skills
 from backend.apps.agents.browser.browser_schema import (
     _ACTION_TOOLS_REQUIRING_REPORT,
@@ -348,6 +349,8 @@ async def run_browser_agent(
                 logger.warning(f"[browser-agent {session_id}] no aux model for adjudication: {e}")
         return _aux_state["client"], _aux_state["model"]
 
+    latest_working_mem = ""  # most recent ReportProgress memory, for the tier-2 playbook distill
+
     # Latest goal from ReportProgress; threaded into BrowserListInteractives so
     # the frontend floats goal-matching elements to the top of the list. Seeded
     # with the task so the first listing (before any ReportProgress) is boosted.
@@ -368,6 +371,15 @@ async def run_browser_agent(
                 + "re-verify since the page may have changed:\n"
                 + prior_note
             )
+
+    # Tier-2 memory: seed the DURABLE strategy playbook for this host (distilled
+    # from past successful runs) so the model skips re-discovery. Advisory text,
+    # re-verified by the agent, never auto-run. Keyed by full host like skills.
+    _pb_host = browser_skills.host_of(initial_url or current_url or "")
+    if _pb_host:
+        _pb_block = browser_playbook.format_for_prompt(_pb_host)
+        if _pb_block:
+            run_system_prompt = run_system_prompt + _pb_block
 
     # Prompt-caching shapes built once: system as a single cached text block,
     # and the last tool carrying the cache_control marker (Anthropic keys on the
@@ -683,6 +695,8 @@ async def run_browser_agent(
                     next_goal = tu.input.get("next_goal", "")
                     if next_goal:
                         current_next_goal = next_goal
+                    if working_mem:
+                        latest_working_mem = working_mem  # for the tier-2 playbook distill at the end
                     # Distill the agent's own working memory into a per-domain
                     # hint for the next visit. Only persist when the run stayed
                     # on a SINGLE apex domain: working_memory is cumulative, so
@@ -1102,6 +1116,22 @@ async def run_browser_agent(
         elif honest and informational:
             logger.info("[browser-skills] NOT recorded (deliverable was gathered/judged content; "
                         "replay can't reproduce it, so no thin-shortcut ghost)")
+
+        # Tier-2 memory: on a substantive verified success, distill this run into
+        # the DURABLE strategy playbook (one cheap aux call, mem0-style distill+
+        # reconcile). Fires for BOTH mechanical and judgment tasks, it's how the
+        # judgment ones (which can't be skills) still get faster/wiser next time.
+        if browser_playbook.should_learn(honest, turn + 1):
+            try:
+                pb_host = browser_skills.host_of(last_seen_url)
+                if pb_host:
+                    aux_client, aux_model = await _get_aux_client()
+                    await browser_playbook.distill_and_store(
+                        pb_host, skill_key_task, latest_working_mem, summary,
+                        aux_client, aux_model,
+                    )
+            except Exception as e:
+                logger.debug(f"[browser-playbook] distill skipped: {e}")
         agent_manager._sync_session_close(session)
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id,

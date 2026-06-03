@@ -670,6 +670,96 @@ def test_agent_can_list_and_deprecate_its_own_skills(monkeypatch):
     assert SK.find_skill("docs.google.com", "share the doc now") is None
 
 
+def test_playbook_distills_on_success_survives_restart_and_seeds_next_run(monkeypatch):
+    # The tier-2 memory, end to end: a substantive judgment run distills a durable
+    # strategy playbook (one aux call), it persists across a restart, and the NEXT
+    # run on the same host gets it seeded into the system prompt, so the model
+    # skips re-discovery. This is what makes LinkedIn-style tasks wiser over time.
+    import backend.apps.agents.browser.browser_playbook as PB
+    import backend.apps.agents.browser.browser_skills as SK
+    import json as _json
+    SK.clear(); PB.clear(wipe_disk=True)
+    BH._browser_history.clear()
+
+    # aux returns a strategy playbook as JSON (the distill+reconcile reply)
+    class PBAux:
+        def __init__(self):
+            self.calls = 0
+            self.messages = self
+        async def create(self, **kw):
+            self.calls += 1
+            txt = _json.dumps({"playbook": [
+                "generic 'design engineer' returns hardware engineers",
+                "search Vercel/Linear + React to surface real design engineers",
+            ]})
+            return Resp([Blk("text", txt)], stop_reason="end_turn")
+
+    # Run 1: a 4+ turn judgment task that completes honestly with a real action.
+    primary1 = FakeLLM([
+        Resp([_rp("orient"), _tu("BrowserListInteractives")]),
+        Resp([_rp("search"), _tu("BrowserNavigate", url=DOC_URL)]),
+        Resp([_rp("read"), _tu("BrowserGetText")]),
+        Resp([_rp("act"), _tu("BrowserClickIndex", index=1)]),
+        Resp([Blk("text", "Done. Found the people; the reliable method was company+React.")], stop_reason="end_turn"),
+    ])
+    pbaux = PBAux()
+    _install(monkeypatch, primary1, pbaux)
+    asyncio.run(BA.run_browser_agent(
+        task="find design engineers", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert pbaux.calls >= 1, "a substantive success must trigger the distill aux call"
+    assert PB.get_playbook("docs.google.com"), "playbook recorded for the host"
+
+    # Restart: drop in-memory, keep disk.
+    PB.clear(wipe_disk=False)
+    assert not PB._cache
+
+    # Run 2: fresh task, same host -> playbook must be seeded into the system prompt.
+    primary2 = FakeLLM([Resp([Blk("text", "done")], stop_reason="end_turn")])
+    _install(monkeypatch, primary2, FakeAux())
+    asyncio.run(BA.run_browser_agent(
+        task="find more engineers", browser_id="b2", model="sonnet", initial_url=DOC_URL,
+    ))
+    system = primary2.calls[0]["system"]
+    system_text = system if isinstance(system, str) else " ".join(b.get("text", "") for b in system)
+    assert "What you learned about docs.google.com" in system_text
+    assert "Vercel/Linear + React" in system_text
+
+
+def test_playbook_not_learned_from_a_ghost_completion(monkeypatch):
+    # Fail-safe: a dishonest 'completion' (all actions errored) must NOT distill a
+    # playbook, garbage strategy from a failed run would mislead future runs.
+    import backend.apps.agents.browser.browser_playbook as PB
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear(); PB.clear(wipe_disk=True)
+    BH._browser_history.clear()
+
+    class CountingAux:
+        def __init__(self):
+            self.calls = 0
+            self.messages = self
+        async def create(self, **kw):
+            self.calls += 1
+            return Resp([Blk("text", "Try something else.")], stop_reason="end_turn")
+
+    # every click errors -> the honesty gate marks the run an error (ghost)
+    primary = FakeLLM([
+        Resp([_rp("go"), _tu("BrowserClick", selector=".s1")]),
+        Resp([_rp("go"), _tu("BrowserClick", selector=".s2")]),
+        Resp([_rp("go"), _tu("BrowserClick", selector=".s3")]),
+        Resp([_rp("go"), _tu("BrowserClick", selector=".s4")]),
+        Resp([Blk("text", "All set!")], stop_reason="end_turn"),
+    ])
+    aux = CountingAux()
+    _install(monkeypatch, primary, aux)
+    asyncio.run(BA.run_browser_agent(
+        task="do the thing", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    # the only aux call allowed here is the stuck-adjudication; the playbook distill
+    # must NOT have stored anything for a dishonest run
+    assert PB.get_playbook("docs.google.com") == []
+
+
 def test_prior_domain_hint_is_seeded_into_system_prompt(monkeypatch):
     BH._browser_history.clear(); BH._domain_notes.clear()
     BH.set_domain_note("google.com", "REMEMBERED: Share button is index 43; Tab into the dialog.")
