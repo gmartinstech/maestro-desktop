@@ -26,7 +26,7 @@ _LOOP_DETECTION_EXCLUDED_TOOLS = {
 }
 
 _LOOP_WINDOW_SIZE = 5
-_LOOP_REPEAT_THRESHOLD = 3
+_LOOP_REPEAT_THRESHOLD = 2  # the SECOND identical (tool,input,result) is already a wall
 _LOOP_HARD_CAP = 5
 
 
@@ -67,13 +67,16 @@ def _detect_loop(
 
 
 _LOOP_WARNING_TEXT = (
-    "LOOP DETECTED: You have called this tool with these exact parameters and "
-    "gotten the same result {count} times in a row. STOP retrying this approach "
-    ",  it is not working. Try a fundamentally different strategy: "
-    "(1) check the page state with BrowserScreenshot or BrowserGetText, "
-    "(2) try a different selector or a different tool, "
-    "(3) use BrowserPressKey for keyboard shortcuts if the site supports them, "
-    "or (4) call RequestHumanIntervention if you genuinely cannot proceed."
+    "LOOP DETECTED: the same action got the same result {count} times, so repeating "
+    "it will NOT help. Diagnose the REAL cause before anything else, do not assume: "
+    "read the exact error in the result; use BrowserEvaluate to check whether your "
+    "target actually exists but is disabled, hidden, or covered by an overlay; use "
+    "BrowserGetText or BrowserScreenshot to check whether the page is really a login "
+    "wall, captcha, or error page rather than what you expected. THEN fix that exact "
+    "cause: a wrong selector means switch to BrowserListInteractives + BrowserClickIndex "
+    "or BrowserPressKey; a blocked element means clear the blocker first; a login, "
+    "captcha, or error page means call RequestHumanIntervention. Don't just try another "
+    "selector if the problem isn't a selector."
 )
 
 
@@ -131,12 +134,14 @@ def is_unproductive(
 
 
 _STAGNATION_NUDGE = (
-    "NO PROGRESS: your last {streak} actions changed nothing on the page and "
-    "looked like failures. STOP repeating this approach. Walk DOWN the strategy "
-    "ladder: switch from CSS clicks to BrowserListInteractives + "
-    "BrowserClickIndex; if that already failed, try BrowserPressKey (Tab/Enter) "
-    "or use BrowserEvaluate to find the element by its visible text; take ONE "
-    "BrowserScreenshot to re-orient if you are unsure what's on screen."
+    "NO PROGRESS: your last {streak} actions changed nothing and looked like "
+    "failures. Before trying yet another variation, find out WHY: read the exact "
+    "errors; use BrowserEvaluate to check if the target is disabled, hidden, or "
+    "behind an overlay; take ONE BrowserGetText or BrowserScreenshot to confirm the "
+    "page is what you think (not a login wall, captcha, or error page). Act on the "
+    "real cause; only if it is truly a selector miss do you walk the ladder "
+    "(BrowserListInteractives + BrowserClickIndex, then BrowserPressKey, then "
+    "find-by-text with BrowserEvaluate)."
 )
 
 

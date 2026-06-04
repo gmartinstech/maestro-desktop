@@ -47,5 +47,6 @@ def test_non_excluded_tool_still_loops_after_threshold():
     # that need it (clicks/types/etc.).
     key = ("BrowserClick", '{"selector":"#x"}', "clicked")
     # below threshold -> not a loop; at/over threshold within the window -> loop
-    assert _detect_loop([key], key) is False
+    assert _detect_loop([], key) is False        # 1st occurrence: not yet a wall
+    assert _detect_loop([key], key) is True       # 2nd identical (threshold=2): a wall
     assert _detect_loop([key] * 5, key) is True
