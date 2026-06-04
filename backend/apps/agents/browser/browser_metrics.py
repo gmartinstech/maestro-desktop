@@ -54,7 +54,14 @@ def tier_for(tool_name: str) -> str:
     return _TIER.get(tool_name, "other")
 
 
+_metrics_dir_cache: str | None = None
+
+
 def _metrics_dir() -> str:
+    # Resolved + mkdir'd once, not on every tool call (this runs in the hot path).
+    global _metrics_dir_cache
+    if _metrics_dir_cache is not None:
+        return _metrics_dir_cache
     override = os.environ.get("OPENSWARM_BROWSER_METRICS_DIR")
     if override:
         base = override
@@ -69,6 +76,7 @@ def _metrics_dir() -> str:
         os.makedirs(base, exist_ok=True)
     except Exception:
         pass
+    _metrics_dir_cache = base
     return base
 
 

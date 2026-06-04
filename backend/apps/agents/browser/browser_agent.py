@@ -1029,9 +1029,15 @@ async def run_browser_agent(
                 # result) for the third time in a row? If so, attach a loud
                 # warning to this tool_result so the model is forced to
                 # acknowledge it on its next turn.
-                call_key = _hash_tool_call(tu.name, tu.input, result)
-                is_loop = _detect_loop(recent_tool_calls, call_key)
-                if call_key[0] not in _LOOP_DETECTION_EXCLUDED_TOOLS:
+                # Loop detection only covers the non-excluded tools, so skip the
+                # hash entirely for the excluded ones; otherwise a screenshot/read
+                # serializes its full ~1MB result here just for _detect_loop to
+                # discard it (it short-circuits excluded tools to False anyway).
+                if tu.name in _LOOP_DETECTION_EXCLUDED_TOOLS:
+                    is_loop = False
+                else:
+                    call_key = _hash_tool_call(tu.name, tu.input, result)
+                    is_loop = _detect_loop(recent_tool_calls, call_key)
                     recent_tool_calls.append(call_key)
                     if len(recent_tool_calls) > _LOOP_WINDOW_SIZE * 2:
                         recent_tool_calls = recent_tool_calls[-_LOOP_WINDOW_SIZE * 2:]
