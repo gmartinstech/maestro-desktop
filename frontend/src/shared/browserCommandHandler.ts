@@ -434,16 +434,45 @@ async function clickBackendNode(
       return { error: `${label} could not be focused (${err?.message || 'focus failed'}); it may be disabled or hidden.` };
     }
     if (typeof opts.text === 'string' && opts.text.length > 0) {
+      // Read the text back from the node itself; "insert reported OK" is not
+      // "the box has the text" (rich-text editors can swallow synthetic input).
+      const textLanded = async (): Promise<boolean> => {
+        try {
+          const t = await sendCdp(wv, 'DOM.resolveNode', { backendNodeId }, sessionId);
+          const r = await sendCdp(wv, 'Runtime.callFunctionOn', {
+            objectId: t.object.objectId,
+            functionDeclaration:
+              'function(s) { const v = (this.value !== undefined ? this.value : this.textContent) || ""; return v.includes(s); }',
+            arguments: [{ value: opts.text }],
+            returnByValue: true,
+          }, sessionId);
+          return r?.result?.value === true;
+        } catch { return true; } // unverifiable beats a false alarm
+      };
       try {
-        await sendCdp(wv, 'Input.insertText', { text: opts.text });
+        await sendCdp(wv, 'Input.insertText', { text: opts.text }, sessionId);
       } catch (err: any) {
         return { error: `Focused ${label} but could not type into it: ${err?.message || String(err)}` };
       }
-      return { text: `Focused ${label} and typed the text in.` };
+      if (await textLanded()) return { text: `Focused ${label} and typed the text in.` };
+      try {
+        const t = await sendCdp(wv, 'DOM.resolveNode', { backendNodeId }, sessionId);
+        await sendCdp(wv, 'Runtime.callFunctionOn', {
+          objectId: t.object.objectId,
+          functionDeclaration:
+            'function(s) { this.focus(); document.execCommand("insertText", false, s); }',
+          arguments: [{ value: opts.text }],
+        }, sessionId);
+      } catch { /* verified below; the honest error covers this failing too */ }
+      if (await textLanded()) return { text: `Focused ${label} and typed the text in (via editor command).` };
+      return { error: `Focused ${label} but the text did not register; the box may be a custom editor. Try BrowserPressKey per character or a different element.` };
     }
     return { text: `Focused ${label}; the cursor is in it now (type with BrowserPressKey, or pass a text arg to fill it in one call).` };
   }
 
+  try {
+    await sendCdp(wv, 'DOM.scrollIntoViewIfNeeded', { backendNodeId }, sessionId);
+  } catch { /* not scrollable or already visible; the box model below decides */ }
   let boxModel;
   try {
     boxModel = await sendCdp(wv, 'DOM.getBoxModel', { backendNodeId }, sessionId);
@@ -456,12 +485,27 @@ async function clickBackendNode(
   }
   const lx = (content[0] + content[4]) / 2;
   const ly = (content[1] + content[5]) / 2;
+
+  // Hit-test before dispatching: a sticky banner or header twin can cover the
+  // element's center, and a blind coordinate click lands on the overlay instead
+  // (the "Reactivate Premium" misfire). If covered, click the chosen node itself.
+  let covered = false;
+  let targetObjectId: string | undefined;
   try {
-    await sendCdp(wv, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: lx, y: ly, button: 'left', clickCount: 1 }, sessionId);
-    await sendCdp(wv, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: lx, y: ly, button: 'left', clickCount: 1 }, sessionId);
-  } catch (err: any) {
-    return { error: `Click failed: ${err.message || String(err)}` };
-  }
+    const t = await sendCdp(wv, 'DOM.resolveNode', { backendNodeId }, sessionId);
+    targetObjectId = t?.object?.objectId;
+    if (targetObjectId) {
+      const rel = await sendCdp(wv, 'Runtime.callFunctionOn', {
+        objectId: targetObjectId,
+        functionDeclaration:
+          'function(x, y) { const r = this.getRootNode(); const h = (r.elementFromPoint ? r : document).elementFromPoint(x, y); return h ? (this === h || this.contains(h)) : true; }',
+        arguments: [{ value: lx }, { value: ly }],
+        returnByValue: true,
+      }, sessionId);
+      covered = rel?.result?.value === false;
+    }
+  } catch { /* hit-test is best-effort; fall through to the coordinate click */ }
+
   let rx = lx, ry = ly;
   if (sessionId) {
     try {
@@ -470,10 +514,30 @@ async function clickBackendNode(
       rx = lx + dx; ry = ly + dy;
     } catch { /* fall back to frame-local for the ripple */ }
   }
+  const ripple = { clickX: rx / wv.clientWidth * 100, clickY: ry / wv.clientHeight * 100 };
+
+  if (covered && targetObjectId) {
+    try {
+      await sendCdp(wv, 'Runtime.callFunctionOn', {
+        objectId: targetObjectId,
+        functionDeclaration:
+          'function() { if (this.click) { this.click(); } else { this.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); } }',
+      }, sessionId);
+      return { text: `Clicked ${label} via its element (another element covers its screen position).`, ...ripple };
+    } catch (err: any) {
+      return { error: `${label} is covered by another element and could not be clicked (${err?.message || String(err)}). Scroll, or pick a different element.` };
+    }
+  }
+
+  try {
+    await sendCdp(wv, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: lx, y: ly, button: 'left', clickCount: 1 }, sessionId);
+    await sendCdp(wv, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: lx, y: ly, button: 'left', clickCount: 1 }, sessionId);
+  } catch (err: any) {
+    return { error: `Click failed: ${err.message || String(err)}` };
+  }
   return {
     text: `Clicked ${label} at (${Math.round(rx)}, ${Math.round(ry)})`,
-    clickX: rx / wv.clientWidth * 100,
-    clickY: ry / wv.clientHeight * 100,
+    ...ripple,
   };
 }
 
