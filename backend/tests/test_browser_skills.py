@@ -458,3 +458,20 @@ def test_list_skills_surfaces_state_rev_and_builds_on(_isolated_skills):
     assert foundation["state"] == sk._TRUSTED and foundation["builds_on"] == []
     assert composed["builds_on"] == [sk._sig("search shoes now")]
     assert "rev" in composed and "steps" in composed
+
+
+def test_replay_safety_refuses_send_steps_and_passes_reads():
+    safe, _ = sk.replay_safety([
+        {"tool": "BrowserNavigate", "params": {"url": "https://a.com"}},
+        {"tool": "BrowserClickByName", "params": {"role": "button", "name": "Search"}},
+        {"tool": "BrowserPressKey", "params": {"key": "Enter"}},
+    ])
+    assert safe is True
+    for bad in (
+        [{"tool": "BrowserClickByName", "params": {"role": "button", "name": "Send"}}],
+        [{"tool": "BrowserClickByName", "params": {"role": "button", "name": "Place order"}}],
+        [{"tool": "BrowserClick", "params": {"selector": "button[aria-label='Submit form']"}}],
+        [{"tool": "BrowserType", "params": {"selector": "#message-body", "text": "hi"}}],
+    ):
+        ok, why = sk.replay_safety(bad)
+        assert ok is False and "irreversible" in why

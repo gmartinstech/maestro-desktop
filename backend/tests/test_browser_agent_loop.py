@@ -98,10 +98,12 @@ def _install(monkeypatch, primary, aux):
             found = "const spec=" in expr and 'const spec=""' not in expr
             return {"text": json.dumps({"ready": True, "quiet": 9999, "elems": 100, "found": found}), "url": DOC_URL}
         if action == "list_interactives":
-            return {"text": '1 interactive elements:\n[1]<button "Submit">', "url": DOC_URL}
+            # a non-irreversible label on purpose: Send/Submit-named steps are
+            # refused by the replay send-gate, which has its own test below
+            return {"text": '1 interactive elements:\n[1]<button "Search">', "url": DOC_URL}
         if action == "click_index":
             # frontend surfaces the clicked element's role/name for skill recording
-            return {"text": "Clicked index 1", "url": DOC_URL, "clickedRole": "button", "clickedName": "Submit"}
+            return {"text": "Clicked index 1", "url": DOC_URL, "clickedRole": "button", "clickedName": "Search"}
         if action == "click_by_name":
             return {"text": f'Clicked button "{params.get("name")}"', "url": DOC_URL}
         if action == "click":
@@ -129,7 +131,7 @@ def _install(monkeypatch, primary, aux):
 def test_full_loop_goal_stagnation_adjudication_and_hint_write(monkeypatch):
     BH._browser_history.clear(); BH._domain_notes.clear()
     primary = FakeLLM([
-        Resp([_rp("click the Submit button"), _tu("BrowserListInteractives")]),
+        Resp([_rp("click the Search button"), _tu("BrowserListInteractives")]),
         Resp([_rp("click submit"), _tu("BrowserClick", selector=".s1")]),
         Resp([_rp("retry"), _tu("BrowserClick", selector=".s2")]),
         Resp([_rp("retry"), _tu("BrowserClick", selector=".s3")]),
@@ -148,7 +150,7 @@ def test_full_loop_goal_stagnation_adjudication_and_hint_write(monkeypatch):
     # 1) goal threaded into the loop's list_interactives call (a no-goal perception
     #    front-load may precede it now, so assert SOME call carries the goal)
     list_calls = [c for c in sent if c["action"] == "list_interactives"]
-    assert any(c["params"].get("goal") == "click the Submit button" for c in list_calls)
+    assert any(c["params"].get("goal") == "click the Search button" for c in list_calls)
 
     # 2) stagnation nudge injected into a tool_result (seen by a later LLM turn)
     all_msgs = json.dumps([c["messages"] for c in primary.calls])
@@ -244,24 +246,24 @@ def test_skill_is_recorded_then_replayed_with_zero_llm_calls(monkeypatch):
     primary = FakeLLM([
         Resp([_rp("click submit"), _tu("BrowserListInteractives")]),
         Resp([_rp("click it"), _tu("BrowserClickIndex", index=1)]),
-        Resp([Blk("text", "Done, clicked Submit.")], stop_reason="end_turn"),
+        Resp([Blk("text", "Done, clicked Search.")], stop_reason="end_turn"),
     ])
     aux = FakeAux()
     sent = _install(monkeypatch, primary, aux)
 
     # Run 1 (learns). initial_url gives the host for record+replay keying.
     r1 = asyncio.run(BA.run_browser_agent(
-        task="click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+        task="click the Search button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
     ))
     assert not r1.get("replayed")
-    assert SK.find_skill("docs.google.com", "click the Submit button") is not None
+    assert SK.find_skill("docs.google.com", "click the Search button") is not None
     calls_after_run1 = len(primary.calls)
     assert calls_after_run1 > 0  # run 1 used the LLM
 
     # Run 2 (replays). Must NOT call the LLM at all, and must use click_by_name.
     sent.clear()
     r2 = asyncio.run(BA.run_browser_agent(
-        task="Please click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+        task="Please click the Search button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
     ))
     assert r2.get("replayed") is True
     assert len(primary.calls) == calls_after_run1, "run 2 must make ZERO LLM calls"
@@ -307,9 +309,9 @@ def test_deferred_replay_fires_after_navigating_to_the_right_host(monkeypatch):
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
     BH._browser_history.clear()
-    SK.record_skill("docs.google.com", "click the Submit button", [
+    SK.record_skill("docs.google.com", "click the Search button", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True,
-         "clicked_role": "button", "clicked_name": "Submit"},
+         "clicked_role": "button", "clicked_name": "Search"},
     ])
     # turn 0 navigates to the doc; the re-check should preempt everything after.
     primary = FakeLLM([
@@ -331,13 +333,13 @@ def test_deferred_replay_fires_after_navigating_to_the_right_host(monkeypatch):
 
     # NO initial_url -> dispatch perceives google -> dispatch replay misses.
     r = asyncio.run(BA.run_browser_agent(
-        task="Please click the Submit button", browser_id="b1", model="sonnet",
+        task="Please click the Search button", browser_id="b1", model="sonnet",
     ))
     assert r.get("replayed") is True, "deferred re-check must replay after the navigation"
     assert any(c["action"] == "click_by_name" for c in sent), "replay re-resolved by name"
     assert len(primary.calls) == 1, "only the navigate turn ran; the re-check preempted the rest"
     # and the deferred replay still promotes the skill through the trust gate
-    assert SK.find_skill("docs.google.com", "click the Submit button")["state"] == SK._TRUSTED
+    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK._TRUSTED
 
 
 def test_deferred_replay_does_not_fire_after_the_page_was_dirtied(monkeypatch):
@@ -347,9 +349,9 @@ def test_deferred_replay_does_not_fire_after_the_page_was_dirtied(monkeypatch):
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
     BH._browser_history.clear()
-    SK.record_skill("docs.google.com", "click the Submit button", [
+    SK.record_skill("docs.google.com", "click the Search button", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True,
-         "clicked_role": "button", "clicked_name": "Submit"},
+         "clicked_role": "button", "clicked_name": "Search"},
     ])
     # turn 0 TYPES (dirties the page), THEN turn 1 navigates to the doc host.
     primary = FakeLLM([
@@ -368,7 +370,7 @@ def test_deferred_replay_does_not_fire_after_the_page_was_dirtied(monkeypatch):
     monkeypatch.setattr(BA.ws_manager, "send_browser_command", _cmd, raising=False)
 
     r = asyncio.run(BA.run_browser_agent(
-        task="Please click the Submit button", browser_id="b1", model="sonnet",
+        task="Please click the Search button", browser_id="b1", model="sonnet",
     ))
     # a dirtied page must NOT trigger the deferred replay; the LLM ran to the end
     assert not r.get("replayed"), "must not replay from a dirtied page state"
@@ -386,16 +388,16 @@ def test_replay_resolves_host_from_live_page_when_no_initial_url(monkeypatch):
     SK.clear()
     BH._browser_history.clear()
     # a skill exists for the host the live page will report (DOC_URL -> docs.google.com)
-    SK.record_skill("docs.google.com", "click the Submit button", [
+    SK.record_skill("docs.google.com", "click the Search button", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True,
-         "clicked_role": "button", "clicked_name": "Submit"},
+         "clicked_role": "button", "clicked_name": "Search"},
     ])
     primary = FakeLLM([Resp([Blk("text", "should not be needed")], stop_reason="end_turn")])
     aux = FakeAux()
     sent = _install(monkeypatch, primary, aux)
     # NOTE: no initial_url passed; the fake browser reports url=DOC_URL via perception
     r = asyncio.run(BA.run_browser_agent(
-        task="Please click the Submit button", browser_id="b1", model="sonnet",
+        task="Please click the Search button", browser_id="b1", model="sonnet",
     ))
     assert r.get("replayed") is True, "must replay via host learned from the live page"
     assert len(primary.calls) == 0, "replay must make ZERO LLM calls"
@@ -491,14 +493,37 @@ def test_replay_success_promotes_skill_to_trusted_through_the_loop(monkeypatch):
     aux = FakeAux()
     _install(monkeypatch, primary, aux)
     asyncio.run(BA.run_browser_agent(
-        task="click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+        task="click the Search button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
     ))
-    assert SK.find_skill("docs.google.com", "click the Submit button")["state"] == SK._PROBATION
+    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK._PROBATION
     r2 = asyncio.run(BA.run_browser_agent(
-        task="click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+        task="click the Search button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
     ))
     assert r2.get("replayed") is True
-    assert SK.find_skill("docs.google.com", "click the Submit button")["state"] == SK._TRUSTED
+    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK._TRUSTED
+
+
+def test_skill_with_send_step_never_replays_silently(monkeypatch):
+    # The audit finding: replay bypasses act-and-confirm and the per-tool gate,
+    # so a recorded Send/Submit must NOT auto-replay; the live agent (which
+    # confirms before anything outward) runs instead, and trust is untouched.
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear()
+    SK.record_skill("docs.google.com", "message tyler saying hi", [
+        {"tool": "BrowserClickIndex", "input": {}, "ok": True,
+         "clicked_role": "button", "clicked_name": "Send"},
+    ])
+    primary = FakeLLM([Resp([Blk("text", "handled live with confirmation")], stop_reason="end_turn")])
+    sent = _install(monkeypatch, primary, FakeAux())
+    r = asyncio.run(BA.run_browser_agent(
+        task="message tyler saying hi", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert not r.get("replayed"), "a send-step skill must never auto-replay"
+    assert not any(c["action"] == "click_by_name" for c in sent), "the recorded Send was not re-fired"
+    assert len(primary.calls) > 0, "the live agent ran instead"
+    assert SK.find_skill("docs.google.com", "message tyler saying hi")["state"] == SK._PROBATION, \
+        "skipping replay is not a replay failure; trust stays untouched"
 
 
 def test_unproven_skill_that_fails_is_quarantined_and_never_retried(monkeypatch):

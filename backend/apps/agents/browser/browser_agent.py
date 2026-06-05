@@ -499,6 +499,13 @@ async def run_browser_agent(
             return None
         if not (sk_obj and steps):
             return None
+        # Audit finding: replay bypasses the per-tool gate and act-and-confirm,
+        # so a recorded Send/Submit must never re-fire silently. Those flows
+        # always run the live agent, which confirms before anything outward.
+        safe, why = browser_skills.replay_safety(steps)
+        if not safe:
+            logger.info(f"[browser-skills] skill on {host} not replayed: {why}; running the full agent so the send is confirmed")
+            return None
         replay_attempted = True
         logger.info(f"[browser-skills] REPLAY attempt: {len(steps)} steps on {host} (after {turns_spent} LLM turn(s))")
         rlog: list[dict] = []
