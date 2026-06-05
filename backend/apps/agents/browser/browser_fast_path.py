@@ -41,18 +41,28 @@ _CLASSIFIER_SYSTEM = (
     "When a website or web app is the context, 'text/message/DM someone' means "
     "sending the message inside that site, which is browsing. Treat 'text' as SMS "
     "only when a phone number is given or no site is involved.\n"
-    "Line 1 of your reply: YES if browsing alone fully completes the request. NO if "
-    "any part clearly needs something a browser cannot do: local files or folders, "
-    "writing or running code, a terminal, creating documents or spreadsheets, SMS "
-    "to a phone number, or other desktop apps. NO for plain conversation or "
-    "questions answerable without visiting any site.\n"
+    "Line 1 of your reply is exactly one word: READ, ACT, or NO.\n"
+    "READ: the request only needs information from a PUBLIC page, no sign-in, no "
+    "account-specific data ('my' anything), and nothing on the page changes.\n"
+    "ACT: browsing completes it but it involves signing in, account data, "
+    "changing state (sending, posting, filling, booking, buying, opening the "
+    "user's own messages/feed), or the user wants a page left open on their "
+    "screen as the goal ('open X', 'pull up X', 'show me X'). When torn "
+    "between READ and ACT, say ACT.\n"
+    "NO: any part clearly needs something a browser cannot do: local files or "
+    "folders, writing or running code, a terminal, creating documents or "
+    "spreadsheets, SMS to a phone number, or other desktop apps. Also NO for "
+    "plain conversation or questions answerable without visiting any site.\n"
     "Examples:\n"
-    "'go to maya's linkedin and text her thanks' -> YES\n"
-    "'open hacker news and tell me the top story' -> YES\n"
+    "'go to maya's linkedin and text her thanks' -> ACT\n"
+    "'open hacker news and tell me the top story' -> READ (the answer is the "
+    "goal, not the open page)\n"
+    "'search wikipedia for tardigrades and open the article' -> ACT\n"
+    "'count the messages in my linkedin thread with bob' -> ACT\n"
     "'find the report on stripe.com and save it to my desktop' -> NO\n"
     "'text 555-0102 that I'm late' -> NO\n"
     "If line 1 is NO, reply with exactly the word NO and nothing else.\n"
-    "If line 1 is YES, follow it with a short browsing brief:\n"
+    "If line 1 is READ or ACT, follow it with a short browsing brief:\n"
     "ENTRY: the best starting URL; use a direct deep/search URL when the site's "
     "pattern is well known (LinkedIn people search is "
     "https://www.linkedin.com/search/results/people/?keywords=NAME).\n"
@@ -79,13 +89,19 @@ def fast_path_eligible(
     return bool(_BROWSY_RE.search(prompt))
 
 
-def _parse_verdict_and_brief(text: str) -> tuple[bool, str]:
-    """Line 1 carries the YES/NO; the rest is the optional routing brief."""
+def _parse_verdict_and_brief(text: str) -> tuple[str, str]:
+    """Line 1 carries READ/ACT/NO; the rest is the routing brief. Anything
+    unparseable is 'no' (normal path)."""
     lines = (text or "").strip().splitlines()
-    if not lines or not lines[0].strip().upper().startswith("YES"):
-        return False, ""
+    head = lines[0].strip().upper() if lines else ""
+    if head.startswith("READ"):
+        verdict = "read"
+    elif head.startswith("ACT") or head.startswith("YES"):
+        verdict = "act"
+    else:
+        return "no", ""
     brief = "\n".join(line for line in lines[1:] if line.strip()).strip()
-    return True, brief[:700]
+    return verdict, brief[:700]
 
 
 def compose_task(prompt: str, brief: str) -> str:
@@ -128,9 +144,9 @@ def _normalize_for_classifier(prompt: str) -> str:
     return re.sub(r"\btext(ing|ed|s)?\b", "message", prompt, flags=re.I)
 
 
-async def classify_and_brief(prompt: str, settings, primary_api: str | None) -> tuple[bool, str]:
-    """One cheap aux call returns the YES/NO verdict plus a routing brief (entry
-    URL + step outline), timeboxed; any failure means NO (normal path)."""
+async def classify_and_brief(prompt: str, settings, primary_api: str | None) -> tuple[str, str]:
+    """One cheap aux call returns a READ/ACT/NO verdict plus a routing brief
+    (entry URL + step outline), timeboxed; any failure means NO (normal path)."""
     try:
         from backend.apps.settings.credentials import get_anthropic_client_for_model
         from backend.apps.agents.providers.registry import resolve_aux_model
@@ -151,8 +167,8 @@ async def classify_and_brief(prompt: str, settings, primary_api: str | None) -> 
         )
         from backend.apps.agents.core.aux_llm import _safe_resp_text
         verdict, brief = _parse_verdict_and_brief(_safe_resp_text(resp))
-        logger.info(f"[browser-fast-path] classifier: {'YES' if verdict else 'NO'} brief={len(brief)}ch")
+        logger.info(f"[browser-fast-path] classifier: {verdict.upper()} brief={len(brief)}ch")
         return verdict, brief
     except Exception as e:
         logger.warning(f"[browser-fast-path] classifier unavailable, normal path: {e}")
-        return False, ""
+        return "no", ""

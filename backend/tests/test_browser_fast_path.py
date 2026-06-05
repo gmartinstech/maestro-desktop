@@ -30,14 +30,28 @@ def test_non_browsy_or_gated_messages_fall_through():
 
 
 def test_verdict_parsing_is_strict():
-    ok, brief = _parse_verdict_and_brief("YES\nENTRY: https://news.ycombinator.com\n1. read top story")
-    assert ok and brief.startswith("ENTRY:") and "top story" in brief
-    assert _parse_verdict_and_brief("yes") == (True, "")
-    assert _parse_verdict_and_brief("NO") == (False, "")
-    assert _parse_verdict_and_brief("Maybe\nENTRY: x") == (False, "")
-    assert _parse_verdict_and_brief("") == (False, "")
-    long_brief = "YES\n" + "x" * 2000
+    v, brief = _parse_verdict_and_brief("READ\nENTRY: https://news.ycombinator.com\n1. read top story")
+    assert v == "read" and brief.startswith("ENTRY:") and "top story" in brief
+    assert _parse_verdict_and_brief("ACT\nENTRY: https://x.com")[0] == "act"
+    assert _parse_verdict_and_brief("yes") == ("act", "")
+    assert _parse_verdict_and_brief("NO") == ("no", "")
+    assert _parse_verdict_and_brief("Maybe\nENTRY: x") == ("no", "")
+    assert _parse_verdict_and_brief("") == ("no", "")
+    long_brief = "ACT\n" + "x" * 2000
     assert len(_parse_verdict_and_brief(long_brief)[1]) == 700
+
+
+def test_fast_read_entry_extraction_and_thin_detection():
+    from backend.apps.agents.browser.browser_fast_read import extract_entry_url, page_is_thin
+    brief = "ENTRY: https://news.ycombinator.com/\n1. Load the page\n2. Read the top story"
+    assert extract_entry_url(brief) == "https://news.ycombinator.com/"
+    assert extract_entry_url("1. just steps, no entry") == ""
+    assert extract_entry_url("entry: HTTPS://example.com/a).") == "HTTPS://example.com/a"
+    assert page_is_thin("")
+    assert page_is_thin("HTTP error 403 fetching https://x.com")
+    assert page_is_thin("Refused to fetch http://169.254.169.254: private address")
+    assert page_is_thin("Title\n\nshort body")
+    assert not page_is_thin("Title\n\n" + "real content " * 60)
 
 
 def test_compose_task_keeps_user_words_first():
