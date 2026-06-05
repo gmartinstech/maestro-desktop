@@ -346,17 +346,47 @@ async function frameOffset(
 // Enumerate interactive elements across the root frame + every attached OOPIF
 // child frame. Shared by list_interactives (numbered list) and click_by_name
 // (stable re-resolution for replay), so both see the exact same surface.
+// Root gets a generous budget (a big real page legitimately takes a few seconds);
+// only a genuinely hung renderer exceeds it. Child frames (usually tracker/ad OOPIFs
+// on heavy sites) must be quick or they're skipped, and we cap how many we walk so an
+// ad-heavy page can't multiply full-tree calls. The page's own content is in the root
+// tree (the about:blank compose iframe is same-process, so it's in the root too).
+const _AX_ROOT_TIMEOUT_MS = 8000;
+const _AX_CHILD_TIMEOUT_MS = 2500;
+const _MAX_AX_CHILD_FRAMES = 6;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  p.catch(() => {}); // swallow a late rejection if the timeout wins the race first
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function enumerateCandidates(wv: BrowserWebview): Promise<RankItem[]> {
   const candidates: RankItem[] = [];
-  const rootTree = await sendCdp(wv, 'Accessibility.getFullAXTree', {});
+  let rootTree;
+  try {
+    rootTree = await withTimeout(
+      sendCdp(wv, 'Accessibility.getFullAXTree', {}), _AX_ROOT_TIMEOUT_MS, 'page perception');
+  } catch (err: any) {
+    // A saturated/hung renderer can't answer; surface a clear, actionable signal
+    // instead of silently blocking to the hard command timeout, so the agent can
+    // wait a beat and retry (the freeze is often intermittent) rather than abort.
+    throw new Error(
+      `the page is too busy to read right now (${err?.message || 'timed out'}); `
+      + 'wait a moment with BrowserWait and try again, or reload the page.');
+  }
   candidates.push(...axNodesToCandidates(rootTree?.nodes || []));
-  const children = await getChildSessions(wv);
+  const children = (await getChildSessions(wv)).slice(0, _MAX_AX_CHILD_FRAMES);
   for (const child of children) {
     try {
-      const childTree = await sendCdp(wv, 'Accessibility.getFullAXTree', {}, child.sessionId);
+      const childTree = await withTimeout(
+        sendCdp(wv, 'Accessibility.getFullAXTree', {}, child.sessionId), _AX_CHILD_TIMEOUT_MS, 'child frame');
       candidates.push(...axNodesToCandidates(childTree?.nodes || [], child.sessionId));
     } catch {
-      // skip unresponsive frame
+      // skip a slow/unresponsive frame rather than stalling the whole list
     }
   }
   return candidates;
