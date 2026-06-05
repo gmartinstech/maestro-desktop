@@ -100,13 +100,19 @@ _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 _CARD_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 _PHONE_RE = re.compile(r"\b(?:\+?\d[ -]?){10,15}\b")
 _TOKEN_PREFIX_RE = re.compile(r"\b(sk-|ghp_|gho_|pk_|xox[bap]-|AIza|eyJ)")
-_SENSITIVE_FIELD_RE = re.compile(r"pass|pwd|secret|otp|cvv|cvc|ssn|card|token|api[_-]?key|security", re.I)
+_SENSITIVE_FIELD_RE = re.compile(
+    r"pass|pwd|secret|otp|cvv|cvc|ssn|card|token|api[_-]?key|security"
+    r"|user|login|sign[-_]?in|email|auth|seed|recovery|phrase|\bpin\b|2fa|verif|code",
+    re.I,
+)
 
 
 def _looks_sensitive(text: str, selector: str = "") -> bool:
     """Conservative: err toward 'sensitive' so secrets never persist. Catches
     emails, SSNs, card/phone-shaped digit runs, known key prefixes, long
-    high-entropy tokens, and anything typed into a password-shaped field."""
+    high-entropy tokens, bare one-time-code digit runs, and anything typed into
+    a credential-shaped field (a wrongly-blocked persist just keeps the skill
+    in-memory, so false positives are cheap; a leak is not)."""
     if selector and _SENSITIVE_FIELD_RE.search(selector):
         return True
     if not text:
@@ -117,8 +123,11 @@ def _looks_sensitive(text: str, selector: str = "") -> bool:
         return True
     if _PHONE_RE.search(text):
         return True
-    # long high-entropy token: >=20 chars with both letters and digits
     stripped = text.strip()
+    # bare 6-8 digit run: the shape of every 2FA/SMS code; never worth persisting
+    if re.fullmatch(r"\d{6,8}", stripped):
+        return True
+    # long high-entropy token: >=20 chars with both letters and digits
     if len(stripped) >= 20 and any(c.isdigit() for c in stripped) and any(c.isalpha() for c in stripped) and " " not in stripped:
         return True
     return False
@@ -373,7 +382,7 @@ def _skills_dir() -> str | None:
         except Exception:
             return None
     try:
-        os.makedirs(base, exist_ok=True)
+        os.makedirs(base, mode=0o700, exist_ok=True)
     except Exception:
         return None
     return base

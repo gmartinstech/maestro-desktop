@@ -83,7 +83,7 @@ def _dir() -> str | None:
         except Exception:
             return None
     try:
-        os.makedirs(base, exist_ok=True)
+        os.makedirs(base, mode=0o700, exist_ok=True)
     except Exception:
         return None
     return base

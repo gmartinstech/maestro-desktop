@@ -21,6 +21,7 @@ Files (under DATA_ROOT/browser_metrics/, env-overridable):
 import json
 import logging
 import os
+import re
 import time
 from collections import Counter
 
@@ -74,7 +75,7 @@ def _metrics_dir() -> str:
             import tempfile
             base = os.path.join(tempfile.gettempdir(), "openswarm_browser_metrics")
     try:
-        os.makedirs(base, exist_ok=True)
+        os.makedirs(base, mode=0o700, exist_ok=True)
     except Exception:
         pass
     _metrics_dir_cache = base
@@ -84,10 +85,27 @@ def _metrics_dir() -> str:
 def _append(filename: str, obj: dict) -> None:
     try:
         path = os.path.join(_metrics_dir(), filename)
-        with open(path, "a", encoding="utf-8") as f:
+        # owner-only: these lines can carry task text and error snippets
+        fd = os.open(path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
             f.write(json.dumps(obj, default=str) + "\n")
     except Exception as e:
         logger.debug(f"[browser-metrics] write failed: {e}")
+
+
+# A task prompt can carry a literal secret ("log in with password hunter2");
+# scrub the value before it lands in tasks.jsonl. Keyword+value and known
+# token prefixes only; the task's normal words stay greppable.
+_TASK_SECRET_RE = re.compile(
+    r"\b(password|passcode|passphrase|pin|otp|token|secret|api[_-]?key)\b\s*(?:is|[:=])?\s*\S+",
+    re.I,
+)
+_TASK_TOKEN_RE = re.compile(r"\b(sk-|ghp_|gho_|pk_|xox[bap]-|AIza|eyJ)[A-Za-z0-9_\-.]{8,}")
+
+
+def _scrub_task(task: str) -> str:
+    t = _TASK_SECRET_RE.sub(lambda m: f"{m.group(1)} [redacted]", task or "")
+    return _TASK_TOKEN_RE.sub("[redacted]", t)
 
 
 def record_tool(session_id, browser_id, turn, tool, elapsed_ms, ok, error,
@@ -153,7 +171,7 @@ def record_task(session_id, browser_id, task, status, started_at, turns,
         "ts": time.time(),
         "session_id": session_id,
         "browser_id": browser_id,
-        "task": (task or "")[:200],
+        "task": _scrub_task(task)[:200],
         "task_sig": task_sig,
         "path": path,
         "playbook_seeded": bool(playbook_seeded),

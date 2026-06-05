@@ -87,3 +87,19 @@ def test_metrics_never_raises_on_bad_dir(monkeypatch):
     bm.record_tool("s", "b", 1, "BrowserScreenshot", 5, ok=True, error="",
                    is_loop=False, stagnation_streak=0, result_len=1)  # must not raise
     bm.record_task("s", "b", "t", "error", __import__("time").time(), 1, [], {})
+
+
+def test_task_secrets_are_scrubbed_from_tasks_jsonl(tmp_path, monkeypatch):
+    from backend.apps.agents.browser import browser_metrics as bm
+    import os as _os
+    import time as _time
+    monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", str(tmp_path))
+    bm._metrics_dir_cache = None
+    bm.record_task("s1", "b1", "log into acme with password hunter2 then post sk-abc12345678901234567",
+                   "completed", _time.time() - 1, 2, [], {})
+    line = open(_os.path.join(str(tmp_path), "tasks.jsonl")).read()
+    assert "hunter2" not in line and "sk-abc" not in line
+    assert "password [redacted]" in line
+    # owner-only file perms
+    mode = _os.stat(_os.path.join(str(tmp_path), "tasks.jsonl")).st_mode & 0o777
+    assert mode == 0o600

@@ -483,3 +483,16 @@ def test_extract_first_json_strips_fences_and_prose():
     assert _first_json('Here you go: [{"n": "x"}] hope that helps') == '[{"n": "x"}]'
     assert _first_json("no json here") == ""
     assert _first_json('{"broken": ') == ""
+
+
+def test_widened_redaction_catches_audit_bypasses():
+    # the audit's three named bypasses: bare 2FA digits, credential-shaped
+    # fields the old regex missed, and seed/recovery phrase boxes
+    assert sk._looks_sensitive("481922", "")
+    assert sk._looks_sensitive("hunter2", "#user")
+    assert sk._looks_sensitive("me@corp.com", "#login-email")
+    assert sk._looks_sensitive("correct horse battery staple", "#seed-phrase")
+    assert sk._looks_sensitive("123456", "input[name='verification-code']")
+    # the bread-and-butter skill (a search query) still persists
+    assert not sk._looks_sensitive("shoes", "#search-input")
+    assert not sk._looks_sensitive("Ada Lovelace", ".search-global-typeahead input")
