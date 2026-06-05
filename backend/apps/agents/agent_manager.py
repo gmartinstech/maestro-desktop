@@ -48,7 +48,7 @@ from backend.apps.agents.manager.prompt.tool_catalog import (
     _get_denied_tool_names,
     _is_fully_denied,
 )
-from backend.apps.agents.core.aux_llm import _safe_resp_text
+from backend.apps.agents.core.aux_llm import _safe_resp_text, clean_short_label
 from backend.apps.agents.manager.session.history_compaction import (
     _build_history_prefix,
     _get_branch_messages,
@@ -3599,7 +3599,7 @@ class AgentManager:
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_turn}],
             )
-            generated = _safe_resp_text(resp).strip().strip('"\'')
+            generated = clean_short_label(_safe_resp_text(resp))
             if generated:
                 title = generated
         except Exception as e:
@@ -3672,15 +3672,8 @@ class AgentManager:
                     ),
                 }],
             )
-            label = _safe_resp_text(resp).strip().strip('"\'').strip('.')
-            if not label:
-                return
-            # Defensive: cap length and strip leading 'I' / first-person if it
-            # slipped through despite the system prompt.
-            if label.lower().startswith(("i ", "i'm ", "i'll ")):
-                return  # bail rather than show a hallucinated first-person label
-            if len(label) > 60:
-                label = label[:60].rsplit(" ", 1)[0]
+            # Bail on refusals/first-person rather than show a hallucinated label.
+            label = clean_short_label(_safe_resp_text(resp), max_words=6, max_chars=60)
             if not label:
                 return
 
