@@ -155,10 +155,27 @@ async function handleNavigate(wv: BrowserWebview, params: Record<string, any>): 
   const raw = params.url as string;
   if (!raw) return { error: 'url parameter is required' };
   const url = resolveInput(raw);
+  // loadURL resolves only on the full 'load' event, which heavy SPAs (LinkedIn,
+  // Gmail) hold open with persistent connections long past our timeout even though
+  // the page is usable in a second. Return the moment the DOM is ready and let the
+  // agent's next wait settle the rest, the way a person clicks before every
+  // background request has finished.
+  let removeReady = () => {};
+  const domReady = new Promise<void>((resolve) => {
+    const onReady = () => resolve();
+    wv.addEventListener('dom-ready', onReady, { once: true });
+    removeReady = () => wv.removeEventListener('dom-ready', onReady);
+  });
+  const fullyLoaded = wv.loadURL(url).catch((err: any) => {
+    // A superseded navigation aborts the old load; that's normal, not a failure.
+    if (err?.message?.includes('ERR_ABORTED')) return;
+    throw err;
+  });
+  fullyLoaded.catch(() => {}); // a late load failure shouldn't throw once dom-ready returned
   try {
-    await wv.loadURL(url);
-  } catch (err: any) {
-    if (!err?.message?.includes('ERR_ABORTED')) throw err;
+    await Promise.race([fullyLoaded, domReady]);
+  } finally {
+    removeReady();
   }
   // Route-count is sampled on the next READ (handleGetText), not here: at
   // navigate-return the SPA's XHRs haven't fired yet, so this would always be ~0.
