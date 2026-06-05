@@ -496,3 +496,21 @@ def test_widened_redaction_catches_audit_bypasses():
     # the bread-and-butter skill (a search query) still persists
     assert not sk._looks_sensitive("shoes", "#search-input")
     assert not sk._looks_sensitive("Ada Lovelace", ".search-global-typeahead input")
+
+
+def test_first_unsafe_step_splits_send_skills():
+    from backend.apps.agents.browser.browser_skills import first_unsafe_step, replay_safety
+    nav_only = [
+        {"tool": "BrowserNavigate", "params": {"url": "https://x.com"}},
+        {"tool": "BrowserClickByName", "params": {"name": "Profile link"}},
+    ]
+    assert first_unsafe_step(nav_only) == (-1, "")
+    assert replay_safety(nav_only) == (True, "")
+
+    send_flow = nav_only + [
+        {"tool": "BrowserClickByName", "params": {"name": "Send"}},
+    ]
+    i, why = first_unsafe_step(send_flow)
+    assert i == 2 and "irreversible" in why
+    safe, _ = replay_safety(send_flow)
+    assert not safe

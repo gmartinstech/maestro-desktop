@@ -296,11 +296,10 @@ def distill_steps(action_log: list[dict]) -> list[dict]:
     return steps
 
 
-def replay_safety(steps: list[dict]) -> tuple[bool, str]:
-    """A skill with an outward-facing step (click Send/Submit/Pay, type into a
-    composer) must never auto-replay with zero LLM and zero confirmation; only
-    the live agent path confirms sends. Reuses the batch replayer's wordlist so
-    there is exactly one definition of "irreversible"."""
+def first_unsafe_step(steps: list[dict]) -> tuple[int, str]:
+    """Index of the first outward-facing step (click Send/Submit/Pay, type into
+    a composer), -1 if none. Reuses the batch replayer's wordlist so there is
+    exactly one definition of "irreversible"."""
     from backend.apps.agents.browser import browser_batch_replay
     for i, s in enumerate(steps):
         tool = s.get("tool", "")
@@ -312,8 +311,15 @@ def replay_safety(steps: list[dict]) -> tuple[bool, str]:
             probe = {"action": "type", "selector": p.get("selector") or ""}
         if probe and browser_batch_replay.is_send_step(probe):
             what = probe.get("name") or probe.get("selector")
-            return False, f"step {i+1} looks irreversible/outward-facing ({what!r})"
-    return True, ""
+            return i, f"step {i+1} looks irreversible/outward-facing ({what!r})"
+    return -1, ""
+
+
+def replay_safety(steps: list[dict]) -> tuple[bool, str]:
+    """A skill with an outward-facing step must never auto-replay with zero LLM
+    and zero confirmation; only the live agent path confirms sends."""
+    i, why = first_unsafe_step(steps)
+    return (i < 0), why
 
 
 def steps_are_persistable(steps: list[dict]) -> bool:

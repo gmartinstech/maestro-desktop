@@ -40,6 +40,13 @@ from backend.apps.agents.browser.browser_loop import (
     stagnation_exhausted,
 )
 from backend.apps.agents.browser.browser_validator import adjudicate_stuck
+
+# Single actions the model could have folded into one BrowserBatch turn;
+# reads, waits, and the batch tools themselves don't count toward the streak.
+_BATCHABLE_ACTION_TOOLS = {
+    "BrowserNavigate", "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
+    "BrowserType", "BrowserPressKey", "BrowserScroll",
+}
 from backend.apps.agents.browser import browser_batch_replay
 from backend.apps.agents.browser import browser_extract
 from backend.apps.agents.browser import browser_metrics
@@ -562,14 +569,20 @@ async def run_browser_agent(
     # agent below (which re-records), so a changed page can never ghost-succeed.
     replay_attempted = False
 
-    async def _try_replay(host: str, turns_spent: int) -> dict | None:
+    # set by a prefix replay; appended to the first user message so the model
+    # wakes up at the composer instead of redoing the navigation
+    replay_prefix_note = ""
+
+    async def _try_replay(host: str, turns_spent: int, allow_prefix: bool = False) -> dict | None:
         """Run a learned skill for the stable task key on `host` with zero LLM
         calls. Returns a completed-result dict on full success, or None to fall
         through to the LLM agent (no skill, unfillable slots, cancel, or any step
         miss). Updates skill trust on every attempt. Used at dispatch AND, when
         the card started on the wrong host, again after the first navigation
-        lands us somewhere a skill exists (the deferred re-check)."""
-        nonlocal final_screenshot, last_seen_url, replay_attempted
+        lands us somewhere a skill exists (the deferred re-check). With
+        allow_prefix, a send-gated skill replays its safe navigation prefix
+        mechanically and hands the live agent just the irreversible tail."""
+        nonlocal final_screenshot, last_seen_url, replay_attempted, replay_prefix_note
         if not host:
             return None
         sk_obj = browser_skills.find_skill(host, skill_key_task)
@@ -582,9 +595,58 @@ async def run_browser_agent(
         # Audit finding: replay bypasses the per-tool gate and act-and-confirm,
         # so a recorded Send/Submit must never re-fire silently. Those flows
         # always run the live agent, which confirms before anything outward.
-        safe, why = browser_skills.replay_safety(steps)
-        if not safe:
-            logger.info(f"[browser-skills] skill on {host} not replayed: {why}; running the full agent so the send is confirmed")
+        unsafe_i, why = browser_skills.first_unsafe_step(steps)
+        if unsafe_i >= 0:
+            if not (allow_prefix and unsafe_i >= 1):
+                logger.info(f"[browser-skills] skill on {host} not replayed: {why}; running the full agent so the send is confirmed")
+                return None
+            prefix = steps[:unsafe_i]
+            logger.info(
+                f"[browser-skills] PREFIX replay: {len(prefix)}/{len(steps)} steps on {host}, "
+                f"live agent confirms the tail ({why})"
+            )
+            _pst = time.time()
+            for step in prefix:
+                if cancel_event.is_set():
+                    return None
+                st = time.time()
+                res = await _cancellable(execute_browser_tool(step["tool"], step.get("params", {}), browser_id, tab_id))
+                if res is None:
+                    return None
+                el_ms = int((time.time() - st) * 1000)
+                step_ok = "error" not in res
+                browser_metrics.record_tool(
+                    session_id, browser_id, -1, step["tool"], el_ms,
+                    ok=step_ok, error=res.get("error", ""), is_loop=False,
+                    stagnation_streak=0, result_len=len(str(res.get("text") or res.get("error") or "")),
+                )
+                logger.info(f"[browser-skills] prefix step {step['tool']} ok={step_ok} in {el_ms}ms")
+                if not step_ok:
+                    verdict = browser_skills.mark_replay_failed(host, skill_key_task)
+                    logger.info(
+                        f"[browser-skills] prefix step failed ({step['tool']}: {res.get('error')}); "
+                        f"full agent from scratch (trust verdict: {verdict})"
+                    )
+                    return None
+                if res.get("url"):
+                    last_seen_url = res["url"]
+            replay_attempted = True
+            _fresh = ""
+            try:
+                lst = await execute_browser_tool("BrowserListInteractives", {}, browser_id, tab_id)
+                if isinstance(lst, dict) and lst.get("text") and "error" not in lst:
+                    _fresh = f"\nCurrent page state after the replayed prefix:\n{_truncate_state(lst['text'])}"
+            except Exception:
+                pass
+            remaining = "; ".join(f"{s['tool']}({str(s.get('params', {}))[:80]})" for s in steps[unsafe_i:])
+            replay_prefix_note = (
+                f"\n\n[skill prefix replayed] A learned skill for this exact task already performed its "
+                f"first {len(prefix)} step(s) mechanically in {int((time.time() - _pst) * 1000)}ms; the page is now at "
+                f"{last_seen_url or 'the prepared state'}. Recorded remaining step(s) for reference: {remaining}. "
+                f"Finish from HERE (do not redo the navigation), and confirm the irreversible step with "
+                f"expect proof as usual.{_fresh}"
+            )
+            logger.info(f"[browser-skills] prefix handoff note attached ({len(replay_prefix_note)}ch)")
             return None
         replay_attempted = True
         logger.info(f"[browser-skills] REPLAY attempt: {len(steps)} steps on {host} (after {turns_spent} LLM turn(s))")
@@ -662,9 +724,11 @@ async def run_browser_agent(
     # dispatch check misses and the deferred re-check inside the loop catches it
     # after the first navigation.
     replay_rechecked = False
-    _dispatch_replay = await _try_replay(replay_host, 0)
+    _dispatch_replay = await _try_replay(replay_host, 0, allow_prefix=True)
     if _dispatch_replay is not None:
         return _dispatch_replay
+    if replay_prefix_note:
+        messages[-1]["content"] = f"{messages[-1]['content']}{replay_prefix_note}"
 
     text_parts = []  # initialized before loop so post-loop summary (line ~1294) has a default
     # Circuit breaker for ReportProgress violations. Some models get stuck
@@ -678,6 +742,11 @@ async def run_browser_agent(
     MAX_CONSECUTIVE_VIOLATIONS = 3
     # rows already shown to the model; attached state shrinks to the delta
     attached_state_seen: set[str] = set()
+    # under-batching telemetry + nudge state
+    single_action_streak = 0
+    batching_nudges = 0
+    multi_action_turns = 0
+    batch_calls = 0
     try:
         for turn in range(MAX_TURNS):
             if cancel_event.is_set():
@@ -819,6 +888,22 @@ async def run_browser_agent(
             tool_uses_sorted = sorted(
                 tool_uses,
                 key=lambda t: 0 if t.name == "ReportProgress" else 1,
+            )
+
+            # Under-batching detector: the model ignores prompt-level batching
+            # invitations, so measure each turn and nudge mechanically below.
+            _turn_actions = sum(1 for t in tool_uses_sorted if t.name in _BATCHABLE_ACTION_TOOLS)
+            _turn_has_batch = any(t.name in ("BrowserBatch", "BrowserRepeatFlow") for t in tool_uses_sorted)
+            if _turn_actions >= 2 or _turn_has_batch:
+                multi_action_turns += 1
+                single_action_streak = 0
+                if _turn_has_batch:
+                    batch_calls += 1
+            elif _turn_actions == 1:
+                single_action_streak += 1
+            logger.info(
+                f"[browser-batching {session_id}] turn={turn} actions={_turn_actions} "
+                f"batch={_turn_has_batch} streak={single_action_streak}"
             )
 
             for tu in tool_uses_sorted:
@@ -1281,6 +1366,25 @@ async def run_browser_agent(
                     content_blocks = content_blocks + [
                         {"type": "text", "text": f"\n\n⚠️ {stag_nudge}"}
                     ]
+
+                # Under-batching nudge: two consecutive turns each spent a full
+                # model round-trip on ONE predictable action; say so on the
+                # result the model is about to read. Deterministic, code-fired.
+                if (tu is tool_uses_sorted[-1] and single_action_streak >= 2
+                        and "error" not in result and not is_loop and not stag_nudge):
+                    single_action_streak = 0
+                    batching_nudges += 1
+                    logger.info(
+                        f"[browser-batching {session_id}] nudge #{batching_nudges} fired at turn {turn}"
+                    )
+                    content_blocks = content_blocks + [{"type": "text", "text": (
+                        "\n\n⚡ That was another full model round-trip spent on ONE action. If the "
+                        "state above already names your next 2-3 targets, put them in ONE "
+                        "BrowserBatch (or several tool calls in this same reply); they run in "
+                        "order, settle between steps, and stop safely at the first failure, so a "
+                        "conservative batch costs nothing. Keep irreversible steps "
+                        "(Send/Submit/Pay/Post) solo."
+                    )}]
                 # Deterministic nudging exhausted: ONE cheap aux adjudication
                 # to suggest a concrete next step before we keep failing.
                 if stagnation_exhausted(stagnation_streak) and not aux_adjudicated:
@@ -1409,6 +1513,11 @@ async def run_browser_agent(
             )
 
         session.status = final_status
+        logger.info(
+            f"[browser-batching {session_id}] run summary: turns={turn + 1} "
+            f"multi_action_turns={multi_action_turns} batch_calls={batch_calls} "
+            f"nudges={batching_nudges}"
+        )
         browser_metrics.record_task(session_id, browser_id, task, final_status,
                                     metrics_started_at, turn + 1, action_log, session.tokens,
                                     path="llm_fallback" if replay_attempted else "llm",
