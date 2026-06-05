@@ -74,7 +74,92 @@ export function getActionLabel(action: string): string {
   return ACTION_LABELS[action] ?? 'Working...';
 }
 
-async function handleScreenshot(wv: BrowserWebview): Promise<Record<string, any>> {
+// Draw each cached element's index as a colored chip on the live page right
+// before capture (browser-use's trick): the screenshot then speaks the same
+// numbers as BrowserListInteractives, so the vision side can act by index.
+const _ANNOTATION_COLORS = ['#e5484d', '#0091ff', '#30a46c', '#f76b15', '#8e4ec6', '#00a2c7'];
+const _ANNOTATE_BUDGET_MS = 1500;
+
+// One unsettled CDP bridge promise must never hang the screenshot; race each call.
+function _cdpTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error('cdp call timed out')), ms))]);
+}
+
+async function annotateElements(wv: BrowserWebview): Promise<number> {
+  const cacheBridge = (window as any).openswarm?.cdpCacheGet;
+  const cached = cacheBridge ? await _cdpTimeout(cacheBridge(wv.getWebContentsId()), 500) : null;
+  if (!cached || typeof cached !== 'object') return 0;
+  const deadline = Date.now() + _ANNOTATE_BUDGET_MS;
+  const drawOne = async (idxStr: string, entry: any): Promise<boolean> => {
+    const backendNodeId = typeof entry === 'number' ? entry : entry?.backendNodeId;
+    // v1 is root-frame only: OOPIF rects are frame-local and would land wrong
+    if (!backendNodeId || entry?.sessionId) return false;
+    try {
+      const t = await _cdpTimeout(sendCdp(wv, 'DOM.resolveNode', { backendNodeId }), 300);
+      const r = await _cdpTimeout(sendCdp(wv, 'Runtime.callFunctionOn', {
+        objectId: t.object.objectId,
+        functionDeclaration:
+          'function(idx, color) {'
+          + ' const r = this.getBoundingClientRect();'
+          + ' if (r.width <= 0 || r.height <= 0) return false;'
+          + ' if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return false;'
+          + ' let c = document.getElementById("__osw_annotations__");'
+          + ' if (!c) { c = document.createElement("div"); c.id = "__osw_annotations__";'
+          + '   c.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none;";'
+          + '   document.documentElement.appendChild(c); }'
+          + ' const box = document.createElement("div");'
+          + ' box.style.cssText = "position:fixed;left:" + r.left + "px;top:" + r.top + "px;width:" + r.width + "px;height:" + r.height + "px;border:2px solid " + color + ";box-sizing:border-box;";'
+          + ' const tag = document.createElement("span");'
+          + ' tag.textContent = String(idx);'
+          + ' tag.style.cssText = "position:absolute;left:-2px;top:-16px;background:" + color + ";color:#fff;font:bold 11px/14px monospace;padding:0 4px;border-radius:2px;";'
+          + ' if (r.top < 18) { tag.style.top = "-2px"; }'
+          + ' box.appendChild(tag); c.appendChild(box); return true;'
+          + ' }',
+        arguments: [{ value: Number(idxStr) }, { value: _ANNOTATION_COLORS[Number(idxStr) % _ANNOTATION_COLORS.length] }],
+        returnByValue: true,
+      }), 300);
+      return r?.result?.value === true;
+    } catch { return false; } // node gone or call timed out; skip
+  };
+  let drawn = 0;
+  const entries = Object.entries(cached);
+  const CHUNK = 10;
+  for (let i = 0; i < entries.length && Date.now() < deadline; i += CHUNK) {
+    const results = await Promise.allSettled(
+      entries.slice(i, i + CHUNK).map(([idxStr, e]) => drawOne(idxStr, e)),
+    );
+    drawn += results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
+  }
+  return drawn;
+}
+
+async function removeAnnotations(wv: BrowserWebview): Promise<void> {
+  try {
+    await _cdpTimeout(sendCdp(wv, 'Runtime.evaluate', {
+      expression: 'document.getElementById("__osw_annotations__")?.remove()',
+    }), 800);
+  } catch { /* page navigated mid-capture; the overlay died with it */ }
+}
+
+async function handleScreenshot(wv: BrowserWebview, params?: Record<string, any>): Promise<Record<string, any>> {
+  if (params?.annotate !== false) {
+    let drawn = 0;
+    try {
+      drawn = await annotateElements(wv);
+      if (drawn > 0) {
+        const shot = await captureRetry(wv);
+        if (shot.image) shot.text = `Screenshot with ${drawn} numbered boxes matching your element list (pass annotate:false for a clean shot).`;
+        return shot;
+      }
+    } catch { /* annotation is decoration; a plain shot always beats an error */
+    } finally {
+      if (drawn > 0) await removeAnnotations(wv);
+    }
+  }
+  return captureRetry(wv);
+}
+
+async function captureRetry(wv: BrowserWebview): Promise<Record<string, any>> {
   // capturePage throws UnknownVizError if the webview hasn't composited a frame
   // yet (the Viz compositor races the first paint, reliably bit turn-0 captures).
   // Retry a few times with a short backoff so a cold first screenshot succeeds
@@ -1305,7 +1390,7 @@ async function runBrowserCommand(
   try {
     switch (action) {
       case 'screenshot':
-        result = await handleScreenshot(wv);
+        result = await handleScreenshot(wv, params);
         break;
       case 'get_text':
         result = await handleGetText(wv);

@@ -71,11 +71,22 @@ BROWSER_TOOLS_SCHEMA = [
         "name": "BrowserScreenshot",
         "description": (
             "Capture a screenshot of the browser page. Returns the screenshot as a "
-            "base64-encoded PNG image. Use this to see what is currently displayed."
+            "base64-encoded PNG image. Use this to see what is currently displayed. "
+            "Elements from your last BrowserListInteractives come back with numbered "
+            "colored boxes drawn on them, the same numbers you click with, so you can "
+            "go straight from what you see to BrowserClickIndex."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "annotate": {
+                    "type": "boolean",
+                    "description": (
+                        "Default true. Pass false for a clean, unannotated shot, e.g. "
+                        "when capturing proof of a completed action."
+                    ),
+                },
+            },
             "required": [],
         },
     },
