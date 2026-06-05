@@ -1143,3 +1143,100 @@ def test_find_reusable_card_reuses_own_then_orphan_never_user(monkeypatch):
         status = "running"
     monkeypatch.setattr(am_mod.agent_manager, "get_session", lambda sid: _Running(), raising=False)
     assert BA._find_reusable_card("d1", target, "p2") == ""
+
+
+def _fake_settle(calls):
+    async def fake_smart_wait(execute_fn, browser_id, tab_id, max_ms, **kw):
+        calls.append(("settle", max_ms))
+        return {"settled": True, "hung": False}
+    return fake_smart_wait
+
+
+def _fake_exec(calls, list_text='3 interactive elements\n[1]<button "A">'):
+    async def wait_exec(tool, params, bid, tid):
+        calls.append((tool, dict(params)))
+        return {"text": list_text}
+    return wait_exec
+
+
+def test_post_action_state_settles_then_attaches(monkeypatch):
+    import asyncio
+    from backend.apps.agents.browser import browser_agent as ba
+    calls = []
+    monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
+    out = asyncio.run(ba._post_action_state(
+        "BrowserClickIndex", {"index": 1}, {"text": "Clicked"},
+        "b1", "", _fake_exec(calls), "find tyler",
+    ))
+    assert ba.PAGE_STATE_MARKER in out and '[1]<button "A">' in out
+    assert ("settle", 1200) in calls
+    assert ("BrowserListInteractives", {"goal": "find tyler"}) in calls
+
+
+def test_post_action_state_navigate_gets_longer_settle(monkeypatch):
+    import asyncio
+    from backend.apps.agents.browser import browser_agent as ba
+    calls = []
+    monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
+    asyncio.run(ba._post_action_state(
+        "BrowserNavigate", {"url": "https://x.com"}, {"text": "Navigated"},
+        "b1", "", _fake_exec(calls), "",
+    ))
+    assert ("settle", 2500) in calls
+
+
+def test_post_action_state_expect_skips_double_settle(monkeypatch):
+    import asyncio
+    from backend.apps.agents.browser import browser_agent as ba
+    calls = []
+    monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
+    out = asyncio.run(ba._post_action_state(
+        "BrowserClickIndex", {"index": 2, "expect": "Sent"}, {"text": "Clicked"},
+        "b1", "", _fake_exec(calls), "",
+    ))
+    assert not any(c[0] == "settle" for c in calls)
+    assert ba.PAGE_STATE_MARKER in out
+
+
+def test_post_action_state_skips_errors_reads_and_batch_reads(monkeypatch):
+    import asyncio
+    from backend.apps.agents.browser import browser_agent as ba
+    calls = []
+    monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
+    exec_fn = _fake_exec(calls)
+    assert asyncio.run(ba._post_action_state(
+        "BrowserClickIndex", {"index": 1}, {"error": "nope"}, "b", "", exec_fn, "")) == ""
+    assert asyncio.run(ba._post_action_state(
+        "BrowserGetText", {}, {"text": "page text"}, "b", "", exec_fn, "")) == ""
+    batch_in = {"actions": [{"type": "click_index", "params": {"index": 1}},
+                            {"type": "list_interactives", "params": {}}]}
+    assert asyncio.run(ba._post_action_state(
+        "BrowserBatch", batch_in, {"text": "ran 2"}, "b", "", exec_fn, "")) == ""
+    assert calls == []
+
+
+def test_post_action_state_truncates_long_lists(monkeypatch):
+    import asyncio
+    from backend.apps.agents.browser import browser_agent as ba
+    calls = []
+    monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
+    long_list = "\n".join(f'[{i}]<button "b{i}">' for i in range(60))
+    out = asyncio.run(ba._post_action_state(
+        "BrowserType", {"selector": "#q", "text": "hi"}, {"text": "Typed"},
+        "b1", "", _fake_exec(calls, long_list), "",
+    ))
+    assert "(+25 more rows" in out and '[34]<button "b34">' in out and '[35]' not in out
+
+
+def test_post_action_state_hung_settle_attaches_nothing(monkeypatch):
+    import asyncio
+    from backend.apps.agents.browser import browser_agent as ba
+    calls = []
+    async def hung_wait(execute_fn, browser_id, tab_id, max_ms, **kw):
+        return {"settled": False, "hung": True}
+    monkeypatch.setattr(ba.browser_wait, "smart_wait", hung_wait)
+    out = asyncio.run(ba._post_action_state(
+        "BrowserClick", {"selector": "a"}, {"text": "Clicked"},
+        "b1", "", _fake_exec(calls), "",
+    ))
+    assert out == "" and calls == []

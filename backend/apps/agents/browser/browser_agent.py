@@ -22,6 +22,7 @@ from backend.apps.agents.browser.browser_history import (
     _trim_history_by_turns,
     _validate_message_pairing,
     clear_browser_history,
+    PAGE_STATE_MARKER,
 )
 from backend.apps.agents.browser.browser_loop import (
     _LOOP_DETECTION_EXCLUDED_TOOLS,
@@ -121,6 +122,59 @@ def _format_tool_result(result: dict, tool_name: str) -> list[dict]:
 
     text = result.get("text", json.dumps(result))
     return [{"type": "text", "text": str(text)}]
+
+
+# Mutating tools whose results get fresh page state attached (the browser-use
+# loop shape: act, settle, see), so acting and seeing are one turn, not two.
+_AUTO_STATE_TOOLS = {
+    "BrowserNavigate", "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
+    "BrowserType", "BrowserPressKey", "BrowserScroll", "BrowserBatch",
+}
+_AUTO_STATE_MAX_LINES = 35
+_AUTO_SETTLE_CAPS_MS = {"BrowserNavigate": 2500, "BrowserBatch": 1500}
+
+
+def _batch_ends_with_read(tool_input: dict) -> bool:
+    actions = (tool_input or {}).get("actions") or []
+    return bool(actions) and (actions[-1] or {}).get("type") == "list_interactives"
+
+
+def _truncate_state(text: str, max_lines: int = _AUTO_STATE_MAX_LINES) -> str:
+    lines = str(text).splitlines()
+    if len(lines) <= max_lines:
+        return str(text)
+    return "\n".join(lines[:max_lines]) + (
+        f"\n(+{len(lines) - max_lines} more rows; call BrowserListInteractives for the full list)"
+    )
+
+
+async def _post_action_state(
+    tool_name: str, tool_input: dict, result: dict,
+    browser_id: str, tab_id: str, wait_exec, goal: str,
+) -> str:
+    """Settle the page after a mutating action, then return a compact fresh
+    interactives list to append to its result. Empty string = attach nothing."""
+    if tool_name not in _AUTO_STATE_TOOLS or not isinstance(result, dict) or "error" in result:
+        return ""
+    if tool_name == "BrowserBatch" and _batch_ends_with_read(tool_input):
+        return ""
+    # an `expect` confirm already ran its own smart_wait; don't settle twice
+    if not str((tool_input or {}).get("expect") or "").strip():
+        settle = await browser_wait.smart_wait(
+            wait_exec, browser_id, tab_id, _AUTO_SETTLE_CAPS_MS.get(tool_name, 1200),
+        )
+        if settle.get("hung"):
+            return ""
+    try:
+        params = {"goal": goal} if goal else {}
+        lst = await asyncio.wait_for(
+            wait_exec("BrowserListInteractives", params, browser_id, tab_id), timeout=5.0,
+        )
+    except Exception:
+        return ""
+    if not isinstance(lst, dict) or "error" in lst or not lst.get("text"):
+        return ""
+    return f"\n\n{PAGE_STATE_MARKER}\n{_truncate_state(lst['text'])}"
 
 
 async def _request_browser_approval(
@@ -607,6 +661,7 @@ async def run_browser_agent(
             # re-read every turn, so this is the biggest per-turn context win on
             # any visual task (measured ~2.9x fewer image tokens, ~5x less upload).
             browser_history.prune_old_screenshots(messages)
+            browser_history.prune_stale_page_state(messages)
             response = await _cancellable(client.messages.create(
                 model=api_model,
                 max_tokens=4096,
@@ -1096,6 +1151,12 @@ async def run_browser_agent(
                 if result.get("url"):
                     last_seen_url = result["url"]
                 card_gone_streak = card_gone_streak + 1 if card_is_unavailable(result) else 0
+
+                _auto_state = await _post_action_state(
+                    tu.name, tu.input, result, browser_id, tab_id, _wait_exec, current_next_goal,
+                )
+                if _auto_state:
+                    result["text"] = f"{result.get('text') or ''}{_auto_state}"
 
                 # Deferred replay re-check: the orchestrator often opens a fresh
                 # card on the wrong host, so the dispatch-time replay missed. Once
