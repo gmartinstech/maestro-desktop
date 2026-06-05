@@ -3320,8 +3320,82 @@ class AgentManager:
             "session": session.model_dump(mode="json"),
         })
 
-        task = asyncio.create_task(self._run_agent_loop(session_id, prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids))
+        # Browser fast path: a plainly browser-only first message skips the
+        # orchestrator LLM entirely (it was ~2/3 of the token bill on these
+        # tasks, spent deciding "delegate to a browser" and restating the
+        # outcome). Conservative gates + a cheap aux classifier; any miss or
+        # error falls through to the normal loop.
+        use_fast_path = False
+        if not hidden:
+            try:
+                from backend.apps.agents.browser import browser_fast_path
+                _extras = bool(images or context_paths or forced_tools or attached_skills
+                               or len(selected_browser_ids or []) > 1)
+                if browser_fast_path.fast_path_eligible(
+                    prompt, session.mode or "", session.dashboard_id, is_first_message, _extras,
+                ):
+                    from backend.apps.agents.providers.registry import get_api_type
+                    use_fast_path = await browser_fast_path.classify_browser_only(
+                        prompt, load_settings(), get_api_type(session.model),
+                    )
+            except Exception as e:
+                logger.warning(f"[browser-fast-path] gate error, normal path: {e}")
+
+        if use_fast_path:
+            task = asyncio.create_task(self._run_browser_fast_path(session_id, prompt, selected_browser_ids))
+        else:
+            task = asyncio.create_task(self._run_agent_loop(session_id, prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids))
         self.tasks[session_id] = task
+
+    async def _run_browser_fast_path(self, session_id: str, prompt: str, selected_browser_ids: list[str] | None):
+        """Dispatch the browser sub-agent directly and reply with its outcome;
+        the orchestrator LLM never runs. stop_agent still works: it cancels
+        this task and the browser-agent child sessions it spawned."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return
+        logger.info(f"[browser-fast-path] direct dispatch for session {session_id}")
+        text = ""
+        try:
+            from backend.apps.agents.browser.browser_agent import run_browser_agents
+            selected = [b for b in (selected_browser_ids or []) if b]
+            results = await run_browser_agents(
+                tasks=[{"task": prompt, "browser_id": selected[0] if selected else "", "url": ""}],
+                model=session.model,
+                dashboard_id=session.dashboard_id,
+                pre_selected_browser_ids=selected,
+                parent_session_id=session_id,
+            )
+            r = results[0] if results else {}
+            if isinstance(r, dict):
+                text = (r.get("summary") or "").strip()
+                if not text:
+                    text = f"The browser agent couldn't complete this: {r.get('error') or 'unknown error'}"
+            else:
+                text = f"The browser agent couldn't complete this: {r}"
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"[browser-fast-path] dispatch failed: {e}")
+            text = f"The browser agent couldn't complete this: {e}"
+
+        asst_msg = Message(role="assistant", content=text, branch_id=session.active_branch_id)
+        session.messages.append(asst_msg)
+        await ws_manager.send_to_session(session_id, "agent:message", {
+            "session_id": session_id,
+            "message": asst_msg.model_dump(mode="json"),
+        })
+        session.status = "completed"
+        session.closed_at = datetime.now()
+        await ws_manager.send_to_session(session_id, "agent:status", {
+            "session_id": session_id,
+            "status": "completed",
+            "session": session.model_dump(mode="json"),
+        })
+        try:
+            _save_session(session_id, session.model_dump(mode="json"))
+        except Exception as e:
+            logger.warning(f"Failed to snapshot session {session_id}: {e}")
 
     async def stop_agent(self, session_id: str):
         """Stop a running agent and all its browser-agent children."""
