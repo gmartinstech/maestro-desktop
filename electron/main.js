@@ -1158,6 +1158,12 @@ function createWindow() {
   mainWindow.webContents.on('will-attach-webview', (_event, webPreferences, params) => {
     webPreferences.plugins = true;
     webPreferences.enableBlinkFeatures = 'EncryptedMedia';
+    // Block autoplay in agent webviews. A profile page full of autoplaying video
+    // (the repeated video.js logs) saturates the renderer's main thread and is a
+    // prime reason the tab goes unresponsive and every command then times out. The
+    // agent never needs autoplay; a human who wants to watch just clicks play, which
+    // is the user gesture that re-enables it. Scoped to webviews, not the main window.
+    webPreferences.autoplayPolicy = 'document-user-activation-required';
     // Force our webview preload to attach for every <webview>, unconditionally.
     // The alternative (reading window.openswarm.getWebviewPreloadPath() in
     // BrowserCard's React code at module-eval time) raced against the
@@ -1899,6 +1905,20 @@ app.on('web-contents-created', (_event, contents) => {
       cdpAutoAttachWired.delete(contents.id);
       cdpRoutesByWcId.delete(contents.id);
       webviewConsoleErrors.delete(contents.id);
+    });
+
+    // A heavy SPA can HANG the renderer without crashing it (a render-process-gone
+    // never fires), leaving every CDP command to time out and the agent to abort the
+    // card. Chromium flags that state as 'unresponsive'; reload once to try to un-stick
+    // it instead of giving up. Rate-limited so a page that also hangs on reload can't
+    // spin, and the agent's own card-gone detection still bails if reload doesn't help.
+    let lastRecoveryReloadAt = 0;
+    contents.on('unresponsive', () => {
+      const now = Date.now();
+      if (now - lastRecoveryReloadAt < 30000) return;
+      lastRecoveryReloadAt = now;
+      console.log(`[webview] renderer unresponsive on wcId ${contents.id}; reloading to recover`);
+      try { contents.reload(); } catch { /* nothing more we can do from here */ }
     });
 
     // WebAuthn/passkey shim. Injected on every dom-ready in the main world
