@@ -148,9 +148,33 @@ def _truncate_state(text: str, max_lines: int = _AUTO_STATE_MAX_LINES) -> str:
     )
 
 
+def _delta_state(text: str, seen_lines: set[str]) -> str:
+    """Shrink an attached element list to the rows that changed since the last
+    attach; stable indices make a line's identity meaningful, so re-sending 30
+    unchanged rows every action is pure token burn. Mutates `seen_lines` to the
+    new baseline. Small overlaps just resend the full list (a reshuffle)."""
+    rows = [l for l in str(text).splitlines() if l.startswith("[")]
+    cur = set(rows)
+    prev = set(seen_lines)
+    seen_lines.clear()
+    seen_lines.update(cur)
+    if not prev or not rows:
+        return text
+    fresh = [l for l in rows if l not in prev]
+    unchanged = len(rows) - len(fresh)
+    if unchanged < 6:
+        return text
+    if not fresh:
+        return f"(all {unchanged} element rows unchanged since your last look; same numbers still valid)"
+    return "\n".join(fresh) + (
+        f"\n(+{unchanged} rows unchanged since your last look; their numbers are still valid)"
+    )
+
+
 async def _post_action_state(
     tool_name: str, tool_input: dict, result: dict,
     browser_id: str, tab_id: str, wait_exec, goal: str,
+    seen_lines: set[str] | None = None,
 ) -> str:
     """Settle the page after a mutating action, then return a compact fresh
     interactives list to append to its result. Empty string = attach nothing."""
@@ -174,7 +198,8 @@ async def _post_action_state(
         return ""
     if not isinstance(lst, dict) or "error" in lst or not lst.get("text"):
         return ""
-    return f"\n\n{PAGE_STATE_MARKER}\n{_truncate_state(lst['text'])}"
+    state = lst["text"] if seen_lines is None else _delta_state(lst["text"], seen_lines)
+    return f"\n\n{PAGE_STATE_MARKER}\n{_truncate_state(state)}"
 
 
 async def _request_browser_approval(
@@ -651,6 +676,8 @@ async def run_browser_agent(
     # MAX_TURNS doing the same broken thing.
     consecutive_violations = 0
     MAX_CONSECUTIVE_VIOLATIONS = 3
+    # rows already shown to the model; attached state shrinks to the delta
+    attached_state_seen: set[str] = set()
     try:
         for turn in range(MAX_TURNS):
             if cancel_event.is_set():
@@ -1154,8 +1181,15 @@ async def run_browser_agent(
                     last_seen_url = result["url"]
                 card_gone_streak = card_gone_streak + 1 if card_is_unavailable(result) else 0
 
+                # a direct full list resets the delta baseline to what the model just saw
+                if tu.name == "BrowserListInteractives" and "error" not in result:
+                    attached_state_seen.clear()
+                    attached_state_seen.update(
+                        l for l in str(result.get("text") or "").splitlines() if l.startswith("[")
+                    )
                 _auto_state = await _post_action_state(
                     tu.name, tu.input, result, browser_id, tab_id, _wait_exec, current_next_goal,
+                    seen_lines=attached_state_seen,
                 )
                 if _auto_state:
                     result["text"] = f"{result.get('text') or ''}{_auto_state}"

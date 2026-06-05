@@ -1240,3 +1240,41 @@ def test_post_action_state_hung_settle_attaches_nothing(monkeypatch):
         "b1", "", _fake_exec(calls), "",
     ))
     assert out == "" and calls == []
+
+
+def test_delta_state_first_attach_sends_full_list():
+    from backend.apps.agents.browser.browser_agent import _delta_state
+    seen = set()
+    full = "8 interactive elements:\n" + "\n".join(f'[{i}]<button "b{i}">' for i in range(1, 9))
+    assert _delta_state(full, seen) == full
+    assert len(seen) == 8
+
+
+def test_delta_state_shrinks_to_changed_rows():
+    from backend.apps.agents.browser.browser_agent import _delta_state
+    rows = [f'[{i}]<button "b{i}">' for i in range(1, 11)]
+    seen = set()
+    _delta_state("\n".join(rows), seen)
+    nxt = rows[:9] + ['[10]<button "b10" value="typed">', '[11]*<button "new">']
+    out = _delta_state("\n".join(nxt), seen)
+    assert '[11]*<button "new">' in out and 'value="typed"' in out
+    assert '[3]<button "b3">' not in out
+    assert "+9 rows unchanged" in out
+    assert seen == set(nxt)
+
+
+def test_delta_state_no_changes_collapses_to_one_line():
+    from backend.apps.agents.browser.browser_agent import _delta_state
+    rows = "\n".join(f'[{i}]<link "l{i}">' for i in range(1, 13))
+    seen = set()
+    _delta_state(rows, seen)
+    out = _delta_state(rows, seen)
+    assert out.startswith("(all 12 element rows unchanged")
+
+
+def test_delta_state_reshuffle_resends_full():
+    from backend.apps.agents.browser.browser_agent import _delta_state
+    seen = set()
+    _delta_state("\n".join(f'[{i}]<button "a{i}">' for i in range(1, 11)), seen)
+    new_page = "10 interactive elements:\n" + "\n".join(f'[{i}]<button "z{i}">' for i in range(1, 11))
+    assert _delta_state(new_page, seen) == new_page
