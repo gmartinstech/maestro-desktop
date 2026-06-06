@@ -104,3 +104,38 @@ def test_dispatch_refused_instantly_when_no_dashboard_connected():
     assert len(results) == 1
     assert results[0]["summary"].startswith("Error: no dashboard window is connected")
     assert dispatch_failed(results[0]["summary"])
+
+
+def test_send_probe_verdict_parsing_order_and_fail_closed():
+    from backend.apps.agents.browser.browser_fast_path import probe_verdict
+    assert probe_verdict("OUTCOME: PAYLOAD-NOT-FOUND") == "not-found"
+    assert probe_verdict("checked thread. OUTCOME: PAYLOAD-FOUND at 10:43 PM") == "found"
+    assert probe_verdict("the browser became unresponsive") == "unknown"
+    assert probe_verdict("") == "unknown"
+    # a report quoting BOTH tokens must not read as found
+    assert probe_verdict("PAYLOAD-FOUND? no: PAYLOAD-NOT-FOUND") == "not-found"
+
+
+def test_send_probe_task_is_read_only_and_names_payload():
+    from backend.apps.agents.browser.browser_fast_path import send_probe_task
+    t = send_probe_task("dm tyler", "[test] hello r45-os")
+    assert "READ-ONLY" in t and "[test] hello r45-os" in t
+    assert "PAYLOAD-FOUND" in t and "PAYLOAD-NOT-FOUND" in t
+
+
+def test_recovery_task_clearance_only_when_verified():
+    from backend.apps.agents.browser.browser_fast_path import recovery_task
+    hedged = recovery_task("dm tyler", "browser died")
+    cleared = recovery_task("dm tyler", "browser died", verified_undelivered=True)
+    assert "FIRST verify" in hedged and "NOT yet delivered" not in hedged
+    assert "NOT yet delivered" in cleared and "exactly ONCE" in cleared
+
+
+def test_send_probe_replies_are_honest():
+    from backend.apps.agents.browser.browser_fast_path import (
+        already_sent_reply, unverifiable_reply,
+    )
+    a = already_sent_reply("[test] hi r46-os", "OUTCOME: PAYLOAD-FOUND at 11:02 PM")
+    assert "did NOT send it again" in a and "r46-os" in a
+    u = unverifiable_reply("[test] hi r46-os", "browser became unresponsive")
+    assert "not retrying" in u.lower() and "r46-os" in u

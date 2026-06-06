@@ -3376,7 +3376,7 @@ class AgentManager:
                 if not text:
                     _fp_path = "read->browser"
 
-            async def _dispatch(task_text: str) -> str:
+            async def _dispatch(task_text: str) -> dict:
                 results = await run_browser_agents(
                     tasks=[{"task": task_text, "browser_id": selected[0] if selected else "", "url": ""}],
                     model=session.model,
@@ -3385,20 +3385,43 @@ class AgentManager:
                     parent_session_id=session_id,
                 )
                 r = results[0] if results else {}
-                return (r.get("summary") or "").strip() if isinstance(r, dict) else str(r or "")
+                return r if isinstance(r, dict) else {"summary": str(r or ""), "action_log": []}
+
+            def _summary(r: dict) -> str:
+                return (r.get("summary") or "").strip()
 
             if not text:
-                text = await _dispatch(browser_fast_path.compose_task(prompt, brief))
+                first = await _dispatch(browser_fast_path.compose_task(prompt, brief))
+                text = _summary(first)
                 if browser_fast_path.dispatch_failed(text):
                     # Retry only transient failures; a dead dashboard fails the
                     # retry identically, so skip it and tell the user instead.
-                    if ws_manager.global_connections:
-                        logger.info(f"[browser-fast-path] first dispatch failed for {session_id}; one recovery dispatch")
-                        _fp_path += "+recovery"
-                        text = await _dispatch(browser_fast_path.recovery_task(prompt, text))
-                    else:
+                    if not ws_manager.global_connections:
                         _fp_path += "+no-dashboard"
                         text = browser_fast_path.NO_DASHBOARD_REPLY
+                    else:
+                        from backend.apps.agents.browser import browser_batch_replay
+                        payload = browser_batch_replay.send_payload_from_log(first.get("action_log"))
+                        if payload:
+                            # The dead attempt had already typed into a composer, so a
+                            # blind retry risks a double-send: a read-only probe's
+                            # verdict gates the retry in code, not prose.
+                            logger.info(f"[browser-fast-path] send-zone failure for {session_id}; payload probe before any retry")
+                            probe_text = _summary(await _dispatch(browser_fast_path.send_probe_task(prompt, payload)))
+                            pv = browser_fast_path.probe_verdict(probe_text)
+                            logger.info(f"[browser-fast-path] send-probe verdict={pv} for {session_id}")
+                            _fp_path += f"+send-probe={pv}"
+                            if pv == "found":
+                                text = browser_fast_path.already_sent_reply(payload, probe_text)
+                            elif pv == "not-found":
+                                text = _summary(await _dispatch(
+                                    browser_fast_path.recovery_task(prompt, text, verified_undelivered=True)))
+                            else:
+                                text = browser_fast_path.unverifiable_reply(payload, text)
+                        else:
+                            logger.info(f"[browser-fast-path] first dispatch failed for {session_id}; one recovery dispatch")
+                            _fp_path += "+recovery"
+                            text = _summary(await _dispatch(browser_fast_path.recovery_task(prompt, text)))
                 if not text:
                     text = "The browser agent couldn't complete this and gave no report."
         except asyncio.CancelledError:

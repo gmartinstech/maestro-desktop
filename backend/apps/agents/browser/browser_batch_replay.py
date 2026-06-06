@@ -153,6 +153,40 @@ def live_batch_guard(actions, seen_lines) -> str:
     return ""
 
 
+def send_payload_from_log(action_log) -> str:
+    """The text a failed run typed into a composer-ish field, '' if it never
+    reached the send zone. Gates the recovery verify-first probe: r44's retry
+    SAID it would verify first then didn't, so the check must be code, not prose."""
+    typed: list[str] = []
+    for a in action_log or []:
+        if not isinstance(a, dict):
+            continue
+        tool = a.get("tool")
+        inp = a.get("input") if isinstance(a.get("input"), dict) else {}
+        text = str(inp.get("text") or "").strip()
+        if not text and tool != "BrowserBatch":
+            continue
+        if tool == "BrowserClickIndex":
+            name = str(a.get("clicked_name") or "")
+            role = str(a.get("clicked_role") or "")
+            # a filter/search box also has role textbox; real messages are longer
+            if _COMPOSE_SEL_RE.search(name) or (role == "textbox" and len(text) >= 20):
+                typed.append(text)
+        elif tool == "BrowserType":
+            if _COMPOSE_SEL_RE.search(str(inp.get("selector") or "")):
+                typed.append(text)
+        elif tool == "BrowserBatch":
+            for sub in (inp.get("actions") or []):
+                if not isinstance(sub, dict):
+                    continue
+                p = sub.get("params") if isinstance(sub.get("params"), dict) else {}
+                sub_text = str(p.get("text") or "").strip()
+                if (sub.get("type") == "type" and sub_text
+                        and _COMPOSE_SEL_RE.search(str(p.get("selector") or ""))):
+                    typed.append(sub_text)
+    return max(typed, key=len) if typed else ""
+
+
 def _sub(val, value: str):
     return value if val == PLACEHOLDER else (
         val.replace(PLACEHOLDER, value) if isinstance(val, str) else val

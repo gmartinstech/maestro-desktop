@@ -214,3 +214,41 @@ def test_guard_allows_search_type_then_enter():
         {"type": "type", "params": {"selector": "input.search-global-typeahead__input", "text": "q"}},
         {"type": "press_key", "params": {"key": "Enter"}},
     ], set()) == ""
+
+
+# --- send payload extraction (recovery verify-first gate) -----------------------
+def test_payload_extracted_from_composer_click_index_fill():
+    log = [
+        {"tool": "BrowserNavigate", "input": {"url": "https://x.com"}},
+        {"tool": "BrowserClickIndex", "input": {"index": 4, "text": "[test] hello world r44-os"},
+         "clicked_role": "textbox", "clicked_name": "Write a message…"},
+    ]
+    assert br.send_payload_from_log(log) == "[test] hello world r44-os"
+
+
+def test_payload_ignores_search_fills_and_short_filter_textboxes():
+    log = [
+        {"tool": "BrowserClickIndex", "input": {"index": 2, "text": "tyler chen entrepreneurs"},
+         "clicked_role": "searchbox", "clicked_name": "Search"},
+        {"tool": "BrowserClickIndex", "input": {"index": 8, "text": "Entrepreneurs First"},
+         "clicked_role": "textbox", "clicked_name": "Add a company"},
+    ]
+    assert br.send_payload_from_log(log) == ""
+
+
+def test_payload_from_type_and_batch_composer_selectors_longest_wins():
+    log = [
+        {"tool": "BrowserType", "input": {"selector": "div.msg-form__contenteditable", "text": "hi"}},
+        {"tool": "BrowserBatch", "input": {"actions": [
+            {"type": "type", "params": {"selector": "div.msg-form__contenteditable",
+                                        "text": "a much longer message body"}},
+            {"type": "type", "params": {"selector": "input.search-typeahead", "text": "ignored search"}},
+        ]}},
+    ]
+    assert br.send_payload_from_log(log) == "a much longer message body"
+
+
+def test_payload_empty_log_and_garbage_safe():
+    assert br.send_payload_from_log([]) == ""
+    assert br.send_payload_from_log(None) == ""
+    assert br.send_payload_from_log([{"tool": "BrowserClickIndex"}, "junk"]) == ""

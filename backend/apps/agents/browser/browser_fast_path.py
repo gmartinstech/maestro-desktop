@@ -132,17 +132,72 @@ NO_DASHBOARD_REPLY = (
 )
 
 
-def recovery_task(prompt: str, first_report: str) -> str:
-    """One informed retry, replacing the orchestrator's recovery role. Verify-
-    first wording keeps a maybe-already-sent irreversible step from repeating."""
+def recovery_task(prompt: str, first_report: str, verified_undelivered: bool = False) -> str:
+    """One informed retry, replacing the orchestrator's recovery role. With
+    verified_undelivered the send-probe already proved nothing landed, so the
+    retry gets clearance instead of hedging; otherwise verify-first wording
+    keeps a maybe-already-sent irreversible step from repeating."""
     report = (first_report or "").strip()[:600] or "no report (the browser died)"
-    return (
-        "A previous browser attempt at this task did not finish. It reported:\n"
-        f"{report}\n\n"
-        f"Finish the task: {prompt}\n\n"
+    guard = (
+        "A read-only check JUST confirmed the message is NOT yet delivered, so "
+        "performing the send is safe. Do it exactly ONCE, solo, with `expect` proof."
+    ) if verified_undelivered else (
         "If that attempt may have already performed an irreversible step "
         "(send/submit/post/pay), FIRST verify on the page whether it happened; "
         "if it did, do NOT repeat it, report DONE with that proof."
+    )
+    return (
+        "A previous browser attempt at this task did not finish. It reported:\n"
+        f"{report}\n\n"
+        f"Finish the task: {prompt}\n\n{guard}"
+    )
+
+
+def send_probe_task(prompt: str, payload: str) -> str:
+    """Recovery pre-check for send-class failures: a read-only dispatch whose
+    verdict gates the retry in code (r44's retry skipped its promised verify
+    step, so prose alone is not a guard)."""
+    return (
+        "READ-ONLY verification, do NOT send, type, click any send/submit "
+        "control, or open a compose box. A previous attempt at the task below "
+        f"may or may not have already delivered its message:\n{prompt}\n\n"
+        "Check the relevant conversation/thread/history for this exact text:\n"
+        f'"{payload}"\n'
+        "Count near-variants too (extra whitespace, duplicated text). "
+        "End with exactly one line: 'OUTCOME: PAYLOAD-FOUND <where and timestamp>' "
+        "or 'OUTCOME: PAYLOAD-NOT-FOUND'."
+    )
+
+
+def probe_verdict(summary: str) -> str:
+    """'found' | 'not-found' | 'unknown'. NOT-FOUND is checked first because
+    the FOUND token is its substring."""
+    s = (summary or "").upper()
+    if "PAYLOAD-NOT-FOUND" in s:
+        return "not-found"
+    if "PAYLOAD-FOUND" in s:
+        return "found"
+    return "unknown"
+
+
+def already_sent_reply(payload: str, probe_report: str) -> str:
+    """First attempt delivered before dying; the fix is evidence, not a resend."""
+    proof = (probe_report or "").strip()[:400]
+    return (
+        "The first attempt actually delivered the message before it lost the "
+        f'browser: a read-only check found "{payload}" already in the '
+        f"conversation, so I did NOT send it again.\n\n{proof}"
+    )
+
+
+def unverifiable_reply(payload: str, first_report: str) -> str:
+    """Fail-closed: can't prove the send didn't land, so don't risk a double."""
+    report = (first_report or "").strip()[:400]
+    return (
+        "The browser attempt failed after it had already typed the message "
+        f'("{payload}"), and a read-only check could not confirm whether it was '
+        "sent. I'm not retrying an irreversible send blind; please glance at "
+        f"the thread and re-ask if it's missing.\n\nFirst attempt: {report}"
     )
 
 
