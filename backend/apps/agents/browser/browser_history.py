@@ -150,6 +150,31 @@ def prune_stale_page_state(messages: list[dict], keep_recent: int = 2) -> int:
     return pruned
 
 
+def place_cache_marker(messages: list[dict], depth: int = 8) -> None:
+    """Move the incremental cache breakpoint to a pruning-safe depth, in place.
+
+    The transcript never cache-hit past the system prompt: pruning rewrites
+    recent attachments, and a tail marker dies to any byte change before it.
+    Pruning only touches blocks falling out of its keep-recent window (the last
+    few messages), so a marker `depth` messages back sits on a stable prefix and
+    each turn re-pays only the tail. A deeper-than-expected mutation just misses
+    one turn and self-heals on the next write.
+    """
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    block.pop("cache_control", None)
+    if len(messages) < depth + 2:
+        return
+    for msg in reversed(messages[: len(messages) - depth]):
+        content = msg.get("content")
+        if isinstance(content, list) and content and isinstance(content[-1], dict):
+            content[-1]["cache_control"] = {"type": "ephemeral"}
+            return
+
+
 def _validate_message_pairing(messages: list[dict]) -> bool:
     """Verify every tool_result references a tool_use_id from a prior assistant
     message in the same list. Returns False if there's an orphan, which means

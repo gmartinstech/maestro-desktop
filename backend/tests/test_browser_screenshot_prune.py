@@ -129,3 +129,67 @@ def test_prune_stale_page_state_collapses_old_heavy_reads_only():
     assert first.startswith("28 interactive elements") and "pruned" in first
     assert msgs[3]["content"][0]["content"][0]["text"] == big
     assert msgs[7]["content"][0]["content"][0]["text"] == "Navigated to https://example.com"
+
+
+# --- incremental cache marker ---------------------------------------------------
+def test_cache_marker_places_one_at_depth_and_strips_old():
+    from backend.apps.agents.browser.browser_history import place_cache_marker
+    msgs = []
+    for i in range(12):
+        msgs.append(_tool_use_msg(f"t{i}", "BrowserClickIndex"))
+        msgs.append(_tool_result_msg(f"t{i}", f"Clicked [{i}]"))
+    place_cache_marker(msgs)
+    place_cache_marker(msgs)  # second pass must not accumulate markers
+    marked = [
+        (mi, b) for mi, m in enumerate(msgs)
+        for b in (m["content"] if isinstance(m["content"], list) else [])
+        if isinstance(b, dict) and "cache_control" in b
+    ]
+    assert len(marked) == 1
+    assert marked[0][0] == len(msgs) - 8 - 1  # last markable message before the tail zone
+
+
+def test_cache_marker_skips_short_conversations():
+    from backend.apps.agents.browser.browser_history import place_cache_marker
+    msgs = [_tool_use_msg("t0", "BrowserClickIndex"), _tool_result_msg("t0", "Clicked")]
+    place_cache_marker(msgs)
+    assert all(
+        "cache_control" not in b
+        for m in msgs for b in m["content"]
+        if isinstance(b, dict)
+    )
+
+
+def test_cache_marker_prefix_stays_stable_across_a_simulated_turn():
+    from backend.apps.agents.browser.browser_history import (
+        PAGE_STATE_MARKER, place_cache_marker, prune_stale_page_state,
+    )
+    import copy as _copy
+    import json as _json
+
+    def _stripped(ms):
+        ms = _copy.deepcopy(ms)
+        for m in ms:
+            for b in (m["content"] if isinstance(m["content"], list) else []):
+                if isinstance(b, dict):
+                    b.pop("cache_control", None)
+        return _json.dumps(ms, sort_keys=True)
+
+    msgs = []
+    for i in range(10):
+        msgs.append(_tool_use_msg(f"t{i}", "BrowserClickIndex"))
+        msgs.append(_tool_result_msg(
+            f"t{i}", f"Clicked [{i}]\n\n{PAGE_STATE_MARKER}\n[1]<button \"A{i}\">",
+        ))
+    prune_stale_page_state(msgs)
+    place_cache_marker(msgs)
+    cut = len(msgs) - 8
+    before = _stripped(msgs[:cut])
+    # next turn: a new attachment arrives, pruning collapses the one falling out
+    msgs.append(_tool_use_msg("t10", "BrowserClickIndex"))
+    msgs.append(_tool_result_msg(
+        "t10", f"Clicked [10]\n\n{PAGE_STATE_MARKER}\n[1]<button \"A10\">",
+    ))
+    prune_stale_page_state(msgs)
+    place_cache_marker(msgs)
+    assert _stripped(msgs[:cut]) == before

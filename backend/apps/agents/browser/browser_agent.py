@@ -784,6 +784,7 @@ async def run_browser_agent(
             # any visual task (measured ~2.9x fewer image tokens, ~5x less upload).
             browser_history.prune_old_screenshots(messages)
             browser_history.prune_stale_page_state(messages)
+            browser_history.place_cache_marker(messages)
             response = await _cancellable(client.messages.create(
                 model=api_model,
                 max_tokens=4096,
