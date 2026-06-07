@@ -43,10 +43,17 @@ from backend.apps.agents.browser.browser_loop import (
 )
 from backend.apps.agents.browser.browser_validator import adjudicate_stuck
 
-# Parked: 0-for-4 on paying out (unstable recorded names, no settle between
-# replayed steps, recorder keeps exploratory detours); flip back on once
-# settle-before-step and detour-pruning land. Full replay of safe skills
-# stays on; this only gates the send-skill PREFIX path.
+# Send-skill PREFIX replay (replay learned steps UP TO the gated Send, never the
+# Send). Settle-before-step + detour-pruning landed, but a live proof (r93/r94)
+# showed two upstream blockers still keep it 0-for-N, so it stays parked:
+#   1. is_send_step flags the composer OPENER ("Message") as irreversible, so a
+#      clean skill has no safe prefix to replay (unsafe_i=0). Openers are
+#      reversible; only the Send is not. Fixing this (shared with the send-guard)
+#      is the real unlock.
+#   2. the recorder sometimes captures a brittle long entity-card name that does
+#      not match at replay time, failing the prefix and quarantining the skill.
+# The mechanism itself FIRES and is safe (clean fallback, send still verified);
+# flip back on once #1 lands.
 _PREFIX_REPLAY_ENABLED = False
 
 # Single actions the model could have folded into one BrowserBatch turn;
