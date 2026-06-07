@@ -38,6 +38,7 @@ from backend.apps.agents.browser.browser_loop import (
     deliverable_is_informational,
     find_send_index,
     interstitial_dismiss_target,
+    recoverable_tool_error,
     replay_recheck_is_safe,
     turn_needs_big_model,
     stagnation_exhausted,
@@ -482,6 +483,7 @@ async def run_browser_agent(
     # the same turn as the landing, not a read-then-decide pair later
     auto_scanned_urls: set[str] = set()
     dismissed_popup_urls: set[str] = set()  # interstitials auto-closed, once per URL
+    recovery_attaches = 0  # recoverable errors enriched with fresh state (saves a re-list turn)
     auto_scan_count = 0
     llm_ms_total = 0
     out_tokens_total = 0  # sum of per-turn output tokens (the latency driver)
@@ -1446,6 +1448,31 @@ async def run_browser_agent(
                     last_seen_url = result["url"]
                 card_gone_streak = card_gone_streak + 1 if card_is_unavailable(result) else 0
 
+                # Error-recovery: the action MISSED (stale index, occlusion, off
+                # screen) but the page is alive. The model would otherwise spend a
+                # whole turn re-listing to see what happened; attach the CURRENT
+                # element list to the error so it re-acts next turn instead. Pure
+                # state enrichment, the action is NEVER retried (no double-send risk).
+                if "error" in result and card_gone_streak == 0 and recoverable_tool_error(result.get("error", "")):
+                    try:
+                        _rl = await asyncio.wait_for(
+                            _wait_exec("BrowserListInteractives",
+                                       {"goal": current_next_goal} if current_next_goal else {},
+                                       browser_id, tab_id), timeout=5.0)
+                        if isinstance(_rl, dict) and _rl.get("text") and "error" not in _rl:
+                            attached_state_seen.clear()
+                            attached_state_seen.update(
+                                l for l in str(_rl["text"]).splitlines() if l.startswith("["))
+                            result["text"] = (f"{result.get('error')}\n\n[recovery] That action did not "
+                                              f"take effect, but the page is live. Current elements (re-act "
+                                              f"from HERE, do not just retry the old index):\n"
+                                              f"{_truncate_state(str(_rl['text']))}")
+                            recovery_attaches += 1
+                            logger.info(f"[browser-recovery {session_id}] attached fresh state after "
+                                        f"recoverable error at turn {turn}: {str(result.get('error'))[:60]}")
+                    except Exception:
+                        pass
+
                 # a direct full list resets the delta baseline to what the model just saw
                 if tu.name == "BrowserListInteractives" and "error" not in result:
                     attached_state_seen.clear()
@@ -1843,10 +1870,12 @@ async def run_browser_agent(
             )
         _tools_ms_total = sum(int(a.get("elapsed_ms", 0) or 0) for a in action_log)
         _wall_ms = int((time.time() - metrics_started_at) * 1000)
+        _err_tools = sum(1 for a in action_log if not a.get("ok", True))
         logger.info(
             f"[browser-time {session_id}] wall={_wall_ms}ms llm={llm_ms_total}ms "
             f"tools={_tools_ms_total}ms other={max(0, _wall_ms - llm_ms_total - _tools_ms_total)}ms "
-            f"auto_scans={auto_scan_count} hint_steps={len(route_hint_keys)}"
+            f"auto_scans={auto_scan_count} hint_steps={len(route_hint_keys)} "
+            f"tool_errors={_err_tools} recovery_attaches={recovery_attaches}"
         )
         _nt = turn + 1
         # merge-verify telemetry: read-only tool calls AFTER the last state-changing

@@ -1363,3 +1363,19 @@ def test_composer_and_send_finders():
     # nothing present
     assert find_composer_index('[1]<button "Connect">') is None
     assert find_send_index('') is None
+
+
+def test_recoverable_tool_error_classifier():
+    from backend.apps.agents.browser.browser_loop import recoverable_tool_error
+    # the action missed but the page is alive -> recoverable (attach fresh state)
+    assert recoverable_tool_error("index 23 is no longer valid (No node with given id found). page may have changed")
+    assert recoverable_tool_error("Clicked index 7 via its element (another element covered it)")
+    assert recoverable_tool_error("element has no box model, try scrolling first")
+    assert recoverable_tool_error("element not visible")
+    # a DEAD card is NOT recoverable (handled by the card-gone path, no live page to read)
+    assert not recoverable_tool_error("not an electron webview")
+    assert not recoverable_tool_error("page unresponsive")
+    assert not recoverable_tool_error("command timed out")
+    # no error, or an unrelated one
+    assert not recoverable_tool_error("")
+    assert not recoverable_tool_error("some unrelated failure")

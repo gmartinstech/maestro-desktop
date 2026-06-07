@@ -317,6 +317,27 @@ def card_is_unavailable(result: dict) -> bool:
     return any(m in err for m in _CARD_GONE_MARKERS)
 
 
+# Errors where the action MISSED but the page is alive (stale index after a
+# reshuffle, a transient overlay covering the target, off-screen). The page
+# itself is fine, so re-attaching the CURRENT element list to the error lets the
+# model re-act next turn instead of burning a turn re-listing. This NEVER retries
+# the action (no double-send risk); it only enriches the error with fresh state.
+_RECOVERABLE_ERR_MARKERS = (
+    "no longer valid", "no node with given id", "page may have changed",
+    "covered it", "obscured", "intercepted", "not clickable",
+    "box model", "try scrolling", "not visible",
+)
+
+
+def recoverable_tool_error(err: str) -> bool:
+    """True for a 'the action missed but the page is alive' error worth showing
+    fresh state for. False for a dead card (handled separately) or no error."""
+    e = (err or "").lower()
+    if not e or any(m in e for m in _CARD_GONE_MARKERS):
+        return False
+    return any(m in e for m in _RECOVERABLE_ERR_MARKERS)
+
+
 # Actions that DIRTY the page so replay-from-here is no longer equivalent to a
 # clean dispatch. Navigation and reads don't dirty anything (they just get us to
 # the page), so the deferred replay re-check is allowed after only those.
