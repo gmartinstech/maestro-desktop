@@ -67,56 +67,6 @@ def interstitial_dismiss_target(interactives_text: str) -> str | None:
     return None
 
 
-# Composer/send finders for the deterministic endgame helper. The endgame burns
-# ~8 turns because the model hunts for the compose box and then re-hunts for the
-# Send button (which often reshuffles or sits off-screen). These resolve both
-# from the interactives list mechanically; the helper types into the composer
-# (reversible) but NEVER clicks Send, that stays the model's gated deliberate act.
-_ROW_IDX_RE = re.compile(r'\[(\d+)\]\*?<\s*([a-z]+)\s+"([^"]*)"', re.I)  # [i]<role "name">
-_COMPOSER_NAME_RE = re.compile(r"write a message|type a message|write a reply|write something|start a (new )?message|message\b", re.I)
-_COMPOSER_ROLES = {"textbox", "searchbox", "combobox"}
-_SEND_NAME_RE = re.compile(r"^send( now| message)?$", re.I)
-
-
-def _parse_rows(interactives_text: str):
-    for line in (interactives_text or "").splitlines():
-        m = _ROW_IDX_RE.search(line)
-        if m:
-            yield int(m.group(1)), m.group(2).lower(), m.group(3).strip()
-
-
-def find_composer_index(interactives_text: str):
-    """Index of the message compose box, or None. A textbox-ish row whose name
-    reads like a composer placeholder. Picks the LAST match (the live overlay's
-    box, not a stale one higher up)."""
-    found = None
-    for idx, role, name in _parse_rows(interactives_text):
-        if role in _COMPOSER_ROLES and _COMPOSER_NAME_RE.search(name):
-            found = idx
-    return found
-
-
-def find_send_index(interactives_text: str):
-    """(index, name) of the Send button, or None. Strict name match so it never
-    grabs 'Send InMail credit' upsells or a 'Send a message to X' profile link;
-    only a real short 'Send' control qualifies."""
-    for idx, role, name in _parse_rows(interactives_text):
-        if role == "button" and _SEND_NAME_RE.match(name):
-            return idx, name
-    return None
-
-
-def turn_needs_big_model(response_content) -> bool:
-    """Cheap-laps escalation test: a turn that reaches the irreversible endgame
-    must run on the primary model, not the cheap one. BrowserClickIndex is the
-    only solo mutator the schema exposes (composer fill + the final send), so its
-    presence marks the endgame; routine discovery/read/batch turns stay cheap."""
-    for b in (response_content or []):
-        if getattr(b, "type", None) == "tool_use" and getattr(b, "name", None) == "BrowserClickIndex":
-            return True
-    return False
-
-
 def _hash_tool_call(tool_name: str, tool_input: dict, result: dict) -> tuple[str, str, str]:
     """Build a stable hash key for a tool call, including its result.
 

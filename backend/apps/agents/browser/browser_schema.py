@@ -6,50 +6,17 @@ prompt, and the turn/report invariants. Exceeds the 300-LOC soft ceiling on
 purpose because it is one cohesive data blob, not multiple responsibilities.
 """
 
-import os
-
-# Bench-only A/B switch: OSW_BROWSER_NO_LEVERS=1 reverts the prompt to its
-# pre-speed-lever behavior (narration allowed beside actions, no merge-verify
-# shortcut) so a controlled run can measure whether the levers move the needle.
-# Default (unset) = levers ON, the shipped behavior.
-_LEVERS_ON = os.environ.get("OSW_BROWSER_NO_LEVERS", "") not in ("1", "true", "TRUE")
-
-# Bench experiment (default OFF): run routine discovery turns on the cheap model
-# and escalate to the primary only for the irreversible endgame (BrowserClickIndex,
-# the one solo mutator the schema exposes). Payoff is UNCERTAIN until A/B'd: the
-# per-turn speedup may be eaten by prompt-cache thrash on the big model's turns.
-_CHEAP_LAPS = os.environ.get("OSW_BROWSER_CHEAP_LAPS", "") in ("1", "true", "TRUE")
-
-# Endgame helper (bench, default OFF): after the model types into a message
-# composer, mechanically locate the Send button and hand it over in the result,
-# so the model stops burning turns hunting for it. Reversible-only: it types and
-# points at Send, it NEVER clicks Send (that stays the model's gated deliberate act).
-_COMPOSE_HELPER = os.environ.get("OSW_BROWSER_COMPOSE_HELPER", "") in ("1", "true", "TRUE")
-
-# Send-timing prior (default ON; OSW_BROWSER_NO_SEND_PRIOR=1 strips it for A/B).
-# A generalizable interaction prior, not site memory: the Send button renders a
-# beat after the text commits, so settle-and-relist instead of hunting; and Enter
-# usually newlines in rich composers, so prefer the Send button. This targets the
-# true-cold tuition turns (the diagnosed find-Send hunt) on ANY site.
-_SEND_PRIOR_ON = os.environ.get("OSW_BROWSER_NO_SEND_PRIOR", "") not in ("1", "true", "TRUE")
-_SEND_PRIOR = (
-    "## Sending into a message composer (interaction priors that save you turns)\n"
-    "After you type into a compose box, the SEND button very often renders a beat "
-    "LATER: it will NOT be in your element list on the same turn you typed. Do NOT "
-    "immediately hunt, scroll, or JS-query for it, that burns 2-4 turns for nothing. "
-    "Instead settle briefly (a short BrowserWait, ~1s) and re-list; the Send control "
-    "appears within a second or two and will then be in the list at its index. Prefer "
-    "clicking that Send button over pressing Enter: in rich-text composers Enter "
-    "usually just inserts a newline and does NOT send.\n\n"
-) if _SEND_PRIOR_ON else ""
-
+# Two prompt levers that A/B-proved out and now ship unconditionally. THINK_SHORTER
+# (no prose beside action tools; ReportProgress IS the thinking) cut per-turn output
+# ~28% and roughly halved narration turns. MERGE_VERIFY (a confirmed `expect` is the
+# proof, skip the re-check) drops a wasted round-trip at the end.
 _THINK_SHORTER = (
     "Do NOT also write a free-text sentence next to your action tools: your ReportProgress "
     "fields ARE your thinking, and a separate prose explanation just repeats them and slows "
     "the turn (it is shown to the user twice). The ONLY time to write a plain message is your "
     "FINAL turn, when the task is done and you call no action tool: that message is your "
     "answer to the user (the OUTCOME line). Every other turn: ReportProgress + tools, no prose.\n"
-) if _LEVERS_ON else ""
+)
 
 _MERGE_VERIFY = (
     "When that `expect` CONFIRMS (the result says 'Confirmed: ...'), that IS your "
@@ -57,7 +24,7 @@ _MERGE_VERIFY = (
     "extra screenshot or read turn to re-check what the confirmation already proved, that "
     "is a wasted round-trip. Only take a separate verification step when `expect` came "
     "back 'NOT confirmed' or you forgot to pass one.\n"
-) if _LEVERS_ON else ""
+)
 
 MODEL_MAP = {
     "sonnet": "claude-sonnet-4-6",
@@ -692,8 +659,6 @@ SYSTEM_PROMPT = (
     "second time unless you have verified the first did NOT go through. This is how you "
     "avoid both ghost-successes and double-sends.\n"
     + _MERGE_VERIFY + "\n"
-
-    + _SEND_PRIOR +
 
     "## Loop awareness\n"
     "If you see a tool result containing 'LOOP DETECTED' or '⚠️', it means you "

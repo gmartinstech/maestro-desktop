@@ -36,11 +36,9 @@ from backend.apps.agents.browser.browser_loop import (
     card_is_unavailable,
     completion_is_honest,
     deliverable_is_informational,
-    find_send_index,
     interstitial_dismiss_target,
     recoverable_tool_error,
     replay_recheck_is_safe,
-    turn_needs_big_model,
     stagnation_exhausted,
 )
 from backend.apps.agents.browser.browser_validator import adjudicate_stuck
@@ -66,9 +64,6 @@ from backend.apps.agents.browser import browser_wait
 from backend.apps.agents.browser import browser_schema
 from backend.apps.agents.browser.browser_schema import (
     _ACTION_TOOLS_REQUIRING_REPORT,
-    _CHEAP_LAPS,
-    _COMPOSE_HELPER,
-    _LEVERS_ON,
     ACTION_MAP,
     BROWSER_TOOLS_SCHEMA,
     MAX_TURNS,
@@ -809,7 +804,7 @@ async def run_browser_agent(
     # wording), but a similar verified route may exist; hand it to the model as
     # advisory text so it follows a known path instead of re-exploring.
     route_hint_keys: list[tuple] = []
-    if _LEVERS_ON and not replay_prefix_note:
+    if not replay_prefix_note:
         _h_skill, _h_score = browser_skills.find_similar_skill(replay_host, skill_key_task)
         if _h_skill:
             _hint, route_hint_keys = browser_skills.render_route_hint(_h_skill, skill_key_task, _h_score)
@@ -823,7 +818,7 @@ async def run_browser_agent(
     # Pre-nav landed on a results page (the cold entry case): scan it NOW so the
     # model's very first turn can pick a candidate instead of read-then-decide.
     _start_url = (current_url or initial_url or "").split("#")[0]
-    if _LEVERS_ON and _start_url and _RESULTS_URL_RE.search(_start_url):
+    if _start_url and _RESULTS_URL_RE.search(_start_url):
         auto_scanned_urls.add(_start_url)
         _scan_json, _sc_ms = await _scan_results(task)
         if _scan_json:
@@ -868,15 +863,6 @@ async def run_browser_agent(
     multi_action_turns = 0
     batch_calls = 0
     batch_guard_blocks = 0
-    # Cheap-laps (bench, default off): routine turns on the cheap model, escalate
-    # to the primary only at the irreversible endgame. Resolve the cheap client
-    # once; any failure falls back to all-primary (never breaks the run).
-    cheap_client, cheap_model = (None, None)
-    cheap_lap_turns = 0
-    cheap_lap_escalations = 0
-    if _CHEAP_LAPS:
-        cheap_client, cheap_model = await _get_aux_client()
-        logger.info(f"[browser-cheap {session_id}] cheap-laps ON model={cheap_model}")
     try:
         for turn in range(MAX_TURNS):
             if cancel_event.is_set():
@@ -890,13 +876,8 @@ async def run_browser_agent(
             browser_history.prune_stale_page_state(messages)
             browser_history.place_cache_marker(messages)
             _llm_t0 = time.monotonic()
-            # Cheap-laps: route the turn to the cheap model; if it reaches the
-            # irreversible endgame (a BrowserClickIndex), redo that turn on the
-            # primary so the judgment + send always run on the smart model.
-            _turn_client, _turn_model = (
-                (cheap_client, cheap_model) if (cheap_client and cheap_model) else (client, api_model))
-            response = await _cancellable(_turn_client.messages.create(
-                model=_turn_model,
+            response = await _cancellable(client.messages.create(
+                model=api_model,
                 max_tokens=4096,
                 # Cache the ~4k-token fixed prefix (system + tool schema) so it's
                 # reprocessed once, not on every turn: big TTFT + cost win on the
@@ -907,13 +888,6 @@ async def run_browser_agent(
                 tools=_cached_tools,
                 messages=messages,
             ))
-            if response is not None and _turn_model != api_model:
-                cheap_lap_turns += 1
-                if turn_needs_big_model(response.content):
-                    cheap_lap_escalations += 1
-                    response = await _cancellable(client.messages.create(
-                        model=api_model, max_tokens=4096,
-                        system=_cached_system, tools=_cached_tools, messages=messages))
             if response is None:
                 break
             _llm_ms = int((time.monotonic() - _llm_t0) * 1000)
@@ -1490,50 +1464,12 @@ async def run_browser_agent(
                     # later solo re-list is still caught as redundant.
                     fresh_state_pending = True
 
-                # Endgame helper: the model just typed into a message composer; the
-                # worst part of the endgame is then re-hunting for the Send button
-                # (it renders a beat late). Locate it from fresh state and hand it
-                # over so the model goes straight to the deliberate send (we NEVER
-                # click Send). The fill can be a SOLO BrowserClickIndex(text) OR a
-                # click_index sub-action inside a BrowserBatch (caught live: r76
-                # batched the fill and the solo-only trigger missed it).
-                def _filled_composer(_tu) -> bool:
-                    if _tu.name == "BrowserClickIndex":
-                        return bool(str((_tu.input or {}).get("text") or "").strip())
-                    if _tu.name == "BrowserBatch":
-                        return any(a.get("type") == "click_index"
-                                   and str((a.get("params") or {}).get("text") or "").strip()
-                                   for a in ((_tu.input or {}).get("actions") or []))
-                    return False
-                if _COMPOSE_HELPER and "error" not in result and _filled_composer(tu):
-                    # The compose Send button reliably renders a beat AFTER the text
-                    # commits (diagnosed live: absent from BOTH the AX list and a DOM
-                    # scan right after typing, then it appears in the AX list a few
-                    # seconds later). So POLL for it rather than settling once; the
-                    # AX tree surfaces it fine, our earlier single 1.5s wait was eager.
-                    _send = find_send_index("\n".join(attached_state_seen))
-                    _polls = 0
-                    while not _send and _polls < 4:  # ~5s budget, then let the model take over
-                        _polls += 1
-                        await browser_wait.smart_wait(_wait_exec, browser_id, tab_id, 1200)
-                        _relist = await _cancellable(execute_browser_tool(
-                            "BrowserListInteractives", {}, browser_id, tab_id))
-                        if isinstance(_relist, dict) and _relist.get("text"):
-                            _send = find_send_index(str(_relist["text"]))
-                    if _send:
-                        _si, _sn = _send
-                        result["text"] = (f"{result.get('text') or ''}\n\n[send-ready] The Send "
-                                          f"control is index {_si} (button '{_sn}'). To deliver, click it "
-                                          f"SOLO with BrowserClickIndex + `expect` proof, do NOT press Enter.")
-                        logger.info(f"[browser-compose {session_id}] located Send at index {_si} "
-                                    f"after composer fill ({_polls} poll(s))")
-
                 # Auto-dismiss a blocking junk popup (cookie wall / upsell /
                 # coachmark) before it costs the model a turn. Mechanical, once
                 # per URL, only on the tight throwaway-dismiss vocabulary that
                 # never sits on a task-needed control, so it can't close anything
                 # required. After closing, re-list so the model sees the page beneath.
-                if _LEVERS_ON and tu.name in _AUTO_STATE_TOOLS and "error" not in result:
+                if tu.name in _AUTO_STATE_TOOLS and "error" not in result:
                     _pop_url = (result.get("url") or last_seen_url or "").split("#")[0]
                     if _pop_url and _pop_url not in dismissed_popup_urls:
                         _close = interstitial_dismiss_target("\n".join(attached_state_seen))
@@ -1555,7 +1491,7 @@ async def run_browser_agent(
                 # costs a read-then-decide turn pair; the cheap aux model reads it
                 # now so the pick happens on this same turn. Capped, per-URL,
                 # fail-silent (a miss just means the old two-turn dance).
-                if (_LEVERS_ON and tu.name in _AUTO_STATE_TOOLS and "error" not in result
+                if (tu.name in _AUTO_STATE_TOOLS and "error" not in result
                         and auto_scan_count < _AUTO_SCAN_MAX_PER_RUN):
                     _scan_url = (result.get("url") or last_seen_url or "").split("#")[0]
                     if _scan_url and _scan_url not in auto_scanned_urls and _RESULTS_URL_RE.search(_scan_url):
@@ -1604,7 +1540,7 @@ async def run_browser_agent(
                         if replay_prefix_note:
                             result["text"] = f"{result.get('text') or ''}{replay_prefix_note}"
                             replay_prefix_note = ""
-                        elif _LEVERS_ON and not route_hint_keys:
+                        elif not route_hint_keys:
                             _h_skill, _h_score = browser_skills.find_similar_skill(cur_host, skill_key_task)
                             if _h_skill:
                                 _hint, route_hint_keys = browser_skills.render_route_hint(_h_skill, skill_key_task, _h_score)
@@ -1894,11 +1830,6 @@ async def run_browser_agent(
             f"mean_out_per_turn={out_tokens_total // max(1, _nt)} narration_turns={narration_turns}/{_nt} "
             f"trailing_reads={_trailing_reads}"
         )
-        if _CHEAP_LAPS:
-            logger.info(
-                f"[browser-cheap {session_id}] cheap_turns={cheap_lap_turns} "
-                f"escalations={cheap_lap_escalations} of {_nt} total turns"
-            )
         browser_metrics.record_task(session_id, browser_id, task, final_status,
                                     metrics_started_at, turn + 1, action_log, session.tokens,
                                     path="llm_fallback" if replay_attempted else "llm",
