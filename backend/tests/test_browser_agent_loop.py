@@ -233,6 +233,25 @@ def test_confirmed_send_ends_the_run_instead_of_stalling(monkeypatch):
     assert result["summary"].startswith("OUTCOME: DONE") or "DONE" in result["summary"]
 
 
+def test_early_perception_is_not_cut_short_before_any_action(monkeypatch):
+    # Orienting on a cold/slow page can take several look-only turns; the stall
+    # backstop must NOT fire before the agent has done anything (it only bounds a
+    # POST-action spin). Here 7 perception turns precede the finish; all must run.
+    BH._browser_history.clear(); BH._domain_notes.clear()
+    # varied read tools so the (separate) identical-repeat loop detector doesn't trip;
+    # this isolates the stall backstop, which must NOT fire pre-action
+    _reads = ["BrowserListInteractives", "BrowserGetText", "BrowserScreenshot"]
+    primary = FakeLLM([
+        *[Resp([_rp("still orienting"), _tu(_reads[i % 3])]) for i in range(7)],
+        Resp([Blk("text", "OUTCOME: NOT DONE - could not find it")], stop_reason="end_turn"),
+    ])
+    aux = FakeAux()
+    _install(monkeypatch, primary, aux)
+    asyncio.run(BA.run_browser_agent(task="find the thing", browser_id="b1", model="sonnet"))
+    # it ran all 8 scripted turns (was NOT force-ended at the 6-perception backstop)
+    assert primary.turn >= 8, f"early orientation was cut short at turn {primary.turn}"
+
+
 def test_aux_adjudication_fires_even_when_loop_detector_trips(monkeypatch):
     # Repeated IDENTICAL failing clicks trip the exact-repeat loop detector AND
     # reach stagnation exhaustion on the same turn. The aux escape hatch must

@@ -1041,7 +1041,15 @@ async def run_browser_agent(
             # so reset and let it continue (multi-send stays safe).
             if _turn_actions == 0:
                 perception_stall += 1
-                _stall_limit = _POST_SEND_STALL_LIMIT if send_confirmed else _PERCEPTION_STALL_LIMIT
+                # The general backstop only applies AFTER the agent has actually done
+                # something (a real mutation, not a read), early pure-perception is
+                # legitimate orienting (a cold/slow page can need several look turns
+                # before the first action) and we must never cut that short. Reads
+                # land in action_log with ok=True too, so check the TOOL, not just ok.
+                _acted = any(a.get("ok") and a.get("tool") in (_BATCHABLE_ACTION_TOOLS | {"BrowserBatch"})
+                             for a in action_log)
+                _stall_limit = (_POST_SEND_STALL_LIMIT if send_confirmed
+                                else (_PERCEPTION_STALL_LIMIT if _acted else 10 ** 9))
                 if perception_stall >= _stall_limit:
                     logger.info(
                         f"[browser-agent {session_id}] ending: {perception_stall} pure-perception "
