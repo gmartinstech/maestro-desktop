@@ -840,7 +840,10 @@ async def run_browser_agent(
             })
             return {
                 "session_id": session_id, "browser_id": browser_id,
-                "summary": f"Completed via learned skill replay ({len(steps)} steps, no LLM).",
+                # Same OUTCOME shape the LLM path emits, so the parent translates it
+                # into a plain human confirmation instead of leaking the replay
+                # mechanics ('skill replay / N steps / no LLM') to the user.
+                "summary": f"OUTCOME: DONE - {task}",
                 "action_log": rlog, "final_screenshot": final_screenshot,
                 "replayed": True,
             }
