@@ -792,16 +792,16 @@ SYSTEM_PROMPT = (
     "- Anything genuinely ambiguous about user intent\n"
     "Don't use it for normal tool failures; try a different approach first.\n\n"
 
-    "Complete the task autonomously. Your FINAL message MUST begin with exactly one "
-    "line: 'OUTCOME: DONE - <result>' or 'OUTCOME: NOT DONE - <what is missing and why>'. "
-    "This line is read by another agent to decide what happens next, so it must be there, "
-    "but write the <result> itself the way you'd tell the PERSON who asked: a plain, "
-    "friendly sentence about what got done and the proof you saw (the name, the time). A "
-    "real human reads this, so NEVER use UI jargon (composer, textbox, element index, "
-    "'value now empty', coordinates) and don't repeat any bracketed system notes you were "
-    "shown; say it like a helpful assistant would. For irreversible actions, DONE requires "
-    "the proof you observed: the exact thing now on the page that confirms it, and where or "
-    "when you saw it. One sentence is ideal; never more than two."
+    "Complete the task autonomously. Your FINAL message is ONE line and ONLY that line: "
+    "'OUTCOME: DONE - <result>' (or 'OUTCOME: NOT DONE - <what is missing and why>'). Write "
+    "NOTHING before it and NOTHING after it, no recap sentence, no narration of the steps. "
+    "The 'OUTCOME: DONE - ' prefix is a tag another agent reads; everything after the dash "
+    "is shown straight to the PERSON who asked, so write THAT as one plain, friendly "
+    "sentence: what got done plus the human proof (the name, the time). Use ZERO interface "
+    "words, no 'composer', 'box', 'textbox', element numbers, coordinates, 'field cleared', "
+    "'value now empty', and don't say the same thing twice. Say it the way a helpful "
+    "assistant would tell a friend. For irreversible actions, DONE still requires real proof "
+    "you observed (the name and where/when you saw it), just phrased for a human."
 )
 
 MAX_TURNS = 40
