@@ -209,7 +209,11 @@ def _build_prompt(host: str, task: str, working_memory: str, summary: str,
         f"TASK: {task}\n"
         f"AGENT NOTES: {working_memory[:1500]}\n"
         f"RESULT: {summary[:800]}\n\n"
-        "Return the UPDATED playbook as JSON: {\"playbook\": [\"...\", ...]}. Rules:\n"
+        "Return JSON: {\"playbook\": [\"...\"], \"universal\": [\"...\"]}, where "
+        "`playbook` is the UPDATED per-site playbook and `universal` is the SUBSET of "
+        "lessons that are SITE-AGNOSTIC (true on ANY website, e.g. how composers/Send "
+        "buttons behave in general), so other sites can reuse them. `universal` may be "
+        "empty; never put site-specific URLs, selectors, or names in it. Rules:\n"
         f"- At most {_MAX_BULLETS} bullets, each under {_MAX_BULLET_CHARS} chars, "
         "atomic and REUSABLE for ANY task on this site.\n"
         "- Keep only durable site strategy: which queries/filters/URLs work, what "
@@ -247,6 +251,24 @@ def _parse(text: str) -> list[str] | None:
     return [str(x) for x in pb if isinstance(x, (str, int, float))]
 
 
+def _parse_universal(text: str) -> list[str]:
+    """The site-agnostic subset the distill flagged, for the cross-site meta-playbook.
+    Tolerant: missing/garbled `universal` just yields nothing (the site distill still runs)."""
+    if not text:
+        return []
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return []
+    try:
+        data = json.loads(m.group(0))
+    except Exception:
+        return []
+    uni = data.get("universal")
+    if not isinstance(uni, list):
+        return []
+    return [str(x) for x in uni if isinstance(x, (str, int, float))]
+
+
 async def distill_and_store(host, task, working_memory, summary,
                             aux_client, aux_model) -> bool:
     """One cheap aux call: distill this successful run + reconcile against the
@@ -268,6 +290,13 @@ async def distill_and_store(host, task, working_memory, summary,
             return False
         stored = _store(host, new_bullets)
         changed = stored != existing
+        # Fold any site-agnostic lessons into the cross-site meta-playbook (no extra
+        # LLM call, they rode along in this same reply). Best-effort, never fatal.
+        try:
+            from backend.apps.agents.browser import browser_meta_playbook
+            browser_meta_playbook.absorb(_parse_universal(text))
+        except Exception:
+            pass
         if changed:
             logger.info(f"[browser-playbook] {host}: {len(stored)} strategy bullet(s) "
                         f"(was {len(existing)})")

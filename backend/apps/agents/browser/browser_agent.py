@@ -64,6 +64,7 @@ from backend.apps.agents.browser import browser_batch_replay
 from backend.apps.agents.browser import browser_extract
 from backend.apps.agents.browser import browser_metrics
 from backend.apps.agents.browser import browser_playbook
+from backend.apps.agents.browser import browser_meta_playbook
 from backend.apps.agents.browser import browser_skills
 from backend.apps.agents.browser import browser_wait
 from backend.apps.agents.browser import browser_schema
@@ -601,6 +602,14 @@ async def run_browser_agent(
         if _pb_block:
             run_system_prompt = run_system_prompt + _pb_block
             pb_seeded = True
+    # Tier-3 memory: the cross-site priors learned on EVERY other site, injected on
+    # every run (host-agnostic) so a brand-new site isn't fully cold. Advisory, capped.
+    try:
+        _meta_block = browser_meta_playbook.format_for_prompt()
+        if _meta_block:
+            run_system_prompt = run_system_prompt + _meta_block
+    except Exception:
+        pass
 
     # Prompt-caching shapes built once: system as a single cached text block,
     # and the last tool carrying the cache_control marker (Anthropic keys on the
