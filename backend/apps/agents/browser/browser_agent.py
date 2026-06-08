@@ -229,13 +229,15 @@ async def _post_action_state(
         )
         if settle.get("hung"):
             return ""
-    # Composer fill: the Send button renders a beat LATER than the text commits, so
-    # a re-list right now misses it and the model wastes turns hunting (measured ~54s
-    # on one run). Wait for Send to paint first, then it's in the list we hand back.
+    # Composer fill: the Send button lazy-renders a beat LATER than the text commits
+    # (measured: not in the AX tree even at 2.5s, esp. under load), so a re-list now
+    # misses it and the model burns a turn re-listing for it, or worse can't find it
+    # to send. This is a target_only wait, it returns the INSTANT Send appears, so the
+    # generous cap costs nothing on a fast render and just adds patience on a slow one.
     _composer_fill = _is_composer_fill(tool_name, tool_input)
     if _composer_fill:
         try:
-            await browser_wait.smart_wait(wait_exec, browser_id, tab_id, 2500,
+            await browser_wait.smart_wait(wait_exec, browser_id, tab_id, 6000,
                                           until="Send", target_only=True)
         except Exception:
             pass
