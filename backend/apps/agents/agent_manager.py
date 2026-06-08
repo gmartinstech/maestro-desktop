@@ -3362,6 +3362,13 @@ class AgentManager:
         _fp_path = verdict
         logger.info(f"[browser-fast-path] direct dispatch for session {session_id} ({verdict})")
         text = ""
+        # The fast-path skips the orchestrator, so the UI never gets the BrowserAgent
+        # tool-call that draws the "Browser Agent" bubble. Emit a synthetic tool_call/
+        # tool_result pair (same shape + mcp__ name the orchestrator uses) so the bubble
+        # shows here too. None until we actually dispatch a browser (a pure READ answer
+        # has no browser, so no bubble).
+        _BROWSER_TOOL = "mcp__openswarm-browser-agent__CreateBrowserAgent"
+        _bubble_tid = None
         try:
             from backend.apps.agents.browser.browser_agent import run_browser_agents
             from backend.apps.agents.browser import browser_fast_path
@@ -3396,6 +3403,14 @@ class AgentManager:
                 return (r.get("summary") or "").strip()
 
             if not text:
+                # show the "Browser Agent" bubble during the dispatch (it renders as
+                # running, then completes when we emit the matching result below)
+                _bubble_tid = uuid4().hex
+                _tc = Message(role="tool_call", branch_id=session.active_branch_id,
+                              content={"id": _bubble_tid, "tool": _BROWSER_TOOL, "input": {"task": prompt}})
+                session.messages.append(_tc)
+                await ws_manager.send_to_session(session_id, "agent:message", {
+                    "session_id": session_id, "message": _tc.model_dump(mode="json")})
                 first = await _dispatch(browser_fast_path.compose_task(prompt, brief))
                 text = _summary(first)
                 if browser_fast_path.dispatch_failed(text):
@@ -3439,6 +3454,14 @@ class AgentManager:
             f"[browser-fast-path] session {session_id} done: path={_fp_path} "
             f"reply={len(text)}ch in {int((time.monotonic() - _fp_t0) * 1000)}ms"
         )
+        # Close the synthetic bubble (always, even if the dispatch threw) so it never
+        # hangs as "running"; the bubble pairs this result with its call positionally.
+        if _bubble_tid:
+            _tr = Message(role="tool_result", branch_id=session.active_branch_id,
+                          content={"tool_use_id": _bubble_tid, "tool": _BROWSER_TOOL, "text": "done"})
+            session.messages.append(_tr)
+            await ws_manager.send_to_session(session_id, "agent:message", {
+                "session_id": session_id, "message": _tr.model_dump(mode="json")})
         asst_msg = Message(role="assistant", content=text, branch_id=session.active_branch_id)
         session.messages.append(asst_msg)
         await ws_manager.send_to_session(session_id, "agent:message", {
