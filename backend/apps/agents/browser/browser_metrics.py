@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from collections import Counter
 
@@ -191,4 +192,30 @@ def record_task(session_id, browser_id, task, status, started_at, turns,
         f"tools={len(action_log)} tok_in={summary['tokens_in']} tok_out={summary['tokens_out']} "
         f"recurring_errs={summary['recurring_errors'][:2]}"
     )
+    _maybe_self_audit()
     return summary
+
+
+_AUDIT_EVERY_N = 25   # refresh the learning self-audit roughly this often
+_task_count = 0
+
+
+def _maybe_self_audit() -> None:
+    """Every N finished tasks, refresh the self-audit report in a daemon thread so
+    it never adds latency to a run (the audit is ~3ms but stays off the hot path).
+    Proposal-only: it writes a report a human reads, it changes nothing."""
+    global _task_count
+    _task_count += 1
+    if _task_count % _AUDIT_EVERY_N != 0:
+        return
+
+    def _run():
+        try:
+            from backend.apps.agents.browser import browser_self_audit
+            browser_self_audit.run_and_write()
+        except Exception:
+            pass
+    try:
+        threading.Thread(target=_run, name="browser-self-audit", daemon=True).start()
+    except Exception:
+        pass

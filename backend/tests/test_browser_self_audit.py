@@ -60,6 +60,32 @@ def test_clean_history_proposes_nothing():
     assert "learning cleanly" in audit.render_report(r)
 
 
+def test_audit_fires_every_n_finished_tasks(monkeypatch, tmp_path):
+    # the trigger refreshes the report once every N tasks, off the hot path. Make
+    # threads synchronous so the test is deterministic, and use a small N.
+    from backend.apps.agents.browser import browser_metrics as m
+    monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", str(tmp_path))
+    m._metrics_dir_cache = None
+    m._task_count = 0
+    monkeypatch.setattr(m, "_AUDIT_EVERY_N", 5)
+
+    class _SyncThread:
+        def __init__(self, target=None, **kw):
+            self._t = target
+
+        def start(self):
+            self._t()
+    monkeypatch.setattr(m.threading, "Thread", _SyncThread)
+
+    log = [{"tool": "BrowserClickIndex", "elapsed_ms": 5, "result_summary": "ok"}]
+    report = tmp_path / "self_audit_report.md"
+    for i in range(4):
+        m.record_task(f"s{i}", "b1", "t", "completed", 0, 7, log, {})
+    assert not report.exists(), "audit fired before N tasks"
+    m.record_task("s5", "b1", "t", "completed", 0, 7, log, {})
+    assert report.exists(), "audit did not fire at the Nth task"
+
+
 def test_run_and_write_emits_a_report_file_and_never_raises():
     d = tempfile.mkdtemp()
     _write(d, "tasks.jsonl", [])
