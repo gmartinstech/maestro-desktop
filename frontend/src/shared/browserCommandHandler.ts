@@ -1,4 +1,6 @@
 import { getWebview, type BrowserWebview } from './browserRegistry';
+import { store } from './state/store';
+import { resumeBrowserCard } from './state/dashboardLayoutSlice';
 import { dashboardWs } from './ws/WebSocketManager';
 import { resolveInput } from './resolveUrl';
 import { rankAndCapInteractives, type RankItem } from './interactiveRanking';
@@ -1345,11 +1347,25 @@ async function handleEvaluate(wv: BrowserWebview, params: Record<string, any>): 
 // window for (re)registration before giving up, so the error stays a real
 // "card is gone" signal rather than a transient race.
 async function awaitWebview(browserId: string, tabId?: string): Promise<BrowserWebview | undefined> {
-  const deadline = Date.now() + 2000;
+  // A suspended (snapshot-swapped) card has no webview at all; wake it and
+  // wait out the remount + page reload before the command touches it.
+  const wasSuspended = !!store.getState().dashboardLayout.suspendedBrowserCards[browserId];
+  if (wasSuspended) store.dispatch(resumeBrowserCard(browserId));
+  const deadline = Date.now() + (wasSuspended ? 12000 : 2000);
   let wv = getWebview(browserId, tabId);
   while (!wv && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 100));
     wv = getWebview(browserId, tabId);
+  }
+  if (wasSuspended && wv) {
+    while (Date.now() < deadline) {
+      try {
+        if (!wv.isLoading() && wv.getURL() !== 'about:blank') break;
+      } catch {
+        // mid-mount hiccup; keep waiting
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
   }
   return wv;
 }

@@ -25,6 +25,7 @@ import {
   setBrowserCardPosition,
   setBrowserCardSize,
   removeBrowserCard,
+  resumeBrowserCard,
   addBrowserTab,
   removeBrowserTab,
   setActiveBrowserTab,
@@ -219,6 +220,8 @@ const BrowserCard: React.FC<Props> = ({
   );
   const browserAgentSession = useAppSelector(selectBrowserAgentSession);
 
+  const suspendedSnap = useAppSelector((state) => state.dashboardLayout.suspendedBrowserCards[browserId]);
+
   const activity = useBrowserActivity(browserId);
   const agentRunning = browserAgentSession?.status === 'running';
   const agentActive = activity.active || agentRunning;
@@ -255,6 +258,11 @@ const BrowserCard: React.FC<Props> = ({
   useEffect(() => {
     setRegistryActiveTab(browserId, activeTabId);
   }, [browserId, activeTabId]);
+
+  // A resumed webview remounts at about:blank; dropping the init markers lets doLoad re-fire.
+  useEffect(() => {
+    if (suspendedSnap) initializedTabs.current.clear();
+  }, [suspendedSnap]);
 
   const tabIdKey = tabs.map((t) => t.id).join(',');
   useEffect(() => {
@@ -367,7 +375,7 @@ const BrowserCard: React.FC<Props> = ({
 
     return () => cleanups.forEach((fn) => fn());
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabIdKey, browserId, dispatch, updateTabLocal]);
+  }, [tabIdKey, browserId, dispatch, updateTabLocal, suspendedSnap]);
 
   const navigate = useCallback((targetUrl: string) => {
     const finalUrl = resolveInput(targetUrl);
@@ -379,7 +387,8 @@ const BrowserCard: React.FC<Props> = ({
       });
     }
     dispatch(updateBrowserTabUrl({ browserId, tabId: activeTabId, url: finalUrl }));
-  }, [browserId, activeTabId, dispatch]);
+    if (suspendedSnap) dispatch(resumeBrowserCard(browserId));
+  }, [browserId, activeTabId, dispatch, suspendedSnap]);
 
   const handleUrlKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -1067,6 +1076,23 @@ const BrowserCard: React.FC<Props> = ({
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none' }} />
         )}
         {isElectron ? (
+          suspendedSnap ? (
+            <Box
+              component="img"
+              src={suspendedSnap.dataUrl}
+              alt=""
+              onClick={() => dispatch(resumeBrowserCard(browserId))}
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                objectPosition: 'top left',
+                cursor: 'pointer',
+              }}
+            />
+          ) : (
           tabs.map((tab) => (
             <webview
               key={tab.id}
@@ -1092,6 +1118,7 @@ const BrowserCard: React.FC<Props> = ({
               }}
             />
           ))
+          )
         ) : null}
         <Dialog
           open={passkeyDialogOpen}

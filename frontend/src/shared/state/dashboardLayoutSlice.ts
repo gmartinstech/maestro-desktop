@@ -92,6 +92,8 @@ export interface DashboardLayoutState {
   /** Transient: new browser card id; Dashboard pans/zooms to it then clears via clearPendingFocusBrowserId. */
   pendingFocusBrowserId: string | null;
   pendingFocusNoteId: string | null;
+  /** Transient: snapshot stand-ins for off-screen webviews; never rides the layout PUT. */
+  suspendedBrowserCards: Record<string, { dataUrl: string; capturedAt: number }>;
 }
 
 const initialState: DashboardLayoutState = {
@@ -108,6 +110,7 @@ const initialState: DashboardLayoutState = {
   initialized: false,
   pendingFocusBrowserId: null,
   pendingFocusNoteId: null,
+  suspendedBrowserCards: {},
 };
 
 interface LayoutPayload {
@@ -629,6 +632,19 @@ const dashboardLayoutSlice = createSlice({
 
     removeBrowserCard(state, action: PayloadAction<string>) {
       delete state.browserCards[action.payload];
+      delete state.suspendedBrowserCards[action.payload];
+    },
+
+    suspendBrowserCard(state, action: PayloadAction<{ browserId: string; dataUrl: string }>) {
+      if (!state.browserCards[action.payload.browserId]) return;
+      state.suspendedBrowserCards[action.payload.browserId] = {
+        dataUrl: action.payload.dataUrl,
+        capturedAt: Date.now(),
+      };
+    },
+
+    resumeBrowserCard(state, action: PayloadAction<string>) {
+      delete state.suspendedBrowserCards[action.payload];
     },
 
     pasteBrowserCard(
@@ -707,6 +723,7 @@ const dashboardLayoutSlice = createSlice({
       card.tabs.splice(idx, 1);
       if (card.tabs.length === 0) {
         delete state.browserCards[action.payload.browserId];
+        delete state.suspendedBrowserCards[action.payload.browserId];
         return;
       }
       if (card.activeTabId === action.payload.tabId) {
@@ -939,6 +956,7 @@ const dashboardLayoutSlice = createSlice({
       state.nextZOrder = 1;
       state.initialized = false;
       state.pendingFocusNoteId = null;
+      state.suspendedBrowserCards = {};
     },
 
   },
@@ -1032,6 +1050,8 @@ export const {
   setBrowserCardPosition,
   setBrowserCardSize,
   removeBrowserCard,
+  suspendBrowserCard,
+  resumeBrowserCard,
   pasteBrowserCard,
   updateBrowserCardUrl,
   addBrowserTab,

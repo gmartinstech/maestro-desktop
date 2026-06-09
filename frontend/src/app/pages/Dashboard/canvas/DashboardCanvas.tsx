@@ -16,6 +16,7 @@ import type {
 import type { Output } from '@/shared/state/outputsSlice';
 import type { CardType, useDashboardSelection } from '../hooks/state/useDashboardSelection';
 import type { useCanvasControls } from '../hooks/interaction/useCanvasControls';
+import { useWebviewSuspend } from '../hooks/interaction/useWebviewSuspend';
 import type { Tether } from '../geometry/dashboardTethers';
 
 type Selection = ReturnType<typeof useDashboardSelection>;
@@ -140,6 +141,8 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
 }) => {
   const dotSize = Math.max(1, 1.5 * canvas.zoom);
   const dotSpacing = 24 * canvas.zoom;
+
+  useWebviewSuspend(browserCards, canvas.panX, canvas.panY, canvas.zoom, canvas.viewportRef);
 
   return (
     <>
