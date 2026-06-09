@@ -81,13 +81,13 @@ export function useDashboardLifecycle({
     // CRITICAL path: these populate the cards the user expects to see
     // on first paint. Don't defer.
     dispatch(fetchSessions({ dashboardId }));
-    dispatch(fetchLayout(dashboardId));
+    dispatch(fetchLayout({ dashboardId }));
     const cleanupBrowserHandler = initBrowserCommandHandler();
     // Global broadcasts (spawned browser cards) skip the replay log, so a
     // socket gap loses them; a reconnect refetch is the only way they return.
     const unsubReconnect = dashboardWs.on('dashboard:reconnected', () => {
       dispatch(fetchSessions({ dashboardId }));
-      dispatch(fetchLayout(dashboardId));
+      dispatch(fetchLayout({ dashboardId, isReconnect: true }));
     });
     // DEFERRABLE: history list (for the search palette) and outputs
     // (for the apps panel) aren't on the first-paint path. Same for the

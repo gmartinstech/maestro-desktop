@@ -124,7 +124,11 @@ function generateTabId(): string {
 
 export const fetchLayout = createAsyncThunk(
   'dashboardLayout/fetch',
-  async (dashboardId: string) => {
+  // isReconnect distinguishes a socket-reconnect recovery refetch (merge, keep
+  // live positions) from a fresh mount/switch load (replace, snapshot is the
+  // user's saved layout). Passed explicitly, not inferred from state, so a
+  // stale in-flight fetch from a previous dashboard can't be misread as a merge.
+  async ({ dashboardId }: { dashboardId: string; isReconnect?: boolean }) => {
     const res = await fetch(`${DASHBOARDS_API}/${dashboardId}`);
     const data = await res.json();
     const layout = data.layout ?? {};
@@ -294,6 +298,27 @@ export function findOpenSpotNear(
   // Pathological , full canvas occupied near anchor. Fall back to the
   // global first-empty scan so we never return an overlap.
   return findOpenGridCell(occupiedRects, newW, newH);
+}
+
+// Reconnect-refetch merge: ADD only the cards the snapshot carries that the
+// client is missing (e.g. a spawned browser whose broadcast was lost in a
+// socket gap), collision-resolving each against the live layout so a recovered
+// card can't land on a card already on canvas, and NEVER touch a card the
+// client already has (that's exactly what preserves its live, collision-placed
+// position). The shared `occupied` list carries placements forward so two
+// recovered cards in the same pass also avoid each other.
+function addMissingCards<T extends { x: number; y: number; width: number; height: number }>(
+  live: Record<string, T>,
+  incoming: Record<string, T>,
+  occupied: Rect[],
+): void {
+  for (const id of Object.keys(incoming)) {
+    if (live[id]) continue;
+    const card = incoming[id];
+    const pos = findOpenSpotNear(card.x, card.y, occupied, card.width, card.height);
+    live[id] = { ...card, x: pos.x, y: pos.y };
+    occupied.push({ x: pos.x, y: pos.y, w: card.width, h: card.height });
+  }
 }
 
 const dashboardLayoutSlice = createSlice({
@@ -924,11 +949,26 @@ const dashboardLayoutSlice = createSlice({
       })
       .addCase(fetchLayout.fulfilled, (state, action) => {
         state.loading = false;
+        // A fresh mount/switch load replaces (the snapshot is the user's saved
+        // layout, authoritative). A reconnect refetch (useDashboardLifecycle
+        // line ~90) recovers cards lost in a socket gap and must MERGE, blind-
+        // replacing there clobbered the live, collision-placed positions of
+        // cards already on canvas (the overlap / vanish under load while many
+        // browsers spawn). The caller says which; never inferred from state.
+        const isReconnectRefetch = action.meta.arg.isReconnect === true;
         state.initialized = true;
-        state.cards = action.payload.cards;
-        state.viewCards = action.payload.viewCards;
-        state.browserCards = action.payload.browserCards;
-        state.notes = action.payload.notes || {};
+        if (!isReconnectRefetch) {
+          state.cards = action.payload.cards;
+          state.viewCards = action.payload.viewCards;
+          state.browserCards = action.payload.browserCards;
+          state.notes = action.payload.notes || {};
+        } else {
+          const occupied = collectOccupiedRects(state, action.payload.expandedSessionIds);
+          addMissingCards(state.cards, action.payload.cards, occupied);
+          addMissingCards(state.viewCards, action.payload.viewCards, occupied);
+          addMissingCards(state.browserCards, action.payload.browserCards, occupied);
+          addMissingCards(state.notes, action.payload.notes || {}, occupied);
+        }
         state.persistedExpandedSessionIds = action.payload.expandedSessionIds;
 
         let maxZ = 0;
