@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { store } from '@/shared/state/store';
 import {
@@ -68,6 +68,23 @@ export function useWebviewSuspend(
   const suspended = useAppSelector((s) => s.dashboardLayout.suspendedBrowserCards);
   const vpRef = useRef<Viewport>({ panX, panY, zoom, vpW: 1200, vpH: 800 });
 
+  // Window resize changes the viewport without touching pan/zoom/cards; tick so
+  // the evaluation below reruns, or a shrunken window never suspends anything.
+  const [resizeTick, setResizeTick] = useState(0);
+  useEffect(() => {
+    if (!isElectron) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const onResize = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => setResizeTick((n) => n + 1), 300);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (t) clearTimeout(t);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isElectron) return;
     const el = viewportRef.current;
@@ -111,5 +128,5 @@ export function useWebviewSuspend(
     }, SETTLE_MS);
 
     return () => clearTimeout(timer);
-  }, [browserCards, suspended, panX, panY, zoom, viewportRef, dispatch]);
+  }, [browserCards, suspended, panX, panY, zoom, viewportRef, dispatch, resizeTick]);
 }
