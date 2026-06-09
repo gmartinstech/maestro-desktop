@@ -186,6 +186,40 @@ BROWSER_TOOLS_SCHEMA = [
         },
     },
     {
+        "name": "BrowserSaveData",
+        "description": (
+            "Save a LARGE dataset you've assembled on the page straight to a file. "
+            "Use this for 'every comment / all N results / the full list' once you've "
+            "collected it into a page variable: trying to return hundreds of rows in your "
+            "reply TRUNCATES, so you'd otherwise waste turns chunking it. Give a JS "
+            "expression that returns the data as a string (almost always "
+            "JSON.stringify(window.__yourVar)) plus a filename; the whole dataset is "
+            "written to the workspace and you get back just the file path, not the data. "
+            "It only writes your own workspace file (never the web). Put the returned path "
+            "in your Done message so the user knows where it landed."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string",
+                    "description": (
+                        "JS that returns the data as a string, e.g. "
+                        "JSON.stringify(window.__rows) or a CSV string you build."
+                    ),
+                },
+                "filename": {
+                    "type": "string",
+                    "description": (
+                        "Plain data filename, e.g. results.json or comments.csv "
+                        "(allowed: .json .ndjson .csv .tsv .txt .md)."
+                    ),
+                },
+            },
+            "required": ["expression", "filename"],
+        },
+    },
+    {
         "name": "BrowserGetConsole",
         "description": (
             "Read the page's OWN recent JavaScript console warnings and errors "
@@ -828,8 +862,13 @@ SYSTEM_PROMPT = (
     "- Spanning MANY pages (get all N, every result)? Confirm the page shape ONCE, then COMMIT "
     "to the sweep: don't re-verify each page works. The site usually exposes far fewer than a "
     "round number asks (a '1000' is often ~15 pages); gather every page it does expose, then "
-    "Done with the full set and a one-line note on the real ceiling. Accumulate as you go so a "
-    "wrap-up nudge can always answer from what you already have.\n\n"
+    "Done with the full set and a one-line note on the real ceiling. Accumulate into a page "
+    "variable as you go (e.g. window.__rows) so nothing is lost between pages.\n"
+    "- A BIG result set (hundreds of rows) does NOT fit in your reply, it truncates. Do NOT "
+    "chunk it back through your messages 100 at a time. Once it's gathered into a page variable, "
+    "call BrowserSaveData('JSON.stringify(window.__rows)', 'results.json') ONCE: it writes the "
+    "whole thing to a file and hands you the path. Then Done, telling the user that path. That "
+    "is one step instead of a dozen.\n\n"
 
     "## When you genuinely cannot proceed\n"
     "Use RequestHumanIntervention for:\n"

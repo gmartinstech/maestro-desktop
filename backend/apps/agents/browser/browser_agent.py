@@ -63,6 +63,7 @@ from backend.apps.agents.browser import browser_batch_replay
 from backend.apps.agents.browser import browser_extract
 from backend.apps.agents.browser import browser_metrics
 from backend.apps.agents.browser import browser_playbook
+from backend.apps.agents.browser import browser_save
 from backend.apps.agents.browser import browser_meta_playbook
 from backend.apps.agents.browser import browser_skills
 from backend.apps.agents.browser import browser_wait
@@ -1313,6 +1314,43 @@ async def run_browser_agent(
                     )
                     tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": [{"type": "text", "text": ex_text}]})
                     result_msg = Message(role="tool_result", content={"text": ex_text, "tool_name": tu.name, "elapsed_ms": 0})
+                    session.messages.append(result_msg)
+                    await ws_manager.send_to_session(session_id, "agent:message", {
+                        "session_id": session_id, "message": result_msg.model_dump(mode="json"),
+                    })
+                    continue
+
+                # Bulk-data sink: write a page-assembled dataset straight to a file so a
+                # big list never has to squeeze through the (truncating) reply. The JS runs
+                # in the page, but Python picks the path, so the write stays sandboxed.
+                if tu.name == "BrowserSaveData":
+                    st = time.time()
+                    _expr = tu.input.get("expression") or ""
+                    _fname = tu.input.get("filename") or ""
+                    if not _expr:
+                        sv_text, sv_ok = "BrowserSaveData needs a JS `expression` that returns the data (usually JSON.stringify(...)).", False
+                    else:
+                        _ev = await _cancellable(execute_browser_tool("BrowserEvaluate", {"expression": _expr}, browser_id, tab_id))
+                        if _ev is None:
+                            cancelled = True
+                            break
+                        if isinstance(_ev, dict) and _ev.get("error"):
+                            sv_text, sv_ok = f"Couldn't read the data to save: {_ev['error']}", False
+                        else:
+                            _cwd = None
+                            if parent_session_id:
+                                _ps = agent_manager.get_session(parent_session_id)
+                                _cwd = getattr(_ps, "cwd", None) if _ps else None
+                            sv_text = browser_save.save_page_data(
+                                _cwd, parent_session_id or session_id, _fname, str((_ev or {}).get("text") or ""))
+                            sv_ok = sv_text.startswith("Saved")
+                    action_log.append({
+                        "tool": "BrowserSaveData", "input": {"filename": _fname},
+                        "result_summary": sv_text[:200],
+                        "elapsed_ms": int((time.time() - st) * 1000), "ok": sv_ok,
+                    })
+                    tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": [{"type": "text", "text": sv_text}]})
+                    result_msg = Message(role="tool_result", content={"text": sv_text, "tool_name": tu.name, "elapsed_ms": int((time.time() - st) * 1000)})
                     session.messages.append(result_msg)
                     await ws_manager.send_to_session(session_id, "agent:message", {
                         "session_id": session_id, "message": result_msg.model_dump(mode="json"),

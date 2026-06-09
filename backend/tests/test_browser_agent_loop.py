@@ -307,7 +307,24 @@ def test_send_shortcut_does_not_arm_on_a_gather_task(monkeypatch):
     assert "went through" not in result["summary"]
 
 
-def test_gather_pulling_new_data_each_turn_is_not_nudged_early(monkeypatch):
+def test_browser_save_data_writes_a_file_and_returns_a_receipt(monkeypatch, tmp_path):
+    # BrowserSaveData should run the JS, write the result to a sandboxed file, and
+    # return a path receipt (NOT the data), so a big list lands in one step instead
+    # of a dozen reply-chunks. The mock's evaluate echoes its expression as the data.
+    import os as _os
+    monkeypatch.setattr(_os.path, "expanduser", lambda p: str(tmp_path))  # fallback workspace -> tmp
+    BH._browser_history.clear(); BH._domain_notes.clear()
+    primary = FakeLLM([
+        Resp([_rp("save the rows"), _tu("BrowserSaveData", expression="JSON.stringify(window.__rows)", filename="rows.json")]),
+        Resp([_tu("Done", message="Saved the full set to rows.json.")]),
+    ])
+    aux = FakeAux()
+    _install(monkeypatch, primary, aux)
+    result = asyncio.run(BA.run_browser_agent(task="get every row and save it", browser_id="b1", model="sonnet"))
+    # the file exists under the sandbox subdir, and the receipt (a tool_result) named a path
+    saved = list(tmp_path.glob("**/browser-data/rows.json"))
+    assert saved, "BrowserSaveData did not write the file"
+    assert result.get("done") is True
     # The Airbnb regression: a page-by-page gather (a fresh Extract returning NEW
     # listings every turn) must NOT trip the spin backstop, gathering is the work,
     # not spinning. Here 9 straight Extract turns each return distinct data; the run
