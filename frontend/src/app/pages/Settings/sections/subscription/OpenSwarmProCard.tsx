@@ -105,7 +105,7 @@ const OpenSwarmProCard: React.FC = () => {
           desc: 'Your subscription ended. Pick a plan to get back in.',
           cta: 'Resubscribe',
           title: 'Resubscribe to OpenSwarm Pro',
-          subtitle: 'Keep using Claude Sonnet, Opus, and Haiku without a Claude account.',
+          subtitle: 'Keep using the latest Claude models without a Claude account.',
           currentPlan: lastPlan,
         };
       }
@@ -119,7 +119,7 @@ const OpenSwarmProCard: React.FC = () => {
         };
       }
       return {
-        desc: 'Claude Sonnet, Opus, and Haiku. No Claude account needed.',
+        desc: 'The latest Claude models. No Claude account needed.',
         cta: 'Subscribe',
         title: 'Choose your plan',
         subtitle: 'One subscription, we handle everything behind the scenes. Cancel anytime.',
@@ -129,22 +129,26 @@ const OpenSwarmProCard: React.FC = () => {
 
     return (
       <>
-        <Box sx={{ p: 1.5, borderRadius: `${c.radius.md}px`, border: `1px solid ${c.border.subtle}` }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{
+          p: 1.5, borderRadius: `${c.radius.md}px`, border: `1px solid ${c.border.subtle}`,
+          transition: c.transition,
+          '&:hover': { borderColor: c.border.medium, transform: 'translateY(-1px)', boxShadow: c.shadow.sm },
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, bgcolor: c.border.medium }} />
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7 }}>
                   <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: c.text.primary }}>
                     OpenSwarm Pro
                   </Typography>
-                  <Box sx={{ px: 0.7, py: 0.15, borderRadius: 999, bgcolor: `${c.accent.primary}15` }}>
-                    <Typography sx={{ fontSize: '0.6rem', color: c.accent.primary, fontWeight: 600 }}>
+                  <Box sx={{ px: 0.7, py: 0.15, borderRadius: 999, bgcolor: `${c.accent.primary}12` }}>
+                    <Typography sx={{ fontSize: '0.58rem', color: c.accent.primary, fontWeight: 600, letterSpacing: '0.03em' }}>
                       RECOMMENDED
                     </Typography>
                   </Box>
                 </Box>
-                <Typography sx={{ fontSize: '0.65rem', color: c.text.muted }}>
+                <Typography noWrap sx={{ fontSize: '0.65rem', color: c.text.muted }}>
                   {copy.desc}
                 </Typography>
               </Box>
