@@ -1262,13 +1262,17 @@ const agentsSlice = createSlice({
           incomingMsgs.map((m) => m.client_message_id).filter(Boolean),
         );
         const incomingIds = new Set(incomingMsgs.map((m) => m.id));
-        const surviving = liveStatus
-          ? (existing?.messages ?? []).filter(
-              (m) =>
-                !incomingIds.has(m.id) &&
-                !(m.client_message_id && incomingClientIds.has(m.client_message_id)),
-            )
-          : [];
+        // An optimistic message (no WS echo yet) is preserved even when both sides
+        // read settled: right after a send on a completed chat, NEITHER status has
+        // flipped to running, and the racing snapshot wiped the just-typed bubble
+        // for seconds. It can't be a deleted-message resurrection; the server has
+        // never confirmed it existed.
+        const surviving = (existing?.messages ?? []).filter(
+          (m) =>
+            (liveStatus || m.optimistic_status) &&
+            !incomingIds.has(m.id) &&
+            !(m.client_message_id && incomingClientIds.has(m.client_message_id)),
+        );
         state.sessions[session.id] = {
           ...session,
           messages: surviving.length
