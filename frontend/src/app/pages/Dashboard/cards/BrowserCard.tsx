@@ -190,12 +190,6 @@ const BrowserCard: React.FC<Props> = ({
   isSelected = false, isHighlighted = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
   cardZOrder = 0, onDoubleClick, onBringToFront,
 }) => {
-  // Arm the Windows webview crash-safety marker synchronously, before React commits
-  // the <webview> below. Cleared on dom-ready; a leftover marker next launch tells
-  // windowsWebviewEnabled() the mount crashed, so it falls back to the iframe.
-  // Idempotent, no-op on Mac and on the iframe path. See the gate block above.
-  if (isElectron && isWindows) armWindowsWebviewPending();
-
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
@@ -221,6 +215,13 @@ const BrowserCard: React.FC<Props> = ({
   const browserAgentSession = useAppSelector(selectBrowserAgentSession);
 
   const suspendedSnap = useAppSelector((state) => state.dashboardLayout.suspendedBrowserCards[browserId]);
+
+  // Arm the Windows webview crash-safety marker synchronously, before React commits
+  // the <webview> below. Cleared on dom-ready; a leftover marker next launch tells
+  // windowsWebviewEnabled() the mount crashed, so it falls back to the iframe.
+  // MUST skip parked cards: they render no webview, so dom-ready never fires and a
+  // stale marker reads as a phantom crash that locks Windows out of webviews.
+  if (isElectron && isWindows && !suspendedSnap) armWindowsWebviewPending();
 
   const activity = useBrowserActivity(browserId);
   const agentRunning = browserAgentSession?.status === 'running';
