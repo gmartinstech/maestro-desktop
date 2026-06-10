@@ -127,7 +127,10 @@ class AppRuntime:
         # over once Vite is actually accepting connections. Without
         # this, the editor flashes a "Site can't be reached" error
         # while `npm install` is running.
-        if self.frontend_port and self._frontend_ready:
+        # Also gated on `running`: a vite that crashed or got orphaned still
+        # has _frontend_ready=True, and handing the webview that dead port is
+        # the ERR_FAILED you see on reopen. No live process, no URL.
+        if self.frontend_port and self._frontend_ready and self.running:
             return f"http://127.0.0.1:{self.frontend_port}/"
         return None
 
@@ -477,6 +480,10 @@ class AppRuntime:
         if not self.process:
             return
         rc = await self.process.wait()
+        # Unclean death (vite crash, OOM, orphaned parent) must drop readiness;
+        # otherwise frontend_url keeps advertising a dead port and the preview
+        # navigates into ERR_FAILED. stop() already does this for clean stops.
+        self._frontend_ready = False
         self._broadcast(LogLine("runtime", f"[runtime] backend exited with code {rc}"))
 
 
