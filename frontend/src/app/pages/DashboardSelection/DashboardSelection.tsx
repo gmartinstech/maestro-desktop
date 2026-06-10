@@ -243,10 +243,10 @@ const DashboardSelection: React.FC = () => {
                   bgcolor: c.bg.surface,
                   overflow: 'hidden',
                   transition: 'all 0.2s ease',
+                  // One elevation cue: the shadow fades in on hover, the card doesn't jump.
                   '&:hover': {
                     borderColor: c.border.strong,
                     boxShadow: c.shadow.md,
-                    transform: 'translateY(-2px)',
                   },
                   '&:hover .card-actions': { opacity: 1 },
                   display: 'flex',
