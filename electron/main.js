@@ -336,7 +336,9 @@ if (!gotLock) {
 app.on('open-url', (event, url) => {
   event.preventDefault();
   forwardDeepLinkToRenderer(url);
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    // focus() alone does not unhide a close-to-dock'd window.
+    try { if (!mainWindow.isVisible()) mainWindow.show(); } catch (_) {}
     mainWindow.focus();
   } else if (BrowserWindow.getAllWindows().length === 0 &&
              !drainingForQuit && !isCreatingMainWindow && backendPort) {
@@ -1214,6 +1216,25 @@ function createWindow() {
     mainWindow.webContents.send('webview-new-window', url, mainWindow.webContents.id);
   });
 
+  // Neuter renderer-side window.close() in the main window's page world.
+  // Our React bundle never calls it legitimately, and while a window-level
+  // close (Cmd+W / red X) is hidden-not-destroyed by the close interception
+  // below, a renderer-side window.close() SKIPS the preventable 'close'
+  // event and destroys the webContents outright (reproduced via CDP).
+  // contextIsolation is on, so a preload override can't reach page callers;
+  // executeJavaScript runs in the page world. The stub logs the caller's
+  // stack and the console tee lands it in backend.log, so a phantom close
+  // becomes a self-identifying report instead of a vanished window.
+  // on(), not once(): re-applies across reloads and crash-recreates.
+  {
+    const wc = mainWindow.webContents;
+    wc.on('did-finish-load', () => {
+      wc.executeJavaScript(
+        "window.close = function () { console.warn('[diag][renderer] window.close() blocked; caller:', new Error().stack); };"
+      ).catch(() => {});
+    });
+  }
+
   // Once the renderer has loaded, flush any deep-link URL we captured before
   // the window existed (cold-launch via openswarm://). pendingDeepLink may
   // be a string (legacy) OR a {channel, url} object (v1.0.26+ OAuth claims).
@@ -1236,8 +1257,31 @@ function createWindow() {
   // (Cmd+W via the default menu, red X, or a programmatic close) — the
   // signature of the 1.2.77 prod self-quits. True means a normal quit is
   // closing windows as part of its pipeline.
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (e) => {
     console.log(`[diag][main] mainWindow close (quitInitiated=${quitInitiated})`);
+    // macOS close-to-dock: a close that is not part of a real quit (Cmd+Q,
+    // dock Quit, logout, updater — all fire before-quit first, flipping
+    // quitInitiated) gets prevented and the window HIDES instead. This keeps
+    // the renderer, webviews, and running agents fully alive, so both the
+    // user's Cmd+W/red-X and the un-attributed programmatic closer behind
+    // the 1.2.77 self-quits cost nothing: the next dock click shows the
+    // same window back instantly (`activate` below). Real quits must pass
+    // through — preventing a close during app.quit() cancels the quit
+    // (Electron semantics), which is exactly what the flag guards against.
+    if (process.platform === 'darwin' && !quitInitiated) {
+      e.preventDefault();
+      try {
+        if (thisWindow.isFullScreen()) {
+          // Hiding a fullscreen window strands a black space; leave
+          // fullscreen first, then hide once the transition lands.
+          thisWindow.once('leave-full-screen', () => { try { thisWindow.hide(); } catch (_) {} });
+          thisWindow.setFullScreen(false);
+        } else {
+          thisWindow.hide();
+        }
+        console.log('[diag][main] close intercepted, window hidden (app + agents stay alive)');
+      } catch (_) {}
+    }
   });
   mainWindow.on('closed', () => {
     // 'close' only fires for window-level closes (Cmd+W / red X / win.close());
@@ -2126,10 +2170,26 @@ app.on('will-quit', () => {
 });
 
 app.on('activate', () => {
-  // Dock-click reopen after the macOS keep-alive above. Guards, in order:
-  // any live window (incl. the boot splash) means there's nothing to do;
-  // drainingForQuit blocks a dock-click mid-quit-drain from resurrecting a
-  // window whose backend is being torn down; isCreatingMainWindow blocks
+  // Dock-click after close-to-dock: the common case is a HIDDEN (not
+  // destroyed) window — just show it again; renderer, webviews, and agents
+  // never stopped, so this is instant and lossless.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      } else if (!mainWindow.isVisible()) {
+        console.log('[diag][main] activate: showing hidden window');
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    } catch (_) {}
+    return;
+  }
+  // Destroyed-window fallback (webContents-level teardown skips the close
+  // interception, and crash recovery destroys windows directly). Guards, in
+  // order: any live window (incl. the boot splash) means there's nothing to
+  // do; drainingForQuit blocks a dock-click mid-quit-drain from resurrecting
+  // a window whose backend is being torn down; isCreatingMainWindow blocks
   // re-entrancy; backendPort gates on boot having completed (pre-boot, the
   // splash flow owns first-window creation).
   if (BrowserWindow.getAllWindows().length !== 0) return;
