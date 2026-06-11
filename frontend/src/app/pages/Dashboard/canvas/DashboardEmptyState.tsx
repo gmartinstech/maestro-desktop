@@ -1,6 +1,7 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Hammer, PenLine, GraduationCap, ArrowLeft } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -16,7 +17,9 @@ import ChatBubbleTeardrop from '../ChatBubbleTeardrop';
 // Two-level starters: pick a category, then its concrete prompts spawn. Every
 // prompt is one-click-runnable (no [placeholders]) and free-trial-safe, it
 // touches the web or the App Builder sandbox, never the user's files.
-type StarterCategory = { id: string; label: string; Icon: LucideIcon; prompts: string[] };
+// target 'app-builder' opens the App Builder (live preview) with the prompt
+// auto-sent; the rest run as a normal agent on the dashboard.
+type StarterCategory = { id: string; label: string; Icon: LucideIcon; prompts: string[]; target?: 'app-builder' };
 const STARTER_CATEGORIES: StarterCategory[] = [
   {
     id: 'research', label: 'Research', Icon: Search,
@@ -28,7 +31,7 @@ const STARTER_CATEGORIES: StarterCategory[] = [
     ],
   },
   {
-    id: 'build', label: 'Build', Icon: Hammer,
+    id: 'build', label: 'Build', Icon: Hammer, target: 'app-builder',
     prompts: [
       'Build a focus timer that dings when the break starts',
       'Make a tip calculator that splits the bill',
@@ -66,16 +69,24 @@ const DashboardEmptyState: React.FC<{
   const model = useAppSelector((s) => s.settings.data.default_model);
   const mode = useAppSelector((s) => s.settings.data.default_mode);
   const canRun = useAppSelector((s) => hasFreeTrialActive(s) || hasModelConnected(s));
+  const navigate = useNavigate();
   const [launching, setLaunching] = React.useState(false);
   const [expanded, setExpanded] = React.useState<string | null>(null);
-  const currentPrompts = STARTER_CATEGORIES.find((cat) => cat.id === expanded)?.prompts ?? [];
+  const currentCategory = STARTER_CATEGORIES.find((cat) => cat.id === expanded);
+  const currentPrompts = currentCategory?.prompts ?? [];
 
   // Only offer chips once a run can actually succeed (free trial armed or a real
   // model connected); otherwise fall back to the plain hint.
   const showChips = !!onLaunch && canRun;
 
   const launch = (prompt: string) => {
-    if (launching || !onLaunch) return;
+    if (launching) return;
+    // Build prompts open the App Builder (live preview) with the prompt auto-sent.
+    if (currentCategory?.target === 'app-builder') {
+      navigate(`/apps/new?prompt=${encodeURIComponent(prompt)}`);
+      return;
+    }
+    if (!onLaunch) return;
     setLaunching(true); // empty state unmounts on first session, but guard a fast double-click
     onLaunch(prompt, mode, model);
   };
