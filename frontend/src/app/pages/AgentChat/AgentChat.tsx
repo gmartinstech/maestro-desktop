@@ -966,9 +966,8 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 <Typography noWrap sx={{ color: c.text.primary, fontWeight: 600 }}>{session.name}</Typography>
                 {!isDraft && statusStyle && session.status !== 'completed' && session.status !== 'stopped' && (
                   // Status speaks only when it needs the user; finished work sits quiet.
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexShrink: 0 }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: statusStyle.color, flexShrink: 0 }} />
-                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: c.text.secondary, whiteSpace: 'nowrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: c.text.tertiary, whiteSpace: 'nowrap' }}>
                       {friendlyStatusLabel(session.status)}
                     </Typography>
                   </Box>

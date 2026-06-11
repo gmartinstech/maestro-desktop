@@ -429,15 +429,15 @@ class AgentManager:
         _builtin_perms = load_builtin_permissions()
 
         # Per-tool DEFAULT policy (overridden by anything the user has set
-        # explicitly in builtin_permissions.json). Bash defaults to "ask"
-        # because every other builtin is sandboxed by domain (Read/Write
-        # touch files but not the shell, browser tools touch a webview),
-        # whereas Bash is a full local shell, and the agent receives
-        # untrusted text from MCP tools (Gmail, WebFetch, browsing) that
-        # can carry prompt injection. Without this, a poisoned email
-        # could silently `rm -rf` the user. Users who want the old
-        # behavior can flip Bash back to always_allow in the UI.
-        _DEFAULTS = {"Bash": "ask"}
+        # explicitly in builtin_permissions.json). Bash defaults to
+        # always_allow like every other builtin, for a frictionless run.
+        # Three guards below STILL force a prompt even on always_allow:
+        # the catastrophic-pattern match (rm -rf and friends), OS-scheduling
+        # (cron/launchd persistence), and the sensitive-path gate. So the
+        # poisoned-email -> destructive-command case is still caught; what
+        # this trades away is the prompt on ordinary shell commands. Users
+        # who want a prompt on every command can flip Bash to "ask" in the UI.
+        _DEFAULTS: dict[str, str] = {}
 
         def _default_for(tool_name: str) -> str:
             return _DEFAULTS.get(tool_name, "always_allow")
