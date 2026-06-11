@@ -1,4 +1,14 @@
-const port = (window as any).__OPENSWARM_PORT__ || 8324;
+const _w = window as any;
+// Prefer the preload-injected port; if it's missing (preload raced the backend
+// port being picked), re-query the live value before falling back to 8324. The
+// bare 8324 guess is wrong on any machine where the backend landed on a fallback
+// port (e.g. 8324 was held by a leftover backend); see the self-heal below.
+const port =
+  _w.__OPENSWARM_PORT__ ||
+  (_w.openswarm && typeof _w.openswarm.getBackendPortLive === 'function'
+    ? _w.openswarm.getBackendPortLive()
+    : 0) ||
+  8324;
 const host = window.location.hostname || 'localhost';
 
 export const API_BASE = `http://${host}:${port}/api`;
@@ -44,6 +54,25 @@ export function ensureAuthToken(): Promise<string> {
   if (_authTokenPromise) return _authTokenPromise;
   _authTokenPromise = refreshAuthToken();
   return _authTokenPromise;
+}
+
+// Self-heal: if our backend calls start failing with a network error (the
+// renderer is pinned to a stale/wrong port), re-query the live port and reload
+// once onto it. Guarded to one attempt per page-load and only when the live
+// port actually differs, so a genuinely-down backend can't cause a reload loop.
+let _portHealTried = false;
+function _maybeHealBackendPort(): void {
+  if (_portHealTried) return;
+  try {
+    const ow = (window as any).openswarm;
+    const live = ow && typeof ow.getBackendPortLive === 'function' ? ow.getBackendPortLive() : null;
+    if (typeof live === 'number' && live > 0 && live !== port) {
+      _portHealTried = true;
+      window.location.reload();
+    }
+  } catch {
+    /* never let a heal attempt throw into the fetch path */
+  }
 }
 
 // Global fetch interceptor: attaches bearer for our API + dedupes/caches GETs in a 1s window.
@@ -117,6 +146,8 @@ function _installAuthFetchInterceptor() {
         _inflightFetches.delete(cacheKey);
       }
     } catch {
+      // A network failure reaching our backend may mean we're on a stale port.
+      _maybeHealBackendPort();
       return originalFetch(input, init);
     }
   };

@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld('__OPENSWARM_PORT__', port);
 
 contextBridge.exposeInMainWorld('openswarm', {
   getBackendPort: () => port,
+  // Fresh re-query of the LIVE backend port (not the cached preload value).
+  // Used by the renderer to self-heal if its cached port ever resolved wrong
+  // (raced null -> 8324, or backend on a fallback port because 8324 was held).
+  getBackendPortLive: () => {
+    try { return ipcRenderer.sendSync('get-backend-port-sync'); } catch (_) { return port; }
+  },
   getWebviewPreloadPath: () => webviewPreloadPath,
 
   // Per-install auth token required for WS + HTTP calls to the
