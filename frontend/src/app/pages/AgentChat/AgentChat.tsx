@@ -76,6 +76,11 @@ const COLLAPSED_TOOL_ROW_HEIGHT = 44;
 // Beyond it, items unmount and are replaced by a measured-height spacer, so
 // render/memory stays bounded no matter how long the transcript is.
 const WINDOW_BUFFER_SCREENS_PER_SIDE = 3;
+// Below this item count the transcript renders WHOLE, no spacers, no windowing.
+// Virtualization only earns its keep on huge chats; on a normal chat the
+// spacer-height recompute just fights the scroll position (the "jumps up and
+// down" glitch), so we skip it entirely until a chat is genuinely long.
+const WINDOW_MIN_ITEMS = 60;
 // Floor on the mounted item count so a single very tall item can't strand us with
 // an effectively empty window.
 const MIN_WINDOW_BUFFER_ITEMS = 6;
@@ -549,6 +554,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (!el) return;
     if (!initialBottomScrollSettledRef.current) return;
     const total = renderItemsLengthRef.current;
+    // Below the windowing threshold the whole transcript is mounted; recomputing
+    // a window here would only churn the spacers and shift scroll. Leave it alone.
+    if (total < WINDOW_MIN_ITEMS) return;
     const clientHeight = Math.max(1, el.clientHeight);
     const tightPx = WINDOW_BUFFER_SCREENS_PER_SIDE * clientHeight;
     // Mount with the tight buffer, but keep already-mounted items until
@@ -1113,8 +1121,11 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   }, [id, renderItems, viewportHeight]);
 
   const total = renderItems.length;
-  const safeWindowEnd = windowEnd > 0 ? Math.min(windowEnd, total) : total;
-  const safeWindowStart = Math.min(Math.max(0, windowStart), Math.max(0, safeWindowEnd - 1));
+  // Small chats render whole (no windowing): forces the full slice so both spacer
+  // loops sum to 0, which removes the recompute-driven scroll jump entirely.
+  const windowingActive = total >= WINDOW_MIN_ITEMS;
+  const safeWindowEnd = !windowingActive ? total : (windowEnd > 0 ? Math.min(windowEnd, total) : total);
+  const safeWindowStart = !windowingActive ? 0 : Math.min(Math.max(0, windowStart), Math.max(0, safeWindowEnd - 1));
   const visibleStartIndex = safeWindowStart;
   const visibleRenderItems = useMemo(
     () => renderItems.slice(safeWindowStart, safeWindowEnd),
@@ -1486,11 +1497,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               height: '100%',
               overflow: 'auto',
               scrollbarGutter: 'stable',
-              // Flex column + the mt:auto content wrapper below bottom-anchors the
-              // transcript: short chats sit flush above the input (no whitespace
-              // under the last message) while long chats scroll normally.
-              display: 'flex',
-              flexDirection: 'column',
+              // Top-aligned natural flow: messages start at the top and grow down
+              // (standard chat). The earlier flex-column + mt:auto bottom-anchor
+              // clustered short chats at the bottom under a big void, reading broken.
               px: 2,
               py: 1,
               // Smoothness bundle (perf-only , no behavior change):
@@ -1510,22 +1519,24 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               overflowAnchor: 'auto',
               contain: 'layout',
               overscrollBehavior: 'contain',
+              // Hidden until the user is in the chat: the thumb is transparent at
+              // rest and fades in on hover, so a resizing thumb never draws the eye.
               '&::-webkit-scrollbar': { width: 6 },
               '&::-webkit-scrollbar-track': { background: 'transparent' },
               '&::-webkit-scrollbar-thumb': {
-                background: c.border.medium,
+                background: 'transparent',
                 borderRadius: 3,
                 minHeight: 48,
-                '&:hover': { background: c.border.strong },
+                transition: 'background 0.2s',
               },
+              '&:hover::-webkit-scrollbar-thumb': { background: c.border.medium },
+              '&:hover::-webkit-scrollbar-thumb:hover': { background: c.border.strong },
               scrollbarWidth: 'thin',
-              scrollbarColor: `${c.border.medium} transparent`,
+              scrollbarColor: 'transparent transparent',
+              '&:hover': { scrollbarColor: `${c.border.medium} transparent` },
             }}
           >
-            {/* mt:auto pins the transcript to the bottom when it's shorter than the
-                viewport (no empty space below the last message); collapses to 0 and
-                scrolls normally once the content overflows. */}
-            <Box sx={{ mt: 'auto' }}>
+            <Box>
             {(session.mcp_suggestions && session.mcp_suggestions.length > 0) && (
               <Box sx={{
                 mt: 1,
