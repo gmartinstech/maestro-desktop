@@ -263,7 +263,7 @@ const Skills: React.FC = () => {
           '& pre': { bgcolor: c.bg.secondary, borderRadius: `${c.radius.sm}px`, p: 2, mb: 1.5, overflow: 'auto',
             '& code': { bgcolor: 'transparent', color: c.text.secondary, px: 0, py: 0 },
           },
-          '& hr': { border: 'none', borderTop: `1px solid ${c.border.subtle}`, my: 2 },
+          '& hr': { border: 'none', my: 3 },
           '& a': { color: c.accent.primary, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
           '& strong': { fontWeight: 600, color: c.text.primary },
         }}>
@@ -308,7 +308,7 @@ const Skills: React.FC = () => {
       <Box
         sx={{
           width: SIDEBAR_W, minWidth: SIDEBAR_W, height: '100%', display: 'flex', flexDirection: 'column',
-          borderRight: `${c.border.width} solid ${c.border.subtle}`, bgcolor: 'transparent',
+          bgcolor: c.bg.secondary,
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, pt: 2, pb: 1 }}>

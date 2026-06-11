@@ -1103,9 +1103,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
             gap: 2,
             px: 1.5,
             py: 1,
-            bgcolor: c.bg.secondary,
-            // Hairline separates the meta strip from the tabs row.
-            borderBottom: `0.5px solid ${c.border.subtle}`,
+            bgcolor: 'transparent',
             flexShrink: 0,
             minHeight: 48,
           }}
@@ -1154,8 +1152,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
           sx={{
             display: 'flex',
             alignItems: 'center',
-            // No borderBottom; bg-color step carries the separation.
-            bgcolor: c.bg.secondary,
+            bgcolor: 'transparent',
             flexShrink: 0,
             px: 1.25,
             py: 1,
@@ -1276,7 +1273,6 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
                 sx={{
                   width: 200,
                   flexShrink: 0,
-                  borderRight: `1px solid ${c.border.subtle}`,
                   bgcolor: c.bg.secondary,
                   display: 'flex',
                   flexDirection: 'column',
