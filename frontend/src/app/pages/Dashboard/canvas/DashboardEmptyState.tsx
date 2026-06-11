@@ -21,7 +21,7 @@ const STARTER_CATEGORIES: StarterCategory[] = [
   {
     id: 'research', label: 'Research', Icon: Search,
     prompts: [
-      'Find today\'s top AI news and summarize it',
+      'Find today\'s top news and summarize it for me',
       'Compare the 3 best standing desks and recommend one',
       'Plan a weekend trip to Tokyo with a day-by-day itinerary',
       'Find the highest-rated wireless earbuds under $100',
@@ -30,17 +30,17 @@ const STARTER_CATEGORIES: StarterCategory[] = [
   {
     id: 'build', label: 'Build', Icon: Hammer,
     prompts: [
-      'Build a Pomodoro timer that dings when it ends',
+      'Build a focus timer that dings when the break starts',
       'Make a tip calculator that splits the bill',
       'Create a Snake game I can play right now',
-      'Build a habit tracker with a streak counter',
+      'Build a daily habit tracker with a streak counter',
     ],
   },
   {
     id: 'write', label: 'Write', Icon: PenLine,
     prompts: [
-      'Draft a cold outreach email to a potential client',
-      'Turn rough notes into a polished status update',
+      'Write a friendly email introducing myself to a new client',
+      'Turn my rough notes into a polished update',
       'Write a product description for a coffee mug',
       'Write a short poem about the sea',
     ],
@@ -48,10 +48,10 @@ const STARTER_CATEGORIES: StarterCategory[] = [
   {
     id: 'learn', label: 'Learn', Icon: GraduationCap,
     prompts: [
-      'Explain how RAG works like I\'m five',
-      'Break down what an LLM actually is',
-      'Compare REST and GraphQL and when to use each',
+      'Explain how AI chatbots actually work, in plain English',
       'Teach me the basics of investing in 5 minutes',
+      'Explain the stock market like I\'m five',
+      'Give me a 5-minute crash course on climate change',
     ],
   },
 ];
@@ -93,12 +93,12 @@ const DashboardEmptyState: React.FC<{
       }}
     >
       <style>{`@keyframes empty-state-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
-      <Typography sx={{ color: c.text.tertiary, fontSize: '1.1rem', mb: 1 }}>
+      <Typography sx={{ color: c.text.tertiary, fontSize: '1.25rem', mb: 1 }}>
         No agents running
       </Typography>
       <Typography
         sx={{
-          fontSize: '0.9rem',
+          fontSize: '1rem',
           display: 'inline-flex',
           alignItems: 'center',
           gap: 0.7,
@@ -131,29 +131,29 @@ const DashboardEmptyState: React.FC<{
                 transition={{ duration: 0.18 }}
                 style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
               >
-                <Typography sx={{ color: c.text.ghost, fontSize: '0.8rem', mb: 1.2 }}>
+                <Typography sx={{ color: c.text.ghost, fontSize: '0.9rem', mb: 1.4 }}>
                   or try one of these
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, width: '100%', maxWidth: 420 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.2, width: '100%', maxWidth: 460 }}>
                   {STARTER_CATEGORIES.map((cat) => (
                     <Box
                       component="button"
                       key={cat.id}
                       onClick={() => setExpanded(cat.id)}
                       sx={{
-                        display: 'flex', alignItems: 'center', gap: 1,
-                        px: 1.6, py: 1.1,
+                        display: 'flex', alignItems: 'center', gap: 1.1,
+                        px: 1.9, py: 1.3,
                         borderRadius: 2.5,
                         border: `1px solid ${c.border.medium}`,
                         background: c.bg.surface,
                         color: c.text.secondary,
-                        fontSize: '0.85rem', fontWeight: 500,
+                        fontSize: '0.98rem', fontWeight: 500,
                         cursor: 'pointer', fontFamily: 'inherit',
                         transition: 'background 150ms, border-color 150ms',
                         '&:hover': { background: c.bg.elevated, borderColor: c.border.strong },
                       }}
                     >
-                      <cat.Icon size={16} />
+                      <cat.Icon size={18} />
                       {cat.label}
                     </Box>
                   ))}
@@ -175,14 +175,14 @@ const DashboardEmptyState: React.FC<{
                     display: 'inline-flex', alignItems: 'center', gap: 0.5,
                     mb: 1.2, px: 1, py: 0.4,
                     border: 'none', background: 'transparent',
-                    color: c.text.ghost, fontSize: '0.8rem',
+                    color: c.text.ghost, fontSize: '0.9rem',
                     cursor: 'pointer', fontFamily: 'inherit',
                     '&:hover': { color: c.text.secondary },
                   }}
                 >
-                  <ArrowLeft size={14} /> back
+                  <ArrowLeft size={15} /> back
                 </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, width: '100%', maxWidth: 460 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.9, width: '100%', maxWidth: 480 }}>
                   {currentPrompts.map((prompt) => (
                     <Box
                       component="button"
@@ -191,12 +191,12 @@ const DashboardEmptyState: React.FC<{
                       disabled={launching}
                       sx={{
                         textAlign: 'left',
-                        px: 1.6, py: 0.9,
+                        px: 1.8, py: 1.1,
                         borderRadius: 2,
                         border: `1px solid ${c.border.medium}`,
                         background: c.bg.surface,
                         color: c.text.secondary,
-                        fontSize: '0.82rem',
+                        fontSize: '0.95rem',
                         cursor: launching ? 'default' : 'pointer',
                         opacity: launching ? 0.5 : 1,
                         fontFamily: 'inherit',
