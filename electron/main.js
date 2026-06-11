@@ -336,7 +336,19 @@ if (!gotLock) {
 app.on('open-url', (event, url) => {
   event.preventDefault();
   forwardDeepLinkToRenderer(url);
-  if (mainWindow) mainWindow.focus();
+  if (mainWindow) {
+    mainWindow.focus();
+  } else if (BrowserWindow.getAllWindows().length === 0 &&
+             !drainingForQuit && !isCreatingMainWindow && backendPort) {
+    // Deep link (e.g. the browser sign-in redirect) arrived while alive but
+    // windowless (macOS keep-alive): reopen so the pendingDeepLink stashed
+    // by forwardDeepLinkToRenderer has a renderer to flush into (createWindow's
+    // did-finish-load handler delivers it). Cold launches are unaffected:
+    // backendPort is unset until boot completes, and the splash flow owns
+    // first-window creation there.
+    console.log('[diag][main] open-url with no window, reopening');
+    recreateMainWindow();
+  }
 });
 
 // Disabled Chromium features. Mac gets one extra: MacWebContentsOcclusion is
@@ -504,6 +516,17 @@ function writeCleanQuitLock() {
   } catch (_) {}
 }
 
+// Quit-cause forensics. On a real quit (Cmd+Q, dock Quit, app.quit()) Electron
+// fires before-quit BEFORE any window 'close' events; a window closing on its
+// own (Cmd+W, red X, programmatic close) fires 'close' with quitInitiated
+// still false. The 1.2.77 self-quit investigation died for lack of exactly
+// this line: every prod "crash" was an orderly quit and nothing recorded who
+// started it. Console output is teed into backend.log in packaged builds.
+let quitInitiated = false;
+app.on('before-quit', () => {
+  quitInitiated = true;
+  console.log('[diag][main] before-quit (quit initiated)');
+});
 app.on('before-quit', writeCleanQuitLock);
 const iconPath = process.platform === 'win32'
   ? path.join(__dirname, 'build', 'icon.ico')
@@ -1209,7 +1232,18 @@ function createWindow() {
 
   // Identity-checked: on crash recovery we recreate the window, which means BOTH the old and new BrowserWindow are alive briefly. The OLD window's closed handler must not clobber the NEW mainWindow reference when the old finally destroys.
   const thisWindow = mainWindow;
+  // Forensic: quitInitiated=false here means the close was window-initiated
+  // (Cmd+W via the default menu, red X, or a programmatic close) — the
+  // signature of the 1.2.77 prod self-quits. True means a normal quit is
+  // closing windows as part of its pipeline.
+  mainWindow.on('close', () => {
+    console.log(`[diag][main] mainWindow close (quitInitiated=${quitInitiated})`);
+  });
   mainWindow.on('closed', () => {
+    // 'close' only fires for window-level closes (Cmd+W / red X / win.close());
+    // a webContents-level teardown skips it and lands here directly, so log
+    // both or the forensics miss that family.
+    console.log(`[diag][main] mainWindow closed (quitInitiated=${quitInitiated})`);
     if (mainWindow === thisWindow) mainWindow = null;
   });
 
@@ -2019,15 +2053,26 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.on('window-all-closed', () => {
-  // Intentionally NOT killBackend() here. before-quit POSTs /shutdown-all
-  // so the backend reaps App Builder child processes (bundled node/vite,
-  // uvicorn) while it is still alive; will-quit kills the backend after.
-  // Killing it here first (on Windows that is taskkill /F, which skips
-  // uvicorn's graceful stop_all) orphans those children, and an orphaned
-  // vite node.exe keeps a lock on its own image at
-  // resources\node\x64\node.exe, blocking the next NSIS upgrade with
-  // "OpenSwarm cannot be closed". Mac's SIGTERM happened to run stop_all,
-  // which is why this never reproduced there.
+  console.log(`[diag][main] window-all-closed (platform=${process.platform}${process.platform === 'darwin' ? ', staying alive' : ', quitting'})`);
+  // macOS: stay alive like a standard Mac app. We never install a custom
+  // application menu, so Electron's DEFAULT menu ships File > Close Window
+  // (Cmd+W) — and with a single window, quitting here turned "close the
+  // window" into "tear down the backend and every running agent". The 1.2.77
+  // prod self-quits all carried this exact signature (window close with no
+  // preceding before-quit). Keeping the process alive de-fangs the whole
+  // class: the dock icon stays, `activate` below reopens against the warm
+  // backend in ~1s, and the [diag][main] close-cause logging identifies the
+  // closer. Explicit quits (Cmd+Q, dock Quit) are untouched — Electron's
+  // quit pipeline runs will-quit -> killBackend regardless of this handler.
+  if (process.platform === 'darwin') return;
+  // Windows/Linux: quit on last window, but intentionally NOT killBackend()
+  // here. before-quit POSTs /shutdown-all so the backend reaps App Builder
+  // child processes (bundled node/vite, uvicorn) while it is still alive;
+  // will-quit kills the backend after. Killing it here first (on Windows
+  // that is taskkill /F, which skips uvicorn's graceful stop_all) orphans
+  // those children, and an orphaned vite node.exe keeps a lock on its own
+  // image at resources\node\x64\node.exe, blocking the next NSIS upgrade
+  // with "OpenSwarm cannot be closed".
   app.quit();
 });
 
@@ -2081,9 +2126,19 @@ app.on('will-quit', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0 && backendPort) {
-    createWindow();
-  }
+  // Dock-click reopen after the macOS keep-alive above. Guards, in order:
+  // any live window (incl. the boot splash) means there's nothing to do;
+  // drainingForQuit blocks a dock-click mid-quit-drain from resurrecting a
+  // window whose backend is being torn down; isCreatingMainWindow blocks
+  // re-entrancy; backendPort gates on boot having completed (pre-boot, the
+  // splash flow owns first-window creation).
+  if (BrowserWindow.getAllWindows().length !== 0) return;
+  if (drainingForQuit || isCreatingMainWindow || !backendPort) return;
+  // recreateMainWindow, NOT bare createWindow: the window is built show:false
+  // and the boot path's splash swapToMain is long gone, so the recreate
+  // path's own ready-to-show -> show()/focus() is what makes it visible.
+  console.log('[diag][main] activate with no window, reopening');
+  recreateMainWindow();
 });
 
 // Splash window action buttons. Only meaningful while splashWindow is alive
