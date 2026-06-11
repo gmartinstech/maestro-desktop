@@ -20,7 +20,6 @@ const SubscriptionCard: React.FC<{ provider: SubscriptionProvider; connected: bo
       transition: c.transition,
       '&:hover': isPreview ? {} : {
         borderColor: connected ? c.status.success + '4d' : c.border.medium,
-        transform: 'translateY(-1px)',
         boxShadow: c.shadow.sm,
       },
       // affirm "Connected" at rest, reveal "Disconnect" on hover so the undo never shouts

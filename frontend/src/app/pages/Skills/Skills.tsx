@@ -233,7 +233,7 @@ const Skills: React.FC = () => {
       {contentView === 'raw' ? (
         <Box sx={{
           flex: 1, minHeight: 0,
-          bgcolor: c.bg.secondary, border: `${c.border.width} solid ${c.border.subtle}`,
+          bgcolor: c.bg.secondary,
           borderRadius: `${c.radius.md}px`, p: 2.5,
           overflow: 'auto',
           '&::-webkit-scrollbar': { width: 5 },
@@ -249,7 +249,7 @@ const Skills: React.FC = () => {
       ) : (
         <Box sx={{
           flex: 1, minHeight: 0,
-          bgcolor: c.bg.elevated, border: `${c.border.width} solid ${c.border.subtle}`,
+          bgcolor: c.bg.elevated,
           borderRadius: `${c.radius.md}px`, p: 3,
           overflow: 'auto',
           '&::-webkit-scrollbar': { width: 5 },
@@ -260,7 +260,7 @@ const Skills: React.FC = () => {
           '& p': { fontSize: '0.88rem', color: c.text.secondary, lineHeight: 1.7, mb: 1.5 },
           '& ul, & ol': { pl: 2.5, mb: 1.5, '& li': { fontSize: '0.88rem', color: c.text.secondary, lineHeight: 1.7, mb: 0.5 } },
           '& code': { fontFamily: c.font.mono, fontSize: '0.82rem', bgcolor: 'rgba(0,0,0,0.04)', px: 0.5, py: 0.15, borderRadius: `${c.radius.xs}px` },
-          '& pre': { bgcolor: c.bg.secondary, border: `${c.border.width} solid ${c.border.subtle}`, borderRadius: `${c.radius.sm}px`, p: 2, mb: 1.5, overflow: 'auto',
+          '& pre': { bgcolor: c.bg.secondary, borderRadius: `${c.radius.sm}px`, p: 2, mb: 1.5, overflow: 'auto',
             '& code': { bgcolor: 'transparent', color: c.text.secondary, px: 0, py: 0 },
           },
           '& hr': { border: 'none', borderTop: `1px solid ${c.border.subtle}`, my: 2 },

@@ -193,7 +193,6 @@ const CodeBlock: React.FC<{ tokens: ReturnType<typeof useClaudeTokens>; children
       m: 0,
       maxHeight: 150,
       overflow: 'auto',
-      border: `1px solid ${c.border.subtle}`,
       color: c.text.secondary,
       fontSize: '0.75rem',
       whiteSpace: 'pre-wrap',
@@ -397,8 +396,8 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
   return (
     <Box
       sx={{
+        // Tint carries the container; the accent icon + title are the identity cue.
         bgcolor: c.bg.secondary,
-        border: `1px solid ${c.accent.primary}33`,
         borderRadius: compact ? 2 : 2.5,
         p: compact ? 1.5 : 2,
         mx: compact ? 0 : 2,
@@ -577,8 +576,8 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
     return (
       <Box
         sx={{
+          // The warning tint is the container; no stroke on top of it.
           bgcolor: c.status.warningBg,
-          border: '1px solid rgba(128,92,31,0.2)',
           borderRadius: 2.5,
           p: 2,
           mx: 2,
@@ -614,7 +613,6 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
               gap: 1,
               alignItems: 'flex-start',
               bgcolor: 'rgba(181,51,51,0.08)',
-              border: '1px solid rgba(181,51,51,0.25)',
               borderRadius: 1.5,
               px: 1.25,
               py: 1,
@@ -718,8 +716,8 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
     <Box
       sx={{
         bgcolor: c.bg.surface,
+        // The brand-colored icon square carries the integration cue; no accent rail.
         border: `1px solid ${c.border.subtle}`,
-        borderLeft: `3px solid ${accentColor}`,
         borderRadius: 2.5,
         p: 0,
         mx: 2,
@@ -982,7 +980,6 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
               px: 2,
               py: 1.25,
               bgcolor: c.status.warningBg,
-              borderBottom: `1px solid ${c.border.subtle}`,
             }}
           >
             <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: c.status.warning, flex: 1 }}>

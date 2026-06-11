@@ -6,11 +6,15 @@ import CircularProgress from '@mui/material/CircularProgress';
 import SearchIcon from '@mui/icons-material/Search';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import BoltIcon from '@mui/icons-material/Bolt';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { searchHistory, resumeSession, HistorySession } from '@/shared/state/agentsSlice';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
+import { createDashboard } from '@/shared/state/dashboardsSlice';
+import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { friendlyStatusLabel } from '@/shared/statusLabel';
 
 interface Props {
   open: boolean;
@@ -32,7 +36,26 @@ interface SessionResult {
   closedAt: string | null;
 }
 
-type Result = DashboardResult | SessionResult;
+interface ActionResult {
+  kind: 'action';
+  id: string;
+  name: string;
+  keywords: string;
+}
+
+type Result = DashboardResult | SessionResult | ActionResult;
+
+// Spotlight-style commands; matched against name + keywords once the user types.
+const ACTIONS: ActionResult[] = [
+  { kind: 'action', id: 'new-dashboard', name: 'New dashboard', keywords: 'create board canvas workspace' },
+  { kind: 'action', id: 'settings', name: 'Open Settings', keywords: 'preferences general theme options' },
+  { kind: 'action', id: 'settings-models', name: 'Connect a model', keywords: 'settings models api key provider subscription' },
+  { kind: 'action', id: 'go-skills', name: 'Go to Skills', keywords: 'customize skills' },
+  { kind: 'action', id: 'go-actions', name: 'Go to Actions', keywords: 'customize tools actions mcp' },
+  { kind: 'action', id: 'go-modes', name: 'Go to Modes', keywords: 'customize modes' },
+  { kind: 'action', id: 'go-apps', name: 'Go to Apps', keywords: 'apps mini app' },
+  { kind: 'action', id: 'all-dashboards', name: 'All dashboards', keywords: 'overview picker browse boards' },
+];
 
 const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
   const c = useClaudeTokens();
@@ -73,9 +96,13 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
     setSelectedIndex(0);
   }, [query]);
 
-  // Dashboards then sessions; merges in-memory active sessions with historySearch.results.
+  // Actions, then dashboards, then sessions; merges in-memory active sessions with historySearch.results.
   const results = useMemo<Result[]>(() => {
     const q = query.trim().toLowerCase();
+    // Commands surface only once typed, Spotlight-style; the empty palette stays content-first.
+    const actionResults: ActionResult[] = q
+      ? ACTIONS.filter((a) => `${a.name} ${a.keywords}`.toLowerCase().includes(q)).slice(0, 4)
+      : [];
     const dashboardResults: DashboardResult[] = Object.values(dashboards)
       .filter((d) => !q || d.name.toLowerCase().includes(q))
       .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
@@ -109,11 +136,30 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
       });
     }
     const sessionResults = Array.from(sessionMap.values()).slice(0, 30);
-    return [...dashboardResults, ...sessionResults];
+    return [...actionResults, ...dashboardResults, ...sessionResults];
   }, [query, dashboards, sessions, history, searchResults]);
 
+  const runAction = useCallback((id: string) => {
+    switch (id) {
+      case 'new-dashboard':
+        dispatch(createDashboard('Untitled Dashboard')).then((res) => {
+          if (createDashboard.fulfilled.match(res)) navigate(`/dashboard/${res.payload.id}`);
+        });
+        break;
+      case 'settings': dispatch(openSettingsModal()); break;
+      case 'settings-models': dispatch(openSettingsModal('models')); break;
+      case 'go-skills': navigate('/skills'); break;
+      case 'go-actions': navigate('/actions'); break;
+      case 'go-modes': navigate('/modes'); break;
+      case 'go-apps': navigate('/apps'); break;
+      case 'all-dashboards': navigate('/'); break;
+    }
+  }, [dispatch, navigate]);
+
   const handleSelect = useCallback((r: Result) => {
-    if (r.kind === 'dashboard') {
+    if (r.kind === 'action') {
+      runAction(r.id);
+    } else if (r.kind === 'dashboard') {
       navigate(`/dashboard/${r.id}`);
     } else {
       if (r.dashboardId) {
@@ -132,7 +178,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
       }
     }
     onClose();
-  }, [navigate, dispatch, onClose]);
+  }, [navigate, dispatch, onClose, runAction]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -152,6 +198,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
 
   if (!open) return null;
 
+  const actionSection = results.filter((r): r is ActionResult => r.kind === 'action');
   const dashSection = results.filter((r): r is DashboardResult => r.kind === 'dashboard');
   const sessSection = results.filter((r): r is SessionResult => r.kind === 'session');
 
@@ -192,7 +239,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
             inputRef={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search dashboards and chats…"
+            placeholder="Search, or type a command…"
             fullWidth
             sx={{
               fontSize: '1.05rem',
@@ -215,6 +262,20 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
             </Typography>
           ) : (
             <>
+              {actionSection.map((r) => {
+                const idx = flatIndexOf(r);
+                return (
+                  <ResultRow
+                    key={`a-${r.id}`}
+                    icon={<BoltIcon sx={{ fontSize: 18, color: c.accent.primary }} />}
+                    title={r.name}
+                    selected={idx === selectedIndex}
+                    onClick={() => handleSelect(r)}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    c={c}
+                  />
+                );
+              })}
               {dashSection.length > 0 && (
                 <SectionHeader label="Dashboards" c={c} />
               )}
@@ -241,7 +302,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
                 const dashName = r.dashboardId ? dashboards[r.dashboardId]?.name : null;
                 const subtitle = [
                   dashName && `in ${dashName}`,
-                  r.closedAt ? 'closed' : r.status,
+                  r.closedAt ? 'closed' : friendlyStatusLabel(r.status),
                 ].filter(Boolean).join(' · ');
                 return (
                   <ResultRow

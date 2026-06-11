@@ -54,6 +54,7 @@ const DashboardSelection: React.FC = () => {
 
   const [search, setSearch] = useState('');
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [menuDashboard, setMenuDashboard] = useState<Dashboard | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -100,8 +101,17 @@ const DashboardSelection: React.FC = () => {
     setMenuDashboard(d);
   };
 
+  // Right-click anywhere on a card opens the same menu at the cursor, Mac-style.
+  const handleContextMenu = (e: React.MouseEvent, d: Dashboard) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuPosition({ top: e.clientY, left: e.clientX });
+    setMenuDashboard(d);
+  };
+
   const handleCloseMenu = () => {
     setMenuAnchor(null);
+    setMenuPosition(null);
     setMenuDashboard(null);
   };
 
@@ -225,6 +235,7 @@ const DashboardSelection: React.FC = () => {
                   if (renamingId === d.id) return;
                   navigate(`/dashboard/${d.id}`);
                 }}
+                onContextMenu={(e) => handleContextMenu(e, d)}
                 sx={{
                   cursor: renamingId === d.id ? 'default' : 'pointer',
                   borderRadius: 3,
@@ -232,10 +243,10 @@ const DashboardSelection: React.FC = () => {
                   bgcolor: c.bg.surface,
                   overflow: 'hidden',
                   transition: 'all 0.2s ease',
+                  // One elevation cue: the shadow fades in on hover, the card doesn't jump.
                   '&:hover': {
                     borderColor: c.border.strong,
                     boxShadow: c.shadow.md,
-                    transform: 'translateY(-2px)',
                   },
                   '&:hover .card-actions': { opacity: 1 },
                   display: 'flex',
@@ -344,7 +355,9 @@ const DashboardSelection: React.FC = () => {
 
       <Menu
         anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
+        anchorReference={menuPosition ? 'anchorPosition' : 'anchorEl'}
+        anchorPosition={menuPosition ?? undefined}
+        open={Boolean(menuAnchor) || Boolean(menuPosition)}
         onClose={handleCloseMenu}
         slotProps={{
           paper: {

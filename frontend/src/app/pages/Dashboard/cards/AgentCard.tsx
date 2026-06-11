@@ -37,6 +37,7 @@ import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScro
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canvasInteractionState';
 import { getAgentWorkTime, fmtSeconds } from '@/shared/agentWorkTime';
+import { friendlyStatusLabel } from '@/shared/statusLabel';
 
 const GoogleServiceIcon: React.FC<{ service: string; size?: number }> = ({ service, size = 16 }) => {
   if (service === 'gmail') {
@@ -756,18 +757,15 @@ const AgentCard: React.FC<Props> = ({
             <Typography sx={{ color: c.text.primary, fontWeight: 600, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {session.name}
             </Typography>
-            <Chip
-              label={session.status.replace('_', ' ')}
-              size="small"
-              sx={{
-                bgcolor: statusStyle.bg,
-                color: statusStyle.color,
-                fontWeight: 600,
-                fontSize: '0.7rem',
-                height: 22,
-                flexShrink: 0,
-              }}
-            />
+            {/* Status speaks only when it needs the user; finished work sits quiet. */}
+            {session.status !== 'completed' && session.status !== 'stopped' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexShrink: 0 }}>
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: statusStyle.color, flexShrink: 0 }} />
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: c.text.secondary, whiteSpace: 'nowrap' }}>
+                  {friendlyStatusLabel(session.status)}
+                </Typography>
+              </Box>
+            )}
             {/* Calm, zero-click signal: the agent recalled or built up memory of
                 this site, so the user feels it getting smarter on its own. */}
             <Fade in={session.memory_recalled || session.memory_learned} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
