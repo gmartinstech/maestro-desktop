@@ -70,8 +70,23 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     if (!prefillPrompt || prefilledRef.current === prefillPrompt) return;
     const editor = editorRef.current;
     if (!editor) return;
-    if (editor.tagName === 'TEXTAREA') (editor as unknown as HTMLTextAreaElement).value = prefillPrompt;
-    else editor.textContent = prefillPrompt;
+    if (editor.tagName === 'TEXTAREA') {
+      const ta = editor as unknown as HTMLTextAreaElement;
+      ta.value = prefillPrompt;
+      ta.setSelectionRange(prefillPrompt.length, prefillPrompt.length);
+    } else {
+      editor.textContent = prefillPrompt;
+      // Park the caret AFTER the seeded text, not at position 0 (the default for a
+      // freshly-set textContent), so the user types/sends from the end.
+      const sel = window.getSelection();
+      if (sel) {
+        const range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
     setHasContent(true);
     prefilledRef.current = prefillPrompt;
     editor.style.opacity = '0.5';

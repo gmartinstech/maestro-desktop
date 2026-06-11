@@ -344,7 +344,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       // let the fetch reconcile in the background; awaiting serialized a slow
       // round trip in front of the live stream on every reopen.
       const warm = !!store.getState().agents.sessions[id]?.messages?.length;
-      if (warm) {
+      // Mid-stream reopen: the server snapshot predates the just-sent user turn
+      // (not persisted until the turn ends), and the WS echo already cleared the
+      // bubble's optimistic flag, so the background reconcile would DROP the user
+      // message until the stream finishes. The warm store + the kept-alive socket
+      // are authoritative here, so skip the fetch; stream-end persists everything.
+      const streamingNow = !!store.getState().streaming.bySession[id];
+      if (warm && streamingNow) {
+        // no fetch: don't let a stale snapshot wipe the in-flight turn
+      } else if (warm) {
         dispatch(fetchSession(id));
       } else {
         try {
