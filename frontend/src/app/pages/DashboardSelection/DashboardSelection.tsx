@@ -11,7 +11,7 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import AddIcon from '@mui/icons-material/Add';
-import DashboardIcon from '@mui/icons-material/Dashboard';
+import DashboardIcon from '@mui/icons-material/GridViewOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Skeleton } from '@/app/components/feedback/Loading';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -277,7 +277,7 @@ const DashboardSelection: React.FC = () => {
                     />
                   ) : (
                     <DashboardIcon
-                      sx={{ fontSize: 48, color: c.accent.primary, opacity: 0.5 }}
+                      sx={{ fontSize: 36, color: c.text.tertiary, opacity: 0.4 }}
                     />
                   )}
                   <Box
