@@ -11,7 +11,6 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import AddIcon from '@mui/icons-material/Add';
-import DashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Skeleton } from '@/app/components/feedback/Loading';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -256,7 +255,9 @@ const DashboardSelection: React.FC = () => {
                 <Box
                   sx={{
                     height: 120,
-                    bgcolor: c.accent.primary + '12',
+                    // Whisper of warmth at the top that fades into the card surface,
+                    // no hard tint block, so preview and title read as one panel.
+                    background: `radial-gradient(120% 90% at 50% 0%, ${c.accent.primary}1F 0%, transparent 62%)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -275,11 +276,7 @@ const DashboardSelection: React.FC = () => {
                         objectPosition: 'top left',
                       }}
                     />
-                  ) : (
-                    <DashboardIcon
-                      sx={{ fontSize: 36, color: c.text.tertiary, opacity: 0.4 }}
-                    />
-                  )}
+                  ) : null}
                   <Box
                     className="card-actions"
                     sx={{
