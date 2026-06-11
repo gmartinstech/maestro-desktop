@@ -371,6 +371,11 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // timeout the moment the user looked away. Same lever VS Code ships with.
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
+// Heavy WebGL/webview churn (spam-switching apps, busy dashboards) can crash the
+// shared GPU process; Chromium kills the whole app after a few GPU crashes. Lift
+// that cap so a GPU hiccup recovers by restarting the GPU process instead of
+// taking the app down with it. Fails quiet: at worst a brief compositor blip.
+app.commandLine.appendSwitch('disable-gpu-process-crash-limit');
 
 let mainWindow = null;
 let backendProcess = null;
