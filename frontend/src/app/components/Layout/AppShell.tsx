@@ -618,7 +618,20 @@ const AppShell: React.FC = () => {
           flexDirection: 'column',
         }}
       >
-        <Box sx={{ flex: 1, overflow: 'auto', pt: 0.5, '&::-webkit-scrollbar': { width: 0 } }}>
+        <Box sx={{
+          flex: 1,
+          overflow: 'auto',
+          pt: 0.5,
+          '&::-webkit-scrollbar': { width: 0 },
+          // Tactile hover: the leading section icon springs once on row-hover, then settles.
+          // Interaction-only, never ambient. Scoped to ListItemIcon so the +/chevron stay put.
+          '& .MuiListItemIcon-root .MuiSvgIcon-root': {
+            transition: 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          },
+          '& .MuiListItemButton-root:hover .MuiListItemIcon-root .MuiSvgIcon-root': {
+            transform: 'scale(1.15)',
+          },
+        }}>
           <Box sx={{ px: 1, mb: 0.25 }}>
             <ListItemButton
               onClick={handleDashboardsClick}
