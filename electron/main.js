@@ -1485,27 +1485,21 @@ function getBuildInfo() {
   return info;
 }
 
-// The packaged frontend ships as an unversioned `./bundle.js`, and the embedded
-// HTTP server sends no validation headers, so Chromium caches it heuristically
-// and keeps serving the OLD JS across an upgrade. The new code never runs (a
-// fix or UI change silently no-ops until the cache happens to evict). Fix: when
-// the build changes, nuke the renderer HTTP + V8 caches ONCE before the window
-// loads. Same build on relaunch keeps the cache (no startup-cost regression).
-async function clearRendererCacheIfBuildChanged() {
+// The packaged frontend ships as an unversioned `./bundle.js` served with no
+// validation headers, so Chromium caches it heuristically and can keep serving
+// OLD cross-version JS, a shipped fix silently no-ops and reinstalling the .app
+// doesn't help (the cache outlives it). A marker-on-build-change clear missed the
+// downgrade-bounce (new->old->new leaves the same marker but a re-poisoned cache),
+// so just drop the HTTP cache every launch before the window loads. The V8 code
+// cache is left intact, so unchanged JS still skips recompile; the only cost is a
+// couple of localhost refetches at startup.
+async function clearStaleFrontendCache() {
   if (isDev) return;
   try {
-    const bi = getBuildInfo();
-    const buildId = `${app.getVersion()}|${bi.sha || ''}|${bi.builtAt || ''}`;
-    const markerPath = path.join(app.getPath('userData'), '.frontend-build');
-    let prev = null;
-    try { prev = fs.readFileSync(markerPath, 'utf8').trim(); } catch (_) {}
-    if (prev === buildId) return;
     await session.defaultSession.clearCache();
-    try { await session.defaultSession.clearCodeCaches({}); } catch (_) {}
-    try { fs.writeFileSync(markerPath, buildId); } catch (_) {}
-    console.log(`[cache] build changed (${prev || 'none'} -> ${buildId}); cleared renderer cache so the new frontend loads`);
+    console.log('[cache] cleared HTTP cache so the on-disk frontend always loads');
   } catch (err) {
-    console.warn('[cache] clearRendererCacheIfBuildChanged failed:', err && err.message);
+    console.warn('[cache] clearStaleFrontendCache failed:', err && err.message);
   }
 }
 
@@ -1768,7 +1762,7 @@ app.whenReady().then(async () => {
     }
     emitSplashStatus('Almost ready…');
     // Must run before createWindow loads the URL, or the renderer fetches the stale bundle first.
-    await clearRendererCacheIfBuildChanged();
+    await clearStaleFrontendCache();
     createWindow();
     if (!isDev) {
       setupAutoUpdater();
