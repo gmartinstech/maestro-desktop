@@ -29,8 +29,9 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import Collapse from '@mui/material/Collapse';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
+import { store } from '@/shared/state/store';
 import { createDraftSession, removeDraftSession, fetchSession } from '@/shared/state/agentsSlice';
-import { createOutput, updateOutput, fetchOutputs, Output, SERVE_BASE } from '@/shared/state/outputsSlice';
+import { createOutput, updateOutput, upsertOutput, fetchOutputs, Output, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import AgentChat from '../AgentChat/AgentChat';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -546,6 +547,14 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     return state.agents.sessions[effectiveSessionId]?.status ?? null;
   });
 
+  // Aux-LLM-generated session title from the user's first prompt. Used as an
+  // early signal for the App's display name so the sidebar doesn't sit at
+  // "Untitled App" while the agent is still working toward its first meta.json write.
+  const sessionName = useAppSelector((state) => {
+    if (!effectiveSessionId) return '';
+    return state.agents.sessions[effectiveSessionId]?.name ?? '';
+  });
+
   const isLaunched = !!effectiveSessionId && effectiveSessionId !== initialDraftId;
   const isAgentActive = agentStatus === 'running' || agentStatus === 'waiting_approval';
 
@@ -562,7 +571,11 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastPollRef = useRef<string>('');
 
-  const nameSetByMeta = useRef(false);
+  // Tracks whether the user has explicitly typed in the name input. Once set,
+  // session-title and meta.json syncs leave the name alone so we don't clobber
+  // a user-chosen name.
+  const nameSetByUserRef = useRef(false);
+
   const [fileVersion, setFileVersion] = useState(0);
 
   const pollWorkspace = useCallback(async () => {
@@ -580,17 +593,29 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
         setFileVersion(v => v + 1);
       }
 
-      if (data.meta) {
-        if (data.meta.name && !nameSetByMeta.current) {
-          nameSetByMeta.current = true;
-          setName((prev) => prev || data.meta.name);
+      if (data.meta && !nameSetByUserRef.current) {
+        const eid = output?.id ?? createdIdRef.current;
+        if (data.meta.name) {
+          setName(data.meta.name);
+          if (eid) {
+            const row = store.getState().outputs.items[eid];
+            if (row && row.name !== data.meta.name) {
+              dispatch(upsertOutput({ ...row, name: data.meta.name }));
+            }
+          }
         }
         if (data.meta.description) {
-          setDescription((prev) => prev || data.meta.description);
+          setDescription(data.meta.description);
+          if (eid) {
+            const row = store.getState().outputs.items[eid];
+            if (row && row.description !== data.meta.description) {
+              dispatch(upsertOutput({ ...row, description: data.meta.description }));
+            }
+          }
         }
       }
     } catch {}
-  }, [workspaceId]);
+  }, [workspaceId, output?.id, dispatch]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -620,6 +645,23 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
       stopPoll();
     };
   }, [workspaceId, pollWorkspace, isAgentActive]);
+
+  // Mirror the aux-LLM session title into the App's name as soon as the chat
+  // gets one, so the sidebar reflects what the user just asked for instead of
+  // sitting at "Untitled App" while the agent works. A later meta.json write
+  // still wins because the user hasn't typed a name themselves.
+  useEffect(() => {
+    if (nameSetByUserRef.current) return;
+    if (!sessionName) return;
+    const eid = output?.id ?? createdIdRef.current;
+    if (!eid) return;
+    const row = store.getState().outputs.items[eid];
+    if (!row) return;
+    if (row.name === sessionName) return;
+    if (row.name !== '' && row.name !== 'Untitled App') return;
+    dispatch(upsertOutput({ ...row, name: sessionName }));
+    setName((prev) => (prev === '' || prev === 'Untitled App') ? sessionName : prev);
+  }, [sessionName, output?.id, dispatch]);
 
   const prevAgentActive = useRef(false);
   useEffect(() => {
@@ -1118,7 +1160,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
         >
           <TextField
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => { nameSetByUserRef.current = true; setName(e.target.value); }}
             placeholder="App name"
             variant="standard"
             sx={{

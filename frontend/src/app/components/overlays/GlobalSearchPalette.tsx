@@ -10,6 +10,7 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { searchHistory, resumeSession, HistorySession } from '@/shared/state/agentsSlice';
+import { displaySessionName } from '@/shared/state/sessionDisplay';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
 import { createDashboard } from '@/shared/state/dashboardsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
@@ -111,11 +112,12 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
 
     const sessionMap = new Map<string, SessionResult>();
     for (const s of Object.values(sessions)) {
-      if (q && !(s.name || '').toLowerCase().includes(q)) continue;
+      const sessionDisplayName = displaySessionName(s.name);
+      if (q && !sessionDisplayName.toLowerCase().includes(q)) continue;
       sessionMap.set(s.id, {
         kind: 'session',
         id: s.id,
-        name: s.name || 'Untitled',
+        name: sessionDisplayName,
         dashboardId: s.dashboard_id || null,
         status: s.status,
         closedAt: null,

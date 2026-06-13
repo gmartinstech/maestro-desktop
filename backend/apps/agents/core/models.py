@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import uuid4
 
 class AgentConfig(BaseModel):
-    name: str = Field(default_factory=lambda: f"Agent-{uuid4().hex[:6]}")
+    name: str = ""
     model: str = "sonnet"
     mode: str = "agent"
     provider: str = "anthropic"

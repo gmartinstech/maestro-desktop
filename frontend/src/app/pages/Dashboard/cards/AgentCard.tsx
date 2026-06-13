@@ -20,6 +20,7 @@ import {
   collapseSession,
   closeSession,
 } from '@/shared/state/agentsSlice';
+import { displaySessionName } from '@/shared/state/sessionDisplay';
 import {
   setCardPosition,
   setCardSize,
@@ -745,7 +746,7 @@ const AgentCard: React.FC<Props> = ({
             }}
           >
             <Typography sx={{ color: c.text.primary, fontWeight: 600, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {session.name}
+              {displaySessionName(session.name)}
             </Typography>
             {/* Status speaks only when it needs the user; finished work sits quiet. */}
             {session.status !== 'completed' && session.status !== 'stopped' && (

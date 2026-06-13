@@ -27,6 +27,7 @@ import {
   AgentSession,
   HistorySession,
 } from '@/shared/state/agentsSlice';
+import { displaySessionName } from '@/shared/state/sessionDisplay';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { store } from '@/shared/state/store';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
@@ -299,7 +300,7 @@ const DynamicIsland: React.FC = () => {
       if (session.pending_approvals?.length > 0) {
         result.push({
           sessionId,
-          sessionName: session.name || 'Agent',
+          sessionName: displaySessionName(session.name),
           approvals: session.pending_approvals,
         });
       }

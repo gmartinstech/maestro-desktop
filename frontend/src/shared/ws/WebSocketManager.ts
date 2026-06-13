@@ -25,6 +25,7 @@ import {
 import { streamStart, streamDelta, streamEnd, clearStreamingForSession } from '../state/streamingSlice';
 import { addBrowserCardFromBackend, removeBrowserCard, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
+import { displaySessionName } from '../state/sessionDisplay';
 import { getAuthToken } from '../config';
 import { notifyAgentCompletion } from '../notifications';
 
@@ -480,7 +481,7 @@ class WebSocketManager {
                 .find((m: any) => m.role === 'assistant' && typeof m.content === 'string');
               notifyAgentCompletion({
                 sessionId: session_id,
-                sessionName: sess.name || 'Agent',
+                sessionName: displaySessionName(sess.name),
                 dashboardId: sess.dashboard_id,
                 status: data.status as 'completed' | 'error',
                 bodyExcerpt: lastAssistant ? String(lastAssistant.content) : undefined,

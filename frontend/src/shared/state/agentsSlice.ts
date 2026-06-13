@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { API_BASE } from '@/shared/config';
+import { normalizeSessionName } from './sessionDisplay';
 
 const AGENTS_API = `${API_BASE}/agents`;
 
@@ -588,7 +589,7 @@ const agentsSlice = createSlice({
     updateSessionName(state, action: PayloadAction<{ sessionId: string; name: string }>) {
       const session = state.sessions[action.payload.sessionId];
       if (session) {
-        session.name = action.payload.name;
+        session.name = normalizeSessionName(action.payload.name);
       }
     },
 
@@ -634,6 +635,7 @@ const agentsSlice = createSlice({
         : action.payload.pending_approvals ?? [];
       state.sessions[action.payload.id] = {
         ...action.payload,
+        name: normalizeSessionName(action.payload.name),
         pending_approvals: mergedApprovals,
         tool_group_meta: { ...existing?.tool_group_meta, ...action.payload.tool_group_meta },
       };
@@ -1035,6 +1037,7 @@ const agentsSlice = createSlice({
           const existing = state.sessions[s.id];
           state.sessions[s.id] = {
             ...s,
+            name: normalizeSessionName(s.name),
             // This is a METADATA poll (status/name); the chat owns its messages
             // via fetchSession + the WS stream. A poll response computed before a
             // just-sent user turn must NOT clobber the live array, that intermittently
@@ -1058,7 +1061,7 @@ const agentsSlice = createSlice({
         state.loading = false;
       })
       .addCase(launchAgent.fulfilled, (state, action) => {
-        state.sessions[action.payload.id] = { ...action.payload, tool_group_meta: action.payload.tool_group_meta ?? {} };
+        state.sessions[action.payload.id] = { ...action.payload, name: normalizeSessionName(action.payload.name), tool_group_meta: action.payload.tool_group_meta ?? {} };
         state.activeSessionId = action.payload.id;
         if (!state.expandedSessionIds.includes(action.payload.id)) {
           state.expandedSessionIds.push(action.payload.id);
@@ -1071,7 +1074,7 @@ const agentsSlice = createSlice({
         const { draftId, session } = action.payload;
         const shouldExpand = action.meta.arg.expand !== false;
         delete state.sessions[draftId];
-        state.sessions[session.id] = { ...session, tool_group_meta: session.tool_group_meta ?? {} };
+        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name), tool_group_meta: session.tool_group_meta ?? {} };
         state.activeSessionId = session.id;
         state.draftLaunchMap[draftId] = session.id;
         state.expandedSessionIds = state.expandedSessionIds.map((id) => (id === draftId ? session.id : id));
@@ -1085,7 +1088,7 @@ const agentsSlice = createSlice({
       .addCase(generateTitle.fulfilled, (state, action) => {
         const session = state.sessions[action.payload.sessionId];
         if (session) {
-          session.name = action.payload.title;
+          session.name = normalizeSessionName(action.payload.title);
         }
       })
       .addCase(generateGroupMeta.fulfilled, (state, action) => {
@@ -1160,7 +1163,7 @@ const agentsSlice = createSlice({
       })
       .addCase(duplicateSession.fulfilled, (state, action) => {
         const session = action.payload;
-        state.sessions[session.id] = session;
+        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name) };
       })
       .addCase(closeSession.fulfilled, (state, action) => {
         const sessionId = action.payload;
@@ -1227,7 +1230,7 @@ const agentsSlice = createSlice({
       })
       .addCase(resumeSession.fulfilled, (state, action) => {
         const session = action.payload;
-        state.sessions[session.id] = { ...session, tool_group_meta: session.tool_group_meta ?? {} };
+        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name), tool_group_meta: session.tool_group_meta ?? {} };
         delete state.history[session.id];
         state.activeSessionId = session.id;
         if (!state.expandedSessionIds.includes(session.id)) {
@@ -1285,6 +1288,7 @@ const agentsSlice = createSlice({
         }
         state.sessions[session.id] = {
           ...session,
+          name: normalizeSessionName(session.name),
           messages: mergedMessages,
           pending_approvals: session.pending_approvals ?? existing?.pending_approvals ?? [],
           tool_group_meta: session.tool_group_meta ?? existing?.tool_group_meta ?? {},
@@ -1315,6 +1319,7 @@ const agentsSlice = createSlice({
           if (!state.sessions[session.id]) {
             state.sessions[session.id] = {
               ...session,
+              name: normalizeSessionName(session.name),
               tool_group_meta: session.tool_group_meta ?? {},
             };
           }

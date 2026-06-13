@@ -18,6 +18,7 @@ import {
   type ViewCardPosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import { fetchOutputs, type Output } from '@/shared/state/outputsSlice';
+import { generateDashboardName } from '@/shared/state/dashboardsSlice';
 import { dashboardWs } from '@/shared/ws/WebSocketManager';
 import { initBrowserCommandHandler } from '@/shared/browserCommandHandler';
 import { clearPendingBrowserUrl, clearPendingFocusAgentId } from '@/shared/state/tempStateSlice';
@@ -251,4 +252,19 @@ export function useDashboardLifecycle({
       if (!outputs[outputId]) dispatch(removeViewCard(outputId));
     }
   }, [layoutInitialized, outputsLoaded, viewCards, outputs, dispatch]);
+
+  const namedOnFirstMessageRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!dashboardId || !layoutInitialized) return;
+    if (namedOnFirstMessageRef.current === dashboardId) return;
+    const dash = store.getState().dashboards.items[dashboardId];
+    if (!dash) return;
+    if (!dash.auto_named && dash.name !== 'Untitled Dashboard') return;
+    const hasUserMessage = Object.values(sessions).some(
+      (s) => s.dashboard_id === dashboardId && s.messages?.some((m) => m.role === 'user'),
+    );
+    if (!hasUserMessage) return;
+    namedOnFirstMessageRef.current = dashboardId;
+    dispatch(generateDashboardName(dashboardId));
+  }, [sessions, dashboardId, layoutInitialized, dispatch]);
 }
