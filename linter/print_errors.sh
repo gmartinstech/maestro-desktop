@@ -14,13 +14,15 @@ LINT_OUTPUT=$(python3 "$SCRIPT_DIR/lint.py" --root "$ROOT_DIR" 2>&1)
 LINT_EXIT=$?
 
 if [ $LINT_EXIT -ne 0 ]; then
-    STRUCT_LINES=$(echo "$LINT_OUTPUT" | grep -v "^structural:" | grep -v "^vulture:" | grep -v "^eslint:" | grep -v "^knip:" | grep -v '\[vulture\]' | grep -v '\[eslint\]' | grep -v '\[knip\]')
+    STRUCT_LINES=$(echo "$LINT_OUTPUT" | grep -v "^structural:" | grep -v "^vulture:" | grep -v "^ruff:" | grep -v "^eslint:" | grep -v "^knip:" | grep -v '\[vulture\]' | grep -v '\[ruff\]' | grep -v '\[eslint\]' | grep -v '\[knip\]')
     VULTURE_LINES=$(echo "$LINT_OUTPUT" | grep '\[vulture\]')
+    RUFF_LINES=$(echo "$LINT_OUTPUT" | grep '\[ruff\]')
     ESLINT_LINES=$(echo "$LINT_OUTPUT" | grep '\[eslint\]')
     KNIP_LINES=$(echo "$LINT_OUTPUT" | grep '\[knip\]')
 
     STRUCT_COUNT=$(echo "$STRUCT_LINES" | grep -cE ':\s+(error|warning):\s+')
     VULTURE_COUNT=$(echo "$VULTURE_LINES" | grep -cE ':\s+(error|warning):\s+')
+    RUFF_COUNT=$(echo "$RUFF_LINES" | grep -cE ':\s+(error|warning):\s+')
     ESLINT_COUNT=$(echo "$ESLINT_LINES" | grep -cE ':\s+(error|warning):\s+')
     KNIP_COUNT=$(echo "$KNIP_LINES" | grep -cE ':\s+(error|warning):\s+')
 
@@ -40,6 +42,15 @@ if [ $LINT_EXIT -ne 0 ]; then
             [ -n "$line" ] && echo -e "${CYAN}  $line${RESET}"
         done
         echo -e "${CYAN}${BOLD}  ${VULTURE_COUNT} finding(s) — fix or add to linter/config/vulture_whitelist.py${RESET}"
+    fi
+
+    if [ "$RUFF_COUNT" -gt 0 ]; then
+        echo ""
+        echo -e "${CYAN}${BOLD}[ruff] Lint errors found:${RESET}"
+        echo "$RUFF_LINES" | while IFS= read -r line; do
+            [ -n "$line" ] && echo -e "${CYAN}  $line${RESET}"
+        done
+        echo -e "${CYAN}${BOLD}  ${RUFF_COUNT} finding(s) — fix, add a noqa, or except in linter/config/config.json${RESET}"
     fi
 
     if [ "$ESLINT_COUNT" -gt 0 ]; then

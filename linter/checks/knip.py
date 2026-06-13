@@ -6,7 +6,9 @@ import json
 import subprocess
 from pathlib import Path
 
-from . import is_lintignored
+from . import CheckError, is_lintignored
+
+_TIMEOUT = 120
 
 KIND_LABELS = {
     "dependencies": "Unused dependency",
@@ -25,21 +27,24 @@ def run_knip(root: Path, ignores: dict[Path, set[str]] | None = None) -> list[st
     frontend_dir = root / "frontend"
     knip_bin = frontend_dir / "node_modules" / ".bin" / "knip"
     if not knip_bin.exists():
-        return []
+        raise CheckError("knip binary not found (run npm install in frontend/)")
 
     cmd = [str(knip_bin), "--reporter", "json"]
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True,
-            cwd=str(frontend_dir), timeout=60,
+            cwd=str(frontend_dir), timeout=_TIMEOUT,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return []
+    except subprocess.TimeoutExpired as e:
+        raise CheckError(f"timed out after {_TIMEOUT}s") from e
+    except OSError as e:
+        raise CheckError(f"failed to launch knip ({e})") from e
 
     try:
         data = json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
-        return []
+    except (json.JSONDecodeError, ValueError) as e:
+        detail = result.stderr.strip()[:300] or "non-JSON output"
+        raise CheckError(f"knip produced unparseable output: {detail}") from e
 
     errors: list[str] = []
     for entry in data.get("issues", []):

@@ -6,7 +6,9 @@ import json
 import subprocess
 from pathlib import Path
 
-from . import is_lintignored
+from . import CheckError, is_lintignored
+
+_TIMEOUT = 120
 
 
 def run_eslint(root: Path, ignores: dict[Path, set[str]] | None = None) -> list[str]:
@@ -14,21 +16,24 @@ def run_eslint(root: Path, ignores: dict[Path, set[str]] | None = None) -> list[
     frontend_dir = root / "frontend"
     eslint_bin = frontend_dir / "node_modules" / ".bin" / "eslint"
     if not eslint_bin.exists():
-        return []
+        raise CheckError("eslint binary not found (run npm install in frontend/)")
 
     cmd = [str(eslint_bin), "src/", "--format", "json", "--no-warn-ignored"]
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True,
-            cwd=str(frontend_dir), timeout=60,
+            cwd=str(frontend_dir), timeout=_TIMEOUT,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return []
+    except subprocess.TimeoutExpired as e:
+        raise CheckError(f"timed out after {_TIMEOUT}s") from e
+    except OSError as e:
+        raise CheckError(f"failed to launch eslint ({e})") from e
 
     try:
         data = json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
-        return []
+    except (json.JSONDecodeError, ValueError) as e:
+        detail = result.stderr.strip()[:300] or "non-JSON output"
+        raise CheckError(f"eslint produced unparseable output: {detail}") from e
 
     errors: list[str] = []
     for entry in data:

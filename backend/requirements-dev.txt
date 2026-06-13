@@ -10,6 +10,12 @@
 pytest==8.3.4
 pytest-asyncio==0.25.2
 
-# Used by linter/lint.py (the vulture dead-code check). watchfiles, also
-# needed by lint.py, already comes in transitively via uvicorn[standard].
+# Used by linter/lint.py. watchfiles, also needed by lint.py, already comes in
+# transitively via uvicorn[standard].
+#   - vulture: whole-program dead code (dead functions/methods/classes/attrs).
+#   - ruff: per-file/per-scope checks (F401 unused imports, F811 redefinitions,
+#     F841 unused locals, ARG001/ARG002 unused args) that ruff does AST-accurately
+#     and vulture either gets wrong or rates as noise. vulture is narrowed to defer
+#     imports/locals to ruff (see linter/checks/vulture.py).
 vulture==2.16
+ruff==0.15.17

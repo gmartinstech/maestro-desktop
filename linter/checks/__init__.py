@@ -9,6 +9,21 @@ from pathlib import Path
 LINTIGNORE_PREFIX = ".lintignore"
 
 
+class CheckError(Exception):
+    """Raised when a check could not complete (missing tool, timeout, crash).
+
+    This is deliberately distinct from "the check ran and found zero problems":
+    the orchestrator catches it and surfaces the failure loudly so a partial run
+    is never silently reported as a clean one. Returning ``[]`` on failure (the
+    old behavior) made a timed-out or crashed tool look identical to a passing
+    one, which let the reported error count silently undercount the real total.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 def _matches_any(text: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(text, p) for p in patterns)
 

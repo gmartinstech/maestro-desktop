@@ -20,6 +20,8 @@ import sys
 import tempfile
 import time
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from backend.apps.outputs.runtime import (
@@ -115,6 +117,7 @@ def test_write_env_value():
 
 
 # --- Test 2: stop_all reaps an active runtime (real spawn). ---
+@pytest.mark.asyncio
 async def test_stop_all_kills_active():
     with tempfile.TemporaryDirectory() as tmp:
         port = _find_free_port()
@@ -151,6 +154,7 @@ async def test_stop_all_kills_active():
 
 
 # --- Test 3: stop_all reaps an idle (LRU + SIGSTOP'd) runtime. ---
+@pytest.mark.asyncio
 async def test_stop_all_kills_idle():
     with tempfile.TemporaryDirectory() as tmp:
         port = _find_free_port()
@@ -182,6 +186,7 @@ async def test_stop_all_kills_idle():
 
 
 # --- Test 4: persisted port collision triggers .env rewrite + new spawn. ---
+@pytest.mark.asyncio
 async def test_port_collision_reallocates_env():
     with tempfile.TemporaryDirectory() as tmp:
         squatted_port = _find_free_port()
@@ -215,6 +220,7 @@ async def test_port_collision_reallocates_env():
 
 
 # --- Test 5: stop_all is idempotent. ---
+@pytest.mark.asyncio
 async def test_stop_all_idempotent():
     m = AppRuntimeManager()
     n = await m.stop_all()
@@ -225,6 +231,7 @@ async def test_stop_all_idempotent():
 
 
 # --- Test 6: vite-like grandchild dies even with EXIT-only trap. ---
+@pytest.mark.asyncio
 async def test_descendant_tree_killed_despite_exit_only_trap():
     """Regression for the actual prod bug: webapp_template run.sh has only
     `trap cleanup EXIT` (no TERM), so a flat SIGTERM to bash exits bash

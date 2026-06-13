@@ -279,15 +279,3 @@ async def test_concurrent_send_message_unique_client_ids():
     actual = [p[1] for p in pairs]
     assert expected == actual, "client_message_id must round-trip exactly"
     assert len(set(actual)) == 100, "all unique"
-
-
-# ---------------------------------------------------------------------------
-# Pytest config: register asyncio mode so we don't need the plugin.
-# ---------------------------------------------------------------------------
-
-
-def pytest_collection_modifyitems(config, items):
-    """Auto-mark async tests so they run under pytest-asyncio."""
-    for item in items:
-        if asyncio.iscoroutinefunction(getattr(item, "function", None)):
-            item.add_marker(pytest.mark.asyncio)
