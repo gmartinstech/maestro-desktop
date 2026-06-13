@@ -872,13 +872,18 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   }, [workspaceId, runtimeShouldRun, appendTerminalLine]);
 
   // One-shot trigger: first visit to Preview/Terminal flips runtimeShouldRun true; never flips back.
+  // Gated on previewSettled (same 250ms as the webview): each runtime/start boots a vite
+  // dev server serialized behind a global lock, so spam-clicking heavy apps used to queue a
+  // pile of vite boots that saturated the backend and stuck the app you landed on (preview
+  // frozen + "Initializing agent..."). Waiting out the debounce means only apps you actually
+  // stay on boot a runtime.
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || !previewSettled) return;
     if (runtimeShouldRun) return;
     const wantsRuntime = activeTab === TAB_PREVIEW || activeTab === TAB_TERMINAL;
     if (!wantsRuntime) return;
     setRuntimeShouldRun(true);
-  }, [workspaceId, activeTab, runtimeShouldRun, TAB_PREVIEW, TAB_TERMINAL]);
+  }, [workspaceId, activeTab, runtimeShouldRun, previewSettled, TAB_PREVIEW, TAB_TERMINAL]);
 
   // Prefer the Vite dev server URL; fall back to legacy /serve/. New-mode pre-Vite renders the install placeholder (legacy URL 404s).
   const showInstallPlaceholder = isNewModeRuntime && !frontendUrl;
