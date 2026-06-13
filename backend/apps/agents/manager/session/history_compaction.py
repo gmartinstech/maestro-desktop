@@ -71,6 +71,39 @@ def _build_history_prefix(messages, cutoff_msg_id: str | None = None) -> str:
     return "<prior_conversation>\n" + "\n".join(lines) + "\n</prior_conversation>"
 
 
+def _estimate_post_compact_input(session) -> int:
+    """Return a conservative token estimate after compaction trims history."""
+    try:
+        messages = _get_branch_messages(session)
+        cutoff_msg_id = getattr(session, "compacted_through_msg_id", None)
+        if cutoff_msg_id:
+            skip_idx = next(
+                (i for i, m in enumerate(messages) if m.id == cutoff_msg_id),
+                -1,
+            )
+            if skip_idx >= 0:
+                messages = messages[skip_idx + 1:]
+        surviving_chars = 0
+        for message in messages:
+            if getattr(message, "hidden", False):
+                continue
+            content = getattr(message, "content", "")
+            if isinstance(content, str):
+                serialized = content
+            else:
+                try:
+                    serialized = json.dumps(content, ensure_ascii=False)
+                except Exception:
+                    serialized = str(content)
+            surviving_chars += len(serialized)
+        framework_overhead = int(getattr(session, "framework_overhead_tokens", 0) or 0)
+        summary_overhead = 200 if cutoff_msg_id else 0
+        return max(0, framework_overhead + summary_overhead + (surviving_chars // 4))
+    except Exception:
+        logger.debug("post-compact token estimate failed", exc_info=True)
+        return max(0, int(getattr(session, "framework_overhead_tokens", 0) or 0))
+
+
 def _truncate_large_tool_result(content: object, session_id: str, msg_id: str, max_bytes: int = 50_000) -> tuple[object, str | None]:
     """Spill a large tool_result body to disk, return a truncated
     inline replacement plus the on-disk path (or None if untouched).

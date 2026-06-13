@@ -53,6 +53,7 @@ from backend.apps.agents.manager.prompt.tool_catalog import (
 from backend.apps.agents.core.aux_llm import _safe_resp_text, clean_short_label
 from backend.apps.agents.manager.session.history_compaction import (
     _build_history_prefix,
+    _estimate_post_compact_input,
     _get_branch_messages,
     _truncate_large_tool_result,
 )
@@ -376,6 +377,35 @@ class AgentManager:
             return False
         session.compacted_through_msg_id = last_id
         return True
+
+    async def _emit_context_update(
+        self,
+        session_id: str,
+        session: AgentSession,
+        *,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        cache_read_tokens: int = 0,
+        cache_read_pct: float = 0.0,
+    ) -> None:
+        if input_tokens is None:
+            input_tokens = int(session.tokens.get("input", 0) or 0)
+        if output_tokens is None:
+            output_tokens = int(session.tokens.get("output", 0) or 0)
+        session.tokens["input"] = input_tokens
+        session.tokens["output"] = output_tokens
+        ctx_window = max(1, getattr(session, "context_window", 0) or 200_000)
+        await ws_manager.send_to_session(session_id, "agent:context_update", {
+            "session_id": session_id,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_read_tokens": cache_read_tokens,
+            "cache_read_pct": cache_read_pct,
+            "ctx_used_pct": round(input_tokens / ctx_window, 4) if input_tokens else 0.0,
+            "context_window": ctx_window,
+            "framework_overhead_tokens": session.framework_overhead_tokens,
+            "active_mcps": list(session.active_mcps),
+        })
 
     def _build_prompt_content(self, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, api_type: str = "anthropic", model: str = ""):
         return _build_prompt_content(prompt, images, context_paths, forced_tools, attached_skills, api_type, model)
@@ -1813,11 +1843,18 @@ class AgentManager:
             # zero latency on the user's turn.
             try:
                 if self._maybe_compact(session):
+                    new_input = _estimate_post_compact_input(session)
                     await ws_manager.send_to_session(session_id, "agent:context_status", {
                         "session_id": session_id,
                         "reason": "compacted",
                         "compacted_through_msg_id": session.compacted_through_msg_id,
                     })
+                    await self._emit_context_update(
+                        session_id,
+                        session,
+                        input_tokens=new_input,
+                        output_tokens=session.tokens.get("output", 0),
+                    )
             except Exception:
                 logger.exception("compaction failed; proceeding without it")
 

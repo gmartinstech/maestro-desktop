@@ -784,6 +784,66 @@ def test_compact_threshold_default():
     assert s.context_window == 200_000
 
 
+def test_post_compact_estimate_excludes_compacted_messages():
+    from backend.apps.agents.core.models import AgentSession, Message
+    from backend.apps.agents.manager.session.history_compaction import (
+        _estimate_post_compact_input,
+    )
+
+    messages = [
+        Message(id=f"m{i}", role="user", content=("old" * 1000 if i < 6 else "keep"))
+        for i in range(8)
+    ]
+    s = AgentSession(id="x", name="t", model="sonnet", mode="agent")
+    s.messages = messages
+    s.compacted_through_msg_id = "m5"
+    s.framework_overhead_tokens = 100
+
+    assert _estimate_post_compact_input(s) == 100 + 200 + (len("keepkeep") // 4)
+
+
+@pytest.mark.asyncio
+async def test_context_update_emitter_refreshes_session_tokens(monkeypatch):
+    import backend.apps.agents.agent_manager as agent_manager_module
+    from backend.apps.agents.agent_manager import AgentManager
+    from backend.apps.agents.core.models import AgentSession
+
+    sent = []
+
+    async def fake_send_to_session(session_id, event, payload):
+        sent.append((session_id, event, payload))
+
+    monkeypatch.setattr(
+        agent_manager_module.ws_manager,
+        "send_to_session",
+        fake_send_to_session,
+    )
+    s = AgentSession(id="x", name="t", model="sonnet", mode="agent")
+    s.context_window = 1_000
+    s.tokens = {"input": 900, "output": 7}
+    s.framework_overhead_tokens = 42
+    s.active_mcps = ["github"]
+
+    await AgentManager()._emit_context_update("x", s, input_tokens=250)
+
+    assert s.tokens == {"input": 250, "output": 7}
+    assert sent == [(
+        "x",
+        "agent:context_update",
+        {
+            "session_id": "x",
+            "input_tokens": 250,
+            "output_tokens": 7,
+            "cache_read_tokens": 0,
+            "cache_read_pct": 0.0,
+            "ctx_used_pct": 0.25,
+            "context_window": 1_000,
+            "framework_overhead_tokens": 42,
+            "active_mcps": ["github"],
+        },
+    )]
+
+
 # ===========================================================================
 # Group L, Sentence-case display (the parseMcpToolName fix)
 # ===========================================================================

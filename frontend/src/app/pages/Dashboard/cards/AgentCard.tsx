@@ -810,9 +810,6 @@ const AgentCard: React.FC<Props> = ({
             {friendlyModelLabel}
           </Typography>
           <Typography variant="caption" sx={{ color: c.text.tertiary }}>
-            {session.mode}
-          </Typography>
-          <Typography variant="caption" sx={{ color: c.text.tertiary }}>
             <ElapsedTimer messages={session.messages} status={session.status} />
           </Typography>
           {session.cost_usd > 0 && hasApiKey && (

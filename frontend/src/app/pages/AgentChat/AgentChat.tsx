@@ -1034,42 +1034,17 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                     );
                   })()}
                   {(() => {
-                    const liveWindow = session.context_window || contextEstimate.limit || 200_000;
-                    const liveInput = session.tokens?.input ?? 0;
-                    const pct = liveInput > 0
-                      ? Math.min(1, liveInput / Math.max(1, liveWindow))
-                      : (contextEstimate.used / Math.max(1, liveWindow));
                     const mcpCount = session.active_mcps?.length ?? 0;
-                    // Quiet until it matters: hide the memory meter until the chat is filling up,
-                    // and hide the tool count unless tools are actually connected.
-                    const showMemory = pct >= 0.60;
-                    const showTools = mcpCount > 0;
-                    if (!showMemory && !showTools) return null;
-                    const pctTxt = `${Math.round(pct * 100)}%`;
-                    const memColor = pct >= 0.85 ? '#ef4444' : '#f59e0b';
-                    const tip = [
-                      showMemory ? `Memory ${pctTxt} full. As the chat fills up, the oldest messages start dropping out.` : null,
-                      showTools ? `${mcpCount} tool${mcpCount === 1 ? '' : 's'} connected.` : null,
-                    ].filter(Boolean).join('\n');
+                    if (mcpCount === 0) return null;
                     return (
                       <Typography
                         variant="caption"
                         sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontVariantNumeric: 'tabular-nums' }}
-                        title={tip}
+                        title={`${mcpCount} tool${mcpCount === 1 ? '' : 's'} connected.`}
                       >
-                        {showMemory && (
-                          <Box component="span" sx={{ color: memColor, fontWeight: 500 }}>
-                            Memory {pctTxt} full
-                          </Box>
-                        )}
-                        {showMemory && showTools && (
-                          <Box component="span" sx={{ color: c.text.ghost }}>·</Box>
-                        )}
-                        {showTools && (
-                          <Box component="span" sx={{ color: c.text.tertiary }}>
-                            {mcpCount} tool{mcpCount === 1 ? '' : 's'}
-                          </Box>
-                        )}
+                        <Box component="span" sx={{ color: c.text.tertiary }}>
+                          {mcpCount} tool{mcpCount === 1 ? '' : 's'}
+                        </Box>
                       </Typography>
                     );
                   })()}
