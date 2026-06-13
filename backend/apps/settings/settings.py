@@ -63,11 +63,17 @@ async def settings_lifespan():
                 await sync_gemini_api_key(getattr(s, "google_api_key", None) or None)
                 await sync_openai_api_key(getattr(s, "openai_api_key", None) or None)
                 await sync_openrouter_api_key(getattr(s, "openrouter_api_key", None) or None)
+            # Reconcile the managed Pro/anthropic connection symmetrically too: keep it only
+            # for an active pro/free-trial bearer, else REMOVE it. Without the else, disconnecting
+            # Pro left a zombie managed Claude connection in 9Router, so the backend kept seeing a
+            # model and the free trial refused to arm ("disconnect Pro -> nothing happens"). Only
+            # the OpenSwarm-managed Pro node is touched; a user's own Claude sub (priority 0) is safe.
             if getattr(s, "connection_mode", None) in ("openswarm-pro", "free-trial"):
                 from backend.apps.settings.credentials import proxy_auth
                 bearer, base = proxy_auth(s)
-                if bearer:
-                    await sync_openswarm_pro_as_claude(bearer, base)
+            else:
+                bearer, base = None, None
+            await sync_openswarm_pro_as_claude(bearer, base)
             await sync_custom_providers(getattr(s, "custom_providers", None) or [])
 
         _asyncio.create_task(_boot_router_then_sync())
