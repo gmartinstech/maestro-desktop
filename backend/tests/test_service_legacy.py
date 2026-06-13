@@ -13,8 +13,6 @@ Run with:
 import json
 import os
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
 
@@ -78,6 +76,7 @@ def install_sync_sink():
 
         _captured_syncs.append({
             "kind": kind,
+            "label": label,
             "distinct_id": cs.get("install_id", ""),
             "properties": props,
         })
@@ -136,7 +135,7 @@ def last_sync(kind: str) -> dict:
 
 # Import application modules (after fixtures are wired).
 from backend.apps.service.client import record
-from backend.apps.agents.core.models import AgentConfig, AgentSession, Message, ApprovalRequest
+from backend.apps.agents.core.models import AgentConfig, Message
 from backend.apps.agents.agent_manager import AgentManager
 
 

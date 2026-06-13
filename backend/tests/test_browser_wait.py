@@ -10,6 +10,7 @@ mid-navigation probe error. Edge-case-complete on purpose.
 import asyncio
 import json
 import time
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -53,28 +54,19 @@ def _probe(ready, quiet, elems=1000, found=False):
             "url": "https://x.com"}
 
 
-class FakeExec:
-    """Returns scripted probe results in sequence (last one repeats)."""
-    def __init__(self, results):
-        self.results = results
-        self.calls = 0
-
-    async def __call__(self, tool, params, bid, tid):
-        assert tool == "BrowserEvaluate"
-        r = self.results[min(self.calls, len(self.results) - 1)]
-        self.calls += 1
-        return r
-
-
+# The executor is faked with AsyncMock: a single scripted result uses
+# return_value (repeats every probe), a multi-step sequence uses side_effect (one
+# per probe, in order). No hand-rolled __call__, so the executor's (tool, params,
+# browser_id, tab_id) contract isn't re-declared just to be ignored.
 class HangingExec:
     """Simulates a wedged tab: every probe blocks far longer than the probe
     timeout (like the underlying 30s command timeout on a hung page)."""
     def __init__(self, block_s=5.0):
         self.block_s = block_s
-        self.calls = 0
+        self.calls = []
 
     async def __call__(self, tool, params, bid, tid):
-        self.calls += 1
+        self.calls.append((tool, params, bid, tid))
         await asyncio.sleep(self.block_s)
         return _probe(False, 0)
 
@@ -82,17 +74,19 @@ class HangingExec:
 @pytest.mark.asyncio
 async def test_returns_early_once_settled():
     # first probe: still loading; second: settled -> should stop well under the cap
-    ex = FakeExec([_probe(False, 0), _probe(True, 999)])
+    ex = AsyncMock(side_effect=[_probe(False, 0), _probe(True, 999)])
     out = await bw.smart_wait(ex, "b", "", 5000, poll_ms=20, floor_ms=20, quiet_window_ms=50)
     assert out["settled"] is True and out["found"] is False
     assert out["waited_ms"] < 5000
     assert "page settled" in out["text"]
+    # the loop only ever probes through BrowserEvaluate
+    assert all(c.args[0] == "BrowserEvaluate" for c in ex.await_args_list)
 
 
 @pytest.mark.asyncio
 async def test_rides_to_cap_when_page_never_settles():
     # an SPA that keeps fetching (quiet always small) -> never settles -> caps out
-    ex = FakeExec([_probe(True, 10)])
+    ex = AsyncMock(return_value=_probe(True, 10))
     out = await bw.smart_wait(ex, "b", "", 200, poll_ms=20, floor_ms=20, quiet_window_ms=400)
     assert out["settled"] is False
     assert out["waited_ms"] >= 180  # ~the cap
@@ -103,7 +97,7 @@ async def test_rides_to_cap_when_page_never_settles():
 async def test_settles_on_dom_stable_when_network_never_idles():
     # the LinkedIn case: network always busy (quiet tiny) but the DOM count is
     # constant -> DOM-settle fires instead of riding to the cap
-    ex = FakeExec([_probe(True, 5, elems=500)])
+    ex = AsyncMock(return_value=_probe(True, 5, elems=500))
     out = await bw.smart_wait(ex, "b", "", 3000, poll_ms=20, floor_ms=20, quiet_window_ms=200)
     assert out["settled"] is True and out["waited_ms"] < 3000
     assert "page settled" in out["text"]
@@ -113,8 +107,8 @@ async def test_settles_on_dom_stable_when_network_never_idles():
 async def test_returns_the_instant_target_is_found():
     # network busy AND DOM churning, but the agent's target appears on probe 2 ->
     # stop immediately, bypassing even the floor
-    ex = FakeExec([_probe(False, 5, elems=100, found=False),
-                   _probe(False, 5, elems=200, found=True)])
+    ex = AsyncMock(side_effect=[_probe(False, 5, elems=100, found=False),
+                                _probe(False, 5, elems=200, found=True)])
     out = await bw.smart_wait(ex, "b", "", 5000, until="Send",
                               poll_ms=20, floor_ms=800, quiet_window_ms=999)
     assert out["settled"] is True and out["found"] is True and "found target" in out["text"]
@@ -124,7 +118,7 @@ async def test_returns_the_instant_target_is_found():
 @pytest.mark.asyncio
 async def test_never_returns_before_the_floor():
     # settled from the very first probe, but the floor must still be respected
-    ex = FakeExec([_probe(True, 9999)])
+    ex = AsyncMock(return_value=_probe(True, 9999))
     out = await bw.smart_wait(ex, "b", "", 5000, poll_ms=10, floor_ms=200, quiet_window_ms=50)
     assert out["waited_ms"] >= 200, "must not read a page before the settle floor"
     assert out["settled"] is True
@@ -132,25 +126,24 @@ async def test_never_returns_before_the_floor():
 
 @pytest.mark.asyncio
 async def test_cancel_mid_wait_stops_cleanly():
-    async def _cancelled(tool, params, bid, tid):
-        return None  # _cancellable returns None when the run is cancelled
-    out = await bw.smart_wait(_cancelled, "b", "", 5000, poll_ms=10, floor_ms=10)
+    # _cancellable returns None when the run is cancelled
+    out = await bw.smart_wait(AsyncMock(return_value=None), "b", "", 5000, poll_ms=10, floor_ms=10)
     assert out["settled"] is False and out["waited_ms"] < 5000
 
 
 @pytest.mark.asyncio
 async def test_probe_error_during_navigation_keeps_waiting_then_settles():
     # while the page is navigating, evaluate errors; we must keep polling, not bail
-    ex = FakeExec([{"error": "Cannot evaluate, page navigating"},
-                   {"error": "still navigating"},
-                   _probe(True, 999)])
+    ex = AsyncMock(side_effect=[{"error": "Cannot evaluate, page navigating"},
+                                {"error": "still navigating"},
+                                _probe(True, 999)])
     out = await bw.smart_wait(ex, "b", "", 5000, poll_ms=15, floor_ms=15, quiet_window_ms=50)
-    assert out["settled"] is True and ex.calls >= 3
+    assert out["settled"] is True and ex.await_count >= 3
 
 
 @pytest.mark.asyncio
 async def test_garbage_probe_text_does_not_crash():
-    ex = FakeExec([{"text": "not json", "url": "u"}, _probe(True, 999)])
+    ex = AsyncMock(side_effect=[{"text": "not json", "url": "u"}, _probe(True, 999)])
     out = await bw.smart_wait(ex, "b", "", 3000, poll_ms=15, floor_ms=15, quiet_window_ms=50)
     assert out["settled"] is True
 
@@ -168,17 +161,18 @@ async def test_hung_tab_returns_fast_not_after_the_full_command_timeout():
     assert out.get("error") == "page unresponsive"
     assert elapsed < 3.0, f"hung wait must return fast, took {elapsed:.1f}s"
     # it bailed after the timeout threshold, not after burning the whole cap
-    assert ex.calls <= bw._MAX_PROBE_TIMEOUTS
+    assert len(ex.calls) <= bw._MAX_PROBE_TIMEOUTS
 
 
 @pytest.mark.asyncio
 async def test_a_single_slow_probe_then_settle_is_not_flagged_hung():
     # one slow probe (under the threshold count) shouldn't trip 'hung'; it recovers
     class _OneSlow:
-        def __init__(self): self.n = 0
-        async def __call__(self, *a):
-            self.n += 1
-            if self.n == 1:
+        def __init__(self):
+            self.calls = []
+        async def __call__(self, tool, params, bid, tid):
+            self.calls.append((tool, params, bid, tid))
+            if len(self.calls) == 1:
                 await asyncio.sleep(0.5)   # one slow poll
                 return _probe(False, 0)
             return _probe(True, 999)

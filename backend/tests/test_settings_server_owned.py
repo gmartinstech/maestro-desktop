@@ -54,7 +54,8 @@ def _activate_pro(client, token="repro-bearer-0123456789abcdef"):
     return token
 
 
-def test_stale_settings_put_cannot_wipe_activation(client, reset_settings):
+@pytest.mark.usefixtures("reset_settings")
+def test_stale_settings_put_cannot_wipe_activation(client):
     """The exact production sequence: snapshot settings, activate Pro, PUT the
     stale snapshot back (renderer Save of a pre-activation draft). The bearer
     and pro mode must survive; the user's editable change must still apply."""
@@ -86,7 +87,8 @@ def test_stale_settings_put_cannot_wipe_activation(client, reset_settings):
     assert body["connection_mode"] == "openswarm-pro"
 
 
-def test_put_cannot_inject_server_owned_fields(client, reset_settings):
+@pytest.mark.usefixtures("reset_settings")
+def test_put_cannot_inject_server_owned_fields(client):
     """The inverse direction: a client PUT must not be able to SET subscription
     state either (it would imply entitlement the cloud never granted)."""
     snapshot = client.get("/api/settings").json()
@@ -107,7 +109,8 @@ def test_put_cannot_inject_server_owned_fields(client, reset_settings):
     assert s.user_id == snapshot.get("user_id")
 
 
-def test_dedicated_endpoints_still_mutate(client, reset_settings):
+@pytest.mark.usefixtures("reset_settings")
+def test_dedicated_endpoints_still_mutate(client):
     """Freezing PUT must not freeze the real owners: disconnect still reverts
     routing, and a fresh activate still re-connects afterwards."""
     _activate_pro(client)

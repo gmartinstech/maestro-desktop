@@ -12,6 +12,7 @@ All providers are mocked, so the test is deterministic and offline.
 
 import asyncio
 import time
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -30,23 +31,18 @@ def _no_network(monkeypatch):
         return set()
     monkeypatch.setattr(W, "_refresh_9r_connected", _no_subs)
 
-    async def _empty(*a, **k):
-        return {}
     # subscription helpers hit localhost:20128 otherwise
-    monkeypatch.setattr(W, "_gemini_grounded_via_9router", _empty)
-    monkeypatch.setattr(W, "_openai_websearch_via_9router", _empty)
+    monkeypatch.setattr(W, "_gemini_grounded_via_9router", AsyncMock(return_value={}))
+    monkeypatch.setattr(W, "_openai_websearch_via_9router", AsyncMock(return_value={}))
 
 
 def _ddg_returns(monkeypatch, text):
-    async def _f(query, num):
-        return text
-    monkeypatch.setattr(WebSearchTool, "_search_ddg", staticmethod(_f))
+    monkeypatch.setattr(WebSearchTool, "_search_ddg", staticmethod(AsyncMock(return_value=text)))
 
 
 def _ddg_throttled(monkeypatch):
-    async def _f(query, num):
-        raise DDGRateLimited(query)
-    monkeypatch.setattr(WebSearchTool, "_search_ddg", staticmethod(_f))
+    monkeypatch.setattr(WebSearchTool, "_search_ddg",
+                        staticmethod(AsyncMock(side_effect=DDGRateLimited("throttled"))))
 
 
 @pytest.mark.asyncio
@@ -54,7 +50,7 @@ async def test_ddg_is_tried_first_and_wins(monkeypatch):
     _ddg_returns(monkeypatch, "[1] Foo\n    https://foo.example")
     # grounded would raise if reached; prove it isn't
     async def _boom(*a, **k):
-        raise AssertionError("grounded should not be called when DDG has results")
+        raise AssertionError(f"grounded should not be called when DDG has results (args={a!r}, kwargs={k!r})")
     monkeypatch.setattr(W, "_gemini_grounded_call", _boom)
 
     t = time.monotonic()
@@ -70,9 +66,8 @@ async def test_ddg_throttled_falls_over_to_openai(monkeypatch):
     _ddg_throttled(monkeypatch)
     monkeypatch.setattr(W, "_resolve_openai_api_key", lambda: "okey")
 
-    async def _openai(api_key, query):
-        return {"text": "grounded answer", "chunks": [("Title", "https://u.example")]}
-    monkeypatch.setattr(W, "_openai_websearch", _openai)
+    monkeypatch.setattr(W, "_openai_websearch",
+                        AsyncMock(return_value={"text": "grounded answer", "chunks": [("Title", "https://u.example")]}))
 
     res = await search(SearchBody(query="x"))
     assert res["backend"] == "openai_native"
@@ -87,13 +82,16 @@ async def test_a_hung_grounded_attempt_is_bounded(monkeypatch):
     monkeypatch.setattr(W, "_GROUNDED_ATTEMPT_TIMEOUT", 0.3)
     monkeypatch.setattr(W, "_resolve_gemini_api_key", lambda: "gkey")
 
+    attempts = []
     async def _hangs(*a, **k):
+        attempts.append((a, k))
         await asyncio.sleep(30)
     monkeypatch.setattr(W, "_gemini_grounded_call", _hangs)
 
     t = time.monotonic()
     res = await search(SearchBody(query="x"))
     elapsed = time.monotonic() - t
+    assert attempts, "the grounded tier should have been attempted before the bound kicked in"
     assert elapsed < 2.0, f"hung provider should be bounded, took {elapsed:.2f}s"
     assert res["backend"] == "none"
     assert any("timed out" in e for e in res["cascade_errors"])
@@ -105,12 +103,10 @@ async def test_primary_openai_reorders_grounded_tier(monkeypatch):
     monkeypatch.setattr(W, "_resolve_gemini_api_key", lambda: "gkey")
     monkeypatch.setattr(W, "_resolve_openai_api_key", lambda: "okey")
 
-    async def _gem(*a, **k):
-        return {"text": "GEM", "chunks": [("g", "https://gem.example")]}
-    async def _oai(api_key, query):
-        return {"text": "OAI", "chunks": [("o", "https://oai.example")]}
-    monkeypatch.setattr(W, "_gemini_grounded_call", _gem)
-    monkeypatch.setattr(W, "_openai_websearch", _oai)
+    monkeypatch.setattr(W, "_gemini_grounded_call",
+                        AsyncMock(return_value={"text": "GEM", "chunks": [("g", "https://gem.example")]}))
+    monkeypatch.setattr(W, "_openai_websearch",
+                        AsyncMock(return_value={"text": "OAI", "chunks": [("o", "https://oai.example")]}))
 
     res = await search(SearchBody(query="x", primary="openai"))
     # openai must be tried before gemini when it's the primary
@@ -140,15 +136,12 @@ import backend.apps.agents.tools.ssrf_guard as _ssrf
 
 @pytest.fixture(autouse=True)
 def _allow_urls(monkeypatch):
-    async def _ok(url):
-        return None
-    monkeypatch.setattr(_ssrf, "assert_safe_url", _ok)
+    monkeypatch.setattr(_ssrf, "assert_safe_url", AsyncMock(return_value=None))
 
 
 def _local_returns(monkeypatch, text):
-    async def _exec(self, input_data, context):
-        return [{"type": "text", "text": text}]
-    monkeypatch.setattr(WebFetchTool, "execute", _exec)
+    monkeypatch.setattr(WebFetchTool, "execute",
+                        AsyncMock(return_value=[{"type": "text", "text": text}]))
 
 
 @pytest.mark.asyncio
@@ -156,7 +149,7 @@ async def test_fetch_local_first_wins_and_is_fast(monkeypatch):
     big = "Contents of https://x.example:\n\n" + ("real article body " * 50)
     _local_returns(monkeypatch, big)
     async def _boom(*a, **k):
-        raise AssertionError("grounded fetch should not run when local has content")
+        raise AssertionError(f"grounded fetch should not run when local has content (args={a!r}, kwargs={k!r})")
     monkeypatch.setattr(W, "_gemini_grounded_call", _boom)
 
     t = time.monotonic()
@@ -170,9 +163,8 @@ async def test_fetch_local_first_wins_and_is_fast(monkeypatch):
 async def test_fetch_thin_local_falls_to_grounded(monkeypatch):
     _local_returns(monkeypatch, "Contents of https://spa.example:\n\n")  # JS wall, empty body
     monkeypatch.setattr(W, "_resolve_gemini_api_key", lambda: "gkey")
-    async def _gem(api_key, prompt, *, use_url_context):
-        return {"text": "rendered page text from grounding", "chunks": []}
-    monkeypatch.setattr(W, "_gemini_grounded_call", _gem)
+    monkeypatch.setattr(W, "_gemini_grounded_call",
+                        AsyncMock(return_value={"text": "rendered page text from grounding", "chunks": []}))
 
     res = await fetch(FetchBody(url="https://spa.example"))
     assert res["backend"] == "gemini_native"

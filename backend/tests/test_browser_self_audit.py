@@ -60,7 +60,7 @@ def test_clean_history_proposes_nothing():
     assert "learning cleanly" in audit.render_report(r)
 
 
-def test_audit_fires_every_n_finished_tasks(monkeypatch, tmp_path):
+def test_audit_fires_every_n_finished_tasks(monkeypatch, tmp_path, mocker):
     # the trigger refreshes the report once every N tasks, off the hot path. Make
     # threads synchronous so the test is deterministic, and use a small N.
     from backend.apps.agents.browser import browser_metrics as m
@@ -69,13 +69,12 @@ def test_audit_fires_every_n_finished_tasks(monkeypatch, tmp_path):
     m._task_count = 0
     monkeypatch.setattr(m, "_AUDIT_EVERY_N", 5)
 
-    class _SyncThread:
-        def __init__(self, target=None, **kw):
-            self._t = target
-
-        def start(self):
-            self._t()
-    monkeypatch.setattr(m.threading, "Thread", _SyncThread)
+    # autospec keeps the stub honest to threading.Thread's real signature (target/
+    # name/daemon); start() just runs the captured target synchronously.
+    thread = mocker.patch.object(m.threading, "Thread", autospec=True)
+    thread.return_value.start = mocker.Mock(
+        side_effect=lambda: thread.call_args.kwargs["target"]()
+    )
 
     log = [{"tool": "BrowserClickIndex", "elapsed_ms": 5, "result_summary": "ok"}]
     report = tmp_path / "self_audit_report.md"

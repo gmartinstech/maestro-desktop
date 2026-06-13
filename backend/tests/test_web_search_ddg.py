@@ -9,6 +9,8 @@ These pin the two bugs that turned DDG into a flaky 'No results found' source:
 We mock the network so the test is deterministic and offline.
 """
 
+from unittest.mock import AsyncMock
+
 import httpx
 import pytest
 
@@ -29,15 +31,15 @@ class _FakeClient:
     """Stands in for httpx.AsyncClient; returns a canned response."""
     def __init__(self, resp: _FakeResp):
         self._resp = resp
+        # AsyncMock accepts any (url, data=, headers=, ...) without re-declaring
+        # httpx's signature just to ignore it.
+        self.post = AsyncMock(return_value=resp)
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, *a):
         return False
-
-    async def post(self, *a, **k):
-        return self._resp
 
 
 def _patch_client(monkeypatch, resp: _FakeResp):

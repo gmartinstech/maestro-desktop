@@ -18,8 +18,8 @@ from backend.config.paths import TOOLS_DIR as DATA_DIR, BUILTIN_PERMISSIONS_PATH
 # oauth_config runs the dotenv load (leaf) so OPENSWARM_OAUTH_BASE_URL is set
 # before anything reads it; re-exported here for the route handlers below.
 from backend.apps.tools_lib.oauth_config import OPENSWARM_OAUTH_BASE_URL
-# _sanitize_server_name + derive_mcp_config re-exported for agent_manager/main.
-from backend.apps.tools_lib.mcp_config import _sanitize_server_name, derive_mcp_config
+# derive_mcp_config re-exported for agent_manager/main.
+from backend.apps.tools_lib.mcp_config import derive_mcp_config
 from backend.apps.tools_lib.mcp_discovery import (
     _discover_mcp_tools_http,
     _discover_mcp_tools_sse,

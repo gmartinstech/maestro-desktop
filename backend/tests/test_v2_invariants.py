@@ -24,10 +24,8 @@ import asyncio
 import json
 import os
 import random
-import string
 import tempfile
-from typing import Any
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 
 import pytest
 
@@ -1163,7 +1161,7 @@ def test_upload_dedup_handles_filename_collision_atomically():
     """O_CREAT|O_EXCL must reserve the destination so two callers
     racing on the same filename get distinct outputs, not one
     overwriting the other."""
-    import os, tempfile, shutil
+    import os
     from backend.apps.settings.settings import UPLOAD_DIR
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     name = f"test_dedup_{os.getpid()}.txt"
@@ -1222,7 +1220,7 @@ def test_resolve_attachments_uses_os_path_basename_for_windows_paths():
     Either way, the refusal copy embeds the result, so the test just verifies
     no crash on Windows-shaped strings. Real Windows behavior is exercised
     in CI on Windows hosts via .github/workflows/."""
-    import os, ntpath
+    import ntpath
     # ntpath.basename simulates what Windows os.path.basename does on
     # actual Windows hosts. Our backend uses os.path which == ntpath on
     # Windows and posixpath on macOS/Linux, so paths go through correctly
@@ -1260,7 +1258,6 @@ def test_sniff_handles_windows_style_backslash_path_string():
     forward slashes on Windows but backslashes on POSIX would NOT find
     the file. The basename() helper in the frontend already normalizes,
     but verify the agent_manager refusal path is graceful."""
-    import os
     from backend.apps.agents.agent_manager import AgentManager
     mgr = AgentManager()
     # A path that doesn't exist (POSIX cannot interpret backslashes as separator)
@@ -1660,7 +1657,7 @@ def test_gemini_proxy_defensive_on_malformed_blocks():
 def test_resolve_attachments_anthropic_emits_native_document():
     """Anthropic upstream gets a `document` content block for PDFs, not
     a text placeholder."""
-    import base64, tempfile, os
+    import tempfile, os
     from backend.apps.agents.agent_manager import AgentManager
     mgr = AgentManager()
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as fh:
@@ -2294,7 +2291,7 @@ def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=No
     state = {
         "nodes": list(initial_nodes or []),
         "connections": list(initial_conns or []),
-        "calls": [],  # list of (method, url, json) tuples
+        "calls": [],  # list of (method, url, json, kwargs) tuples
         "next_id": 1,
     }
     fail = fail_endpoints or set()
@@ -2307,7 +2304,7 @@ def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=No
         return r
 
     async def _get(url, **kw):
-        state["calls"].append(("GET", url, None))
+        state["calls"].append(("GET", url, None, kw))
         if "/api/provider-nodes" in url and "GET:provider-nodes" in fail:
             return _resp(500)
         if url.endswith("/api/provider-nodes"):
@@ -2317,7 +2314,7 @@ def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=No
         return _resp(404)
 
     async def _post(url, json=None, **kw):
-        state["calls"].append(("POST", url, json))
+        state["calls"].append(("POST", url, json, kw))
         if "/api/provider-nodes" in url and not url.endswith("/provider-nodes/"):
             if "POST:provider-nodes" in fail:
                 return _resp(500, {"error": "fail"})
@@ -2337,7 +2334,7 @@ def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=No
         return _resp(404)
 
     async def _put(url, json=None, **kw):
-        state["calls"].append(("PUT", url, json))
+        state["calls"].append(("PUT", url, json, kw))
         # /api/provider-nodes/<id>
         for n in state["nodes"]:
             if url.endswith(f"/provider-nodes/{n['id']}"):
@@ -2346,7 +2343,7 @@ def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=No
         return _resp(404)
 
     async def _patch(url, json=None, **kw):
-        state["calls"].append(("PATCH", url, json))
+        state["calls"].append(("PATCH", url, json, kw))
         for c in state["connections"]:
             if url.endswith(f"/providers/{c['id']}"):
                 c.update(json or {})
@@ -2354,7 +2351,7 @@ def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=No
         return _resp(404)
 
     async def _delete(url, **kw):
-        state["calls"].append(("DELETE", url, None))
+        state["calls"].append(("DELETE", url, None, kw))
         for n in list(state["nodes"]):
             if url.endswith(f"/provider-nodes/{n['id']}"):
                 state["nodes"].remove(n)

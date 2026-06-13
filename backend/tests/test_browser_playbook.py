@@ -24,15 +24,17 @@ class _Resp:
 
 
 class FakeAux:
-    """Records the prompt it's given and returns a scripted reply. `reply` may be
-    a string (returned verbatim) or a callable(prompt)->string."""
+    """Records the calls + prompts it's given and returns a scripted reply.
+    `reply` may be a string (returned verbatim) or a callable(prompt)->string."""
     def __init__(self, reply):
         self.reply = reply
         self.prompts = []
+        self.calls = []
         self.messages = self
 
-    async def create(self, model=None, max_tokens=None, messages=None):
-        prompt = messages[0]["content"]
+    async def create(self, **kw):
+        self.calls.append(kw)
+        prompt = kw["messages"][0]["content"]
         self.prompts.append(prompt)
         r = self.reply(prompt) if callable(self.reply) else self.reply
         return _Resp(r)
@@ -53,6 +55,9 @@ async def test_first_success_creates_a_playbook():
     aux = FakeAux(_pb("generic 'design engineer' = hardware; add React or a company name"))
     changed = await _distill("linkedin.com", "find design engineers", "notes", "done", aux)
     assert changed
+    # the distill must use the configured aux model on a bounded token budget
+    assert aux.calls[0]["model"] == "aux-model"
+    assert aux.calls[0]["max_tokens"] == 600
     bullets = pb.get_playbook("linkedin.com")
     assert len(bullets) == 1 and "hardware" in bullets[0]
 

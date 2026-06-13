@@ -321,7 +321,8 @@ async def test_endpoint_submit(sink):
 
 
 @pytest.mark.asyncio
-async def test_endpoint_submit_missing_payload(sink):
+@pytest.mark.usefixtures("sink")
+async def test_endpoint_submit_missing_payload():
     from backend.apps.service.service import post_submit
     res = await post_submit({"kind": "state"})
     assert res["ok"] is False
@@ -336,7 +337,8 @@ async def test_endpoint_event_happy(sink):
 
 
 @pytest.mark.asyncio
-async def test_endpoint_event_missing_surface(sink):
+@pytest.mark.usefixtures("sink")
+async def test_endpoint_event_missing_surface():
     from backend.apps.service.service import post_event
     res = await post_event({"action": "x"})
     assert res["ok"] is False

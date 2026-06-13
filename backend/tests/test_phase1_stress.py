@@ -13,8 +13,7 @@ import os
 import random
 import string
 import tempfile
-from typing import Any
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 
 import pytest
 

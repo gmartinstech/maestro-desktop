@@ -13,19 +13,16 @@ Run with:  backend/.venv/bin/python backend/tests/test_outputs_runtime_cleanup.p
 """
 import asyncio
 import os
-import shutil
 import socket
 import subprocess
 import sys
 import tempfile
-import time
 
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from backend.apps.outputs.runtime import (
-    AppRuntime,
     AppRuntimeManager,
     _find_free_port,
     _is_port_free,

@@ -51,7 +51,8 @@ def test_migrate_leaves_modern_values_untouched():
 
 # ---------------- load_settings: happy paths ----------------
 
-def test_no_file_returns_defaults(settings_file):
+@pytest.mark.usefixtures("settings_file")
+def test_no_file_returns_defaults():
     s = store.load_settings()
     assert isinstance(s, AppSettings)
     assert s.default_system_prompt == DEFAULT_SYSTEM_PROMPT
@@ -146,7 +147,8 @@ def test_non_dict_top_level_returns_defaults(settings_file):
 
 # ---------------- round-trip ----------------
 
-def test_save_then_load_roundtrip(settings_file):
+@pytest.mark.usefixtures("settings_file")
+def test_save_then_load_roundtrip():
     s = AppSettings(theme="light", default_model="opus", installation_id="keep-me")
     store.save_settings(s)
     loaded = store.load_settings()

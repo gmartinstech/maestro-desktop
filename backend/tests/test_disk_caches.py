@@ -1,6 +1,5 @@
 import json
 import os
-import time
 
 import pytest
 
@@ -36,7 +35,8 @@ def _bump_mtime(path):
     os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
 
 
-def test_settings_write_through_is_fresh(settings_tmp):
+@pytest.mark.usefixtures("settings_tmp")
+def test_settings_write_through_is_fresh():
     s = store.load_settings()
     s.theme = "light"
     store.save_settings(s)
@@ -57,7 +57,8 @@ def test_settings_external_edit_detected(settings_tmp):
     assert store.load_settings().theme == "light"
 
 
-def test_settings_cache_returns_isolated_copies(settings_tmp):
+@pytest.mark.usefixtures("settings_tmp")
+def test_settings_cache_returns_isolated_copies():
     store.save_settings(AppSettings(theme="dark"))
     a = store.load_settings()
     a.theme = "light"
@@ -101,10 +102,15 @@ def test_tools_in_place_rewrite_detected(tools_tmp):
     assert [x.name for x in tools_lib._load_all()] == ["New"]
 
 
-def test_tools_cached_hit_skips_reparse(tools_tmp, monkeypatch):
+@pytest.mark.usefixtures("tools_tmp")
+def test_tools_cached_hit_skips_reparse(monkeypatch):
     tools_lib._save(ToolDefinition(name="Once", description="o"))
     tools_lib._load_all()
-    def boom(*a, **k):
-        raise AssertionError("disk re-parse on unchanged dir")
-    monkeypatch.setattr(json, "load", boom)
+    real_load = json.load
+    loads = {"n": 0}
+    def counting_load(*a, **k):
+        loads["n"] += 1
+        return real_load(*a, **k)
+    monkeypatch.setattr(json, "load", counting_load)
     assert [x.name for x in tools_lib._load_all()] == ["Once"]
+    assert loads["n"] == 0, "disk re-parse on unchanged dir"
