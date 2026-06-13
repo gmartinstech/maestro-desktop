@@ -14,6 +14,8 @@ This folder contains the project's code quality tooling: a structural linter, de
 
 **No leading-underscore names (`no-underscore-names`)** — Bans names that start with `_` in backend Python: functions, methods, arguments, classes, variable bindings, instance/class attribute writes (`self._x = ...`), and import aliases. The prefix is a blind spot — Pylance's `reportUnusedVariable`, ruff's `dummy-variable-rgx` (`F841`/`ARG0xx`), and vulture all treat a leading underscore as "intentionally private/unused" and stop reporting it, so dead `_name` code slips through every dead-code tool at once. Dunders (`__init__`, `__repr__`, … — required by Python) and the bare `_` throwaway (`for _ in …`) are exempt; name-mangled `__x` is **not**. The rule ships strict with no exceptions seeded — offenders are renamed by hand.
 
+**`p_` private convention (`p-private`)** — Enforces the `p_` prefix as a real access modifier with **Java `private` semantics** over backend Python. Module-level `p_` symbols (top-level `def`/`class`/assignment) are **file-private** — usable anywhere in their own file, nowhere else. Class members (`def p_m`, `self.p_x = …`, class-body fields `p_x: T`) are **class-private** — a `recv.p_x` access is legal only lexically inside the owning class (or a class nested within it). Strict like Java `private`, not `protected`: a subclass in another file reaching a base's `p_` member is flagged. Nested/inner classes may reach the enclosing class's members (the whole enclosing-class stack is checked). Detection is access-form based — attribute access governs class members, bare-name/import governs module-level — so no type inference is needed. No exemptions: tests and `__init__.py` re-exports are enforced. Greenfield today (zero `p_` in the tree), so it ships green and only fires once the convention is used.
+
 These rules apply to `.py`, `.ts`, `.tsx`, `.js`, and `.jsx` files (the `no-underscore-names` rule is Python-only).
 
 ### Orphaned endpoints
@@ -85,6 +87,7 @@ Or use the `knip:check` VS Code task (`Cmd+Shift+P` → "Run Task" → "knip:che
     "no-nested-imports": true,
     "vulture": true,
     "no-underscore-names": true,
+    "p-private": true,
     "eslint": true,
     "knip": true,
     "endpoints": true,
@@ -176,6 +179,7 @@ linter/
     __init__.py        # shared filter/match utilities + .lintignore support
     structural.py      # file length, folder size, nested imports
     no_underscore_names.py # bans leading-underscore Python names
+    p_private.py       # enforces p_ private convention (Java-private scoping)
     vulture.py         # vulture dead-code runner
     eslint.py          # eslint runner
     knip.py            # knip unused-code runner
@@ -203,6 +207,7 @@ deferred.
 | `max-folder-items` (7) | on | Grandfathered per subtree via `.lintignore-max-folder-items` markers in `backend/`, `frontend/`, `debugger/`, `electron/`, `scripts/`. |
 | `vulture` | on | Dead-code detection over `backend/`. Runs against `backend/.venv/bin/vulture`. |
 | `no-underscore-names` | on | Bans leading-underscore Python names over `backend/`. Pure-AST, no external tool. Strict with no seeded exceptions — existing offenders are renamed by hand. |
+| `p-private` | on | Enforces the `p_` private convention (Java `private` scoping: module-level = file-private, class members = class-private) over `backend/`. Pure-AST two-pass, no external tool. Greenfield — zero findings today. |
 | `no-nested-imports` | off | We deliberately use function-level / lazy imports to break import cycles (400+ sites). Flagging them all is wrong for this codebase. |
 | `eslint`, `knip` | off | Node tooling, deferred to a later pass. |
 | `endpoints` | off | Orphaned-endpoint triage deferred. |

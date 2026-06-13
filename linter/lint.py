@@ -21,6 +21,7 @@ from checks.endpoints import run_endpoint_check
 from checks.classes import run_class_check
 from checks.cycles import run_cycle_check
 from checks.no_underscore_names import run_underscore_check
+from checks.p_private import run_p_private_check
 from watchfiles import watch, DefaultFilter
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -28,7 +29,7 @@ CONFIG_FILE = SCRIPT_DIR / "config" / "config.json"
 
 # Print order for the sections; also the order they run in.
 SECTION_ORDER = [
-    "structural", "vulture", "ruff", "no-underscore-names", "eslint",
+    "structural", "vulture", "ruff", "no-underscore-names", "p-private", "eslint",
     "knip", "endpoints", "classes", "import-cycles",
 ]
 
@@ -156,6 +157,9 @@ def run_checks(root: Path) -> LintResult:
     run_section("no-underscore-names", lambda: run_underscore_check(
         root, exceptions, excludes, ignores,
     ) if enabled.get("no-underscore-names", True) else [])
+    run_section("p-private", lambda: run_p_private_check(
+        root, exceptions, excludes, ignores,
+    ) if enabled.get("p-private", True) else [])
     run_section("eslint", lambda: run_eslint(root, ignores) if enabled.get("eslint", True) else [])
     run_section("knip", lambda: run_knip(root, ignores) if enabled.get("knip", True) else [])
     run_section("endpoints", lambda: run_endpoint_check(
