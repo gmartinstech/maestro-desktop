@@ -2273,6 +2273,16 @@ async def run_browser_agents(
 
     pre_selected = set(pre_selected_browser_ids or [])
 
+    # The user explicitly picked a browser via select-mode, so that card must be driven
+    # instead of spawning a fresh one. The model often omits browser_id when calling the
+    # tool, which used to fall through to host-based auto-create (the "it always opens its
+    # own browser" bug); here we hand each unclaimed selected card to the next task that
+    # named none, BEFORE the parallel dispatch so it can't race the card-pick lock.
+    _unclaimed = [b for b in (pre_selected_browser_ids or []) if b]
+    for _t in tasks:
+        if not _t.get("browser_id") and _unclaimed:
+            _t["browser_id"] = _unclaimed.pop(0)
+
     async def _run_one(task_def: dict) -> dict:
         browser_id = task_def.get("browser_id", "")
         task_text = task_def.get("task", "")

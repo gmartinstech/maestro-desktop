@@ -1153,7 +1153,14 @@ class AgentManager:
                     os.path.dirname(__file__), "browser_agent_mcp_server.py"
                 )
                 backend_port = os.environ.get("OPENSWARM_PORT", "8324")
-                pre_selected_bids = self._get_pre_selected_browser_ids(session.dashboard_id)
+                # The browser the user picked in select-mode must be driven, not duplicated.
+                # Put their selection FIRST so the dispatch claims it for the task; keep the
+                # rest of the dashboard's cards in the list so their host/no-renavigate
+                # semantics still hold. Without the user's selection here the sub-agent fell
+                # back to host-based auto-create and opened its own browser.
+                _user_sel = [b for b in (selected_browser_ids or []) if b]
+                _all_bids = self._get_pre_selected_browser_ids(session.dashboard_id)
+                pre_selected_bids = _user_sel + [b for b in _all_bids if b not in _user_sel]
                 from backend.auth import get_auth_token as _get_auth_token
                 _auth_tok = _get_auth_token()
                 mcp_servers["openswarm-browser-agent"] = {
