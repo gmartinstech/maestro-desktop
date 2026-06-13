@@ -7,6 +7,8 @@ import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
+import { useAppSelector } from '@/shared/hooks';
+import { hasFreeTrialActive } from '@/app/components/Onboarding/steps/skipPredicates';
 
 interface ModeConf { label: string; icon: React.ReactNode; color: string }
 
@@ -28,6 +30,9 @@ interface Props {
 export const ModeControl: React.FC<Props> = ({
   c, menuPaperProps, modeConf, modesArr, mode, onModeChange, iconMap, modeAnchor, setModeAnchor, setModelAnchor, allModelFlat, model,
 }) => {
+  // On the free trial the model is fixed server-side, so there's nothing to pick: hide the
+  // whole model control (no picker, no model name) until the user connects their own model.
+  const freeTrialActive = useAppSelector(hasFreeTrialActive);
   return (
     <>
       <Box
@@ -87,27 +92,29 @@ export const ModeControl: React.FC<Props> = ({
         })}
       </Menu>
 
-      <Box
-        onClick={(e) => setModelAnchor(e.currentTarget)}
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.25,
-          px: 0.75,
-          py: 0.25,
-          borderRadius: '6px',
-          cursor: 'pointer',
-          userSelect: 'none',
-          color: c.text.muted,
-          '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
-          transition: 'background 0.15s',
-        }}
-      >
-        <Typography sx={{ fontSize: '0.82rem', fontWeight: 500, color: 'inherit', lineHeight: 1 }}>
-          {(() => { const m = allModelFlat.find((m) => m.value === model); return m ? m.label : model; })()}
-        </Typography>
-        <KeyboardArrowDownIcon sx={{ fontSize: 14, color: 'inherit', opacity: 0.7 }} />
-      </Box>
+      {!freeTrialActive && (
+        <Box
+          onClick={(e) => setModelAnchor(e.currentTarget)}
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.25,
+            px: 0.75,
+            py: 0.25,
+            borderRadius: '6px',
+            cursor: 'pointer',
+            userSelect: 'none',
+            color: c.text.muted,
+            '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
+            transition: 'background 0.15s',
+          }}
+        >
+          <Typography sx={{ fontSize: '0.82rem', fontWeight: 500, color: 'inherit', lineHeight: 1 }}>
+            {(() => { const m = allModelFlat.find((m) => m.value === model); return m ? m.label : model; })()}
+          </Typography>
+          <KeyboardArrowDownIcon sx={{ fontSize: 14, color: 'inherit', opacity: 0.7 }} />
+        </Box>
+      )}
     </>
   );
 };
