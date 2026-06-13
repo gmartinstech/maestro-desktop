@@ -20,9 +20,9 @@ def clean_short_label(raw: str, max_words: int = 4, max_chars: int = 36) -> str:
 
 
 def aux_max_tokens_for(model: str | None, base: int = 100) -> int:
-    # GPT-5 reasoners burn reasoning tokens before output; floor at 4K so a label can land.
+    # GPT-5 reasoners burn reasoning tokens before output; floor at 2K so a label can land.
     if isinstance(model, str) and "gpt-5" in model.lower():
-        return max(base, 4096)
+        return max(base, 2048)
     return base
 
 
