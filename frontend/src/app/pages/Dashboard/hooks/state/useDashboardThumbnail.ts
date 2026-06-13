@@ -42,8 +42,8 @@ export function useDashboardThumbnail({
 }: UseDashboardThumbnailArgs) {
   // Screenshot the dashboard's contents for its card preview. Native Electron capturePage
   // (no DOM mutation, no flash). We snapshot while the dashboard is visible whenever its card
-  // set changes, then commit on exit only if that set differs from the last saved shot, so
-  // merely opening a dashboard never re-screenshots it (which would also reorder the sidebar).
+  // set changes and dispatch the update in-place, so the sidebar reorders as soon as the
+  // change settles rather than waiting for the user to navigate away.
   const currentSignature = useAppSelector((state) =>
     dashboardSignature(state.dashboardLayout),
   );
@@ -53,23 +53,24 @@ export function useDashboardThumbnail({
   const savedSignatureRef = useRef<string | null>(savedSignature);
   savedSignatureRef.current = savedSignature;
 
-  const pendingThumbnailRef = useRef<string | null>(null);
-  const pendingSignatureRef = useRef<string | null>(null);
   // Baseline we compare against; seeded from the persisted signature, advanced on each commit.
   const lastSavedSignatureRef = useRef<string | null>(savedSignature);
   const captureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captureRetriesRef = useRef(0);
 
   const captureNow = useCallback(() => {
+    if (!dashboardId) return;
     const viewportEl = viewportRef.current;
     const contentEl = contentRef.current;
     if (!viewportEl || !contentEl) return;
     const layoutState = store.getState().dashboardLayout;
     const sig = dashboardSignature(layoutState);
     if (!sig) {
-      // Emptied dashboard: queue a clear ('') so its card falls back to the default icon.
-      pendingThumbnailRef.current = '';
-      pendingSignatureRef.current = '';
+      // Emptied dashboard: clear the preview so its card falls back to the default icon.
+      if (lastSavedSignatureRef.current !== '') {
+        store.dispatch(updateDashboardThumbnail({ id: dashboardId, thumbnail: '', signature: '' }));
+        lastSavedSignatureRef.current = '';
+      }
       return;
     }
     // Capturing the dashboard composites live webview pixels; doing it while a
@@ -91,18 +92,19 @@ export function useDashboardThumbnail({
       viewCards: layoutState.viewCards,
       browserCards: layoutState.browserCards,
     };
+    const capturingId = dashboardId;
     captureDashboardThumbnail(viewportEl, contentEl, allCards)
       .then((thumbnail) => {
-        if (thumbnail) {
-          pendingThumbnailRef.current = thumbnail;
-          pendingSignatureRef.current = sig;
-        }
+        if (!thumbnail) return;
+        if (sig === lastSavedSignatureRef.current) return;
+        store.dispatch(updateDashboardThumbnail({ id: capturingId, thumbnail, signature: sig }));
+        lastSavedSignatureRef.current = sig;
       })
       .catch(() => {});
-  }, [viewportRef, contentRef]);
+  }, [dashboardId, viewportRef, contentRef]);
 
   // While visible, (re)snapshot a beat after the card set changes. If it already matches the
-  // saved shot (or was reverted back to it), drop any pending capture instead of committing stale pixels.
+  // saved shot (or was reverted back to it), cancel any pending capture instead of committing stale pixels.
   useEffect(() => {
     if (!isActive || !dashboardId || !layoutInitialized) return;
     if (currentSignature === lastSavedSignatureRef.current) {
@@ -110,8 +112,6 @@ export function useDashboardThumbnail({
         clearTimeout(captureTimerRef.current);
         captureTimerRef.current = null;
       }
-      pendingThumbnailRef.current = null;
-      pendingSignatureRef.current = null;
       return;
     }
     if (captureTimerRef.current) clearTimeout(captureTimerRef.current);
@@ -121,36 +121,10 @@ export function useDashboardThumbnail({
     };
   }, [isActive, dashboardId, layoutInitialized, currentSignature, captureNow]);
 
-  const commitThumbnail = useCallback((id: string) => {
-    if (!id) return;
-    const thumbnail = pendingThumbnailRef.current;
-    if (thumbnail === null) return; // nothing captured this session
-    const sig = pendingSignatureRef.current ?? '';
-    if (sig === lastSavedSignatureRef.current) return; // card set unchanged since last shot
-    store.dispatch(updateDashboardThumbnail({ id, thumbnail, signature: sig }));
-    lastSavedSignatureRef.current = sig;
-    pendingThumbnailRef.current = null;
-    pendingSignatureRef.current = null;
-  }, []);
-
-  // Persistent component: dashboardId is a prop. On switch, the cleanup commits the dashboard
-  // we're leaving; the setup re-baselines to the one we're entering. Cleanup also fires on unmount.
+  // Persistent component: dashboardId is a prop. Re-baseline the signature when switching dashboards.
   useEffect(() => {
     lastSavedSignatureRef.current = savedSignatureRef.current;
-    pendingThumbnailRef.current = null;
-    pendingSignatureRef.current = null;
-    const exitingId = dashboardId;
-    return () => {
-      commitThumbnail(exitingId);
-    };
-  }, [dashboardId, commitThumbnail]);
-
-  // Navigating to /apps etc. keeps the dashboard mounted but flips it inactive; that's still an exit.
-  const prevIsActiveRef = useRef(isActive);
-  useEffect(() => {
-    if (prevIsActiveRef.current && !isActive) commitThumbnail(dashboardId);
-    prevIsActiveRef.current = isActive;
-  }, [isActive, dashboardId, commitThumbnail]);
+  }, [dashboardId]);
 
   return { captureNow };
 }
