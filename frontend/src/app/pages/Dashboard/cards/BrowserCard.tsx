@@ -303,7 +303,7 @@ const BrowserCard: React.FC<Props> = ({
           // (the historical Windows mount segfault). Clear the crash-safety marker.
           if (isWindows) markWindowsWebviewSurvived();
           wv.loadURL(targetUrl).catch(() => {});
-          // Lock guest zoom at 1.0 so ctrl+wheel never triggers Chromium's in-page zoom; canvas zoom takes over (issue #27).
+          // Disable in-guest pinch zoom; page zoom (cmd+= / cmd+-) still works via chromium.
           try {
             (wv as any).setVisualZoomLevelLimits?.(1, 1);
             (wv as any).setZoomFactor?.(1);
@@ -328,19 +328,16 @@ const BrowserCard: React.FC<Props> = ({
           setPasskeyDialogOpen(true);
         } else if (e?.channel === 'browser-dblclick') {
           onDoubleClickRef.current?.(browserId, 'browser');
-        } else if (e?.channel === 'canvas-wheel-zoom') {
-          // Convert guest coords to doc coords and dispatch a CustomEvent; synthetic WheelEvent bubble was unreliable through GuestView.
+        } else if (e?.channel === 'canvas-wheel-pan') {
+          // Plain wheel inside an unselected webview never bubbles out; the
+          // preload forwards it here so the dashboard canvas can pan.
           const payload = e.args?.[0] || {};
-          const wvRect = wv.getBoundingClientRect();
-          const docX = wvRect.left + (payload.clientX ?? 0);
-          const docY = wvRect.top + (payload.clientY ?? 0);
           window.dispatchEvent(
-            new CustomEvent('openswarm:canvas-wheel-zoom', {
+            new CustomEvent('openswarm:canvas-wheel-pan', {
               detail: {
+                deltaX: payload.deltaX ?? 0,
                 deltaY: payload.deltaY ?? 0,
                 deltaMode: payload.deltaMode ?? 0,
-                clientX: docX,
-                clientY: docY,
               },
             }),
           );
