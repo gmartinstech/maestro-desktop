@@ -12,19 +12,19 @@ logger = logging.getLogger(__name__)
 # operate on an already-loaded page and should be quick; navigation legitimately
 # loads the network so it gets a longer leash. Was a flat 30s, which let one
 # wedged page spin for ~20 minutes across retries.
-_BROWSER_CMD_TIMEOUT_DEFAULT = 15.0   # modest load headroom; still "short" so a wedged tab fails fast
-_BROWSER_CMD_TIMEOUTS = {
+P_BROWSER_CMD_TIMEOUT_DEFAULT = 15.0   # modest load headroom; still "short" so a wedged tab fails fast
+P_BROWSER_CMD_TIMEOUTS = {
     "navigate": 25.0,     # a real page load can be slow (more leash under load)
     "replay_route": 20.0, # an API fetch can be slow
     "wait": 12.0,         # smart-wait already caps itself well under this
 }
-_BROWSER_CMD_REBROADCAST_S = 3.0
+P_BROWSER_CMD_REBROADCAST_S = 3.0
 # A CPU-starved renderer can briefly drop its WS (a missed heartbeat) and the
 # frontend auto-reconnects a beat later; bridge that gap instead of hard-failing
 # a live run into it. Short enough that a genuinely-closed window still fails
 # quickly (and no LLM turns are ever burned waiting); long enough to ride out a
 # reconnect even on a loaded machine.
-_WS_RECONNECT_WAIT_S = 8.0
+P_WS_RECONNECT_WAIT_S = 8.0
 
 # Public - called by browser_agent.py
 async def await_reconnect(has_conn) -> bool:
@@ -33,7 +33,7 @@ async def await_reconnect(has_conn) -> bool:
     if has_conn():
         return True
     waited = 0.0
-    while waited < _WS_RECONNECT_WAIT_S:
+    while waited < P_WS_RECONNECT_WAIT_S:
         await asyncio.sleep(0.5)
         waited += 0.5
         if has_conn():
@@ -164,7 +164,7 @@ class ConnectionManager:
             "current_seq": newest if newest is not None else 0,
         }
 
-    def _strip_replayed_closes(self, events: list[str]) -> list[str]:
+    def p_strip_replayed_closes(self, events: list[str]) -> list[str]:
         """Drop `agent:closed` events from a replay buffer.
 
         agent:closed is a transition event ("session JUST closed") whose
@@ -188,7 +188,7 @@ class ConnectionManager:
             out.append(payload_str)
         return out
 
-    def _filter_stale_approvals(self, events: list[str]) -> list[str]:
+    def p_filter_stale_approvals(self, events: list[str]) -> list[str]:
         """Return events minus any `agent:approval_request` whose request_id
         is no longer in pending_futures. JSON parse is per-event but replay
         only runs on (re)connect, so it isn't a hot path.
@@ -282,7 +282,7 @@ class ConnectionManager:
             # so it gets a longer leash; everything else fails fast. A one-off slow
             # command just times out and the next success resets the agent's streak,
             # so only a SUSTAINED hang trips the fast-fail abort.
-            timeout = _BROWSER_CMD_TIMEOUTS.get(action, _BROWSER_CMD_TIMEOUT_DEFAULT)
+            timeout = P_BROWSER_CMD_TIMEOUTS.get(action, P_BROWSER_CMD_TIMEOUT_DEFAULT)
             deadline = loop.time() + timeout
             # Re-broadcast until a client answers: a silently-dead dashboard
             # socket takes up to ~35s of heartbeat to notice, and a command
@@ -294,7 +294,7 @@ class ConnectionManager:
                 if remaining <= 0:
                     return {"error": "Browser command timed out"}
                 done, _ = await asyncio.wait(
-                    {future}, timeout=min(_BROWSER_CMD_REBROADCAST_S, remaining)
+                    {future}, timeout=min(P_BROWSER_CMD_REBROADCAST_S, remaining)
                 )
                 if done:
                     return future.result()
