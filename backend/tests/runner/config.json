@@ -2,5 +2,6 @@
   "repo_root": "../..",
   "test_paths": ["tests/test_cases"],
   "venv_python": ".venv/bin/python",
-  "coverage_source": ["backend"]
+  "coverage_source": ["backend"],
+  "icons": "nerd"
 }

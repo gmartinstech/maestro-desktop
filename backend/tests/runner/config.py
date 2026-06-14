@@ -9,6 +9,10 @@ another repo by editing data instead of code:
     venv_python      the interpreter the *tests* run in (separate from the
                      runner's own venv); falls back to the current interpreter
     coverage_source  packages measured under --cov, and the report path filter
+    icons            picker glyph tier (a *ceiling*): "nerd" | "emoji" |
+                     "unicode" | "ascii", default "unicode". Each icon falls
+                     back to the fanciest variant at or below this tier, so a
+                     terminal without a Nerd Font still renders the rest.
 
 All paths in the JSON are resolved relative to this directory (the runner
 folder) unless absolute. Missing keys fall back to today's behavior.
@@ -29,6 +33,11 @@ _DEFAULT_REPO_ROOT = RUNNER_DIR.parents[1]  # <repo>/tests/runner -> <repo>
 _DEFAULT_TEST_PATHS = ["tests/unit", "tests/api"]
 _DEFAULT_COVERAGE_SOURCE = ["backend"]
 
+# Allowed picker glyph tiers, fanciest first. "unicode" is the safe default:
+# plain BMP shapes that render on any terminal without a patched font.
+_ICON_TIERS = ("nerd", "emoji", "unicode", "ascii")
+_DEFAULT_ICONS = "unicode"
+
 
 @dataclass(frozen=True)
 class Config:
@@ -36,6 +45,7 @@ class Config:
     test_paths: list[str]
     venv_python: str
     coverage_source: list[str]
+    icons: str
 
 
 def _resolve(base: Path, value: str) -> Path:
@@ -59,6 +69,12 @@ def load_config(path: Path | None = None) -> Config:
     test_paths = raw.get("test_paths") or list(_DEFAULT_TEST_PATHS)
     coverage_source = raw.get("coverage_source") or list(_DEFAULT_COVERAGE_SOURCE)
 
+    # An unknown/misspelled tier silently falls back to the safe default rather
+    # than crashing the picker on launch.
+    icons = raw.get("icons")
+    if icons not in _ICON_TIERS:
+        icons = _DEFAULT_ICONS
+
     # The test interpreter is resolved against repo_root. If it is unset or does
     # not exist, fall back to the interpreter running the runner so the tool
     # still works in a single-venv setup. We deliberately do NOT call
@@ -77,4 +93,5 @@ def load_config(path: Path | None = None) -> Config:
         test_paths=test_paths,
         venv_python=venv_python,
         coverage_source=coverage_source,
+        icons=icons,
     )

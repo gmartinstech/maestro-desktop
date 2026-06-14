@@ -6,6 +6,7 @@ With paths / -k / --no-pick: skip the picker and run directly.
 
 from __future__ import annotations
 
+import sys
 from typing import List, Optional
 
 import typer
@@ -13,6 +14,7 @@ from rich.console import Console
 
 from tests.runner.discovery import discover
 from tests.runner.picker import run_picker
+from tests.runner.rerun_prompt import prompt_actions
 from tests.runner.run import RunOptions, run_tests
 
 console = Console()
@@ -80,7 +82,15 @@ def main(
             console.print("[yellow]Nothing selected.[/]")
             raise typer.Exit(0)
 
-    code = run_tests(node_ids, opts)
+    code, summary = run_tests(node_ids, opts)
+    # On a TTY, offer the post-run action prompt (rerun all / failed / passed /
+    # exit) and loop on whatever the user picks, reusing the same run options.
+    # Skipped when output is redirected/CI so we never try to open a TUI there.
+    while sys.stdout.isatty() and summary.all_ids:
+        choice = prompt_actions(summary.all_ids, summary.failed_ids, summary.passed_ids)
+        if not choice:
+            break
+        code, summary = run_tests(choice, opts)
     raise typer.Exit(code)
 
 

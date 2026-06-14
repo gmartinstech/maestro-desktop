@@ -60,7 +60,20 @@ class RunOptions:
     verbose: bool = False      # -v  : richer failure output (untruncated asserts)
     no_capture: bool = False   # -s  : stream test stdout / print() output live
     show_output: bool = False  # -O  : show captured output for passing tests too
-    keyword: str | None = None  # -k  : only tests matching this expression
+
+
+@dataclass
+class RunSummary:
+    """The post-run picture the action prompt needs to offer its reruns.
+
+    ``all_ids`` is every collected node ID (rerun-all), ``passed_ids`` the ones
+    that passed, ``failed_ids`` the ones that failed/errored. Skipped tests are
+    deliberately in neither pass nor fail bucket.
+    """
+
+    all_ids: list[str]
+    passed_ids: list[str]
+    failed_ids: list[str]
 
 
 class Dashboard:
@@ -89,6 +102,10 @@ class Dashboard:
         self.errors = 0
         self.current = ""
         self.failures: list[tuple[str, str]] = []
+        # Every collected node ID (in collection order) + the final outcome per
+        # node, so the post-run prompt can offer rerun-all / passed / failed.
+        self._collected: list[str] = []
+        self._outcome: dict[str, str] = {}
         self.live: Live | None = None
         self._start = time.time()
         self._current_start = self._start
@@ -126,6 +143,7 @@ class Dashboard:
 
     def _on_collection(self, items: list[str]) -> None:
         self.total = len(items)
+        self._collected = list(items)
         for nodeid in items:
             f = self._file_of(nodeid)
             if f not in self._file_total:
@@ -196,6 +214,7 @@ class Dashboard:
         # Update per-file tallies for the -s-off table.
         f = self._file_of(nodeid)
         outcome = entry["outcome"]
+        self._outcome[nodeid] = outcome
         if outcome == "passed":
             self._file_pass[f] += 1
         elif outcome in ("failed", "error"):
@@ -442,6 +461,30 @@ class Dashboard:
                 )
             )
 
+    def all_ids(self) -> list[str]:
+        """Every collected node ID, in collection order (rerun-all target)."""
+        return list(self._collected)
+
+    def passed_ids(self) -> list[str]:
+        """Collected node IDs whose final outcome was a pass (skips excluded)."""
+        return [n for n in self._collected if self._outcome.get(n) == "passed"]
+
+    def failed_ids(self) -> list[str]:
+        """The deduped, real pytest node IDs of everything that failed.
+
+        Strips the " (setup)" / " (teardown)" phase suffixes we tack on in
+        ``self.failures`` so each entry is a target you can hand straight back
+        to pytest.
+        """
+        seen: set[str] = set()
+        out: list[str] = []
+        for nodeid, _ in self.failures:
+            clean = nodeid.split(" (", 1)[0]
+            if clean not in seen:
+                seen.add(clean)
+                out.append(clean)
+        return out
+
 
 def render_coverage(console: Console, rows: list, total: float) -> None:
     """Render the coverage table from rows computed by the worker."""
@@ -480,14 +523,16 @@ def _build_pytest_args(node_ids: list[str], opts: RunOptions) -> list[str]:
         # Disable pytest's output capture so test stdout / print() reaches the
         # worker's gutter shim, which frames each line back to us as an event.
         args.append("-s")
-    if opts.keyword:
-        args += ["-k", opts.keyword]
     args += node_ids
     return args
 
 
-def run_tests(node_ids: list[str], opts: RunOptions | None = None) -> int:
-    """Run the given node IDs in the test venv (subprocess). Returns the exit code."""
+def run_tests(node_ids: list[str], opts: RunOptions | None = None) -> tuple[int, RunSummary]:
+    """Run the given node IDs in the test venv (subprocess).
+
+    Returns ``(exit_code, summary)`` where ``summary`` carries the collected /
+    passed / failed node IDs for the post-run action prompt.
+    """
     if opts is None:
         opts = RunOptions()
     if not node_ids:
@@ -578,4 +623,8 @@ def run_tests(node_ids: list[str], opts: RunOptions | None = None) -> int:
             )
     err_file.close()
 
-    return int(exit_code)
+    return int(exit_code), RunSummary(
+        all_ids=dashboard.all_ids(),
+        passed_ids=dashboard.passed_ids(),
+        failed_ids=dashboard.failed_ids(),
+    )
