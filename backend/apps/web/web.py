@@ -164,7 +164,7 @@ def _format_grounded_as_fetch(grounded: dict, url: str) -> str:
 def _resolve_gemini_api_key() -> str | None:
     """Pull the AI Studio API key from settings, or None."""
     try:
-        from backend.apps.settings.settings import load_settings
+        from backend.apps.settings.store import load_settings
         s = load_settings()
         return getattr(s, "google_api_key", None) or None
     except Exception:
@@ -173,7 +173,7 @@ def _resolve_gemini_api_key() -> str | None:
 
 def _resolve_openai_api_key() -> str | None:
     try:
-        from backend.apps.settings.settings import load_settings
+        from backend.apps.settings.store import load_settings
         s = load_settings()
         return getattr(s, "openai_api_key", None) or None
     except Exception:

@@ -12,7 +12,8 @@ from pydantic import BaseModel
 
 from backend.config.Apps import SubApp
 from backend.apps.settings.credentials import OPENSWARM_DEFAULT_PROXY_URL
-from backend.apps.settings.settings import load_settings, save_settings_async
+from backend.apps.settings.store import load_settings
+from backend.apps.settings.settings import save_settings_async
 
 logger = logging.getLogger(__name__)
 

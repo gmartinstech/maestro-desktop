@@ -31,11 +31,11 @@ def client():
 @pytest.fixture
 def reset_settings():
     """Snapshot + restore settings around each test so writes don't leak."""
-    from backend.apps.settings.settings import load_settings, _save_settings
+    from backend.apps.settings.store import load_settings, save_settings
 
     original = load_settings().model_copy(deep=True)
     yield
-    _save_settings(original)
+    save_settings(original)
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ def test_signin_activate_persists_user_id(client):
     assert body["plan"] == "free"
 
     # Persisted to settings.
-    from backend.apps.settings.settings import load_settings
+    from backend.apps.settings.store import load_settings
     s = load_settings()
     assert s.user_id == "u-1234"
     assert s.user_email == "smoke@example.com"
@@ -145,14 +145,14 @@ def test_signin_activate_short_token_rejected_locally(client):
 
 @pytest.mark.usefixtures("reset_settings")
 def test_signout_clears_local_identity(client):
-    from backend.apps.settings.settings import load_settings, _save_settings
+    from backend.apps.settings.store import load_settings, save_settings
     s = load_settings()
     s.user_id = "u-bye"
     s.user_email = "bye@example.com"
     s.signin_method = "google"
     s.openswarm_bearer_token = "bearer-to-revoke-xxxxxxxx"
     s.connection_mode = "openswarm-pro"
-    _save_settings(s)
+    save_settings(s)
 
     fake_response = AsyncMock()
     fake_response.status_code = 200
@@ -174,16 +174,16 @@ def test_signout_clears_local_identity(client):
 @pytest.mark.usefixtures("reset_settings")
 def test_signout_succeeds_even_when_cloud_unreachable(client):
     """A flaky network shouldn't strand the user signed-in locally."""
-    from backend.apps.settings.settings import load_settings, _save_settings
+    from backend.apps.settings.store import load_settings, save_settings
     s = load_settings()
     s.user_id = "u-flaky"
     s.openswarm_bearer_token = "bearer-flaky-network-xxxx"
-    _save_settings(s)
+    save_settings(s)
 
     with patch("httpx.AsyncClient") as MockClient:
         instance = MockClient.return_value.__aenter__.return_value
-        import httpx as _httpx
-        instance.post = AsyncMock(side_effect=_httpx.HTTPError("network down"))
+        import httpx
+        instance.post = AsyncMock(side_effect=httpx.HTTPError("network down"))
 
         r = client.post("/api/auth/signout")
     assert r.status_code == 200

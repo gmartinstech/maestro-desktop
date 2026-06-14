@@ -114,7 +114,7 @@ def load_settings() -> AppSettings:
 _settings_write_lock = threading.Lock()
 
 
-def _atomic_write_settings(payload: dict) -> None:
+def atomic_write_settings(payload: dict) -> None:
     """Atomic SETTINGS_FILE write; call via save_settings*, not directly."""
     global _cached_settings, _cached_sig
     with _settings_write_lock:
@@ -147,4 +147,4 @@ def _atomic_write_settings(payload: dict) -> None:
 
 def save_settings(settings_obj: AppSettings) -> None:
     """Sync atomic persist; thread-safe. Async callers should prefer save_settings_async (Defender can stretch writes to 50-200ms)."""
-    _atomic_write_settings(settings_obj.model_dump())
+    atomic_write_settings(settings_obj.model_dump())

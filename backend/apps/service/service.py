@@ -118,7 +118,7 @@ async def service_lifespan():
     global P_PULSE_TASK, P_DRAIN_TASK
 
     try:
-        from backend.apps.settings.settings import load_settings
+        from backend.apps.settings.store import load_settings
         from backend.apps.settings.store import save_settings
         settings = load_settings()
 

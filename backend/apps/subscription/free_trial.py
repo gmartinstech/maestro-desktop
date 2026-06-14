@@ -78,7 +78,7 @@ def _fingerprint(settings_obj) -> str | None:
     return hashlib.sha256((_FP_SALT + raw).encode("utf-8")).hexdigest()
 
 
-def _has_own_model(s) -> bool:
+def has_own_model(s) -> bool:
     """True if the user already has any real model path in settings; never shadow it."""
     if any(getattr(s, k, None) for k in (
         "anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
@@ -142,7 +142,7 @@ async def arm_free_trial(settings_obj) -> dict:
     mode = getattr(settings_obj, "connection_mode", "own_key")
     if mode not in ("own_key", "free-trial"):
         return {"armed": False, "reason": "other_mode"}
-    if _has_own_model(settings_obj) or await _has_connected_subscription():
+    if has_own_model(settings_obj) or await _has_connected_subscription():
         # A real model exists now (key, custom provider, or a 9Router sub). If we
         # were on the free lane, hand the wheel back instead of re-arming.
         if mode == "free-trial":

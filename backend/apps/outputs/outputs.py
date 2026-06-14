@@ -19,7 +19,7 @@ from backend.apps.outputs.view_builder_templates import (
     load_app_builder_skill,
     seed_webapp_template_workspace,
 )
-from backend.apps.settings.settings import load_settings
+from backend.apps.settings.store import load_settings
 from backend.config.paths import OUTPUTS_DIR as DATA_DIR, OUTPUTS_WORKSPACE_DIR as WORKSPACE_DIR
 from backend.apps.outputs.html_inject import (
     get_anthropic_client,

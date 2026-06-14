@@ -448,7 +448,7 @@ async def run_browser_agent(
         # host (for replay) and front-load turn 1 (this path used to start cold).
         preloaded_perception, current_url, preloaded_reads = await _perceive("")
 
-    from backend.apps.settings.settings import load_settings
+    from backend.apps.settings.store import load_settings
     from backend.apps.settings.credentials import get_anthropic_client_for_model
     from backend.apps.agents.providers.registry import (
         _find_builtin_model,

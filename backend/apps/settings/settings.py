@@ -13,8 +13,8 @@ from backend.config.Apps import SubApp
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
 from backend.apps.settings.store import (
     DATA_DIR,
-    load_settings,
-    _atomic_write_settings,
+    load_settings as load_settings_from_store,
+    atomic_write_settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def settings_lifespan():
         from backend.apps.nine_router.process import ensure_running, is_running
         from backend.apps.nine_router.sync import sync_gemini_api_key, sync_openai_api_key, sync_openrouter_api_key
         from backend.apps.nine_router.sync_custom import sync_openswarm_pro_as_claude, sync_custom_providers
-        s = load_settings()
+        s = load_settings_from_store()
 
         async def boot_router_then_sync():
             """Boot 9Router then push key-based connections (sequential: sync helpers no-op pre-boot)."""
@@ -67,7 +67,7 @@ async def settings_lifespan():
 
 
 async def p_upload_dir_gc_loop():
-    """Daily GC of UPLOAD_DIR. Without this, every PDF/image the user
+    """Daily GC of P_UPLOAD_DIR. Without this, every PDF/image the user
     drops sits in the OS temp dir forever, growing unbounded across
     sessions. We keep files for 7 days to make resume-after-restart
     work, then delete. macOS temp under /var/folders/... is auto-purged
@@ -78,9 +78,9 @@ async def p_upload_dir_gc_loop():
         try:
             now = time.time()
             cutoff = now - 7 * 86400
-            if os.path.isdir(UPLOAD_DIR):
-                for entry in os.listdir(UPLOAD_DIR):
-                    p = os.path.join(UPLOAD_DIR, entry)
+            if os.path.isdir(P_UPLOAD_DIR):
+                for entry in os.listdir(P_UPLOAD_DIR):
+                    p = os.path.join(P_UPLOAD_DIR, entry)
                     try:
                         if os.path.isfile(p) and os.path.getmtime(p) < cutoff:
                             os.remove(p)
@@ -94,21 +94,22 @@ async def p_upload_dir_gc_loop():
 settings = SubApp("settings", settings_lifespan)
 
 
+# Public - Used by auth.router.py, free_trial.py, subscription.router.py
 async def save_settings_async(settings_obj: AppSettings) -> None:
     """Async atomic save via thread pool; shares the lock with the sync variant."""
     payload = settings_obj.model_dump()
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _atomic_write_settings, payload)
+    await loop.run_in_executor(None, atomic_write_settings, payload)
 
 
 @settings.router.get("")
 async def get_settings():
-    return load_settings().model_dump()
+    return load_settings_from_store().model_dump()
 
 
 # Written only by their dedicated flows (Stripe activate, sign-in, signout, OAuth connects);
 # a full-object PUT from a stale renderer snapshot must never revert or forge them.
-SERVER_OWNED_FIELDS = (
+P_SERVER_OWNED_FIELDS = (
     "connection_mode",
     "openswarm_bearer_token",
     "openswarm_proxy_url",
@@ -131,8 +132,8 @@ SERVER_OWNED_FIELDS = (
 async def update_settings(body: AppSettings):
     from backend.apps.service.client import sync
 
-    old = load_settings()
-    for k in SERVER_OWNED_FIELDS:
+    old = load_settings_from_store()
+    for k in P_SERVER_OWNED_FIELDS:
         setattr(body, k, getattr(old, k, None))
 
     # If the user connects their own model while the free trial is armed, hand
@@ -140,8 +141,8 @@ async def update_settings(body: AppSettings):
     # owned, so the loop above just restored it to "free-trial") would keep them
     # pinned to the forced Haiku lane even though they pasted a real key.
     if getattr(old, "connection_mode", "own_key") == "free-trial":
-        from backend.apps.subscription.free_trial import _has_own_model
-        if _has_own_model(body):
+        from backend.apps.subscription.free_trial import has_own_model
+        if has_own_model(body):
             body.connection_mode = "own_key"
             body.free_trial_token = None
             body.free_trial_remaining = None
@@ -256,13 +257,13 @@ class AppThemeOverridePayload(BaseModel):
 @settings.router.get("/app-theme-override")
 async def get_app_theme_override():
     """Cross-app theme preference for App Builder workspaces; backend-held because each app uses its own localStorage origin."""
-    return {"mode": load_settings().app_template_theme_override}
+    return {"mode": load_settings_from_store().app_template_theme_override}
 
 
 @settings.router.put("/app-theme-override")
 async def put_app_theme_override(body: AppThemeOverridePayload):
     """MERGE the override; the general PUT /api/settings replaces the whole object and would blank secrets, logging the user out."""
-    current = load_settings()
+    current = load_settings_from_store()
     current.app_template_theme_override = body.mode
     await save_settings_async(current)
     return {"ok": True, "mode": current.app_template_theme_override}
@@ -275,7 +276,7 @@ async def get_default_system_prompt():
 
 @settings.router.post("/reset-system-prompt")
 async def reset_system_prompt():
-    current = load_settings()
+    current = load_settings_from_store()
     current.default_system_prompt = DEFAULT_SYSTEM_PROMPT
     await save_settings_async(current)
     return {"ok": True, "settings": current.model_dump()}
@@ -288,10 +289,11 @@ class BrowseResponse(BaseModel):
     files: list[str]
 
 
-UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "self-swarm-uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+P_UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "self-swarm-uploads")
+os.makedirs(P_UPLOAD_DIR, exist_ok=True)
 
 
+# Public - Used by attatchments.py
 def sniff_file_kind(contents: bytes) -> tuple[str, str | None]:
     """Classify an uploaded file as text/pdf/image/binary so the agent
     layer can route it (inline as text, send as native document/image
@@ -333,7 +335,7 @@ def sniff_file_kind(contents: bytes) -> tuple[str, str | None]:
         return ("binary", None)
 
 
-def _estimate_pdf_tokens(contents: bytes) -> int:
+def p_estimate_pdf_tokens(contents: bytes) -> int:
     """Conservative PDF token estimate without a parser dep.
 
     We use two signals and take the MAX so the chip + dry-run never
@@ -350,15 +352,15 @@ def _estimate_pdf_tokens(contents: bytes) -> int:
     Taking max() means a small page count on a huge PDF (image-heavy)
     still reads as expensive, and a huge page count on a small PDF still
     reads as expensive. The chip never lies that an attachment is cheap."""
-    import re as _re
+    import re
     by_pages = 0
     try:
         # Prefer the root catalog's /Pages entry. PDFs can have nested
         # /Count fields (outlines, sub-pages), so anchor on /Type /Pages.
-        m = _re.search(rb"/Type\s*/Pages\b[^>]{0,200}?/Count\s+(\d+)", contents, _re.DOTALL)
+        m = re.search(rb"/Type\s*/Pages\b[^>]{0,200}?/Count\s+(\d+)", contents, re.DOTALL)
         if not m:
             # Fallback: catalog declares /Pages then references /Count via /Kids.
-            m = _re.search(rb"/Pages[^>]{0,200}?/Count\s+(\d+)", contents, _re.DOTALL)
+            m = re.search(rb"/Pages[^>]{0,200}?/Count\s+(\d+)", contents, re.DOTALL)
         if m:
             pages = int(m.group(1))
             if 0 < pages < 10_000:
@@ -401,7 +403,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
         # would observe `dest` free and both would write, with the second
         # winning. O_EXCL fails the create if anyone else got there first.
         base, ext = os.path.splitext(safe_name)
-        dest = os.path.join(UPLOAD_DIR, safe_name)
+        dest = os.path.join(P_UPLOAD_DIR, safe_name)
         counter = 0
         fd = None
         while fd is None:
@@ -411,7 +413,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
                 counter += 1
                 if counter > 10_000:
                     raise HTTPException(status_code=500, detail="upload dedup exhausted")
-                dest = os.path.join(UPLOAD_DIR, f"{base}_{counter}{ext}")
+                dest = os.path.join(P_UPLOAD_DIR, f"{base}_{counter}{ext}")
         try:
             with os.fdopen(fd, "wb") as fh:
                 fh.write(contents)
@@ -432,7 +434,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
             except Exception:
                 tokens_est = min(len(contents), 512_000) // 4
         elif kind == "pdf":
-            tokens_est = _estimate_pdf_tokens(contents)
+            tokens_est = p_estimate_pdf_tokens(contents)
         elif kind == "image":
             tokens_est = 1_500
         else:
@@ -450,20 +452,20 @@ async def upload_files(files: list[UploadFile] = File(...)):
     return JSONResponse({"files": results})
 
 
-class _SummarizeRequest(BaseModel):
+class P_SummarizeRequest(BaseModel):
     path: str
     target_tokens: int = 4_000
     primary_model: Optional[str] = None
 
 
 @settings.router.post("/summarize-file")
-async def summarize_file(req: _SummarizeRequest):
+async def summarize_file(req: P_SummarizeRequest):
     """Compress an attached file down to a fact-dense summary the agent can
     still reason over without paying the full token cost.
 
     Called from the chat-input attach handler when one file alone would
     exceed 50% of the selected model's context window. The summary is
-    written to a sibling file with `.summary.txt` suffix in UPLOAD_DIR so
+    written to a sibling file with `.summary.txt` suffix in P_UPLOAD_DIR so
     the existing attachment plumbing (paths flow through context_paths)
     works unchanged. Aux model picked via provider-agnostic
     resolve_aux_model, so users on OpenAI/Gemini/OpenRouter get summarized
@@ -472,7 +474,7 @@ async def summarize_file(req: _SummarizeRequest):
     src = req.path
     if not os.path.isfile(src):
         raise HTTPException(status_code=404, detail="file not found")
-    if not os.path.commonpath([os.path.realpath(src), os.path.realpath(UPLOAD_DIR)]) == os.path.realpath(UPLOAD_DIR):
+    if not os.path.commonpath([os.path.realpath(src), os.path.realpath(P_UPLOAD_DIR)]) == os.path.realpath(P_UPLOAD_DIR):
         raise HTTPException(status_code=400, detail="path outside upload dir")
 
     try:
@@ -487,8 +489,8 @@ async def summarize_file(req: _SummarizeRequest):
     try:
         from backend.apps.agents.providers.registry import resolve_aux_model, get_api_type
         from backend.apps.settings.credentials import get_anthropic_client_for_model
-        s = load_settings()
-        aux_model, _base = await resolve_aux_model(
+        s = load_settings_from_store()
+        aux_model, _ = await resolve_aux_model(
             s,
             preferred_tier="haiku",
             primary_api=get_api_type(req.primary_model) if req.primary_model else None,
@@ -512,7 +514,7 @@ async def summarize_file(req: _SummarizeRequest):
         CHUNK_CHARS = 200_000
         is_chunked = len(raw) > CHUNK_CHARS
 
-        async def _summarize_block(text: str, target_tokens: int, label: str) -> str:
+        async def summarize_block(text: str, target_tokens: int, label: str) -> str:
             user = (
                 f"Target length: ~{target_tokens} tokens.\n\n"
                 f"<document path=\"{label}\">\n{text}\n</document>\n\n"
@@ -534,7 +536,7 @@ async def summarize_file(req: _SummarizeRequest):
             return out
 
         if not is_chunked:
-            summary = await _summarize_block(raw, req.target_tokens, os.path.basename(src))
+            summary = await summarize_block(raw, req.target_tokens, os.path.basename(src))
         else:
             chunks = [raw[i:i + CHUNK_CHARS] for i in range(0, len(raw), CHUNK_CHARS)]
             per_chunk_budget = max(800, req.target_tokens // len(chunks) + 600)
@@ -544,15 +546,15 @@ async def summarize_file(req: _SummarizeRequest):
             # provider's per-key rate limit, and a single user summarizing
             # one file will never hit that.
             partials = await asyncio.gather(*[
-                _summarize_block(ch, per_chunk_budget, f"{os.path.basename(src)} (part {i + 1} of {len(chunks)})")
+                summarize_block(ch, per_chunk_budget, f"{os.path.basename(src)} (part {i + 1} of {len(chunks)})")
                 for i, ch in enumerate(chunks)
             ])
             merge_input = "\n\n".join(f"## Part {i + 1}\n{p}" for i, p in enumerate(partials))
-            summary = await _summarize_block(merge_input, req.target_tokens, f"merged summary of {os.path.basename(src)}")
+            summary = await summarize_block(merge_input, req.target_tokens, f"merged summary of {os.path.basename(src)}")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"summarize failed: {e}")
 
-    base, _ext = os.path.splitext(src)
+    base, _ = os.path.splitext(src)
     dest = f"{base}.summary.txt"
     counter = 1
     while os.path.exists(dest):

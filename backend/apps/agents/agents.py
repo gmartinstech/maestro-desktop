@@ -402,7 +402,7 @@ async def subscriptions_poll(body: dict):
         )
         if result.get("success"):
             from backend.apps.service.client import sync as _sync
-            from backend.apps.settings.settings import load_settings
+            from backend.apps.settings.store import load_settings
             _sync(load_settings().model_dump())
         return result
     except Exception as e:
@@ -426,7 +426,7 @@ async def subscriptions_exchange(body: dict):
         result = await exchange_oauth(provider, code, redirect_uri, code_verifier, state)
         if result.get("success"):
             from backend.apps.service.client import sync as _sync
-            from backend.apps.settings.settings import load_settings
+            from backend.apps.settings.store import load_settings
             _sync(load_settings().model_dump())
         return result
     except Exception as e:
@@ -458,7 +458,7 @@ async def probe_model(body: dict):
             _find_builtin_model,
             _NINEROUTER_MODEL_PREFIXES,
         )
-        from backend.apps.settings.settings import load_settings
+        from backend.apps.settings.store import load_settings
         from backend.apps.nine_router.process import is_running
         settings = load_settings()
         api_type = get_api_type(short_name)
@@ -525,7 +525,7 @@ async def list_models():
     """Picker model list, grouped by provider, intersected with available creds."""
     from backend.apps.agents.providers.registry import BUILTIN_MODELS
     from backend.apps.nine_router.process import is_running, get_providers
-    from backend.apps.settings.settings import load_settings
+    from backend.apps.settings.store import load_settings
 
     settings = load_settings()
     nine_router_up = is_running()
@@ -818,7 +818,7 @@ async def subscriptions_disconnect(body: dict):
         removed = await _delete_provider_connections(to_remove)
         if removed:
             from backend.apps.service.client import sync as _sync
-            from backend.apps.settings.settings import load_settings
+            from backend.apps.settings.store import load_settings
             _sync(load_settings().model_dump())
             return {"ok": True}
         return {"ok": False, "error": "Connection not found"}

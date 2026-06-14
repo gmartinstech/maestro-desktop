@@ -13,7 +13,7 @@ from backend.apps.agents.core.models import (
     AgentConfig, AgentSession, Message, MessageBranch, ApprovalRequest, ToolGroupMeta,
 )
 from backend.apps.agents.core.ws_manager import ws_manager
-from backend.apps.settings.settings import load_settings
+from backend.apps.settings.store import load_settings
 from backend.apps.tools_lib.tools_lib import (
     _load_all as load_all_tools,
     derive_mcp_config,

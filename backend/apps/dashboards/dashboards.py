@@ -315,7 +315,7 @@ async def generate_name(dashboard_id: str):
 
     fallback = " ".join(prompts[0].split()[:4])[:36] or "Untitled Dashboard"
     try:
-        from backend.apps.settings.settings import load_settings
+        from backend.apps.settings.store import load_settings
         from backend.apps.settings.credentials import get_anthropic_client_for_model
         from backend.apps.agents.providers.registry import resolve_aux_model
         global_settings = load_settings()

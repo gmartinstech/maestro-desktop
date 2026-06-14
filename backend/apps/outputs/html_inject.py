@@ -32,7 +32,7 @@ def get_anthropic_client(api_model: str | None = None):
         get_anthropic_client,
         get_anthropic_client_for_model,
     )
-    from backend.apps.settings.settings import load_settings
+    from backend.apps.settings.store import load_settings
     settings = load_settings()
     if api_model:
         return get_anthropic_client_for_model(settings, api_model)

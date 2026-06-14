@@ -323,7 +323,7 @@ def p_pick_upstream(model: str) -> tuple[str, dict[str, str]]:
          user has their own key, avoids the 8h OAuth expiry pain)
       3. Fallback → 9router (cc/ OAuth subscription, may 401 if expired)
     Everything non-Claude goes to 9router for translation."""
-    from backend.apps.settings.settings import load_settings
+    from backend.apps.settings.store import load_settings
     s = load_settings()
 
     if p_is_claude_model(model):
@@ -384,7 +384,7 @@ async def proxy(rest: str, request: Request):
             forward_to_openai,
             forward_to_openrouter,
         )
-        from backend.apps.settings.settings import load_settings
+        from backend.apps.settings.store import load_settings
         s = load_settings()
         if p_is_openai_max_completion_tokens_model(model):
             oak = (getattr(s, "openai_api_key", "") or "").strip()
