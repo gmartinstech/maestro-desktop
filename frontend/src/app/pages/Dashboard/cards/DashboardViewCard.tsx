@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Box from '@mui/material/Box';
+import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -10,7 +11,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import { Output, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { setViewCardPosition, setViewCardSize, removeViewCard } from '@/shared/state/dashboardLayoutSlice';
-import { useAppDispatch } from '@/shared/hooks';
+import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ViewPreview, { ViewPreviewHandle } from '@/app/pages/Views/ViewPreview';
@@ -407,6 +408,7 @@ const DashboardViewCard: React.FC<Props> = ({
           inputData={inputData}
           backendResult={backendResult}
         />
+        <BuildingOverlay sessionId={output.session_id ?? null} />
       </Box>
 
       {/* Resize handles */}
@@ -480,6 +482,51 @@ const DashboardViewCard: React.FC<Props> = ({
 };
 
 export default React.memo(DashboardViewCard);
+
+// Calm overlay shown while the App Builder chat that owns this output is
+// actively editing it. Hides whatever transient half-broken state the agent
+// might be writing through (a missing import, a syntax error mid-keystroke)
+// so the user sees "Building..." instead of an error iframe. Fades in/out.
+const BuildingOverlay: React.FC<{ sessionId: string | null }> = ({ sessionId }) => {
+  const c = useClaudeTokens();
+  const status = useAppSelector((s) => (sessionId ? s.agents.sessions[sessionId]?.status : undefined));
+  const isBuilding = status === 'running' || status === 'waiting_approval';
+  return (
+    <Fade in={isBuilding} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 11,
+          bgcolor: c.bg.surface,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 1.25,
+          // Block pointer events to the iframe behind so user can't click into the half-built app.
+          pointerEvents: 'auto',
+        }}
+      >
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            bgcolor: c.accent.primary,
+            animation: 'view-card-building-pulse 1.2s ease-in-out infinite',
+            '@keyframes view-card-building-pulse': {
+              '0%, 100%': { opacity: 0.35, transform: 'scale(0.85)' },
+              '50%': { opacity: 1, transform: 'scale(1)' },
+            },
+          }}
+        />
+        <Typography sx={{ color: c.text.secondary, fontSize: '0.85rem', fontWeight: 500 }}>
+          Building…
+        </Typography>
+      </Box>
+    </Fade>
+  );
+};
 
 // Old-mode outputs render the legacy serve URL; new-mode webapp_template outputs attach to a runtime and point the webview at Vite once frontend_url arrives.
 const DashboardOutputPreview: React.FC<{

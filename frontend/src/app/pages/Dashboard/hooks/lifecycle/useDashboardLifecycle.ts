@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject, type RefObject } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import { report } from '@/shared/serviceClient';
 import { store } from '@/shared/state/store';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -40,7 +40,6 @@ interface UseDashboardLifecycleArgs {
   handleHighlightCard: (cardId: string) => void;
   hasFittedRef: MutableRefObject<boolean>;
   restoredExpandedRef: MutableRefObject<boolean>;
-  pendingViewBuilderSessionsRef: RefObject<Set<string>>;
 }
 
 export function useDashboardLifecycle({
@@ -57,7 +56,6 @@ export function useDashboardLifecycle({
   handleHighlightCard,
   hasFittedRef,
   restoredExpandedRef,
-  pendingViewBuilderSessionsRef,
 }: UseDashboardLifecycleArgs) {
   const dispatch = useAppDispatch();
   const pendingBrowserUrl = useAppSelector((state) => state.tempState.pendingBrowserUrl);
@@ -256,27 +254,35 @@ export function useDashboardLifecycle({
     }
   }, [layoutInitialized, outputsLoaded, viewCards, outputs, dispatch]);
 
-  // App Builder auto-open: when a view-builder session launched on this
-  // dashboard, useAgentSpawn parks its id in pendingViewBuilderSessionsRef.
-  // The backend then seeds an Output row and broadcasts agent:output_upserted;
-  // when that lands in outputsSlice we drop a ViewCard next to the chat so the
-  // user sees the app appear without a manual "open" step. Per-mount tracked
-  // (not redux) so a manual close after auto-open stays closed.
+  // On first load after outputs settle, snapshot every existing Output id as
+  // "already accounted for." Any output that ARRIVES later (typically the
+  // agent:output_upserted WS broadcast the backend fires the instant a
+  // view-builder session is seeded, at session start) whose session_id points
+  // at a view-builder chat on this dashboard gets a view card dropped on the
+  // canvas right away. Per-mount tracked so a manual close after auto-open
+  // stays closed. Prior approach keyed off a pending-set populated inside
+  // launchAndSendFirstMessage.then(): the WS upsert won the race and the
+  // effect saw an empty set, so the card didn't pop until the session-end
+  // meta-sync re-broadcast.
+  const autoOpenedOutputsRef = useRef<Set<string>>(new Set());
+  const outputsSnapshottedRef = useRef<boolean>(false);
   useEffect(() => {
-    if (!layoutInitialized) return;
-    const pending = pendingViewBuilderSessionsRef.current;
-    if (!pending || pending.size === 0) return;
+    if (!layoutInitialized || !outputsLoaded) return;
+    if (!outputsSnapshottedRef.current) {
+      for (const oid of Object.keys(outputs)) autoOpenedOutputsRef.current.add(oid);
+      outputsSnapshottedRef.current = true;
+      return;
+    }
     for (const output of Object.values(outputs)) {
+      if (autoOpenedOutputsRef.current.has(output.id)) continue;
       const sid = output.session_id;
-      if (!sid || !pending.has(sid)) continue;
-      if (viewCards[output.id]) {
-        pending.delete(sid);
-        continue;
-      }
-      // Let addViewCard pick a collision-free grid cell; the auto-fit below
-      // pans/zooms to show the chat + new view card together regardless.
+      if (!sid) continue;
+      const sess = sessions[sid];
+      if (!sess || sess.mode !== 'view-builder') continue;
+      if (sess.dashboard_id !== dashboardId) continue;
+      autoOpenedOutputsRef.current.add(output.id);
+      if (viewCards[output.id]) continue;
       dispatch(addViewCard({ outputId: output.id, expandedSessionIds }));
-      pending.delete(sid);
       const outputId = output.id;
       setTimeout(() => {
         const vc = store.getState().dashboardLayout.viewCards[outputId];
@@ -288,7 +294,7 @@ export function useDashboardLifecycle({
         handleHighlightCard(outputId);
       }, 200);
     }
-  }, [layoutInitialized, outputs, viewCards, expandedSessionIds, dispatch, canvasActions, handleHighlightCard, pendingViewBuilderSessionsRef]);
+  }, [layoutInitialized, outputsLoaded, outputs, sessions, viewCards, dashboardId, expandedSessionIds, dispatch, canvasActions, handleHighlightCard]);
 
   const namedOnFirstMessageRef = useRef<string | null>(null);
   useEffect(() => {

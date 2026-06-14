@@ -38,7 +38,6 @@ interface UseAgentSpawnArgs {
   setToolbarOpen: Dispatch<SetStateAction<boolean>>;
   setAutoFocusSessionId: Dispatch<SetStateAction<string | null>>;
   setPendingSelectSessionId: Dispatch<SetStateAction<string | null>>;
-  pendingViewBuilderSessionsRef: RefObject<Set<string>>;
 }
 
 export function useAgentSpawn({
@@ -55,7 +54,6 @@ export function useAgentSpawn({
   setToolbarOpen,
   setAutoFocusSessionId,
   setPendingSelectSessionId,
-  pendingViewBuilderSessionsRef,
 }: UseAgentSpawnArgs) {
   const dispatch = useAppDispatch();
 
@@ -157,12 +155,6 @@ export function useAgentSpawn({
       ).then((action) => {
         if (launchAndSendFirstMessage.fulfilled.match(action)) {
           const realId = action.payload.session.id;
-          // App Builder chats expect a view card to pop in next to the chat
-          // once the backend seeds its Output row. Register the session id
-          // so useDashboardLifecycle's output watcher can do the auto-open.
-          if (mode === 'view-builder') {
-            pendingViewBuilderSessionsRef.current?.add(realId);
-          }
           dispatch(generateTitle({ sessionId: realId, prompt }));
           if (selectedBrowserIds?.length) {
             dispatch(setGlowingBrowserCards({ browserIds: selectedBrowserIds, sessionId: realId, label: 'Use Browser' }));
