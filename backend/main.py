@@ -8,13 +8,13 @@ from uuid import uuid4
 # invisible because nothing configured the 'backend' logger; every debugging
 # session re-paid that blindness. Idempotent so uvicorn reloads don't stack
 # handlers; uvicorn's own access logs are untouched.
-_backend_logger = logging.getLogger("backend")
-if not _backend_logger.handlers:
-    _h = logging.StreamHandler()
-    _h.setFormatter(logging.Formatter("%(asctime)s %(levelname).1s %(name)s: %(message)s", "%H:%M:%S"))
-    _backend_logger.addHandler(_h)
-    _backend_logger.setLevel(logging.INFO)
-    _backend_logger.propagate = False
+P_BACKEND_LOGGER = logging.getLogger("backend")
+if not P_BACKEND_LOGGER.handlers:
+    h = logging.StreamHandler()
+    h.setFormatter(logging.Formatter("%(asctime)s %(levelname).1s %(name)s: %(message)s", "%H:%M:%S"))
+    P_BACKEND_LOGGER.addHandler(h)
+    P_BACKEND_LOGGER.setLevel(logging.INFO)
+    P_BACKEND_LOGGER.propagate = False
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +74,12 @@ install_token_scrubber()
 # carries it. Platform-agnostic; wrapped so a settings hiccup never blocks
 # startup, and the lazy path stays as a fallback.
 try:
-    import uuid as _uuid
-    from backend.apps.settings.store import load_settings as _load_boot_settings, save_settings as _save_boot_settings
-    _boot_settings = _load_boot_settings()
-    if not getattr(_boot_settings, "installation_id", None):
-        _boot_settings.installation_id = _uuid.uuid4().hex
-        _save_boot_settings(_boot_settings)
+    import uuid
+    from backend.apps.settings.store import load_settings, save_settings
+    boot_settings = load_settings()
+    if not getattr(boot_settings, "installation_id", None):
+        boot_settings.installation_id = uuid.uuid4().hex
+        save_settings(boot_settings)
 except Exception:
     pass
 
@@ -114,7 +114,7 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def _auth_middleware(request: Request, call_next):
+async def auth_middleware(request: Request, call_next):
     """Reject HTTP requests without our per-install bearer token.
 
     Exemptions (see `auth.is_path_exempt`):
@@ -147,9 +147,9 @@ async def _auth_middleware(request: Request, call_next):
         # /api/outputs/.../serve/index.html via <iframe src="...">.
         auth_ok = request_matches_token(headers, query_params=dict(request.query_params))
         if not auth_ok and x_api_key:
-            import secrets as _s
-            from backend.auth import get_auth_token as _gt
-            auth_ok = _s.compare_digest(x_api_key, _gt() or "\x00")
+            import secrets
+            from backend.auth import get_auth_token
+            auth_ok = secrets.compare_digest(x_api_key, get_auth_token() or "\x00")
         if not auth_ok:
             logger.warning(
                 f"auth: rejecting {request.method} {request.url.path} "
@@ -184,7 +184,7 @@ async def websocket_session(websocket: WebSocket, session_id: str):
         things that end a run are: natural completion, explicit
         `agent:stop`, REST `/close`, or process shutdown.
     """
-    if not _ws_auth_ok(websocket):
+    if not p_ws_auth_ok(websocket):
         return
     await ws_manager.connect_session(session_id, websocket)
     try:
@@ -257,7 +257,7 @@ async def websocket_session(websocket: WebSocket, session_id: str):
         # the agent task, that's intentional. See module docstring.
         ws_manager.disconnect_session(session_id, websocket)
 
-def _ws_auth_ok(websocket: WebSocket) -> bool:
+def p_ws_auth_ok(websocket: WebSocket) -> bool:
     """Validate token + origin before accepting a WS. Returns True if OK.
 
     On failure closes with 4401 (custom app-level code) and returns False,
@@ -273,8 +273,7 @@ def _ws_auth_ok(websocket: WebSocket) -> bool:
         logger.warning(f"ws: rejecting connection to {websocket.url.path}, {reason}")
         # Can't `await websocket.close()` before accept(), so schedule the
         # close in a task. The client receives a 403 on handshake.
-        import asyncio as _asyncio
-        _asyncio.create_task(websocket.close(code=4401))
+        asyncio.create_task(websocket.close(code=4401))
         return False
     return True
 
@@ -285,7 +284,7 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
     pane. On connect we replay the runtime's ring buffer so a Terminal
     tab opened mid-session sees the context it missed, then we tail
     every subsequent line until disconnect."""
-    if not _ws_auth_ok(websocket):
+    if not p_ws_auth_ok(websocket):
         return
     await websocket.accept()
     from backend.apps.outputs.runtime import RUNTIME_MANAGER
@@ -318,15 +317,15 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
     # primed with existing lines before we enter the loop.
     queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
 
-    def _on_line(line) -> None:
+    def on_line(line) -> None:
         try:
             queue.put_nowait((line.stream, line.text))
         except asyncio.QueueFull:
             pass
 
-    unsubscribe = rt.subscribe(_on_line)
+    unsubscribe = rt.subscribe(on_line)
 
-    def _build_status_frame() -> dict:
+    def build_status_frame() -> dict:
         return {
             "event": "runtime:status",
             "workspace_id": workspace_id,
@@ -346,7 +345,7 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
         # new-mode preview pointer (Vite dev server); `backend_url` is
         # the workspace's optional FastAPI backend (old-mode backend.py
         # OR new-mode post-backend_init.sh).
-        await websocket.send_text(json.dumps(_build_status_frame()))
+        await websocket.send_text(json.dumps(build_status_frame()))
         while True:
             stream, text = await queue.get()
             await websocket.send_text(json.dumps({
@@ -361,7 +360,7 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
             # to the Vite URL and the preview pane has to know to
             # switch over. Re-push status after every runtime line.
             if stream == "runtime":
-                await websocket.send_text(json.dumps(_build_status_frame()))
+                await websocket.send_text(json.dumps(build_status_frame()))
     except WebSocketDisconnect:
         pass
     finally:
@@ -370,7 +369,7 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
 
 @app.websocket("/ws/dashboard")
 async def websocket_dashboard(websocket: WebSocket):
-    if not _ws_auth_ok(websocket):
+    if not p_ws_auth_ok(websocket):
         return
     await ws_manager.connect_global(websocket)
     try:
@@ -446,7 +445,7 @@ async def subscriptions_pending(state: str):
     }, headers={"Access-Control-Allow-Origin": "*"})
 
 
-_SUCCESS_HTML = (
+P_SUCCESS_HTML = (
     '<html><body style="background:#1a1a1a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">'
     '<div style="text-align:center">'
     '<div style="width:64px;height:64px;border-radius:50%;background:#22c55e20;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:32px">&#10003;</div>'
@@ -490,7 +489,7 @@ async def subscriptions_callback(request: Request):
         # Chrome's prefetcher and some extensions speculatively GET URLs.
         if state and state in COMPLETED_OAUTH:
             logger.info(f"Duplicate OAuth callback for state {state[:8]}... (already completed)")
-            return HTMLResponse(_SUCCESS_HTML)
+            return HTMLResponse(P_SUCCESS_HTML)
         logger.warning(f"OAuth callback with unknown state {state[:8] if state else '(empty)'}...")
         return HTMLResponse('<html><body style="background:#1a1a1a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><div style="text-align:center"><h2>Session expired</h2><p style="color:#888">Please try connecting again.</p></div></body></html>')
 
@@ -508,7 +507,7 @@ async def subscriptions_callback(request: Request):
 
     mark_oauth_completed(state)
     logger.info(f"OAuth exchange succeeded for provider={pending.get('provider')}")
-    return HTMLResponse(_SUCCESS_HTML)
+    return HTMLResponse(P_SUCCESS_HTML)
 
 
 @app.post("/api/browser-agent/run")
@@ -550,7 +549,7 @@ async def mcp_meta(action: str, request: Request):
         valid options instead of activating (anti-hallucination).
     """
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.tools_lib.tools_lib import _load_all as load_all_tools
+    from backend.apps.tools_lib.tools_lib import load_all_tools
     from backend.apps.tools_lib.mcp_config import sanitize_mcp_server_name
 
     body = await request.json()
@@ -562,7 +561,7 @@ async def mcp_meta(action: str, request: Request):
     # sanitized server names; values are extra search-hint tokens appended
     # to the haystack. Only generic synonyms, anything that's already in
     # the description doesn't need to be listed.
-    _SERVER_SEARCH_ALIASES: dict[str, list[str]] = {
+    P_SERVER_SEARCH_ALIASES: dict[str, list[str]] = {
         "google-workspace": [
             "email", "inbox", "mail", "gmail", "calendar", "schedule",
             "events", "drive", "docs", "sheets", "spreadsheet", "slides",
@@ -582,7 +581,7 @@ async def mcp_meta(action: str, request: Request):
         "youtube": ["video", "transcript", "channel"],
     }
 
-    def _connected_servers() -> list[dict]:
+    def connected_servers() -> list[dict]:
         out = []
         for t in load_all_tools():
             if not (t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")):
@@ -597,7 +596,7 @@ async def mcp_meta(action: str, request: Request):
                     action_names = [str(k) for k in td.keys() if not str(k).startswith("_")]
             except Exception:
                 pass
-            aliases = _SERVER_SEARCH_ALIASES.get(sanitized, [])
+            aliases = P_SERVER_SEARCH_ALIASES.get(sanitized, [])
             out.append({
                 "name": sanitized,
                 "description": (t.description or "").strip() or f"{t.name} integration",
@@ -606,20 +605,20 @@ async def mcp_meta(action: str, request: Request):
             })
         return out
 
-    def _strip_extras(s: dict) -> dict:
+    def strip_extras(s: dict) -> dict:
         return {k: v for k, v in s.items() if not k.startswith("_")}
 
     if action == "list":
-        servers = _connected_servers()
+        servers = connected_servers()
         session = agent_manager.sessions.get(parent_session_id) if parent_session_id else None
         active_set = set(session.active_mcps) if session else set()
-        active = [{**_strip_extras(s), "status": "active"} for s in servers if s["name"] in active_set]
-        available = [{**_strip_extras(s), "status": "available"} for s in servers if s["name"] not in active_set]
+        active = [{**strip_extras(s), "status": "active"} for s in servers if s["name"] in active_set]
+        available = [{**strip_extras(s), "status": "available"} for s in servers if s["name"] not in active_set]
         return JSONResponse({"active": active, "available": available})
 
     if action == "search":
         query = (body.get("query") or "").strip().lower()
-        servers = _connected_servers()
+        servers = connected_servers()
         session = agent_manager.sessions.get(parent_session_id) if parent_session_id else None
         active_set = set(session.active_mcps) if session else set()
         # Ranking: substring hits across name+description+sub-tool names+
@@ -644,7 +643,7 @@ async def mcp_meta(action: str, request: Request):
                     else:
                         score += 1
             if score:
-                annotated = {**_strip_extras(s), "status": "active" if s["name"] in active_set else "available"}
+                annotated = {**strip_extras(s), "status": "active" if s["name"] in active_set else "available"}
                 scored.append((score, annotated))
         scored.sort(key=lambda t: (-t[0], 0 if t[1]["status"] == "active" else 1, t[1]["name"]))
         matches = [s for _, s in scored[:5]]
@@ -660,7 +659,7 @@ async def mcp_meta(action: str, request: Request):
         if not session:
             return JSONResponse({"error": "session not found"}, status_code=404)
 
-        servers = _connected_servers()
+        servers = connected_servers()
         valid_names = {s["name"] for s in servers}
         if server_name not in valid_names:
             return JSONResponse({"status": "unknown_server", "available": sorted(valid_names)})
@@ -681,8 +680,8 @@ async def mcp_meta(action: str, request: Request):
         if session.sdk_session_id:
             session.needs_fresh_session = True
         try:
-            from backend.apps.agents.core.ws_manager import ws_manager as _ws
-            await _ws.send_to_session(parent_session_id, "agent:status", {
+            from backend.apps.agents.core.ws_manager import ws_manager
+            await ws_manager.send_to_session(parent_session_id, "agent:status", {
                 "session_id": parent_session_id,
                 "status": session.status,
                 "session": session.model_dump(mode="json"),
@@ -749,14 +748,14 @@ async def session_compact(session_id: str):
     only sets the marker; the button is the user opting into the cost).
     """
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.core.ws_manager import ws_manager as _ws
+    from backend.apps.agents.core.ws_manager import ws_manager
     session = agent_manager.sessions.get(session_id)
     if not session:
         return JSONResponse({"error": "session not found"}, status_code=404)
     did_compact = agent_manager._maybe_compact(session, force=True)
     if did_compact:
         session.needs_fresh_session = True
-    await _ws.send_to_session(session_id, "agent:context_status", {
+    await ws_manager.send_to_session(session_id, "agent:context_status", {
         "session_id": session_id,
         "reason": "compacted_manual" if did_compact else "noop",
         "compacted_through_msg_id": session.compacted_through_msg_id,
@@ -768,7 +767,7 @@ async def session_compact(session_id: str):
 async def session_clear(session_id: str):
     """Wipe the session's UI history AND its SDK convo state (/clear slash cmd, Reset history button)."""
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.core.ws_manager import ws_manager as _ws
+    from backend.apps.agents.core.ws_manager import ws_manager
     from backend.apps.agents.core.models import MessageBranch
     session = agent_manager.sessions.get(session_id)
     if not session:
@@ -784,12 +783,12 @@ async def session_clear(session_id: str):
     session.branches = {"main": MessageBranch(id="main")}
     session.active_branch_id = "main"
     session.tool_group_meta = {}
-    await _ws.send_to_session(session_id, "agent:status", {
+    await ws_manager.send_to_session(session_id, "agent:status", {
         "session_id": session_id,
         "status": session.status,
         "session": session.model_dump(mode="json"),
     })
-    await _ws.send_to_session(session_id, "agent:context_status", {
+    await ws_manager.send_to_session(session_id, "agent:context_status", {
         "session_id": session_id,
         "reason": "cleared",
     })
@@ -841,7 +840,7 @@ if __name__ == "__main__":
 
     import uvicorn.config
 
-    class _ReadyServer(uvicorn.Server):
+    class P_ReadyServer(uvicorn.Server):
         """Subclass that prints a machine-readable READY line on startup."""
         async def startup(self, sockets=None):
             await super().startup(sockets)
@@ -851,6 +850,6 @@ if __name__ == "__main__":
         uvicorn.run("backend.main:app", host=args.host, port=args.port, reload=True)
     else:
         config = uvicorn.Config("backend.main:app", host=args.host, port=args.port)
-        server = _ReadyServer(config)
+        server = P_ReadyServer(config)
         import asyncio
         asyncio.run(server.serve())

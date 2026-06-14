@@ -10,10 +10,10 @@ from backend.config.paths import AUTH_TOKEN_FILE
 
 logger = logging.getLogger(__name__)
 
-_TOKEN: str = ""
+TOKEN: str = ""
 
 
-def _write_atomic(path: str, data: str, mode: int = 0o600) -> None:
+def p_write_atomic(path: str, data: str, mode: int = 0o600) -> None:
     """Atomic write to `path` at the given file mode; never world-readable or half-written."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
@@ -29,100 +29,102 @@ def _write_atomic(path: str, data: str, mode: int = 0o600) -> None:
     os.replace(tmp, path)
 
 
+# Public - called by main.py
 def init_auth_token() -> str:
     """Load the per-install token from disk, or mint one if missing; reused across restarts so Electron's cached copy stays valid."""
-    global _TOKEN
+    global TOKEN
     try:
         if os.path.exists(AUTH_TOKEN_FILE):
             with open(AUTH_TOKEN_FILE, "r", encoding="utf-8") as f:
                 existing = f.read().strip()
             if existing and 16 <= len(existing) <= 512:
-                _TOKEN = existing
+                TOKEN = existing
                 logger.info(
                     f"auth: reusing existing token from {AUTH_TOKEN_FILE}"
                 )
-                return _TOKEN
+                return TOKEN
     except Exception as e:
         logger.warning(f"auth: failed to read existing token, generating new: {e}")
 
-    _TOKEN = secrets.token_urlsafe(32)
+    TOKEN = secrets.token_urlsafe(32)
     try:
-        _write_atomic(AUTH_TOKEN_FILE, _TOKEN, mode=0o600)
+        p_write_atomic(AUTH_TOKEN_FILE, TOKEN, mode=0o600)
         logger.info(f"auth: wrote token to {AUTH_TOKEN_FILE} (mode 0600)")
     except Exception as e:
         # If we can't write the file, Electron can't read it; log loudly but don't crash.
         logger.error(f"auth: failed to write token file: {e}")
-    return _TOKEN
+    return TOKEN
 
 
+# Public - called by main.py
 def get_auth_token() -> str:
     """Return the current token. Empty string if init_auth_token() hasn't run."""
-    return _TOKEN
+    return TOKEN
 
 
-class _TokenScrubFilter(logging.Filter):
+class P_TokenScrubFilter(logging.Filter):
     """Logging filter that redacts the install token from log records (defense in depth)."""
 
-    _PLACEHOLDER = "<REDACTED:openswarm-token>"
+    P_PLACEHOLDER = "<REDACTED:openswarm-token>"
 
     @staticmethod
-    def _args_might_contain_token(args) -> bool:
+    def p_args_might_contain_token(args) -> bool:
         """Cheap pre-check; avoids eager %-formatting on the >99% of records that don't mention the token."""
         if not args:
             return False
         items = args if isinstance(args, (tuple, list)) else (args,)
         for a in items:
-            if isinstance(a, str) and _TOKEN in a:
+            if isinstance(a, str) and TOKEN in a:
                 return True
             if isinstance(a, dict):
                 for v in a.values():
-                    if isinstance(v, str) and _TOKEN in v:
+                    if isinstance(v, str) and TOKEN in v:
                         return True
         return False
 
     @classmethod
-    def _scrub_args(cls, args):
+    def p_scrub_args(cls, args):
         """Scrub token from args while preserving tuple/dict shape; uvicorn's AccessFormatter unpacks args as a 5-tuple and explodes on None."""
         if args is None:
             return args
         if isinstance(args, dict):
             new_dict = None
             for k, v in args.items():
-                if isinstance(v, str) and _TOKEN in v:
+                if isinstance(v, str) and TOKEN in v:
                     if new_dict is None:
                         new_dict = dict(args)
-                    new_dict[k] = v.replace(_TOKEN, cls._PLACEHOLDER)
+                    new_dict[k] = v.replace(TOKEN, cls.P_PLACEHOLDER)
             return new_dict if new_dict is not None else args
         if isinstance(args, tuple):
             new_list = None
             for i, v in enumerate(args):
-                if isinstance(v, str) and _TOKEN in v:
+                if isinstance(v, str) and TOKEN in v:
                     if new_list is None:
                         new_list = list(args)
-                    new_list[i] = v.replace(_TOKEN, cls._PLACEHOLDER)
+                    new_list[i] = v.replace(TOKEN, cls.P_PLACEHOLDER)
             return tuple(new_list) if new_list is not None else args
-        if isinstance(args, str) and _TOKEN in args:
-            return args.replace(_TOKEN, cls._PLACEHOLDER)
+        if isinstance(args, str) and TOKEN in args:
+            return args.replace(TOKEN, cls.P_PLACEHOLDER)
         return args
 
     def filter(self, record: logging.LogRecord) -> bool:  # pragma: no cover (defensive)
-        if not _TOKEN:
+        if not TOKEN:
             return True
         # Fast path: skip eager %-formatting on records that don't mention the token.
         raw_msg = record.msg if isinstance(record.msg, str) else ""
-        if _TOKEN not in raw_msg and not self._args_might_contain_token(record.args):
+        if TOKEN not in raw_msg and not self.p_args_might_contain_token(record.args):
             return True
         # Slow path: in-place args rewrite (preserves shape for AccessFormatter), then re-render to catch tokens buried in custom reprs.
         try:
-            if isinstance(record.msg, str) and _TOKEN in record.msg:
-                record.msg = record.msg.replace(_TOKEN, self._PLACEHOLDER)
+            if isinstance(record.msg, str) and TOKEN in record.msg:
+                record.msg = record.msg.replace(TOKEN, self.P_PLACEHOLDER)
             scrubbed = self._scrub_args(record.args)
             if scrubbed is not record.args:
                 record.args = scrubbed
             try:
                 rendered = record.getMessage()
-                if _TOKEN in rendered:
-                    record.msg = rendered.replace(_TOKEN, self._PLACEHOLDER)
+                if TOKEN in rendered:
+                    record.msg = rendered.replace(TOKEN, self.P_PLACEHOLDER)
                     record.args = None
             except Exception:
                 pass
@@ -132,19 +134,20 @@ class _TokenScrubFilter(logging.Filter):
         return True
 
 
-_scrubber_installed = False
+P_SCRUBBER_INSTALLED = False
 
 
+# Public - called by main.py
 def install_token_scrubber() -> None:
     """Attach the scrubbing filter to every existing AND future log handler; logger-level filters miss propagated child records."""
-    global _scrubber_installed
-    if _scrubber_installed:
+    global P_SCRUBBER_INSTALLED
+    if P_SCRUBBER_INSTALLED:
         return
 
-    scrubber = _TokenScrubFilter()
+    scrubber = P_TokenScrubFilter()
 
-    def _attach(handler: logging.Handler) -> None:
-        if not any(isinstance(f, _TokenScrubFilter) for f in handler.filters):
+    def attach(handler: logging.Handler) -> None:
+        if not any(isinstance(f, P_TokenScrubFilter) for f in handler.filters):
             handler.addFilter(scrubber)
 
     loggers: list[logging.Logger] = [logging.getLogger()]
@@ -153,26 +156,26 @@ def install_token_scrubber() -> None:
             loggers.append(logger)
     for logger in loggers:
         for h in list(logger.handlers):
-            _attach(h)
+            attach(h)
 
     # Patch addHandler so handlers attached later (uvicorn finishes log config after main.py imports) get the scrubber too.
-    _original_addHandler = logging.Logger.addHandler
+    original_addHandler = logging.Logger.addHandler
 
-    def _patched_addHandler(self: logging.Logger, hdlr: logging.Handler) -> None:
-        _attach(hdlr)
-        return _original_addHandler(self, hdlr)
+    def patched_addHandler(self: logging.Logger, hdlr: logging.Handler) -> None:
+        attach(hdlr)
+        return original_addHandler(self, hdlr)
 
-    logging.Logger.addHandler = _patched_addHandler  # type: ignore[assignment]
+    logging.Logger.addHandler = patched_addHandler  # type: ignore[assignment]
 
     root = logging.getLogger()
-    if not any(isinstance(f, _TokenScrubFilter) for f in root.filters):
+    if not any(isinstance(f, P_TokenScrubFilter) for f in root.filters):
         root.addFilter(scrubber)
 
-    _scrubber_installed = True
+    P_SCRUBBER_INSTALLED = True
 
 
 # Auth-exempt paths: external redirects with their own nonce/state validation, plus the bootstrap health probe.
-_AUTH_EXEMPT_EXACT = {
+P_AUTH_EXEMPT_EXACT = {
     "/api/subscriptions/callback",
     "/api/tools/oauth/callback",
     "/api/tools/oauth/cloud-claim",
@@ -191,7 +194,7 @@ _AUTH_EXEMPT_EXACT = {
     "/api/dev/token",
 }
 
-_AUTH_EXEMPT_PREFIX = (
+P_AUTH_EXEMPT_PREFIX = (
     # Electron polls /api/health/check before loading the token.
     "/api/health",
     # 9Router proxies OpenAI requests with the user's sk-... bearer, not our local token; localhost-only is the gate.
@@ -203,11 +206,12 @@ _AUTH_EXEMPT_PREFIX = (
 )
 
 
+# Public - called by main.py
 def is_path_exempt(path: str) -> bool:
     """True if this request path bypasses token auth."""
-    if path in _AUTH_EXEMPT_EXACT:
+    if path in P_AUTH_EXEMPT_EXACT:
         return True
-    for p in _AUTH_EXEMPT_PREFIX:
+    for p in P_AUTH_EXEMPT_PREFIX:
         if path.startswith(p):
             return True
     return False
@@ -224,9 +228,10 @@ def extract_bearer(header_value: str | None) -> str:
     return ""
 
 
+# Public - called by main.py
 def request_matches_token(request_headers: dict, query_params: dict | None = None) -> bool:
     """Validate that an HTTP/WS request carries our token (Bearer, x-openswarm-token, or ?token=); constant-time compare."""
-    if not _TOKEN:
+    if not TOKEN:
         # Backend not initialized: fail closed. Only test fixtures that bypass main hit this.
         return False
 
@@ -250,13 +255,13 @@ def request_matches_token(request_headers: dict, query_params: dict | None = Non
             candidates.append(qp_token)
 
     for candidate in candidates:
-        if secrets.compare_digest(candidate, _TOKEN):
+        if secrets.compare_digest(candidate, TOKEN):
             return True
     return False
 
 
 # WS Origin allowlist: Electron packaged is file://, dev is localhost:3000, some Electron contexts send bare "null".
-_ORIGIN_ALLOWLIST_DEV = {
+P_ORIGIN_ALLOWLIST_DEV = {
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "file://",
@@ -264,12 +269,13 @@ _ORIGIN_ALLOWLIST_DEV = {
 }
 
 
+# Public - called by main.py
 def is_origin_allowed(origin: str | None) -> bool:
     """True if the WS connection's Origin header is from our app."""
     if origin is None:
         # Native WS client / curl / MCP subprocess: token check still required, so allow.
         return True
-    if origin in _ORIGIN_ALLOWLIST_DEV:
+    if origin in P_ORIGIN_ALLOWLIST_DEV:
         return True
     # Packaged Electron file:// includes paths like file:///Applications/OpenSwarm.app/...; match by prefix.
     if origin.startswith("file://"):

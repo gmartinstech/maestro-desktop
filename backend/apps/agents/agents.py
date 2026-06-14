@@ -373,8 +373,8 @@ async def subscriptions_connect(body: dict):
         result = await start_oauth(provider)
 
         if result.get("flow") == "authorization_code" and result.get("state"):
-            from backend.main import _pending_oauth
-            _pending_oauth[result["state"]] = {
+            from backend.apps.oauth_state import PENDING_OAUTH
+            PENDING_OAUTH[result["state"]] = {
                 "provider": provider,
                 "code_verifier": result.get("code_verifier", ""),
                 "redirect_uri": result.get("redirect_uri", ""),

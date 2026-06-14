@@ -2,7 +2,7 @@ from typing import Callable
 
 from backend.apps.modes.modes import load_mode
 from backend.apps.tools_lib.tools_lib import (
-    _load_all as load_all_tools,
+    load_all_tools,
 )
 from backend.apps.tools_lib.mcp_config import sanitize_mcp_server_name
 from backend.apps.agents.manager.prompt.tool_catalog import get_denied_tool_names, is_fully_denied

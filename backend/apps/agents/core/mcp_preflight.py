@@ -11,7 +11,7 @@ from typing import Any
 from backend.apps.agents.providers.registry import resolve_aux_model
 from backend.apps.settings.credentials import get_anthropic_client_for_model
 from backend.apps.settings.store import load_settings
-from backend.apps.tools_lib.tools_lib import _load_all as load_all_tools
+from backend.apps.tools_lib.tools_lib import load_all_tools
 
 logger = logging.getLogger(__name__)
 

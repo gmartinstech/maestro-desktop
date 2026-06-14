@@ -11,19 +11,19 @@ from backend.config.Apps import SubApp
 
 logger = logging.getLogger(__name__)
 
-REPO = "anthropics/skills"
-BRANCH = "main"
-RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}"
-MANIFEST_URL = f"{RAW_BASE}/.claude-plugin/marketplace.json"
-REFRESH_INTERVAL_S = 3600
-CONCURRENT_FETCHES = 15
+P_REPO = "anthropics/skills"
+P_BRANCH = "main"
+P_RAW_BASE = f"https://raw.githubusercontent.com/{P_REPO}/{P_BRANCH}"
+P_MANIFEST_URL = f"{P_RAW_BASE}/.claude-plugin/marketplace.json"
+P_REFRESH_INTERVAL_S = 3600
+P_CONCURRENT_FETCHES = 15
 
-_cache: dict[str, dict] = {}
-_cache_updated_at: float = 0
-_refresh_task: Optional[asyncio.Task] = None
+P_CACHE: dict[str, dict] = {}
+P_CACHE_UPDATED_AT: float = 0
+P_REFRESH_TASK: Optional[asyncio.Task] = None
 
 
-def _parse_frontmatter(raw: str) -> tuple[dict, str]:
+def p_parse_frontmatter(raw: str) -> tuple[dict, str]:
     """Split YAML frontmatter from markdown body."""
     if not raw.startswith("---"):
         return {}, raw
@@ -40,12 +40,12 @@ def _parse_frontmatter(raw: str) -> tuple[dict, str]:
     return meta, body
 
 
-async def _fetch_skill_paths(client: httpx.AsyncClient) -> list[tuple[str, str]]:
+async def p_fetch_skill_paths(client: httpx.AsyncClient) -> list[tuple[str, str]]:
     """Fetch the marketplace.json manifest and return (skill_folder, plugin_name) pairs.
 
     Uses raw.githubusercontent.com; no GitHub API needed, no rate limiting.
     """
-    resp = await client.get(MANIFEST_URL)
+    resp = await client.get(P_MANIFEST_URL)
     resp.raise_for_status()
     manifest = resp.json()
 
@@ -58,7 +58,7 @@ async def _fetch_skill_paths(client: httpx.AsyncClient) -> list[tuple[str, str]]
     return paths
 
 
-async def _fetch_one_skill(
+async def p_fetch_one_skill(
     client: httpx.AsyncClient,
     sem: asyncio.Semaphore,
     folder: str,
@@ -66,7 +66,7 @@ async def _fetch_one_skill(
 ) -> Optional[dict]:
     async with sem:
         try:
-            resp = await client.get(f"{RAW_BASE}/{folder}/SKILL.md")
+            resp = await client.get(f"{P_RAW_BASE}/{folder}/SKILL.md")
             if resp.status_code != 200:
                 return None
             raw = resp.text
@@ -74,7 +74,7 @@ async def _fetch_one_skill(
             logger.debug(f"Failed to fetch {folder}/SKILL.md: {exc}")
             return None
 
-    meta, body = _parse_frontmatter(raw)
+    meta, body = p_parse_frontmatter(raw)
     name = meta.get("name", "")
     if not name:
         folder_name = folder.rsplit("/", 1)[-1]
@@ -86,23 +86,23 @@ async def _fetch_one_skill(
         "content": body,
         "folder": folder,
         "category": plugin_name.replace("-", " ").replace("_", " ").title(),
-        "repositoryUrl": f"https://github.com/{REPO}/tree/{BRANCH}/{folder}",
+        "repositoryUrl": f"https://github.com/{P_REPO}/tree/{P_BRANCH}/{folder}",
     }
 
 
-async def _fetch_all_skills() -> dict[str, dict]:
+async def p_fetch_all_skills() -> dict[str, dict]:
     skills: dict[str, dict] = {}
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
-            paths = await _fetch_skill_paths(client)
+            paths = await p_fetch_skill_paths(client)
         except Exception as e:
             logger.warning(f"Skill registry manifest fetch failed: {e}")
             return skills
 
         logger.info(f"Skill registry: found {len(paths)} skills in manifest, fetching content...")
-        sem = asyncio.Semaphore(CONCURRENT_FETCHES)
+        sem = asyncio.Semaphore(P_CONCURRENT_FETCHES)
         results = await asyncio.gather(
-            *[_fetch_one_skill(client, sem, folder, plugin) for folder, plugin in paths]
+            *[p_fetch_one_skill(client, sem, folder, plugin) for folder, plugin in paths]
         )
         for rec in results:
             if rec:
@@ -112,26 +112,26 @@ async def _fetch_all_skills() -> dict[str, dict]:
     return skills
 
 
-async def _refresh_loop():
-    global _cache, _cache_updated_at
+async def p_refresh_loop():
+    global P_CACHE, P_CACHE_UPDATED_AT
     while True:
         try:
-            _cache = await _fetch_all_skills()
-            _cache_updated_at = time.time()
+            P_CACHE = await p_fetch_all_skills()
+            P_CACHE_UPDATED_AT = time.time()
         except Exception as e:
             logger.exception(f"Skill registry refresh error: {e}")
-        await asyncio.sleep(REFRESH_INTERVAL_S)
+        await asyncio.sleep(P_REFRESH_INTERVAL_S)
 
 
 @asynccontextmanager
 async def skill_registry_lifespan():
-    global _refresh_task
-    _refresh_task = asyncio.create_task(_refresh_loop())
+    global P_REFRESH_TASK
+    P_REFRESH_TASK = asyncio.create_task(p_refresh_loop())
     yield
-    if _refresh_task:
-        _refresh_task.cancel()
+    if P_REFRESH_TASK:
+        P_REFRESH_TASK.cancel()
         try:
-            await _refresh_task
+            await P_REFRESH_TASK
         except asyncio.CancelledError:
             pass
 
@@ -142,13 +142,13 @@ skill_registry = SubApp("skill-registry", skill_registry_lifespan)
 @skill_registry.router.get("/stats")
 async def registry_stats():
     categories: dict[str, int] = {}
-    for s in _cache.values():
+    for s in P_CACHE.values():
         cat = s.get("category", "General")
         categories[cat] = categories.get(cat, 0) + 1
     return {
-        "total": len(_cache),
+        "total": len(P_CACHE),
         "categories": categories,
-        "lastUpdated": _cache_updated_at,
+        "lastUpdated": P_CACHE_UPDATED_AT,
     }
 
 
@@ -159,7 +159,7 @@ async def registry_search(
     offset: int = Query(0, ge=0),
     category: str = Query("", description="Filter by category"),
 ):
-    pool = list(_cache.values())
+    pool = list(P_CACHE.values())
     if category:
         cat_lower = category.lower()
         pool = [s for s in pool if s.get("category", "").lower() == cat_lower]
@@ -192,7 +192,7 @@ async def registry_search(
 
 @skill_registry.router.get("/detail/{skill_name:path}")
 async def registry_detail(skill_name: str):
-    sk = _cache.get(skill_name)
+    sk = P_CACHE.get(skill_name)
     if not sk:
         return {"error": "Skill not found"}, 404
     return {"skill": sk}

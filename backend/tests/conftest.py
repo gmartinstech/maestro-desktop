@@ -12,7 +12,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _isolate_browser_state(monkeypatch):
+def isolate_browser_state(monkeypatch):
     skills_dir = tempfile.mkdtemp(prefix="os_skills_")
     metrics_dir = tempfile.mkdtemp(prefix="os_metrics_")
     playbook_dir = tempfile.mkdtemp(prefix="os_playbook_")
@@ -20,7 +20,7 @@ def _isolate_browser_state(monkeypatch):
     monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", metrics_dir)
     monkeypatch.setenv("OPENSWARM_BROWSER_PLAYBOOK_DIR", playbook_dir)
 
-    def _reset():
+    def reset():
         for mod in ("browser_skills", "browser_playbook"):
             try:
                 m = __import__(f"backend.apps.agents.browser.{mod}", fromlist=[mod])
@@ -30,10 +30,10 @@ def _isolate_browser_state(monkeypatch):
         # metrics caches its dir at first use; drop it so each test writes
         # where ITS env var points, not where the first test's pointed
         try:
-            from backend.apps.agents.browser import browser_metrics as _bm
-            _bm._metrics_dir_cache = None
+            from backend.apps.agents.browser import browser_metrics
+            browser_metrics.P_METRICS_DIR_CACHE = None
         except Exception:
             pass
-    _reset()
+    reset()
     yield
-    _reset()
+    reset()

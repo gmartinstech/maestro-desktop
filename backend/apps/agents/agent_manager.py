@@ -14,17 +14,18 @@ from backend.apps.agents.core.models import (
 )
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.store import load_settings
+from backend.apps.tools_lib.oauth_tokens import (
+    refresh_google_token,
+    refresh_airtable_token,
+    refresh_hubspot_token,
+)
 from backend.apps.tools_lib.tools_lib import (
-    _load_all as load_all_tools,
-    derive_mcp_config,
+    load_all_tools,
     load_builtin_permissions,
     load_trusted_sensitive_paths,
-    refresh_airtable_token,
-    refresh_google_token,
-    refresh_hubspot_token,
     save_trusted_sensitive_paths,
 )
-from backend.apps.tools_lib.mcp_config import sanitize_mcp_server_name
+from backend.apps.tools_lib.mcp_config import sanitize_mcp_server_name, derive_mcp_config
 from backend.apps.agents.core.error_classify import (
     is_auth_error,
     is_free_trial_exhausted,

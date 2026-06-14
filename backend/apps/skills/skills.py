@@ -15,14 +15,14 @@ INDEX_PATH = os.path.join(SKILLS_DIR, ".skills_index.json")
 from backend.config.paths import SKILLS_WORKSPACE_DIR
 
 
-def _load_index() -> dict[str, dict]:
+def p_load_index() -> dict[str, dict]:
     if os.path.exists(INDEX_PATH):
         with open(INDEX_PATH) as f:
             return json.load(f)
     return {}
 
 
-def _save_index(index: dict[str, dict]):
+def p_save_index(index: dict[str, dict]):
     with open(INDEX_PATH, "w") as f:
         json.dump(index, f, indent=2)
 
@@ -32,7 +32,7 @@ def _save_index(index: dict[str, dict]):
 # `built_in: true` in the index. Users can edit the content (their
 # changes flow through to the matching agent's prompt on the next turn),
 # but they can't delete the file; the DELETE endpoint refuses with 409.
-def _built_in_skill_registry() -> list[dict]:
+def p_built_in_skill_registry() -> list[dict]:
     # Imported lazily so this module stays cheap to import from
     # everywhere (the skills outputs module pulls in pydantic+fastapi
     # transitively and we don't want a cycle).
@@ -69,15 +69,15 @@ def _built_in_skill_registry() -> list[dict]:
     ]
 
 
-def _seed_built_in_skills() -> None:
+def p_seed_built_in_skills() -> None:
     """Copy each built-in skill into SKILLS_DIR if not already present, and
     ensure the index has the `built_in: true` flag so the UI and DELETE
     endpoint know to treat it specially. Idempotent; safe to call on
     every boot. Doesn't overwrite the file once it exists (so user edits
     are preserved across restarts and upgrades)."""
-    index = _load_index()
+    index = p_load_index()
     dirty = False
-    for entry in _built_in_skill_registry():
+    for entry in p_built_in_skill_registry():
         skill_id = entry["id"]
         fpath = os.path.join(SKILLS_DIR, f"{skill_id}.md")
         if not os.path.exists(fpath):
@@ -103,7 +103,7 @@ def _seed_built_in_skills() -> None:
             index[skill_id] = meta
             dirty = True
     if dirty:
-        _save_index(index)
+        p_save_index(index)
 
 
 @asynccontextmanager
@@ -111,7 +111,7 @@ async def skills_lifespan():
     os.makedirs(SKILLS_DIR, exist_ok=True)
     os.makedirs(SKILLS_WORKSPACE_DIR, exist_ok=True)
     try:
-        _seed_built_in_skills()
+        p_seed_built_in_skills()
     except Exception:
         # Don't block app startup on a skill-seed failure; the worst
         # case is the user has to manually paste the skill in once.
@@ -122,9 +122,9 @@ async def skills_lifespan():
 skills = SubApp("skills", skills_lifespan)
 
 
-def _sync_skills() -> list[Skill]:
+def p_sync_skills() -> list[Skill]:
     """Sync skills from the filesystem, updating the index."""
-    index = _load_index()
+    index = p_load_index()
     result = []
 
     if os.path.exists(SKILLS_DIR):
@@ -152,10 +152,10 @@ def _sync_skills() -> list[Skill]:
 
 @skills.router.get("/list")
 async def list_skills():
-    return {"skills": [s.model_dump() for s in _sync_skills()]}
+    return {"skills": [s.model_dump() for s in p_sync_skills()]}
 
 
-def _parse_skill_frontmatter(raw: str) -> dict:
+def p_parse_skill_frontmatter(raw: str) -> dict:
     """Extract YAML frontmatter fields from a SKILL.md file."""
     if not raw.startswith("---"):
         return {}
@@ -207,7 +207,7 @@ async def read_skill_workspace(workspace_id: str):
         except json.JSONDecodeError:
             pass
 
-    frontmatter = _parse_skill_frontmatter(skill_content) if skill_content else {}
+    frontmatter = p_parse_skill_frontmatter(skill_content) if skill_content else {}
 
     return {
         "skill_content": skill_content,
@@ -218,7 +218,7 @@ async def read_skill_workspace(workspace_id: str):
 
 @skills.router.get("/{skill_id}")
 async def get_skill(skill_id: str):
-    for s in _sync_skills():
+    for s in p_sync_skills():
         if s.id == skill_id:
             return s.model_dump()
     raise HTTPException(status_code=404, detail="Skill not found")
@@ -232,13 +232,13 @@ async def create_skill(body: SkillCreate):
     with open(fpath, "w") as f:
         f.write(body.content)
 
-    index = _load_index()
+    index = p_load_index()
     index[slug] = {
         "name": body.name,
         "description": body.description,
         "command": body.command or slug,
     }
-    _save_index(index)
+    p_save_index(index)
 
     skill = Skill(
         id=slug,
@@ -262,7 +262,7 @@ async def update_skill(skill_id: str, body: SkillUpdate):
         with open(fpath, "w") as f:
             f.write(body.content)
 
-    index = _load_index()
+    index = p_load_index()
     meta = index.get(skill_id, {})
     if body.name is not None:
         meta["name"] = body.name
@@ -271,7 +271,7 @@ async def update_skill(skill_id: str, body: SkillUpdate):
     if body.command is not None:
         meta["command"] = body.command
     index[skill_id] = meta
-    _save_index(index)
+    p_save_index(index)
 
     with open(fpath) as f:
         content = f.read()
@@ -289,7 +289,7 @@ async def update_skill(skill_id: str, body: SkillUpdate):
 
 @skills.router.delete("/{skill_id}")
 async def delete_skill(skill_id: str):
-    index = _load_index()
+    index = p_load_index()
     if index.get(skill_id, {}).get("built_in"):
         raise HTTPException(
             status_code=409,
@@ -303,5 +303,5 @@ async def delete_skill(skill_id: str):
     if os.path.exists(fpath):
         os.remove(fpath)
     index.pop(skill_id, None)
-    _save_index(index)
+    p_save_index(index)
     return {"ok": True}
