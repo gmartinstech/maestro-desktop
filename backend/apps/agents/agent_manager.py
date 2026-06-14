@@ -12,7 +12,7 @@ from typing import Optional
 from backend.apps.agents.core.models import (
     AgentConfig, AgentSession, Message, MessageBranch, ApprovalRequest, ToolGroupMeta,
 )
-from backend.apps.agents.core.ws_manager import ws_manager
+from backend.apps.agents.core.ws_manager import WS_MANAGER
 from backend.apps.settings.store import load_settings
 from backend.apps.tools_lib.oauth_tokens import (
     refresh_google_token,
@@ -269,7 +269,7 @@ class AgentManager:
                     # written meta.json.
                     try:
                         new_output = _load(output_id)
-                        await ws_manager.broadcast_global("agent:output_upserted", {
+                        await WS_MANAGER.broadcast_global("agent:output_upserted", {
                             "output": new_output.model_dump(mode="json"),
                         })
                     except Exception:
@@ -314,7 +314,7 @@ class AgentManager:
         _apply_context_window(session, global_settings)
         self.sessions[session_id] = session
 
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "running",
             "session": session.model_dump(mode="json"),
@@ -696,12 +696,12 @@ class AgentManager:
             session.status = "waiting_approval"
 
 
-            await ws_manager.send_to_session(session_id, "agent:status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": "waiting_approval",
             })
 
-            decision = await ws_manager.send_approval_request(
+            decision = await WS_MANAGER.send_approval_request(
                 session_id, request_id, tool_name, safe_input,
                 sensitive_pattern=sensitive_pattern,
                 sensitive_label=label,
@@ -740,7 +740,7 @@ class AgentManager:
                 a for a in session.pending_approvals if a.id != request_id
             ]
             session.status = "running"
-            await ws_manager.send_to_session(session_id, "agent:status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": "running",
             })
@@ -981,7 +981,7 @@ class AgentManager:
                 )
                 _apply_context_window(sub_session)
                 self.sessions[sub_session_id] = sub_session
-                await ws_manager.broadcast_global("agent:status", {
+                await WS_MANAGER.broadcast_global("agent:status", {
                     "session_id": sub_session_id,
                     "status": sub_session.status,
                     "session": sub_session.model_dump(mode="json"),
@@ -1005,7 +1005,7 @@ class AgentManager:
             except Exception:
                 logger.exception("Tool result truncation failed; keeping inline body")
             session.messages.append(result_msg)
-            await ws_manager.send_to_session(session_id, "agent:message", {
+            await WS_MANAGER.send_to_session(session_id, "agent:message", {
                 "session_id": session_id,
                 "message": result_msg.model_dump(mode="json"),
             })
@@ -1046,7 +1046,7 @@ class AgentManager:
                 if _stale:
                     session.active_mcps = [s for s in session.active_mcps if s in _enabled]
                     session.needs_fork = True
-                    await ws_manager.send_to_session(session_id, "agent:context_status", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:context_status", {
                         "session_id": session_id,
                         "reason": "mcp_disabled_externally",
                         "deactivated": _stale,
@@ -1801,7 +1801,7 @@ class AgentManager:
             # zero latency on the user's turn.
             try:
                 if self._maybe_compact(session):
-                    await ws_manager.send_to_session(session_id, "agent:context_status", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:context_status", {
                         "session_id": session_id,
                         "reason": "compacted",
                         "compacted_through_msg_id": session.compacted_through_msg_id,
@@ -1830,7 +1830,7 @@ class AgentManager:
                         trimmed.append(f"mcp:{session.active_mcps.pop(0)}")
                         _est_tokens -= 8_000  # rough per-MCP schema cost
                     if trimmed:
-                        await ws_manager.send_to_session(session_id, "agent:context_status", {
+                        await WS_MANAGER.send_to_session(session_id, "agent:context_status", {
                             "session_id": session_id,
                             "reason": "trimmed",
                             "trimmed": trimmed,
@@ -1853,7 +1853,7 @@ class AgentManager:
                                 branch_id=session.active_branch_id,
                             )
                             session.messages.append(_trim_msg)
-                            await ws_manager.send_to_session(session_id, "agent:message", {
+                            await WS_MANAGER.send_to_session(session_id, "agent:message", {
                                 "session_id": session_id,
                                 "message": _trim_msg.model_dump(mode="json"),
                             })
@@ -2156,7 +2156,7 @@ class AgentManager:
                 else:
                     session.messages.append(consolidated)
                 try:
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id,
                         "message": consolidated.model_dump(mode="json"),
                     })
@@ -2274,7 +2274,7 @@ class AgentManager:
                             if block_type == "text":
                                 if stream_text_msg_id is None:
                                     stream_text_msg_id = uuid4().hex
-                                    await ws_manager.send_to_session(session_id, "agent:stream_start", {
+                                    await WS_MANAGER.send_to_session(session_id, "agent:stream_start", {
                                         "session_id": session_id,
                                         "message_id": stream_text_msg_id,
                                         "role": "assistant",
@@ -2296,7 +2296,7 @@ class AgentManager:
                                 # thinking blocks (think → tool → think
                                 # → answer turns sum correctly).
                                 _thinking_block_starts[index] = time.time()
-                                await ws_manager.send_to_session(session_id, "agent:stream_start", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:stream_start", {
                                     "session_id": session_id,
                                     "message_id": thinking_msg_id,
                                     "role": "thinking",
@@ -2322,7 +2322,7 @@ class AgentManager:
                                 # the dedupe at the AssistantMessage
                                 # block below.
                                 _turn_tool_count += 1
-                                await ws_manager.send_to_session(session_id, "agent:stream_start", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:stream_start", {
                                     "session_id": session_id,
                                     "message_id": tool_msg_id,
                                     "role": "tool_call",
@@ -2338,7 +2338,7 @@ class AgentManager:
                             if msg_id and delta_type == "text_delta":
                                 _text_chunk = delta.get("text", "")
                                 _turn_assistant_text_chars += len(_text_chunk)
-                                await ws_manager.send_to_session(session_id, "agent:stream_delta", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:stream_delta", {
                                     "session_id": session_id,
                                     "message_id": msg_id,
                                     "delta": _text_chunk,
@@ -2348,7 +2348,7 @@ class AgentManager:
                                 # with a "thinking" field (not "text")
                                 _think_chunk = delta.get("thinking", "")
                                 _thinking_total_chars += len(_think_chunk)
-                                await ws_manager.send_to_session(session_id, "agent:stream_delta", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:stream_delta", {
                                     "session_id": session_id,
                                     "message_id": msg_id,
                                     "delta": _think_chunk,
@@ -2356,7 +2356,7 @@ class AgentManager:
                             elif msg_id and delta_type == "input_json_delta":
                                 _json_chunk = delta.get("partial_json", "")
                                 _turn_tool_input_chars += len(_json_chunk)
-                                await ws_manager.send_to_session(session_id, "agent:stream_delta", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:stream_delta", {
                                     "session_id": session_id,
                                     "message_id": msg_id,
                                     "delta": _json_chunk,
@@ -2376,14 +2376,14 @@ class AgentManager:
                                     (time.time() - _thinking_block_starts.pop(index)) * 1000
                                 )
                             if msg_id and msg_id != stream_text_msg_id:
-                                await ws_manager.send_to_session(session_id, "agent:stream_end", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:stream_end", {
                                     "session_id": session_id,
                                     "message_id": msg_id,
                                 })
 
                         elif event_type == "message_stop":
                             if stream_text_msg_id:
-                                await ws_manager.send_to_session(session_id, "agent:stream_end", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:stream_end", {
                                     "session_id": session_id,
                                     "message_id": stream_text_msg_id,
                                 })
@@ -2526,13 +2526,13 @@ class AgentManager:
                                     branch_id=session.active_branch_id,
                                 )
                                 session.messages.append(_err_msg)
-                                await ws_manager.send_to_session(session_id, "agent:auth_error", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:auth_error", {
                                     "session_id": session_id,
                                     "reason": reason,
                                     "message": friendly,
                                     "model": session.model,
                                 })
-                                await ws_manager.send_to_session(session_id, "agent:message", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                                     "session_id": session_id,
                                     "message": _err_msg.model_dump(mode="json"),
                                 })
@@ -2544,7 +2544,7 @@ class AgentManager:
                                     branch_id=session.active_branch_id,
                                 )
                                 session.messages.append(asst_msg)
-                                await ws_manager.send_to_session(session_id, "agent:message", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                                     "session_id": session_id,
                                     "message": asst_msg.model_dump(mode="json"),
                                 })
@@ -2553,7 +2553,7 @@ class AgentManager:
                             msg_id = stream_tool_msg_ids_ordered[i] if i < len(stream_tool_msg_ids_ordered) else uuid4().hex
                             tool_msg = Message(id=msg_id, role="tool_call", content=tu, branch_id=session.active_branch_id)
                             session.messages.append(tool_msg)
-                            await ws_manager.send_to_session(session_id, "agent:message", {
+                            await WS_MANAGER.send_to_session(session_id, "agent:message", {
                                 "session_id": session_id,
                                 "message": tool_msg.model_dump(mode="json"),
                             })
@@ -2739,7 +2739,7 @@ class AgentManager:
                                     cost = 0.0
 
                             session.cost_usd = cost
-                            await ws_manager.send_to_session(session_id, "agent:cost_update", {
+                            await WS_MANAGER.send_to_session(session_id, "agent:cost_update", {
                                 "session_id": session_id,
                                 "cost_usd": session.cost_usd,
                             })
@@ -2757,7 +2757,7 @@ class AgentManager:
                             ctx_used_pct = round(total_input / _ctx_window, 4) if total_input else 0.0
                             cache_read_pct = round(cache_read / total_input, 4) if total_input else 0.0
                             try:
-                                await ws_manager.send_to_session(session_id, "agent:context_update", {
+                                await WS_MANAGER.send_to_session(session_id, "agent:context_update", {
                                     "session_id": session_id,
                                     "input_tokens": total_input,
                                     "output_tokens": out,
@@ -2811,13 +2811,13 @@ class AgentManager:
                         # it with stream_end and start the fresh turn under a
                         # new message id.
                         if stream_text_msg_id:
-                            await ws_manager.send_to_session(session_id, "agent:stream_end", {
+                            await WS_MANAGER.send_to_session(session_id, "agent:stream_end", {
                                 "session_id": session_id,
                                 "message_id": stream_text_msg_id,
                             })
                             stream_text_msg_id = None
                         for _tool_msg_id in stream_tool_msg_ids_ordered:
-                            await ws_manager.send_to_session(session_id, "agent:stream_end", {
+                            await WS_MANAGER.send_to_session(session_id, "agent:stream_end", {
                                 "session_id": session_id,
                                 "message_id": _tool_msg_id,
                             })
@@ -2884,7 +2884,7 @@ class AgentManager:
                 session.status = "completed"
                 if stream_text_msg_id:
                     try:
-                        await ws_manager.send_to_session(session_id, "agent:stream_end", {
+                        await WS_MANAGER.send_to_session(session_id, "agent:stream_end", {
                             "session_id": session_id,
                             "message_id": stream_text_msg_id,
                         })
@@ -2913,8 +2913,8 @@ class AgentManager:
                     "compact_threshold_pct": session.compact_threshold_pct,
                     "context_soft_cap_pct": session.context_soft_cap_pct,
                 }
-                await ws_manager.send_to_session(session_id, "agent:context_overflow", _ovf_payload)
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:context_overflow", _ovf_payload)
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
@@ -2950,11 +2950,11 @@ class AgentManager:
                 )
                 error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
                 session.messages.append(error_msg)
-                await ws_manager.send_to_session(session_id, "agent:free_trial_exhausted", {
+                await WS_MANAGER.send_to_session(session_id, "agent:free_trial_exhausted", {
                     "session_id": session_id,
                     "message": friendly_msg,
                 })
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
@@ -3014,13 +3014,13 @@ class AgentManager:
                     reason = "anthropic_auth_invalid"
                 error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
                 session.messages.append(error_msg)
-                await ws_manager.send_to_session(session_id, "agent:auth_error", {
+                await WS_MANAGER.send_to_session(session_id, "agent:auth_error", {
                     "session_id": session_id,
                     "reason": reason,
                     "message": friendly_msg,
                     "model": session.model,
                 })
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
@@ -3042,7 +3042,7 @@ class AgentManager:
                     logger.debug("submit_diagnostic model_error failed", exc_info=True)
                 error_msg = Message(role="system", content=f"Error: {str(e)}", branch_id=session.active_branch_id)
                 session.messages.append(error_msg)
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
@@ -3062,7 +3062,7 @@ class AgentManager:
                     logger.debug("submit_diagnostic model_error failed", exc_info=True)
                 error_msg = Message(role="system", content=f"Error: {str(e)}", branch_id=session.active_branch_id)
                 session.messages.append(error_msg)
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
@@ -3074,7 +3074,7 @@ class AgentManager:
             session.status = "error"
             error_msg = Message(role="system", content=f"Error: {str(e)}", branch_id=session.active_branch_id)
             session.messages.append(error_msg)
-            await ws_manager.send_to_session(session_id, "agent:message", {
+            await WS_MANAGER.send_to_session(session_id, "agent:message", {
                 "session_id": session_id,
                 "message": error_msg.model_dump(mode="json"),
             })
@@ -3098,14 +3098,14 @@ class AgentManager:
                             try:
                                 matching = [o for o in _load_all() if o.workspace_id == session_id]
                                 if matching:
-                                    await ws_manager.broadcast_global("agent:output_upserted", {
+                                    await WS_MANAGER.broadcast_global("agent:output_upserted", {
                                         "output": matching[0].model_dump(mode="json"),
                                     })
                             except Exception:
                                 logger.exception("post-sync output_upserted broadcast failed")
                     except Exception:
                         logger.exception("post-session meta sync failed")
-                await ws_manager.send_to_session(session_id, "agent:status", {
+                await WS_MANAGER.send_to_session(session_id, "agent:status", {
                     "session_id": session_id,
                     "status": session.status,
                     "session": session.model_dump(mode="json"),
@@ -3117,7 +3117,7 @@ class AgentManager:
 
     async def _stream_text(self, session_id: str, msg_id: str, text: str, delay: float = 0.03):
         """Emit stream_start, word-by-word deltas, and stream_end for a text message."""
-        await ws_manager.send_to_session(session_id, "agent:stream_start", {
+        await WS_MANAGER.send_to_session(session_id, "agent:stream_start", {
             "session_id": session_id,
             "message_id": msg_id,
             "role": "assistant",
@@ -3125,20 +3125,20 @@ class AgentManager:
         words = text.split(" ")
         for i, word in enumerate(words):
             chunk = word if i == 0 else " " + word
-            await ws_manager.send_to_session(session_id, "agent:stream_delta", {
+            await WS_MANAGER.send_to_session(session_id, "agent:stream_delta", {
                 "session_id": session_id,
                 "message_id": msg_id,
                 "delta": chunk,
             })
             await asyncio.sleep(delay)
-        await ws_manager.send_to_session(session_id, "agent:stream_end", {
+        await WS_MANAGER.send_to_session(session_id, "agent:stream_end", {
             "session_id": session_id,
             "message_id": msg_id,
         })
 
     async def _stream_tool_input(self, session_id: str, msg_id: str, tool_name: str, input_json: str, delay: float = 0.02):
         """Emit stream_start, chunked deltas, and stream_end for a tool_call input."""
-        await ws_manager.send_to_session(session_id, "agent:stream_start", {
+        await WS_MANAGER.send_to_session(session_id, "agent:stream_start", {
             "session_id": session_id,
             "message_id": msg_id,
             "role": "tool_call",
@@ -3146,13 +3146,13 @@ class AgentManager:
         })
         chunk_size = 12
         for i in range(0, len(input_json), chunk_size):
-            await ws_manager.send_to_session(session_id, "agent:stream_delta", {
+            await WS_MANAGER.send_to_session(session_id, "agent:stream_delta", {
                 "session_id": session_id,
                 "message_id": msg_id,
                 "delta": input_json[i:i + chunk_size],
             })
             await asyncio.sleep(delay)
-        await ws_manager.send_to_session(session_id, "agent:stream_end", {
+        await WS_MANAGER.send_to_session(session_id, "agent:stream_end", {
             "session_id": session_id,
             "message_id": msg_id,
         })
@@ -3174,19 +3174,19 @@ class AgentManager:
         )
         session.pending_approvals.append(approval_req)
         session.status = "waiting_approval"
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "waiting_approval",
         })
         
-        decision = await ws_manager.send_approval_request(
+        decision = await WS_MANAGER.send_approval_request(
             session_id, request_id, "Bash",
             {"command": f"echo 'Processing: {prompt}'", "description": "Echo the user prompt"}
         )
         
         session.pending_approvals = [a for a in session.pending_approvals if a.id != request_id]
         session.status = "running"
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "running",
         })
@@ -3200,7 +3200,7 @@ class AgentManager:
         )
         tool_msg = Message(id=tool_msg_id, role="tool_call", content=tool_input_content, branch_id=session.active_branch_id)
         session.messages.append(tool_msg)
-        await ws_manager.send_to_session(session_id, "agent:message", {
+        await WS_MANAGER.send_to_session(session_id, "agent:message", {
             "session_id": session_id,
             "message": tool_msg.model_dump(mode="json"),
         })
@@ -3210,7 +3210,7 @@ class AgentManager:
         if decision.get("behavior") == "allow":
             tool_result = Message(role="tool_result", content=f"Processing: {prompt}", branch_id=session.active_branch_id)
             session.messages.append(tool_result)
-            await ws_manager.send_to_session(session_id, "agent:message", {
+            await WS_MANAGER.send_to_session(session_id, "agent:message", {
                 "session_id": session_id,
                 "message": tool_result.model_dump(mode="json"),
             })
@@ -3228,7 +3228,7 @@ class AgentManager:
 
         asst_msg = Message(id=asst_msg_id, role="assistant", content=asst_text, branch_id=session.active_branch_id)
         session.messages.append(asst_msg)
-        await ws_manager.send_to_session(session_id, "agent:message", {
+        await WS_MANAGER.send_to_session(session_id, "agent:message", {
             "session_id": session_id,
             "message": asst_msg.model_dump(mode="json"),
         })
@@ -3241,12 +3241,12 @@ class AgentManager:
         # `_mock_run` flag is read by the close path so a mock session
         # doesn't get reported to the cloud as a real one.
         setattr(session, "_mock_run", True)
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "completed",
             "session": session.model_dump(mode="json"),
         })
-        await ws_manager.send_to_session(session_id, "agent:cost_update", {
+        await WS_MANAGER.send_to_session(session_id, "agent:cost_update", {
             "session_id": session_id,
             "cost_usd": session.cost_usd,
         })
@@ -3306,7 +3306,7 @@ class AgentManager:
             session.allowed_tools = mode_tools
             session_changed = True
         if session_changed:
-            await ws_manager.send_to_session(session_id, "agent:status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": session.status,
                 "session": session.model_dump(mode="json"),
@@ -3326,7 +3326,7 @@ class AgentManager:
             client_message_id=client_message_id,
         )
         session.messages.append(user_msg)
-        await ws_manager.send_to_session(session_id, "agent:message", {
+        await WS_MANAGER.send_to_session(session_id, "agent:message", {
             "session_id": session_id,
             "message": user_msg.model_dump(mode="json"),
         })
@@ -3360,7 +3360,7 @@ class AgentManager:
             pass
 
         session.status = "running"
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "running",
             "session": session.model_dump(mode="json"),
@@ -3455,14 +3455,14 @@ class AgentManager:
                 _tc = Message(role="tool_call", branch_id=session.active_branch_id,
                               content={"id": _bubble_tid, "tool": _BROWSER_TOOL, "input": {"task": prompt}})
                 session.messages.append(_tc)
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id, "message": _tc.model_dump(mode="json")})
                 first = await _dispatch(browser_fast_path.compose_task(prompt, brief))
                 text = _summary(first)
                 if browser_fast_path.dispatch_failed(first):
                     # Retry only transient failures; a dead dashboard fails the
                     # retry identically, so skip it and tell the user instead.
-                    if not ws_manager.global_connections:
+                    if not WS_MANAGER.global_connections:
                         _fp_path += "+no-dashboard"
                         text = browser_fast_path.NO_DASHBOARD_REPLY
                     else:
@@ -3506,17 +3506,17 @@ class AgentManager:
             _tr = Message(role="tool_result", branch_id=session.active_branch_id,
                           content={"tool_use_id": _bubble_tid, "tool": _BROWSER_TOOL, "text": "done"})
             session.messages.append(_tr)
-            await ws_manager.send_to_session(session_id, "agent:message", {
+            await WS_MANAGER.send_to_session(session_id, "agent:message", {
                 "session_id": session_id, "message": _tr.model_dump(mode="json")})
         asst_msg = Message(role="assistant", content=text, branch_id=session.active_branch_id)
         session.messages.append(asst_msg)
-        await ws_manager.send_to_session(session_id, "agent:message", {
+        await WS_MANAGER.send_to_session(session_id, "agent:message", {
             "session_id": session_id,
             "message": asst_msg.model_dump(mode="json"),
         })
         session.status = "completed"
         session.closed_at = datetime.now()
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "completed",
             "session": session.model_dump(mode="json"),
@@ -3544,13 +3544,13 @@ class AgentManager:
                 session._cancel_event.set()
 
             for req in list(session.pending_approvals):
-                ws_manager.resolve_approval(req.id, {"behavior": "deny", "message": "Agent stopped"})
+                WS_MANAGER.resolve_approval(req.id, {"behavior": "deny", "message": "Agent stopped"})
             session.pending_approvals = []
 
             session.status = "stopped"
             if not session.closed_at:
                 session.closed_at = datetime.now()
-            await ws_manager.send_to_session(session_id, "agent:status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": "stopped",
                 "session": session.model_dump(mode="json"),
@@ -3566,7 +3566,7 @@ class AgentManager:
 
     def handle_approval(self, request_id: str, decision: dict):
         """Resolve a pending HITL approval."""
-        ws_manager.resolve_approval(request_id, decision)
+        WS_MANAGER.resolve_approval(request_id, decision)
 
     async def edit_message(self, session_id: str, message_id: str, new_content: str):
         """Edit a prior user message, creating a new branch (fork)."""
@@ -3627,18 +3627,18 @@ class AgentManager:
         )
         session.messages.append(edited_msg)
 
-        await ws_manager.send_to_session(session_id, "agent:message", {
+        await WS_MANAGER.send_to_session(session_id, "agent:message", {
             "session_id": session_id,
             "message": edited_msg.model_dump(mode="json"),
         })
-        await ws_manager.send_to_session(session_id, "agent:branch_created", {
+        await WS_MANAGER.send_to_session(session_id, "agent:branch_created", {
             "session_id": session_id,
             "branch": new_branch.model_dump(mode="json"),
             "active_branch_id": new_branch_id,
         })
 
         session.status = "running"
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "running",
             "session": session.model_dump(mode="json"),
@@ -3662,7 +3662,7 @@ class AgentManager:
             raise ValueError(f"Branch {branch_id} not found")
         session.active_branch_id = branch_id
         session.needs_fresh_session = True
-        await ws_manager.send_to_session(session_id, "agent:branch_switched", {
+        await WS_MANAGER.send_to_session(session_id, "agent:branch_switched", {
             "session_id": session_id,
             "active_branch_id": branch_id,
         })
@@ -3720,7 +3720,7 @@ class AgentManager:
             logger.warning(f"Title generation failed, using fallback: {e}")
 
         session.name = title
-        await ws_manager.send_to_session(session_id, "agent:name_updated", {
+        await WS_MANAGER.send_to_session(session_id, "agent:name_updated", {
             "session_id": session_id,
             "name": title,
         })
@@ -3791,7 +3791,7 @@ class AgentManager:
             if not label:
                 return
 
-            await ws_manager.send_to_session(session_id, "agent:turn_label", {
+            await WS_MANAGER.send_to_session(session_id, "agent:turn_label", {
                 "session_id": session_id,
                 "turn_id": turn_id,
                 "label": label,
@@ -3926,7 +3926,7 @@ class AgentManager:
         meta = ToolGroupMeta(id=group_id, name=name, svg=svg, is_refined=is_refinement)
         session.tool_group_meta[group_id] = meta
 
-        await ws_manager.send_to_session(session_id, "agent:group_meta_updated", {
+        await WS_MANAGER.send_to_session(session_id, "agent:group_meta_updated", {
             "session_id": session_id,
             "group_id": group_id,
             "name": name,
@@ -3950,7 +3950,7 @@ class AgentManager:
                     continue
                 setattr(session, key, value)
 
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": session.status,
             "session": session.model_dump(mode="json"),
@@ -3990,7 +3990,7 @@ class AgentManager:
         session.closed_at = datetime.now()
 
         for req in list(session.pending_approvals):
-            ws_manager.resolve_approval(req.id, {"behavior": "deny", "message": "Session closed"})
+            WS_MANAGER.resolve_approval(req.id, {"behavior": "deny", "message": "Session closed"})
         session.pending_approvals = []
 
         if hasattr(session, '_cancel_event'):
@@ -4003,7 +4003,7 @@ class AgentManager:
 
         save_session(session_id, doc_data)
 
-        await ws_manager.send_to_session(session_id, "agent:closed", {
+        await WS_MANAGER.send_to_session(session_id, "agent:closed", {
             "session_id": session_id,
             "status": session.status,
             "name": session.name,
@@ -4065,7 +4065,7 @@ class AgentManager:
         # completions and close_session calls overwrite it via
         # save_session, so memory and disk stay in sync.
 
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": session.status,
             "session": session.model_dump(mode="json"),
@@ -4138,7 +4138,7 @@ class AgentManager:
                 session.status = "stopped"
             session.closed_at = None
             for req in list(session.pending_approvals):
-                ws_manager.resolve_approval(req.id, {"behavior": "deny", "message": "Server shutting down"})
+                WS_MANAGER.resolve_approval(req.id, {"behavior": "deny", "message": "Server shutting down"})
             session.pending_approvals = []
             # Tag this close as "shutdown" so the cloud can tell it apart
             # from a user-initiated close. The desktop doesn't care; the
@@ -4243,7 +4243,7 @@ class AgentManager:
 
         self.sessions[new_session.id] = new_session
 
-        await ws_manager.send_to_session(new_session.id, "agent:status", {
+        await WS_MANAGER.send_to_session(new_session.id, "agent:status", {
             "session_id": new_session.id,
             "status": new_session.status,
             "session": new_session.model_dump(mode="json"),
@@ -4329,7 +4329,7 @@ class AgentManager:
 
         self.sessions[fork.id] = fork
 
-        await ws_manager.broadcast_global("agent:status", {
+        await WS_MANAGER.broadcast_global("agent:status", {
             "session_id": fork.id,
             "status": fork.status,
             "session": fork.model_dump(mode="json"),
@@ -4341,7 +4341,7 @@ class AgentManager:
             branch_id=fork.active_branch_id,
         )
         fork.messages.append(user_msg)
-        await ws_manager.send_to_session(fork.id, "agent:message", {
+        await WS_MANAGER.send_to_session(fork.id, "agent:message", {
             "session_id": fork.id,
             "message": user_msg.model_dump(mode="json"),
         })

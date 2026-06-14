@@ -29,7 +29,7 @@ from backend.apps.oauth_state import (
 from backend.config.Apps import MainApp
 from backend.apps.health.health import health
 from backend.apps.agents.agents import agents
-from backend.apps.agents.core.ws_manager import ws_manager
+from backend.apps.agents.core.ws_manager import WS_MANAGER
 from backend.apps.skills.skills import skills
 from backend.apps.tools_lib.tools_lib import tools_lib
 from backend.apps.modes.modes import modes
@@ -186,7 +186,7 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     """
     if not p_ws_auth_ok(websocket):
         return
-    await ws_manager.connect_session(session_id, websocket)
+    await WS_MANAGER.connect_session(session_id, websocket)
     try:
         while True:
             data = await websocket.receive_text()
@@ -203,7 +203,7 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                 # terminal event for already-finished sessions.
                 last_seq = int(payload.get("last_seq") or 0)
                 connection_uuid = payload.get("connection_uuid") or ""
-                ack = await ws_manager.replay_to(session_id, websocket, last_seq)
+                ack = await WS_MANAGER.replay_to(session_id, websocket, last_seq)
                 from backend.apps.agents.core.seq_log import SEQ_LOG
                 await websocket.send_text(json.dumps({
                     "event": "server:hello",
@@ -255,7 +255,7 @@ async def websocket_session(websocket: WebSocket, session_id: str):
     except WebSocketDisconnect:
         # Drops the socket from the connection list. Does NOT cancel
         # the agent task, that's intentional. See module docstring.
-        ws_manager.disconnect_session(session_id, websocket)
+        WS_MANAGER.disconnect_session(session_id, websocket)
 
 def p_ws_auth_ok(websocket: WebSocket) -> bool:
     """Validate token + origin before accepting a WS. Returns True if OK.
@@ -371,7 +371,7 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
 async def websocket_dashboard(websocket: WebSocket):
     if not p_ws_auth_ok(websocket):
         return
-    await ws_manager.connect_global(websocket)
+    await WS_MANAGER.connect_global(websocket)
     try:
         while True:
             data = await websocket.receive_text()
@@ -394,12 +394,12 @@ async def websocket_dashboard(websocket: WebSocket):
                     "trust_pattern": bool(payload.get("trust_pattern")),
                 })
             elif event == "browser:result":
-                ws_manager.resolve_browser_command(
+                WS_MANAGER.resolve_browser_command(
                     payload.get("request_id", ""),
                     payload,
                 )
     except WebSocketDisconnect:
-        ws_manager.disconnect_global(websocket)
+        WS_MANAGER.disconnect_global(websocket)
 
 
 @app.get("/api/dev/token")
@@ -427,7 +427,7 @@ async def browser_command(request: Request):
         return JSONResponse({"error": "action and browser_id are required"}, status_code=400)
 
     request_id = uuid4().hex
-    result = await ws_manager.send_browser_command(request_id, action, browser_id, params, tab_id=tab_id)
+    result = await WS_MANAGER.send_browser_command(request_id, action, browser_id, params, tab_id=tab_id)
     return JSONResponse(result)
 
 
@@ -680,8 +680,8 @@ async def mcp_meta(action: str, request: Request):
         if session.sdk_session_id:
             session.needs_fresh_session = True
         try:
-            from backend.apps.agents.core.ws_manager import ws_manager
-            await ws_manager.send_to_session(parent_session_id, "agent:status", {
+            from backend.apps.agents.core.WS_MANAGER import WS_MANAGER
+            await WS_MANAGER.send_to_session(parent_session_id, "agent:status", {
                 "session_id": parent_session_id,
                 "status": session.status,
                 "session": session.model_dump(mode="json"),
@@ -748,14 +748,14 @@ async def session_compact(session_id: str):
     only sets the marker; the button is the user opting into the cost).
     """
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.core.ws_manager import ws_manager
+    from backend.apps.agents.core.WS_MANAGER import WS_MANAGER
     session = agent_manager.sessions.get(session_id)
     if not session:
         return JSONResponse({"error": "session not found"}, status_code=404)
     did_compact = agent_manager._maybe_compact(session, force=True)
     if did_compact:
         session.needs_fresh_session = True
-    await ws_manager.send_to_session(session_id, "agent:context_status", {
+    await WS_MANAGER.send_to_session(session_id, "agent:context_status", {
         "session_id": session_id,
         "reason": "compacted_manual" if did_compact else "noop",
         "compacted_through_msg_id": session.compacted_through_msg_id,
@@ -767,7 +767,7 @@ async def session_compact(session_id: str):
 async def session_clear(session_id: str):
     """Wipe the session's UI history AND its SDK convo state (/clear slash cmd, Reset history button)."""
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.core.ws_manager import ws_manager
+    from backend.apps.agents.core.WS_MANAGER import WS_MANAGER
     from backend.apps.agents.core.models import MessageBranch
     session = agent_manager.sessions.get(session_id)
     if not session:
@@ -783,12 +783,12 @@ async def session_clear(session_id: str):
     session.branches = {"main": MessageBranch(id="main")}
     session.active_branch_id = "main"
     session.tool_group_meta = {}
-    await ws_manager.send_to_session(session_id, "agent:status", {
+    await WS_MANAGER.send_to_session(session_id, "agent:status", {
         "session_id": session_id,
         "status": session.status,
         "session": session.model_dump(mode="json"),
     })
-    await ws_manager.send_to_session(session_id, "agent:context_status", {
+    await WS_MANAGER.send_to_session(session_id, "agent:context_status", {
         "session_id": session_id,
         "reason": "cleared",
     })

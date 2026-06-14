@@ -2,7 +2,7 @@
 Browser sub-agent runner.
 
 Provides a lightweight Anthropic API tool-use loop that drives browser
-interactions directly through ws_manager (no MCP subprocess needed).
+interactions directly through WS_MANAGER (no MCP subprocess needed).
 Sub-agents appear as visible AgentSession cards on the dashboard.
 """
 
@@ -83,7 +83,7 @@ from backend.apps.agents.browser.browser_schema import (
     SYSTEM_PROMPT,
 )
 from backend.apps.agents.core.models import AgentSession, ApprovalRequest, Message
-from backend.apps.agents.core.ws_manager import ws_manager, _await_reconnect
+from backend.apps.agents.core.ws_manager import WS_MANAGER, await_reconnect
 from backend.apps.tools_lib.tools_lib import load_builtin_permissions
 
 logger = logging.getLogger(__name__)
@@ -99,14 +99,14 @@ _CONFIRM_TOOLS = {
 async def execute_browser_tool(
     tool_name: str, tool_input: dict, browser_id: str, tab_id: str = "",
 ) -> dict:
-    """Execute a browser tool via ws_manager directly (no MCP/HTTP round-trip)."""
+    """Execute a browser tool via WS_MANAGER directly (no MCP/HTTP round-trip)."""
     action = ACTION_MAP.get(tool_name)
     if not action:
         return {"error": f"Unknown browser tool: {tool_name}"}
 
     params = {k: v for k, v in tool_input.items()}
     request_id = uuid4().hex
-    result = await ws_manager.send_browser_command(
+    result = await WS_MANAGER.send_browser_command(
         request_id, action, browser_id, params, tab_id=tab_id,
     )
     return result
@@ -323,14 +323,14 @@ async def _request_browser_approval(
     session.pending_approvals.append(approval_req)
     session.status = "waiting_approval"
 
-    await ws_manager.send_to_session(session.id, "agent:status", {
+    await WS_MANAGER.send_to_session(session.id, "agent:status", {
         "session_id": session.id,
         "status": "waiting_approval",
     })
 
     try:
         decision = await asyncio.wait_for(
-            ws_manager.send_approval_request(
+            WS_MANAGER.send_approval_request(
                 session.id, request_id, tool_name, tool_input,
             ),
             timeout=300.0,
@@ -342,7 +342,7 @@ async def _request_browser_approval(
         a for a in session.pending_approvals if a.id != request_id
     ]
     session.status = "running"
-    await ws_manager.send_to_session(session.id, "agent:status", {
+    await WS_MANAGER.send_to_session(session.id, "agent:status", {
         "session_id": session.id,
         "status": "running",
     })
@@ -390,7 +390,7 @@ async def run_browser_agent(
         if parent and parent.status == "stopped":
             cancel_event.set()
 
-    await ws_manager.send_to_session(session_id, "agent:status", {
+    await WS_MANAGER.send_to_session(session_id, "agent:status", {
         "session_id": session_id,
         "status": "running",
         "session": session.model_dump(mode="json"),
@@ -480,11 +480,11 @@ async def run_browser_agent(
             )
             err_msg = Message(role="system", content=f"Error: {error_text}")
             session.messages.append(err_msg)
-            await ws_manager.send_to_session(session_id, "agent:message", {
+            await WS_MANAGER.send_to_session(session_id, "agent:message", {
                 "session_id": session_id,
                 "message": err_msg.model_dump(mode="json"),
             })
-            await ws_manager.send_to_session(session_id, "agent:status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": "error",
                 "session": session.model_dump(mode="json"),
@@ -645,7 +645,7 @@ async def run_browser_agent(
 
     user_msg = Message(role="user", content=task)
     session.messages.append(user_msg)
-    await ws_manager.send_to_session(session_id, "agent:message", {
+    await WS_MANAGER.send_to_session(session_id, "agent:message", {
         "session_id": session_id,
         "message": user_msg.model_dump(mode="json"),
     })
@@ -658,12 +658,12 @@ async def run_browser_agent(
         _recall_msg = Message(role="assistant",
                               content=f"Picking up what I learned about {_pb_host} from a previous visit.")
         session.messages.append(_recall_msg)
-        await ws_manager.send_to_session(session_id, "agent:message", {
+        await WS_MANAGER.send_to_session(session_id, "agent:message", {
             "session_id": session_id, "message": _recall_msg.model_dump(mode="json"),
         })
         # Push the session so the "Remembered" chip shows WHILE it works (the
         # high-value moment), not just on the finished card.
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id, "status": session.status,
             "session": session.model_dump(mode="json"),
         })
@@ -855,7 +855,7 @@ async def run_browser_agent(
                 pass
             session.status = "completed"
             agent_manager._sync_session_close(session)
-            await ws_manager.send_to_session(session_id, "agent:status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:status", {
                 "session_id": session_id, "status": "completed",
                 "session": session.model_dump(mode="json"),
             })
@@ -1060,7 +1060,7 @@ async def run_browser_agent(
                     content="\n".join(text_parts),
                 )
                 session.messages.append(asst_msg)
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": asst_msg.model_dump(mode="json"),
                 })
@@ -1071,7 +1071,7 @@ async def run_browser_agent(
                     content={"id": tu.id, "tool": tu.name, "input": tu.input},
                 )
                 session.messages.append(tool_msg)
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": tool_msg.model_dump(mode="json"),
                 })
@@ -1233,7 +1233,7 @@ async def run_browser_agent(
                     )
                     brain_msg = Message(role="assistant", content=brain_text)
                     session.messages.append(brain_msg)
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id,
                         "message": brain_msg.model_dump(mode="json"),
                     })
@@ -1273,7 +1273,7 @@ async def run_browser_agent(
                     tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": [{"type": "text", "text": meta_text}]})
                     result_msg = Message(role="tool_result", content={"text": meta_text, "tool_name": tu.name, "elapsed_ms": 0})
                     session.messages.append(result_msg)
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id, "message": result_msg.model_dump(mode="json"),
                     })
                     continue
@@ -1321,7 +1321,7 @@ async def run_browser_agent(
                     tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": [{"type": "text", "text": ex_text}]})
                     result_msg = Message(role="tool_result", content={"text": ex_text, "tool_name": tu.name, "elapsed_ms": 0})
                     session.messages.append(result_msg)
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id, "message": result_msg.model_dump(mode="json"),
                     })
                     continue
@@ -1358,7 +1358,7 @@ async def run_browser_agent(
                     tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": [{"type": "text", "text": sv_text}]})
                     result_msg = Message(role="tool_result", content={"text": sv_text, "tool_name": tu.name, "elapsed_ms": int((time.time() - st) * 1000)})
                     session.messages.append(result_msg)
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id, "message": result_msg.model_dump(mode="json"),
                     })
                     continue
@@ -1419,7 +1419,7 @@ async def run_browser_agent(
                     tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": [{"type": "text", "text": bf_text}]})
                     result_msg = Message(role="tool_result", content={"text": bf_text, "tool_name": tu.name, "elapsed_ms": 0})
                     session.messages.append(result_msg)
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id, "message": result_msg.model_dump(mode="json"),
                     })
                     continue
@@ -1464,7 +1464,7 @@ async def run_browser_agent(
                         content={"text": result_text, "tool_name": tu.name, "elapsed_ms": 0},
                     )
                     session.messages.append(result_msg)
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id,
                         "message": result_msg.model_dump(mode="json"),
                     })
@@ -1484,7 +1484,7 @@ async def run_browser_agent(
                         content={"text": denied_text, "tool_name": tu.name, "elapsed_ms": 0},
                     )
                     session.messages.append(result_msg)
-                    await ws_manager.send_to_session(session_id, "agent:message", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:message", {
                         "session_id": session_id,
                         "message": result_msg.model_dump(mode="json"),
                     })
@@ -1506,7 +1506,7 @@ async def run_browser_agent(
                             content={"text": denied_text, "tool_name": tu.name, "elapsed_ms": 0},
                         )
                         session.messages.append(result_msg)
-                        await ws_manager.send_to_session(session_id, "agent:message", {
+                        await WS_MANAGER.send_to_session(session_id, "agent:message", {
                             "session_id": session_id,
                             "message": result_msg.model_dump(mode="json"),
                         })
@@ -1911,7 +1911,7 @@ async def run_browser_agent(
                     content={"text": result_text, "tool_name": tu.name, "elapsed_ms": elapsed_ms},
                 )
                 session.messages.append(result_msg)
-                await ws_manager.send_to_session(session_id, "agent:message", {
+                await WS_MANAGER.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": result_msg.model_dump(mode="json"),
                 })
@@ -1969,7 +1969,7 @@ async def run_browser_agent(
             session.status = "stopped"
             record_task(session_id, browser_id, task, "stopped",
                                         metrics_started_at, turn + 1, action_log, session.tokens)
-            await ws_manager.send_to_session(session_id, "agent:status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": "stopped",
                 "session": session.model_dump(mode="json"),
@@ -2121,13 +2121,13 @@ async def run_browser_agent(
                         _learn_msg = Message(role="assistant",
                                              content=f"Noted what worked on {pb_host} so I'm faster here next time.")
                         session.messages.append(_learn_msg)
-                        await ws_manager.send_to_session(session_id, "agent:message", {
+                        await WS_MANAGER.send_to_session(session_id, "agent:message", {
                             "session_id": session_id, "message": _learn_msg.model_dump(mode="json"),
                         })
             except Exception as e:
                 logger.debug(f"[browser-playbook] distill skipped: {e}")
         agent_manager._sync_session_close(session)
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": final_status,
             "session": session.model_dump(mode="json"),
@@ -2158,11 +2158,11 @@ async def run_browser_agent(
                                     action_log, session.tokens)
         error_msg = Message(role="system", content=f"Error: {str(e)}")
         session.messages.append(error_msg)
-        await ws_manager.send_to_session(session_id, "agent:message", {
+        await WS_MANAGER.send_to_session(session_id, "agent:message", {
             "session_id": session_id,
             "message": error_msg.model_dump(mode="json"),
         })
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": "error",
             "session": session.model_dump(mode="json"),
@@ -2240,7 +2240,7 @@ async def _create_browser_card(dashboard_id: str, url: str, parent_session_id: s
     dashboard.updated_at = datetime.now()
     save_dashboard(dashboard)
 
-    await ws_manager.broadcast_global("dashboard:browser_card_added", {
+    await WS_MANAGER.broadcast_global("dashboard:browser_card_added", {
         "dashboard_id": dashboard_id,
         "browser_card": card.model_dump(mode="json"),
         "parent_session_id": parent_session_id or "",
@@ -2267,7 +2267,7 @@ async def run_browser_agents(
     # corpse before card-gone detection trips. But a CPU-starved renderer can
     # briefly drop its WS then auto-reconnect, so wait (capped) for it to come
     # back before refusing, turning a load blip into a pause, not a failed run.
-    if not ws_manager.global_connections and not await _await_reconnect(lambda: bool(ws_manager.global_connections)):
+    if not WS_MANAGER.global_connections and not await await_reconnect(lambda: bool(WS_MANAGER.global_connections)):
         logger.warning("[browser-agent] dispatch refused: no dashboard after reconnect wait")
         return [{
             "summary": (

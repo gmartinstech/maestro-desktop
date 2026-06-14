@@ -26,8 +26,8 @@ _BROWSER_CMD_REBROADCAST_S = 3.0
 # reconnect even on a loaded machine.
 _WS_RECONNECT_WAIT_S = 8.0
 
-
-async def _await_reconnect(has_conn) -> bool:
+# Public - called by browser_agent.py
+async def await_reconnect(has_conn) -> bool:
     """Poll up to _WS_RECONNECT_WAIT_S for a dashboard socket to (re)appear.
     `has_conn` is a 0-arg callable returning truthy when connected."""
     if has_conn():
@@ -260,7 +260,7 @@ class ConnectionManager:
         self, request_id: str, action: str, browser_id: str, params: dict, tab_id: str = ""
     ) -> dict:
         """Send a browser command to the frontend and wait for the result."""
-        if not self.global_connections and not await _await_reconnect(lambda: bool(self.global_connections)):
+        if not self.global_connections and not await await_reconnect(lambda: bool(self.global_connections)):
             return {"error": "No dashboard is connected. Open the dashboard to use browser tools."}
 
         loop = asyncio.get_event_loop()
@@ -308,4 +308,4 @@ class ConnectionManager:
             future.set_result(result)
 
 
-ws_manager = ConnectionManager()
+WS_MANAGER = ConnectionManager()

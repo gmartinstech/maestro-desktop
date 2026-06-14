@@ -65,13 +65,13 @@ async def send_message(session_id: str, body: dict):
     # Run MCP-suggestion classifier in parallel with the agent launch; fails open.
     try:
         from backend.apps.agents.core.mcp_preflight import run_preflight
-        from backend.apps.agents.core.ws_manager import ws_manager as _ws
+        from backend.apps.agents.core.ws_manager import WS_MANAGER
 
         async def _emit_preflight():
             try:
                 result = await run_preflight(prompt)
                 if result.get("suggestions") or result.get("is_vague"):
-                    await _ws.send_to_session(session_id, "agent:mcp_suggestions", {
+                    await WS_MANAGER.send_to_session(session_id, "agent:mcp_suggestions", {
                         "session_id": session_id,
                         "suggestions": result.get("suggestions", []),
                         "is_vague": bool(result.get("is_vague")),
@@ -297,9 +297,9 @@ async def compact_session(session_id: str):
         raise HTTPException(status_code=404, detail="session not found")
     fired = agent_manager._maybe_compact(session, force=True)
     if fired:
-        from backend.apps.agents.core.ws_manager import ws_manager
+        from backend.apps.agents.core.ws_manager import WS_MANAGER
         try:
-            await ws_manager.send_to_session(session_id, "agent:context_status", {
+            await WS_MANAGER.send_to_session(session_id, "agent:context_status", {
                 "session_id": session_id,
                 "reason": "compacted",
                 "compacted_through_msg_id": session.compacted_through_msg_id,
@@ -322,9 +322,9 @@ async def clear_session(session_id: str):
     session.compacted_through_msg_id = None
     session.tokens = {"input": 0, "output": 0}
     session.needs_fresh_session = True
-    from backend.apps.agents.core.ws_manager import ws_manager
+    from backend.apps.agents.core.ws_manager import WS_MANAGER
     try:
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": session.status,
             "session": session.model_dump(mode="json"),

@@ -82,13 +82,13 @@ def _build_app(seq_log):
     so the test thread can drive event emission through the same
     event loop as the WS handler, avoiding the cross-loop hazards
     of `asyncio.run()` mid-test."""
-    from backend.apps.agents.core.ws_manager import ws_manager
+    from backend.apps.agents.core.ws_manager import WS_MANAGER
 
     app = FastAPI()
 
     @app.websocket("/ws/agents/{session_id}")
     async def ws_session(websocket: WebSocket, session_id: str):
-        await ws_manager.connect_session(session_id, websocket)
+        await WS_MANAGER.connect_session(session_id, websocket)
         try:
             while True:
                 data = await websocket.receive_text()
@@ -97,7 +97,7 @@ def _build_app(seq_log):
                 payload = msg.get("data", {})
                 if event == "client:hello":
                     last_seq = int(payload.get("last_seq") or 0)
-                    ack = await ws_manager.replay_to(session_id, websocket, last_seq)
+                    ack = await WS_MANAGER.replay_to(session_id, websocket, last_seq)
                     await websocket.send_text(json.dumps({
                         "event": "server:hello",
                         "session_id": session_id,
@@ -114,7 +114,7 @@ def _build_app(seq_log):
                         "data": {"nonce": payload.get("nonce")},
                     }))
         except WebSocketDisconnect:
-            ws_manager.disconnect_session(session_id, websocket)
+            WS_MANAGER.disconnect_session(session_id, websocket)
 
     @app.post("/test/emit/{session_id}")
     async def emit_events(session_id: str, body: dict):
@@ -148,11 +148,11 @@ async def _emit_run(session_id: str, n_events: int, terminate: str | None = "com
     fanning out the broadcast across multiple coroutines. The seq
     log must still order them strictly.
     """
-    from backend.apps.agents.core.ws_manager import ws_manager
+    from backend.apps.agents.core.ws_manager import WS_MANAGER
 
     async def emit_chunk(start: int, count: int):
         for i in range(count):
-            await ws_manager.send_to_session(session_id, "agent:stream_delta", {
+            await WS_MANAGER.send_to_session(session_id, "agent:stream_delta", {
                 "session_id": session_id,
                 "message_id": "m1",
                 "delta": f"chunk-{start + i}",
@@ -176,7 +176,7 @@ async def _emit_run(session_id: str, n_events: int, terminate: str | None = "com
             await emit_chunk(per * concurrent_tasks, rem)
 
     if terminate is not None:
-        await ws_manager.send_to_session(session_id, "agent:status", {
+        await WS_MANAGER.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
             "status": terminate,
         })
@@ -516,13 +516,13 @@ def test_disconnect_does_not_touch_agent_task(_patch_persist_dir):
     this test will catch it. We import agent_manager lazily so the
     `tasks` dict starts empty; we register a sentinel task and confirm
     disconnect_session doesn't poke it."""
-    from backend.apps.agents.core.ws_manager import ws_manager
+    from backend.apps.agents.core.ws_manager import WS_MANAGER
     # Insert a real Future into a parallel registry to mimic
     # `agent_manager.tasks[session_id]` and confirm ws_manager
     # never reaches into it. We don't import agent_manager (heavy);
     # we just inspect the source.
     import inspect
-    src = inspect.getsource(ws_manager.disconnect_session)
+    src = inspect.getsource(WS_MANAGER.disconnect_session)
     assert "cancel" not in src.lower()
     assert "agent_manager" not in src
     assert "tasks" not in src

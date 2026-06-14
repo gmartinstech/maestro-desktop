@@ -137,8 +137,8 @@ def _install(mocker, monkeypatch: pytest.MonkeyPatch, primary, aux):
             return {"text": f"GET {params.get('url')} -> HTTP 200\n{{\"docs\": []}}", "status": 200, "url": DOC_URL}
         return {"text": "ok", "url": DOC_URL}
 
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _send_browser_command, raising=False)
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", AsyncMock(return_value=None), raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _send_browser_command, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", AsyncMock(return_value=None), raising=False)
     return sent
 
 
@@ -491,13 +491,13 @@ def test_replay_falls_back_to_full_agent_when_a_step_fails(monkeypatch, mocker):
     aux = FakeAux()
     sent = _install(mocker, monkeypatch, primary, aux)
     # make click_by_name FAIL (target gone) so replay must fall back
-    orig = BA.ws_manager.send_browser_command
+    orig = BA.WS_MANAGER.send_browser_command
     async def _fail_cbn(request_id, action, browser_id, params, tab_id=""):
         if action == "click_by_name":
             sent.append({"action": action, "params": params})
             return {"error": 'No element matching name="Save" on this page.'}
         return await orig(request_id, action, browser_id, params, tab_id)
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _fail_cbn, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _fail_cbn, raising=False)
 
     r = asyncio.run(BA.run_browser_agent(
         task="click the Save button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
@@ -527,7 +527,7 @@ def test_deferred_replay_fires_after_navigating_to_the_right_host(monkeypatch, m
     ])
     sent = _install(mocker, monkeypatch, primary, FakeAux())
     GOOGLE = "https://www.google.com/"
-    orig = BA.ws_manager.send_browser_command
+    orig = BA.WS_MANAGER.send_browser_command
 
     async def _cmd(request_id, action, browser_id, params, tab_id=""):
         # perception + reads report GOOGLE (so the DISPATCH replay misses there),
@@ -535,7 +535,7 @@ def test_deferred_replay_fires_after_navigating_to_the_right_host(monkeypatch, m
         if action in ("list_interactives", "get_text"):
             return {"text": "stuff", "url": GOOGLE}
         return await orig(request_id, action, browser_id, params, tab_id)
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _cmd, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _cmd, raising=False)
 
     # NO initial_url -> dispatch perceives google -> dispatch replay misses.
     r = asyncio.run(BA.run_browser_agent(
@@ -567,13 +567,13 @@ def test_deferred_replay_does_not_fire_after_the_page_was_dirtied(monkeypatch, m
     ])
     sent = _install(mocker, monkeypatch, primary, FakeAux())
     GOOGLE = "https://www.google.com/"
-    orig = BA.ws_manager.send_browser_command
+    orig = BA.WS_MANAGER.send_browser_command
 
     async def _cmd(request_id, action, browser_id, params, tab_id=""):
         if action in ("list_interactives", "get_text"):
             return {"text": "stuff", "url": GOOGLE}
         return await orig(request_id, action, browser_id, params, tab_id)
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _cmd, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _cmd, raising=False)
 
     r = asyncio.run(BA.run_browser_agent(
         task="Please click the Search button", browser_id="b1", model="sonnet",
@@ -746,14 +746,14 @@ def test_unproven_skill_that_fails_is_quarantined_and_never_retried(monkeypatch,
     primary = FakeLLM([Resp([Blk("text", "full agent handled it")], stop_reason="end_turn")])
     aux = FakeAux()
     sent = _install(mocker, monkeypatch, primary, aux)
-    orig = BA.ws_manager.send_browser_command
+    orig = BA.WS_MANAGER.send_browser_command
 
     async def _fail_cbn(request_id, action, browser_id, params, tab_id=""):
         if action == "click_by_name":
             sent.append({"action": action, "params": params})
             return {"error": 'No element matching name="Save" on this page.'}
         return await orig(request_id, action, browser_id, params, tab_id)
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _fail_cbn, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _fail_cbn, raising=False)
 
     # Run 1: replay is attempted, the step fails -> skill is quarantined.
     asyncio.run(BA.run_browser_agent(
@@ -807,13 +807,13 @@ def test_read_answered_from_frontloaded_perception_is_not_a_ghost(monkeypatch, m
     ])
     captured = {}
     _install(mocker, monkeypatch, primary, FakeAux())
-    orig = BA.ws_manager.send_to_session
+    orig = BA.WS_MANAGER.send_to_session
 
     async def _cap(session_id, event, payload):
         if event == "agent:status":
             captured["status"] = payload.get("status")
         return await orig(session_id, event, payload)
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", _cap, raising=False)
 
     r = asyncio.run(BA.run_browser_agent(
         task="read me the first sentence", browser_id="b1", model="sonnet", initial_url=DOC_URL,
@@ -839,13 +839,13 @@ def test_ghost_completion_is_reported_as_error_not_completed(monkeypatch, mocker
     _install(mocker, monkeypatch, primary, aux)
     # every click errors (the fake returns an error for action 'click')
     captured = {}
-    orig_send = BA.ws_manager.send_to_session
+    orig_send = BA.WS_MANAGER.send_to_session
 
     async def _cap(session_id, event, payload):
         if event == "agent:status":
             captured["status"] = payload.get("status")
         return await orig_send(session_id, event, payload)
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", _cap, raising=False)
 
     r = asyncio.run(BA.run_browser_agent(
         task="Submit the form", browser_id="b1", model="sonnet", initial_url=DOC_URL,
@@ -877,15 +877,15 @@ def test_dead_browser_card_aborts_fast_without_spinning(monkeypatch, mocker):
     card_gone = AsyncMock(return_value={
         "error": "Browser card 'b1' not found or not an Electron webview",
     })
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", card_gone, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", card_gone, raising=False)
     captured = {}
-    orig = BA.ws_manager.send_to_session
+    orig = BA.WS_MANAGER.send_to_session
 
     async def _cap(session_id, event, payload):
         if event == "agent:status":
             captured["status"] = payload.get("status")
         return await orig(session_id, event, payload)
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", _cap, raising=False)
 
     r = asyncio.run(BA.run_browser_agent(
         task="Click submit", browser_id="b1", model="sonnet", initial_url=DOC_URL,
@@ -911,15 +911,15 @@ def test_hung_browser_card_aborts_fast_not_a_20_minute_loop(monkeypatch, mocker)
 
     # a wedged tab returns the same timeout error to every command
     hung = AsyncMock(return_value={"error": "Browser command timed out"})
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", hung, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", hung, raising=False)
     captured = {}
-    orig = BA.ws_manager.send_to_session
+    orig = BA.WS_MANAGER.send_to_session
 
     async def _cap(session_id, event, payload):
         if event == "agent:status":
             captured["status"] = payload.get("status")
         return await orig(session_id, event, payload)
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", _cap, raising=False)
 
     r = asyncio.run(BA.run_browser_agent(
         task="Read the page", browser_id="b1", model="sonnet", initial_url=DOC_URL,
@@ -1070,14 +1070,14 @@ def test_ambient_memory_signals_fire_calmly(monkeypatch, mocker):
             return Resp([Blk("text", _json.dumps({"playbook": ["search company+React, not generic"]}))],
                         stop_reason="end_turn")
     msgs = []
-    orig = BA.ws_manager.send_to_session
+    orig = BA.WS_MANAGER.send_to_session
 
     async def _cap(session_id, event, payload):
         if event == "agent:message":
             c = payload.get("message", {}).get("content")
             msgs.append(c if isinstance(c, str) else (c or {}).get("text", ""))
         return await orig(session_id, event, payload)
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", _cap, raising=False)
 
     def _run():
         return FakeLLM([
@@ -1090,7 +1090,7 @@ def test_ambient_memory_signals_fire_calmly(monkeypatch, mocker):
 
     # Run 1: nothing learned yet -> NO recall line, but it learns -> closing line.
     _install(mocker, monkeypatch, _run(), PBAux())
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", _cap, raising=False)
     asyncio.run(BA.run_browser_agent(task="find engineers", browser_id="b1", model="sonnet", initial_url=DOC_URL))
     joined1 = " ".join(msgs)
     assert "Picking up what I learned" not in joined1, "no recall on the first-ever visit"
@@ -1099,7 +1099,7 @@ def test_ambient_memory_signals_fire_calmly(monkeypatch, mocker):
     # Run 2: now there's a playbook -> recall line fires.
     msgs.clear()
     _install(mocker, monkeypatch, _run(), PBAux())
-    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_to_session", _cap, raising=False)
     asyncio.run(BA.run_browser_agent(task="find more", browser_id="b2", model="sonnet", initial_url=DOC_URL))
     assert any("Picking up what I learned about docs.google.com" in m for m in msgs), "recall line on a return visit"
 
@@ -1162,7 +1162,7 @@ def test_batch_replay_runs_a_read_loop_for_all_values(monkeypatch, mocker):
         if action == "navigate":
             return {"text": "Navigated", "url": params.get("url")}
         return {"text": "ok", "url": DOC_URL}
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _data, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _data, raising=False)
 
     asyncio.run(BA.run_browser_agent(task="read three profiles", browser_id="b1", model="sonnet", initial_url=DOC_URL))
     navs = [c for c in sent if c["action"] == "navigate" and "/in/" in c["params"].get("url", "")]
@@ -1196,7 +1196,7 @@ def test_batch_replay_is_ghost_proof_when_an_item_does_not_match(monkeypatch, mo
         if action == "navigate":
             return {"text": "Navigated", "url": params.get("url")}
         return {"text": "profile data", "url": DOC_URL}
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _vary, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _vary, raising=False)
 
     asyncio.run(BA.run_browser_agent(task="read three", browser_id="b1", model="sonnet", initial_url=DOC_URL))
     all_msgs = json.dumps([c["messages"] for c in primary.calls])
@@ -1256,13 +1256,13 @@ def test_captured_routes_are_surfaced_once_per_host(monkeypatch, mocker):
         Resp([Blk("text", "done")], stop_reason="end_turn"),
     ])
     _install(mocker, monkeypatch, primary, FakeAux())
-    orig = BA.ws_manager.send_browser_command
+    orig = BA.WS_MANAGER.send_browser_command
 
     async def _with_routes(request_id, action, browser_id, params, tab_id=""):
         if action == "evaluate":
             return {"text": "Reddit Programming", "url": DOC_URL, "routes_available": 4}
         return await orig(request_id, action, browser_id, params, tab_id)
-    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _with_routes, raising=False)
+    monkeypatch.setattr(BA.WS_MANAGER, "send_browser_command", _with_routes, raising=False)
 
     asyncio.run(BA.run_browser_agent(task="browse", browser_id="b1", model="sonnet", initial_url=DOC_URL))
     # messages are cumulative across calls, so count within ONE call's full
