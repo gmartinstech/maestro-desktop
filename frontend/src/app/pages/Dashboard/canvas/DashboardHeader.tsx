@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import DashboardIcon from '@mui/icons-material/Dashboard';
+import { LayoutDashboard } from 'lucide-react';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import LanguageIcon from '@mui/icons-material/Language';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import ShareButton from '@/app/components/share/ShareButton';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
@@ -111,20 +112,24 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 1,
-          bgcolor: c.bg.surface,
-          border: `1px solid ${c.border.medium}`,
-          borderRadius: expanded ? `${c.radius.lg}px ${c.radius.lg}px 0 0` : `${c.radius.lg}px`,
-          boxShadow: c.shadow.sm,
-          py: 0.75,
-          px: 1.5,
+          gap: 0.75,
+          // macOS-toolbar vibrancy: a faint translucent material + blur so the
+          // title stays legible over the dot grid without a hard box.
+          bgcolor: expanded ? c.bg.surface : `${c.bg.surface}40`,
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+          borderRadius: '6px',
+          py: 0.5,
+          px: 0.75,
           cursor: hasItems ? 'pointer' : 'default',
           userSelect: 'none',
-          transition: 'border-radius 0.2s',
-          '&:hover': hasItems ? { bgcolor: c.bg.secondary } : {},
+          transition: 'background-color 0.12s ease',
+          '&:hover': hasItems ? { bgcolor: `${c.bg.surface}99` } : {},
         }}
       >
-        <DashboardIcon sx={{ fontSize: 'small', color: c.accent.primary }} />
+        <Box sx={{ display: 'flex', color: c.accent.primary, flexShrink: 0 }}>
+          <LayoutDashboard size={16} strokeWidth={1.75} />
+        </Box>
         <Typography
           noWrap
           sx={{
@@ -142,11 +147,19 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             sx={{
               fontSize: 18,
               color: c.text.tertiary,
-              transition: 'transform 0.2s',
+              transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
               transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
               ml: 0.25,
             }}
           />
+        )}
+        {dashboardId && (
+          <Box sx={{ ml: 0.25, display: 'flex' }}>
+            <ShareButton
+              target={{ kind: 'dashboard', id: dashboardId, name: dashboardName || 'Dashboard' }}
+              iconFontSize={15}
+            />
+          </Box>
         )}
       </Box>
 
@@ -167,10 +180,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         >
           <Box
             sx={{
+              mt: 0.5,
               bgcolor: c.bg.surface,
               border: `1px solid ${c.border.medium}`,
-              borderTop: 'none',
-              borderRadius: `0 0 ${c.radius.lg}px ${c.radius.lg}px`,
+              borderRadius: `${c.radius.lg}px`,
               boxShadow: c.shadow.md,
               py: 0.75,
               overflowY: 'auto',
