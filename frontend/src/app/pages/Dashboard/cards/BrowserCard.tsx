@@ -303,11 +303,6 @@ const BrowserCard: React.FC<Props> = ({
           // (the historical Windows mount segfault). Clear the crash-safety marker.
           if (isWindows) markWindowsWebviewSurvived();
           wv.loadURL(targetUrl).catch(() => {});
-          // Disable in-guest pinch zoom; page zoom (cmd+= / cmd+-) still works via chromium.
-          try {
-            (wv as any).setVisualZoomLevelLimits?.(1, 1);
-            (wv as any).setZoomFactor?.(1);
-          } catch (_) {}
         };
         wv.addEventListener('dom-ready', doLoad, { once: true });
         cleanups.push(() => wv.removeEventListener('dom-ready', doLoad));
