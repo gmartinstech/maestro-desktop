@@ -148,7 +148,3 @@ def _atomic_write_settings(payload: dict) -> None:
 def save_settings(settings_obj: AppSettings) -> None:
     """Sync atomic persist; thread-safe. Async callers should prefer save_settings_async (Defender can stretch writes to 50-200ms)."""
     _atomic_write_settings(settings_obj.model_dump())
-
-
-def _save_settings(settings_obj: AppSettings) -> None:
-    save_settings(settings_obj)

@@ -3,7 +3,7 @@ import json
 import logging
 from fastapi import WebSocket
 
-from backend.apps.agents.core.seq_log import TERMINAL_STATUSES, seq_log
+from backend.apps.agents.core.seq_log import TERMINAL_STATUSES, SEQ_LOG
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ async def _await_reconnect(has_conn) -> bool:
 
 
 class ConnectionManager:
-    """Manages WebSocket connections and HITL approval bridging; events flow through seq_log so reconnects can replay."""
+    """Manages WebSocket connections and HITL approval bridging; events flow through SEQ_LOG so reconnects can replay."""
 
     def __init__(self):
         self.connections: dict[str, list[WebSocket]] = {}
@@ -75,7 +75,7 @@ class ConnectionManager:
 
     async def send_to_session(self, session_id: str, event: str, data: dict):
         """Broadcast a session event with monotonic sequencing; terminal statuses also persist to disk."""
-        async with seq_log.stamp(session_id, event, data) as (seq, payload_str):
+        async with SEQ_LOG.stamp(session_id, event, data) as (seq, payload_str):
             for ws in list(self.connections.get(session_id, [])):
                 try:
                     await ws.send_text(payload_str)
@@ -88,13 +88,13 @@ class ConnectionManager:
                     logger.debug("send_to_session: global send failed", exc_info=True)
             # Persist under the lock so a concurrent running status can't race past and overwrite with stale state.
             if event == "agent:status" and data.get("status") in TERMINAL_STATUSES:
-                seq_log.persist_terminal(session_id, payload_str)
+                SEQ_LOG.persist_terminal(session_id, payload_str)
 
     async def replay_to(
         self, session_id: str, websocket: WebSocket, last_seq: int
     ) -> dict:
         """Replay buffered events with seq > last_seq; returns ack envelope for the resume handshake."""
-        oldest, newest, events = seq_log.replay(session_id, last_seq)
+        oldest, newest, events = SEQ_LOG.replay(session_id, last_seq)
 
         # Gap-check first: if last_seq predates the buffer, signal REST-refresh; last_seq=0 means fresh client (full replay).
         if last_seq > 0 and oldest is not None and last_seq < oldest - 1:
@@ -150,7 +150,7 @@ class ConnectionManager:
                 "to_seq": newest,
             }
 
-        terminal = seq_log.load_terminal(session_id)
+        terminal = SEQ_LOG.load_terminal(session_id)
         if terminal is not None:
             try:
                 await websocket.send_text(terminal)
@@ -211,7 +211,7 @@ class ConnectionManager:
         return out
 
     async def broadcast_global(self, event: str, data: dict):
-        """Send to all dashboard connections; bypasses seq_log (dashboard resumes via full state refetch)."""
+        """Send to all dashboard connections; bypasses SEQ_LOG (dashboard resumes via full state refetch)."""
         payload = json.dumps({"event": event, "data": data})
         for ws in list(self.global_connections):
             try:
@@ -286,7 +286,7 @@ class ConnectionManager:
             deadline = loop.time() + timeout
             # Re-broadcast until a client answers: a silently-dead dashboard
             # socket takes up to ~35s of heartbeat to notice, and a command
-            # sent into that gap is lost forever (broadcast skips seq_log).
+            # sent into that gap is lost forever (broadcast skips SEQ_LOG).
             # The renderer dedupes by request_id so re-sends can't double-act.
             while True:
                 await self.broadcast_global("browser:command", payload)

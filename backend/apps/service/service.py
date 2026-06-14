@@ -75,8 +75,8 @@ async def _pulse_loop():
 
         cost_delta = 0.0
         try:
-            from backend.apps.nine_router import get_usage_stats, is_running as _9r_running
-            if _9r_running():
+            from backend.apps.nine_router.process import get_usage_stats, is_running
+            if is_running():
                 stats = await get_usage_stats()
                 if stats:
                     cur_cost = stats.get("totalCost", 0) or 0
@@ -124,13 +124,14 @@ async def service_lifespan():
     global _pulse_task, _drain_task
 
     try:
-        from backend.apps.settings.settings import load_settings, _save_settings
+        from backend.apps.settings.settings import load_settings
+        from backend.apps.settings.store import save_settings
         settings = load_settings()
 
         is_first_open = settings.first_opened_at is None
         if is_first_open:
             settings.first_opened_at = datetime.now().isoformat()
-            _save_settings(settings)
+            save_settings(settings)
 
         days_since_install = 0
         if settings.first_opened_at:
@@ -192,8 +193,8 @@ async def service_lifespan():
         logger.debug(f"Service startup event failed (non-critical): {e}")
 
     try:
-        from backend.apps.nine_router import ensure_running as ensure_9router
-        await ensure_9router()
+        from backend.apps.nine_router.process import ensure_running
+        await ensure_running()
     except Exception as e:
         logger.debug(f"9Router auto-start skipped: {e}")
 
@@ -219,8 +220,8 @@ async def service_lifespan():
         _drain_task = None
 
     try:
-        from backend.apps.nine_router import stop as stop_9router
-        stop_9router()
+        from backend.apps.nine_router.process import stop
+        stop()
     except Exception:
         pass
 
@@ -321,8 +322,8 @@ async def usage_summary():
     completed = status_counts.get("completed", 0)
     completion_rate = completed / total_sessions if total_sessions > 0 else 0
 
-    from backend.apps.nine_router import get_usage_stats, is_running as _9r_running
-    nine_router_stats = await get_usage_stats() if _9r_running() else None
+    from backend.apps.nine_router.process import get_usage_stats, is_running
+    nine_router_stats = await get_usage_stats() if is_running() else None
 
     if nine_router_stats and nine_router_stats.get("totalCost", 0) > 0:
         cost_source = "9router"
@@ -382,8 +383,8 @@ async def usage_summary():
 
 @service.router.get("/cost-breakdown")
 async def cost_breakdown(period: str = "7d"):
-    from backend.apps.nine_router import get_usage_stats, is_running as _9r_running
-    if not _9r_running():
+    from backend.apps.nine_router.process import get_usage_stats, is_running
+    if not is_running():
         return {"available": False, "by_model": {}, "by_provider": {}}
     stats = await get_usage_stats(period)
     if not stats:

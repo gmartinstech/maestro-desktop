@@ -14,7 +14,7 @@ FULL_TOOLS = [
 ]
 
 
-def _get_denied_tool_names(tool) -> set[str]:
+def get_denied_tool_names(tool) -> set[str]:
     """Return the set of MCP sub-tool names whose permission is 'deny'."""
     return {
         key for key, value in tool.tool_permissions.items()
@@ -22,14 +22,14 @@ def _get_denied_tool_names(tool) -> set[str]:
     }
 
 
-def _get_all_known_tool_names(tool) -> set[str]:
+def get_all_known_tool_names(tool) -> set[str]:
     """Return all known sub-tool names for an MCP tool (from _tool_descriptions)."""
     return set(tool.tool_permissions.get("_tool_descriptions", {}).keys())
 
 
-def _is_fully_denied(tool) -> bool:
+def is_fully_denied(tool) -> bool:
     """True when every known sub-tool on this MCP server is set to 'deny'."""
-    known = _get_all_known_tool_names(tool)
+    known = get_all_known_tool_names(tool)
     if not known:
         return False
-    return known <= _get_denied_tool_names(tool)
+    return known <= get_denied_tool_names(tool)

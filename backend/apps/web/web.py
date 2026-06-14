@@ -193,16 +193,16 @@ async def _refresh_9r_connected() -> set[str]:
     (e.g. {"claude", "codex", "antigravity", "gemini-cli"}). Cached for
     20s to keep search/fetch endpoints snappy."""
     global _NINE_ROUTER_CONNECTED, _NINE_ROUTER_CACHE_AT
-    import time as _t
-    now = _t.time()
+    import time
+    now = time.time()
     if now - _NINE_ROUTER_CACHE_AT < 20.0:
         return _NINE_ROUTER_CONNECTED
     try:
-        from backend.apps.nine_router import is_running as _9r_running, get_providers as _9r_providers
-        if not _9r_running():
+        from backend.apps.nine_router.process import is_running, get_providers
+        if not is_running():
             _NINE_ROUTER_CONNECTED = set()
         else:
-            conns = await _9r_providers()
+            conns = await get_providers()
             _NINE_ROUTER_CONNECTED = {
                 c.get("provider")
                 for c in conns

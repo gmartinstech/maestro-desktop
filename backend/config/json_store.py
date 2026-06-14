@@ -9,7 +9,7 @@ Two jobs:
   on a garbled/unreadable file, so a single corrupt file can't crash a whole
   load-all path (and take down boot or a page with it).
 
-Settings/seq_log/auth keep their own inlined atomic writers; this is for the
+Settings/SEQ_LOG/auth keep their own inlined atomic writers; this is for the
 stores that were still doing plain open()+dump().
 """
 import json

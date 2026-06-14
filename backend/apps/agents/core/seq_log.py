@@ -13,12 +13,12 @@ from typing import AsyncIterator, Optional
 logger = logging.getLogger(__name__)
 
 # 500 events covers a 30s drop even at ~20Hz thinking deltas (~50KB/session).
-BUFFER_LIMIT = 500
+P_BUFFER_LIMIT = 500
 
-TERMINAL_STATUSES = {"completed", "stopped", "error"}
+P_TERMINAL_STATUSES = {"completed", "stopped", "error"}
 
 
-class _SessionSeqLog:
+class P_SessionSeqLog:
     """Per-session lock + monotonic seq + recent-event ring buffer."""
 
     __slots__ = ("lock", "seq", "buffer")
@@ -27,43 +27,43 @@ class _SessionSeqLog:
         self.lock: asyncio.Lock = asyncio.Lock()
         self.seq: int = 0
         # (seq, json_payload_str): pre-serialized so replays don't redo json.dumps per reconnect.
-        self.buffer: deque[tuple[int, str]] = deque(maxlen=BUFFER_LIMIT)
+        self.buffer: deque[tuple[int, str]] = deque(maxlen=P_BUFFER_LIMIT)
 
 
 class SeqLogStore:
     """Process-wide store. Per-session locks live inside `_SessionSeqLog`."""
 
     def __init__(self, persist_dir: Optional[str] = None) -> None:
-        self._per_session: dict[str, _SessionSeqLog] = {}
+        self.p_per_session: dict[str, P_SessionSeqLog] = {}
         # Coarse lock guards only the setdefault path; never crosses an await.
-        self._dict_lock = asyncio.Lock()
-        self._persist_dir = persist_dir
+        self.p_dict_lock = asyncio.Lock()
+        self.p_persist_dir = persist_dir
         if persist_dir:
             try:
                 os.makedirs(persist_dir, exist_ok=True)
             except Exception:
                 logger.warning("seq_log: failed to create persist dir %s", persist_dir)
 
-    async def _get_or_create(self, session_id: str) -> _SessionSeqLog:
-        log = self._per_session.get(session_id)
+    async def p_get_or_create(self, session_id: str) -> P_SessionSeqLog:
+        log = self.p_per_session.get(session_id)
         if log is not None:
             return log
-        async with self._dict_lock:
+        async with self.p_dict_lock:
             log = self._per_session.get(session_id)
             if log is None:
-                log = _SessionSeqLog()
-                self._per_session[session_id] = log
+                log = P_SessionSeqLog()
+                self.p_per_session[session_id] = log
             return log
 
-    def _peek(self, session_id: str) -> Optional[_SessionSeqLog]:
-        return self._per_session.get(session_id)
+    def p_peek(self, session_id: str) -> Optional[P_SessionSeqLog]:
+        return self.p_per_session.get(session_id)
 
     @asynccontextmanager
     async def stamp(
         self, session_id: str, event: str, data: dict
     ) -> AsyncIterator[tuple[int, str]]:
         """Atomically assign seq, buffer, and yield (seq, payload); caller's send must happen inside the with-block."""
-        log = await self._get_or_create(session_id)
+        log = await self.p_get_or_create(session_id)
         async with log.lock:
             log.seq += 1
             seq = log.seq
@@ -81,7 +81,7 @@ class SeqLogStore:
         self, session_id: str, last_seq: int
     ) -> tuple[Optional[int], Optional[int], list[str]]:
         """Return (oldest_buffered_seq, newest_buffered_seq, events)."""
-        log = self._peek(session_id)
+        log = self.p_peek(session_id)
         if log is None:
             return (None, None, [])
         # asyncio is single-threaded; deque list() is safe vs concurrent append/eviction. No lock needed for read.
@@ -95,21 +95,21 @@ class SeqLogStore:
 
     def current_seq(self, session_id: str) -> int:
         """Last assigned seq, or 0 if no log exists for the session."""
-        log = self._peek(session_id)
+        log = self.p_peek(session_id)
         return log.seq if log else 0
 
-    def _terminal_path(self, session_id: str) -> Optional[str]:
-        if not self._persist_dir:
+    def p_terminal_path(self, session_id: str) -> Optional[str]:
+        if not self.p_persist_dir:
             return None
         # Session ids are uuid4 hex; sanitize anyway against path traversal.
         safe = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
         if not safe:
             return None
-        return os.path.join(self._persist_dir, f"{safe}.json")
+        return os.path.join(self.p_persist_dir, f"{safe}.json")
 
     def persist_terminal(self, session_id: str, payload_str: str) -> None:
         """Atomic write of a terminal event for post-restart clients; best-effort, never blocks broadcast."""
-        path = self._terminal_path(session_id)
+        path = self.p_terminal_path(session_id)
         if not path:
             return
         try:
@@ -123,7 +123,7 @@ class SeqLogStore:
             )
 
     def load_terminal(self, session_id: str) -> Optional[str]:
-        path = self._terminal_path(session_id)
+        path = self.p_terminal_path(session_id)
         if not path or not os.path.exists(path):
             return None
         try:
@@ -134,8 +134,8 @@ class SeqLogStore:
 
     def clear(self, session_id: str) -> None:
         """Drop in-memory log and persisted terminal; for full deletion only, closed-but-retained sessions keep it."""
-        self._per_session.pop(session_id, None)
-        path = self._terminal_path(session_id)
+        self.p_per_session.pop(session_id, None)
+        path = self.p_terminal_path(session_id)
         if path and os.path.exists(path):
             try:
                 os.remove(path)
@@ -143,7 +143,7 @@ class SeqLogStore:
                 pass
 
 
-def _default_persist_dir() -> Optional[str]:
+def p_default_persist_dir() -> Optional[str]:
     try:
         from backend.config.paths import DATA_ROOT
         return os.path.join(DATA_ROOT, "agents", "terminal_events")
@@ -151,4 +151,4 @@ def _default_persist_dir() -> Optional[str]:
         return None
 
 
-seq_log = SeqLogStore(persist_dir=_default_persist_dir())
+SEQ_LOG = SeqLogStore(persist_dir=p_default_persist_dir())

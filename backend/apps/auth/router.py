@@ -52,7 +52,7 @@ async def _sync_pro_routing(settings_obj) -> None:
     paying user into pro mode and sign-out must tear the lane down so a
     revoked bearer doesn't linger in the router."""
     try:
-        from backend.apps.nine_router import sync_pro_routing
+        from backend.apps.nine_router.sync_custom import sync_pro_routing
         await sync_pro_routing(settings_obj)
     except Exception as e:
         logger.debug("pro routing sync skipped: %s", e)
@@ -211,7 +211,7 @@ async def signout():
     # Best-effort: failures here shouldn't block the sign-out itself.
     try:
         from backend.apps.agents.agent_manager import agent_manager
-        from backend.apps.agents.agent_manager import _save_session
+        from backend.apps.agents.manager.session.session_store import save_session
 
         running = list(agent_manager.tasks.keys())
         for session_id in running:
@@ -227,7 +227,7 @@ async def signout():
             if sess.sdk_session_id:
                 sess.sdk_session_id = None
                 try:
-                    _save_session(sess.id, sess.model_dump(mode="json"))
+                    save_session(sess.id, sess.model_dump(mode="json"))
                 except Exception as e:
                     logger.warning("signout: save_session(%s) failed: %s", sess.id, e)
 

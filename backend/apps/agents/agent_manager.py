@@ -33,41 +33,41 @@ from backend.apps.agents.core.error_classify import (
     is_unknown_model_error,
 )
 from backend.apps.agents.manager.session.session_store import (
-    _delete_session_file,
-    _load_all_session_data,
-    _load_session_data,
-    _save_session,
+    delete_session_file,
+    load_all_session_data,
+    load_session_data,
+    save_session,
     build_search_text,
 )
-from backend.apps.agents.manager.session.cloud_sync import _sync_session_close
-from backend.apps.agents.manager.session.workspace_git import _detect_git_identity, _ensure_cwd_git_repo
+from backend.apps.agents.manager.session.cloud_sync import sync_session_close
+from backend.apps.agents.manager.session.workspace_git import detect_git_identity, ensure_cwd_git_repo
 from backend.apps.agents.manager.prompt.tool_catalog import (
     FULL_TOOLS,
-    _get_all_known_tool_names,
-    _get_denied_tool_names,
-    _is_fully_denied,
+    get_all_known_tool_names,
+    get_denied_tool_names,
+    is_fully_denied,
 )
 from backend.apps.agents.core.aux_llm import safe_resp_text, clean_short_label
 from backend.apps.agents.manager.session.history_compaction import (
-    _build_history_prefix,
-    _get_branch_messages,
-    _truncate_large_tool_result,
+    build_history_prefix,
+    get_branch_messages,
+    truncate_large_tool_result,
 )
 from backend.apps.agents.manager.prompt.prompt_context import (
-    _build_browser_context,
-    _build_selected_app_context,
-    _build_connected_tools_context,
-    _build_mcp_registry_summary,
-    _compose_system_prompt,
-    _resolve_attached_skills,
-    _resolve_forced_tools,
-    _resolve_mode,
+    build_browser_context,
+    build_selected_app_context,
+    build_connected_tools_context,
+    build_mcp_registry_summary,
+    compose_system_prompt,
+    resolve_attached_skills,
+    resolve_forced_tools,
+    resolve_mode,
 )
 from backend.apps.agents.manager.prompt.attachments import (
-    _build_dir_tree,
-    _build_prompt_content,
-    _resolve_attachments,
-    _resolve_context_paths,
+    build_dir_tree,
+    build_prompt_content,
+    resolve_attachments,
+    resolve_context_paths,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ def get_all_tool_names() -> list[str]:
         if t.mcp_config
         and t.enabled
         and t.auth_status in ("configured", "connected")
-        and not _is_fully_denied(t)
+        and not is_fully_denied(t)
     ]
     return builtin_tools + mcp_names
 
@@ -130,7 +130,7 @@ class AgentManager:
         self.tasks: dict[str, asyncio.Task] = {}
     
     def _resolve_mode(self, mode_id: str) -> tuple[list[str], str | None, str | None]:
-        return _resolve_mode(mode_id, get_all_tool_names)
+        return resolve_mode(mode_id, get_all_tool_names)
 
     async def _build_mcp_servers(
         self,
@@ -178,7 +178,7 @@ class AgentManager:
                 logger.info(f"[MCP-DEBUG] GATED {server_name}: not in session.active_mcps, model must call MCPActivate first")
                 continue
 
-            if _is_fully_denied(tool):
+            if is_fully_denied(tool):
                 logger.info(f"[MCP-DEBUG] SKIPPED {tool.name}: fully denied")
                 continue
 
@@ -206,19 +206,19 @@ class AgentManager:
         return mcp_servers
 
     def _build_connected_tools_context(self, allowed_tools: list[str]) -> str | None:
-        return _build_connected_tools_context(allowed_tools, get_all_tool_names)
+        return build_connected_tools_context(allowed_tools, get_all_tool_names)
 
     def _build_browser_context(self, dashboard_id: str | None, selected_browser_ids: list[str] | None = None) -> str | None:
-        return _build_browser_context(dashboard_id, selected_browser_ids)
+        return build_browser_context(dashboard_id, selected_browser_ids)
 
     def _build_selected_app_context(self, selected_app_output_ids: list[str] | None) -> str | None:
-        return _build_selected_app_context(selected_app_output_ids)
+        return build_selected_app_context(selected_app_output_ids)
 
     def _build_mcp_registry_summary(self, allowed_tools: list[str], active_mcps: list[str]) -> str | None:
-        return _build_mcp_registry_summary(allowed_tools, active_mcps, get_all_tool_names)
+        return build_mcp_registry_summary(allowed_tools, active_mcps, get_all_tool_names)
 
     def _compose_system_prompt(self, default_prompt: str | None, mode_prompt: str | None, session_prompt: str | None, connected_tools_ctx: str | None = None, browser_ctx: str | None = None, mcp_registry_ctx: str | None = None) -> str | None:
-        return _compose_system_prompt(default_prompt, mode_prompt, session_prompt, connected_tools_ctx, browser_ctx, mcp_registry_ctx)
+        return compose_system_prompt(default_prompt, mode_prompt, session_prompt, connected_tools_ctx, browser_ctx, mcp_registry_ctx)
 
     async def launch_agent(self, config: AgentConfig) -> AgentSession:
         session_id = uuid4().hex
@@ -291,9 +291,9 @@ class AgentManager:
             effective_cwd = os.path.join(_home, ".openswarm", "workspaces", session_id)
             os.makedirs(effective_cwd, exist_ok=True)
 
-        _ensure_cwd_git_repo(effective_cwd, _home)
+        ensure_cwd_git_repo(effective_cwd, _home)
 
-        repo_url, branch_name = _detect_git_identity(effective_cwd)
+        repo_url, branch_name = detect_git_identity(effective_cwd)
 
         session = AgentSession(
             id=session_id,
@@ -322,13 +322,13 @@ class AgentManager:
         return session
 
     def _build_dir_tree(self, root: str, max_depth: int = 4, prefix: str = "") -> list[str]:
-        return _build_dir_tree(root, max_depth, prefix)
+        return build_dir_tree(root, max_depth, prefix)
 
     def _resolve_forced_tools(self, forced_tools: list[str] | None) -> str:
-        return _resolve_forced_tools(forced_tools)
+        return resolve_forced_tools(forced_tools)
 
     def _resolve_attached_skills(self, attached_skills: list | None) -> str:
-        return _resolve_attached_skills(attached_skills)
+        return resolve_attached_skills(attached_skills)
 
     # ------------------------------------------------------------------
     # Compaction & token guard (Phase 2)
@@ -351,12 +351,12 @@ class AgentManager:
         sets compacted_through_msg_id and emits a context_status event.
         Never modifies session.messages, originals stay around for the
         UI drawer; only the history *sent to the SDK* is trimmed (handled
-        in _build_history_prefix lookups).
+        in build_history_prefix lookups).
         """
         ctx_used = session.tokens.get("input", 0) / max(1, session.context_window)
         if not force and ctx_used < session.compact_threshold_pct:
             return False
-        msgs = _get_branch_messages(session)
+        msgs = get_branch_messages(session)
         if len(msgs) < 4:
             return False
         # Summarize everything up to (but not including) the last 6
@@ -373,13 +373,13 @@ class AgentManager:
         return True
 
     def _build_prompt_content(self, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, api_type: str = "anthropic", model: str = ""):
-        return _build_prompt_content(prompt, images, context_paths, forced_tools, attached_skills, api_type, model)
+        return build_prompt_content(prompt, images, context_paths, forced_tools, attached_skills, api_type, model)
 
     def _resolve_attachments(self, context_paths: list | None, api_type: str, model: str) -> tuple[str, list[dict], list[str]]:
-        return _resolve_attachments(context_paths, api_type, model)
+        return resolve_attachments(context_paths, api_type, model)
 
     def _resolve_context_paths(self, context_paths: list | None) -> str:
-        return _resolve_context_paths(context_paths)
+        return resolve_context_paths(context_paths)
 
     async def _run_agent_loop(self, session_id: str, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, fork_session: bool = False, selected_browser_ids: list[str] | None = None, selected_app_output_ids: list[str] | None = None):
         """Run the Claude Agent SDK query loop for a session."""
@@ -387,8 +387,8 @@ class AgentManager:
         if not session:
             return
         
-        from backend.apps.agents.providers.registry import get_api_type as _get_api_type
-        _api = _get_api_type(session.model)
+        from backend.apps.agents.providers.registry import get_api_type as idk_get_api_type
+        _api = idk_get_api_type(session.model)
         prompt_content = self._build_prompt_content(
             prompt, images, context_paths, forced_tools, attached_skills,
             api_type=_api, model=session.model,
@@ -997,7 +997,7 @@ class AgentManager:
             # at *write* time (before the next turn ships history to the
             # SDK) so the bloat never re-enters context.
             try:
-                truncated_content, blob_path = _truncate_large_tool_result(
+                truncated_content, blob_path = truncate_large_tool_result(
                     result_msg.content, session.id, result_msg.id
                 )
                 if blob_path:
@@ -1248,8 +1248,8 @@ class AgentManager:
             # settings is NOT enough; it must be a *-api route model. Everyone
             # else registers openswarm-web and cascades through /api/web/search.
             from backend.apps.agents.tools.web import anthropic_web_search_is_reliable
-            from backend.apps.agents.providers.registry import _find_builtin_model as _fbm_web
-            _web_model_entry = _fbm_web(session.model)
+            from backend.apps.agents.providers.registry import find_builtin_model as fbm_web
+            _web_model_entry = fbm_web(session.model)
             _uses_direct_anthropic_api = (
                 _web_model_entry is not None
                 and _web_model_entry.get("route") == "api"
@@ -1344,8 +1344,8 @@ class AgentManager:
                         None,
                     )
                     if tool_def:
-                        denied = _get_denied_tool_names(tool_def)
-                        known = _get_all_known_tool_names(tool_def)
+                        denied = get_denied_tool_names(tool_def)
+                        known = get_all_known_tool_names(tool_def)
                         for tn in known - denied:
                             policy = tool_def.tool_permissions.get(tn, "ask")
                             if policy == "always_allow":
@@ -1465,12 +1465,12 @@ class AgentManager:
             }
             # cc/cx/gc/ag/gemini/openrouter prefixes force 9Router; route="api"
             # bypasses to the provider's host directly; otherwise Pro proxy or key.
-            from backend.apps.nine_router import is_running as _9r_running
-            from backend.apps.agents.providers.registry import _NINEROUTER_MODEL_PREFIXES
-            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(_NINEROUTER_MODEL_PREFIXES)
+            from backend.apps.nine_router.process import is_running
+            from backend.apps.agents.providers.registry import NINEROUTER_MODEL_PREFIXES
+            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(NINEROUTER_MODEL_PREFIXES)
 
-            from backend.apps.agents.providers.registry import _find_builtin_model
-            _model_entry = _find_builtin_model(session.model)
+            from backend.apps.agents.providers.registry import find_builtin_model
+            _model_entry = find_builtin_model(session.model)
             _is_pinned_api_route = (
                 _model_entry is not None
                 and _model_entry.get("route") == "api"
@@ -1513,18 +1513,18 @@ class AgentManager:
                 # User-configured OpenAI-compatible endpoint (Ollama Cloud,
                 # Together, local Ollama, etc.). Routes through 9Router's
                 # openai-compatible provider node we synced from settings.
-                from backend.apps.nine_router import ensure_running as _9r_ensure_c
-                if not _9r_running():
+                from backend.apps.nine_router.process import ensure_running
+                if not is_running():
                     logger.info(f"[MCP-DEBUG] custom provider selected but 9Router not running; waiting for startup")
-                    await _9r_ensure_c()
-                    if not _9r_running():
+                    await ensure_running()
+                    if not is_running():
                         raise ValueError(
                             "9Router could not start. Custom OpenAI-compatible "
                             "providers need 9Router to translate the Anthropic "
                             "protocol, install Node.js and restart the app."
                         )
-                from backend.apps.agents.providers.registry import _find_custom_provider_for_value
-                cp = _find_custom_provider_for_value(global_settings, session.model)
+                from backend.apps.agents.providers.registry import find_custom_provider_for_value
+                cp = find_custom_provider_for_value(global_settings, session.model)
                 env = {
                     "ANTHROPIC_API_KEY": "9router",
                     "ANTHROPIC_BASE_URL": "http://localhost:20128",
@@ -1538,8 +1538,8 @@ class AgentManager:
                     # CLI can issue requests. Servers that DO check auth always
                     # have a real key configured.
                     env["OPENAI_API_KEY"] = (cp.api_key or "").strip() or "no-auth-required"
-                    from backend.apps.nine_router import normalize_openai_compat_base_url as _norm_cp_url
-                    env["OPENAI_BASE_URL"] = _norm_cp_url(cp.base_url or "")
+                    from backend.apps.nine_router.sync_custom import normalize_openai_compat_base_url
+                    env["OPENAI_BASE_URL"] = normalize_openai_compat_base_url(cp.base_url or "")
                 # Pin subagent ids, without these, CLI's default Haiku 4.5
                 # gets sent to the custom provider and 404s.
                 if global_settings.anthropic_api_key:
@@ -1575,11 +1575,11 @@ class AgentManager:
                 # CLI's WebSearch delegation needs an Anthropic-shaped lane;
                 # if the user has no Anthropic key/sub/Pro, fall back to OR's
                 # resold Claude so subagents stay on the same OR billing.
-                if not _9r_running():
-                    from backend.apps.nine_router import ensure_running as _9r_ensure
+                if not is_running():
+                    from backend.apps.nine_router.process import ensure_running
                     logger.info(f"[MCP-DEBUG] OpenRouter selected but 9Router not running; waiting for startup")
-                    await _9r_ensure()
-                    if not _9r_running():
+                    await ensure_running()
+                    if not is_running():
                         raise ValueError(
                             "9Router could not start. OpenRouter routing requires "
                             "Node.js, install it and restart the app, or pick a "
@@ -1619,7 +1619,7 @@ class AgentManager:
             elif api_type == "anthropic" and not resolved_is_9router and global_settings.anthropic_api_key:
                 options_kwargs["env"] = {"ANTHROPIC_API_KEY": global_settings.anthropic_api_key}
                 logger.info("[MCP-DEBUG] Using direct Anthropic API key")
-            elif _9r_running():
+            elif is_running():
                 # Gemini-bound ids go through the local proxy for schema scrubbing;
                 # everything else hits 9Router directly.
                 _is_gemini_bound = (
@@ -1663,10 +1663,10 @@ class AgentManager:
                 logger.info(f"[MCP-DEBUG] Using 9Router (api_type={api_type})")
             else:
                 if api_type != "anthropic":
-                    from backend.apps.nine_router import ensure_running as _9r_ensure
+                    from backend.apps.nine_router.process import ensure_running
                     logger.info(f"[MCP-DEBUG] 9Router not running for non-Anthropic model {session.model}; waiting for startup")
-                    await _9r_ensure()
-                    if _9r_running():
+                    await ensure_running()
+                    if is_running():
                         options_kwargs["env"] = {
                             "ANTHROPIC_API_KEY": "9router",
                             "ANTHROPIC_BASE_URL": "http://localhost:20128",
@@ -1726,7 +1726,7 @@ class AgentManager:
                 # the git-init block in launch_agent, leaving them
                 # without a valid HEAD. Ensure it here so subagent
                 # worktree-add always works.
-                _ensure_cwd_git_repo(session.cwd)
+                ensure_cwd_git_repo(session.cwd)
                 options_kwargs["cwd"] = session.cwd
 
             try:
@@ -1764,7 +1764,7 @@ class AgentManager:
             # Fresh-restart path: some session changes must not reuse the
             # CLI's resume transcript. MCPActivate needs a new transport so
             # tool schemas are reread; branch edits/switches need the model
-            # to see only _get_branch_messages(session), not facts from the
+            # to see only get_branch_messages(session), not facts from the
             # old branch's SDK transcript. Soft restart: drop resume +
             # sdk_session_id, replay local history via the prompt, let the
             # SDK build a clean session from the current app state.
@@ -1785,8 +1785,8 @@ class AgentManager:
                 if session.needs_fork:
                     session.needs_fork = False
             elif len(session.messages) > 1:
-                history = _build_history_prefix(
-                    _get_branch_messages(session),
+                history = build_history_prefix(
+                    get_branch_messages(session),
                     cutoff_msg_id=session.compacted_through_msg_id,
                 )
                 if history:
@@ -1990,11 +1990,11 @@ class AgentManager:
                 # answer text (e.g. 13).
                 if not _turn_thinking_text_parts or force_provider_unavailable:
                     try:
-                        from backend.apps.nine_router import (
+                        from backend.apps.nine_router.process import (
                             get_latest_reasoning_tokens,
-                            is_running as _9r_running,
+                            is_running
                         )
-                        if _9r_running():
+                        if is_running():
                             rt = await get_latest_reasoning_tokens(model_hint=session.model)
                             if rt and rt > 0:
                                 upstream_reasoning_tokens = rt
@@ -2039,11 +2039,11 @@ class AgentManager:
                     turn_tokens = max(_turn_output_tokens, heuristic_tokens)
                 else:
                     try:
-                        from backend.apps.nine_router import (
+                        from backend.apps.nine_router.process import (
                             get_latest_reasoning_tokens,
-                            is_running as _9r_running,
+                            is_running,
                         )
-                        if _9r_running():
+                        if is_running():
                             rt = await get_latest_reasoning_tokens(model_hint=session.model)
                             if rt and rt > 0:
                                 turn_tokens = rt
@@ -2704,7 +2704,7 @@ class AgentManager:
                                 cost = 0.0
                             elif isinstance(resolved_model, str) and resolved_model.startswith("openrouter/"):
                                 # SDK assumes Anthropic rates → 50-100× off for OR.
-                                from backend.apps.agents.providers.registry import get_openrouter_pricing
+                                from backend.apps.agents.providers.openrouter import get_openrouter_pricing
                                 pricing = get_openrouter_pricing(resolved_model)
                                 if pricing:
                                     in_rate, out_rate = pricing
@@ -2725,7 +2725,7 @@ class AgentManager:
                                 # ($30 instead of $0.04 per Mehmet-style
                                 # 4-PDF turn). Use the published per-model
                                 # rates instead.
-                                from backend.apps.agents.providers.registry import get_direct_pricing
+                                from backend.apps.agents.providers.openrouter import get_direct_pricing
                                 pricing = get_direct_pricing(resolved_model) or get_direct_pricing(session.model)
                                 if pricing:
                                     in_rate, out_rate = pricing
@@ -3112,7 +3112,7 @@ class AgentManager:
                     "session": session.model_dump(mode="json"),
                 })
                 try:
-                    _save_session(session_id, session.model_dump(mode="json"))
+                    save_session(session_id, session.model_dump(mode="json"))
                 except Exception as e:
                     logger.warning(f"Failed to snapshot session {session_id}: {e}")
 
@@ -3270,7 +3270,7 @@ class AgentManager:
         """Send a follow-up message to an existing session."""
         session = self.sessions.get(session_id)
         if not session:
-            data = _load_session_data(session_id)
+            data = load_session_data(session_id)
             if data:
                 session = AgentSession(**data)
                 _apply_context_window(session)
@@ -3293,8 +3293,8 @@ class AgentManager:
             # responses with placeholder text). Forking starts a new CLI
             # session so history is re-sent fresh in whichever format the
             # new provider expects.
-            from backend.apps.agents.providers.registry import get_api_type as _get_api_type_for_model
-            if _get_api_type_for_model(session.model) != _get_api_type_for_model(model):
+            from backend.apps.agents.providers.registry import get_api_type as get_api_type_for_model
+            if get_api_type_for_model(session.model) != get_api_type_for_model(model):
                 session.needs_fork = True
                 logger.info(f"[MCP-DEBUG] Forking session: api_type changed {session.model}→{model}")
 
@@ -3523,7 +3523,7 @@ class AgentManager:
             "session": session.model_dump(mode="json"),
         })
         try:
-            _save_session(session_id, session.model_dump(mode="json"))
+            save_session(session_id, session.model_dump(mode="json"))
         except Exception as e:
             logger.warning(f"Failed to snapshot session {session_id}: {e}")
 
@@ -3822,8 +3822,8 @@ class AgentManager:
             return
 
         try:
-            from backend.apps.agents.providers.registry import _find_builtin_model
-            entry = _find_builtin_model(session.model)
+            from backend.apps.agents.providers.registry import find_builtin_model
+            entry = find_builtin_model(session.model)
             if not entry or entry.get("api") != "anthropic":
                 return  # other providers handle caching automatically
 
@@ -3962,7 +3962,7 @@ class AgentManager:
         return build_search_text(session, max_len)
 
     def _sync_session_close(self, session: AgentSession, close_reason: str = "user"):
-        _sync_session_close(session, close_reason)
+        sync_session_close(session, close_reason)
 
     async def close_session(self, session_id: str) -> None:
         """Close a session: pause the agent if running, persist to JSON file,
@@ -4002,7 +4002,7 @@ class AgentManager:
         doc_data = session.model_dump(mode="json")
         doc_data["search_text"] = self._build_search_text(session)
 
-        _save_session(session_id, doc_data)
+        save_session(session_id, doc_data)
 
         await ws_manager.send_to_session(session_id, "agent:closed", {
             "session_id": session_id,
@@ -4041,7 +4041,7 @@ class AgentManager:
         self.sessions.pop(session_id, None)
         self.tasks.pop(session_id, None)
 
-        _delete_session_file(session_id)
+        delete_session_file(session_id)
         logger.info(f"Session {session_id} permanently deleted")
 
     async def resume_session(self, session_id: str) -> AgentSession:
@@ -4049,7 +4049,7 @@ class AgentManager:
         if session_id in self.sessions:
             return self.sessions[session_id]
 
-        data = _load_session_data(session_id)
+        data = load_session_data(session_id)
         if data is None:
             raise ValueError(f"Session {session_id} not found in history")
 
@@ -4064,7 +4064,7 @@ class AgentManager:
         # chat permanently removed it from history on the next restart.
         # The disk copy stays as the durable record; subsequent turn
         # completions and close_session calls overwrite it via
-        # _save_session, so memory and disk stay in sync.
+        # save_session, so memory and disk stay in sync.
 
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id,
@@ -4083,7 +4083,7 @@ class AgentManager:
         dashboard_id: str | None = None,
     ) -> dict:
         """Return paginated, optionally filtered summaries of closed sessions."""
-        all_data = _load_all_session_data()
+        all_data = load_all_session_data()
         all_data.sort(key=lambda pair: pair[1].get("closed_at") or "", reverse=True)
 
         q_lower = q.strip().lower()
@@ -4118,7 +4118,7 @@ class AgentManager:
 
     async def reconcile_on_startup(self) -> None:
         """Mark any stale running sessions as stopped."""
-        for sid, data in _load_all_session_data():
+        for sid, data in load_all_session_data():
             dirty = False
             if data.get("status") in ("running", "waiting_approval"):
                 data["status"] = "stopped"
@@ -4130,7 +4130,7 @@ class AgentManager:
                 data["mode"] = "ask"
                 dirty = True
             if dirty:
-                _save_session(sid, data)
+                save_session(sid, data)
 
     async def persist_all_sessions(self) -> None:
         """Flush every in-memory session to JSON files (for graceful shutdown)."""
@@ -4147,7 +4147,7 @@ class AgentManager:
             self._sync_session_close(session, close_reason="shutdown")
             doc_data = session.model_dump(mode="json")
             doc_data["search_text"] = self._build_search_text(session)
-            _save_session(session_id, doc_data)
+            save_session(session_id, doc_data)
             logger.info(f"Persisted session {session_id} on shutdown")
         self.sessions.clear()
         self.tasks.clear()
@@ -4159,7 +4159,7 @@ class AgentManager:
         shutdown).  Sessions with closed_at were explicitly closed by the user
         and stay on disk so the history endpoint can still serve them.
         """
-        for sid, data in _load_all_session_data():
+        for sid, data in load_all_session_data():
             try:
                 session = AgentSession(**data)
             except Exception as e:
@@ -4172,14 +4172,14 @@ class AgentManager:
             session.pending_approvals = []
             _apply_context_window(session)
             self.sessions[session.id] = session
-            _delete_session_file(sid)
+            delete_session_file(sid)
             logger.info(f"Restored session {session.id}")
 
     async def duplicate_session(self, session_id: str, dashboard_id: str | None = None, up_to_message_id: str | None = None) -> AgentSession:
         """Create an independent copy of a session with the same chat history."""
         source = self.sessions.get(session_id)
         if not source:
-            data = _load_session_data(session_id)
+            data = load_session_data(session_id)
             if data is None:
                 raise ValueError(f"Session {session_id} not found")
             source = AgentSession(**data)
@@ -4262,7 +4262,7 @@ class AgentManager:
         """Fork an existing session and send it a new message, returning the result."""
         source = self.sessions.get(source_session_id)
         if not source:
-            data = _load_session_data(source_session_id)
+            data = load_session_data(source_session_id)
             if data is None:
                 raise ValueError(f"Session {source_session_id} not found")
             source = AgentSession(**data)
@@ -4387,7 +4387,7 @@ class AgentManager:
                 results.append(s.model_dump(mode="json"))
                 seen.add(s.id)
 
-        for sid, data in _load_all_session_data():
+        for sid, data in load_all_session_data():
             if sid in seen:
                 continue
             if data.get("mode") == "browser-agent" and data.get("parent_session_id") == parent_session_id:

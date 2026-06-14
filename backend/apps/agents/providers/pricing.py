@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 
 # ---------------------------------------------------------------------------
 # Curated model tiers; Intelligence, Speed, Cost on a 1-5 scale
@@ -185,7 +186,7 @@ MODEL_TIERS: dict[str, tuple[int, int, int]] = {
 }
 
 
-def _heuristic_tiers(label: str, output_cost_per_1m: float, reasoning: bool) -> tuple[int, int, int]:
+def p_heuristic_tiers(label: str, output_cost_per_1m: float, reasoning: bool) -> tuple[int, int, int]:
     """Fallback tier scoring for models not in MODEL_TIERS. Tries to
     extract a parameter count from the label (8B/70B/235B/etc.) and
     use that as a stronger size signal than cost alone, since open-
@@ -204,7 +205,6 @@ def _heuristic_tiers(label: str, output_cost_per_1m: float, reasoning: bool) -> 
         - inverse of size, with name keywords as ±1 nudges.
       Cost: pure cost bucket.
     """
-    import re as _re
     out = output_cost_per_1m or 0.0
 
     # Cost bucket; same 5-tier cost ladder as before.
@@ -225,7 +225,7 @@ def _heuristic_tiers(label: str, output_cost_per_1m: float, reasoning: bool) -> 
     # clearly above 1B (so we don't pick up version numbers).
     lower = (label or "").lower()
     param_b = 0.0
-    for m in _re.finditer(r"\b(\d{1,4}(?:\.\d+)?)\s*b\b", lower):
+    for m in re.finditer(r"\b(\d{1,4}(?:\.\d+)?)\s*b\b", lower):
         try:
             v = float(m.group(1))
             if v >= 1 and v > param_b:
@@ -259,9 +259,9 @@ def _heuristic_tiers(label: str, output_cost_per_1m: float, reasoning: bool) -> 
 
     # Speed inverse of intel.
     speed = 6 - intel
-    if _re.search(r"\b(mini|lite|flash|haiku|nano|small|fast|turbo|micro|tiny)\b", lower):
+    if re.search(r"\b(mini|lite|flash|haiku|nano|small|fast|turbo|micro|tiny)\b", lower):
         speed += 1
-    if _re.search(r"\b(opus|ultra|max|xlarge|titan|huge)\b", lower):
+    if re.search(r"\b(opus|ultra|max|xlarge|titan|huge)\b", lower):
         speed -= 1
     if reasoning and intel >= 4:
         # Frontier reasoning models burn lots of tokens on hidden
@@ -310,7 +310,7 @@ def compute_tiers(
         if c in MODEL_TIERS:
             return MODEL_TIERS[c]
 
-    return _heuristic_tiers(label, output_cost_per_1m, reasoning)
+    return p_heuristic_tiers(label, output_cost_per_1m, reasoning)
 
 
 def compute_billing_kind(

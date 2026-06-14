@@ -100,10 +100,10 @@ async def _has_connected_subscription() -> bool:
     connections live in 9Router, not settings, so the sync check above misses
     them; this catches a sub connected while the trial was armed."""
     try:
-        from backend.apps.nine_router import is_running as _9r_running, get_providers as _9r_providers
-        if not _9r_running():
+        from backend.apps.nine_router.process import is_running, get_providers
+        if not is_running():
             return False
-        conns = await _9r_providers()
+        conns = await get_providers()
         return any(
             c.get("isActive") and c.get("provider") in ("claude", "codex", "gemini-cli")
             for c in conns
@@ -118,7 +118,7 @@ def _proxy_base(settings_obj) -> str:
 
 async def _sync_routing(settings_obj) -> None:
     try:
-        from backend.apps.nine_router import sync_pro_routing
+        from backend.apps.nine_router.sync_custom import sync_pro_routing
         await sync_pro_routing(settings_obj)
     except Exception as e:
         logger.debug("free-trial routing sync skipped: %s", e)

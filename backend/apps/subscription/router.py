@@ -39,7 +39,7 @@ async def _sync_pro_routing(settings_obj) -> None:
     non-Claude primaries). PUT /api/settings no longer carries these fields,
     so the state-change endpoints here are the only trigger left."""
     try:
-        from backend.apps.nine_router import sync_pro_routing
+        from backend.apps.nine_router.sync_custom import sync_pro_routing
         await sync_pro_routing(settings_obj)
     except Exception as e:
         logger.debug("pro routing sync skipped: %s", e)

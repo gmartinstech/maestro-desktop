@@ -8,7 +8,7 @@ from backend.config.paths import SESSIONS_DIR
 logger = logging.getLogger(__name__)
 
 
-def _get_branch_messages(session) -> list:
+def get_branch_messages(session) -> list:
     """Return the linear message list for the active branch, walking the branch tree."""
     branch_id = session.active_branch_id or "main"
     branch = session.branches.get(branch_id)
@@ -48,7 +48,7 @@ def _get_branch_messages(session) -> list:
     return result
 
 
-def _build_history_prefix(messages, cutoff_msg_id: str | None = None) -> str:
+def build_history_prefix(messages, cutoff_msg_id: str | None = None) -> str:
     """Format branch messages into a conversation summary for context injection.
 
     When `cutoff_msg_id` is provided (session.compacted_through_msg_id), drop every
@@ -71,7 +71,7 @@ def _build_history_prefix(messages, cutoff_msg_id: str | None = None) -> str:
     return "<prior_conversation>\n" + "\n".join(lines) + "\n</prior_conversation>"
 
 
-def _truncate_large_tool_result(content: object, session_id: str, msg_id: str, max_bytes: int = 50_000) -> tuple[object, str | None]:
+def truncate_large_tool_result(content: object, session_id: str, msg_id: str, max_bytes: int = 50_000) -> tuple[object, str | None]:
     """Spill a large tool_result body to disk, return a truncated
     inline replacement plus the on-disk path (or None if untouched).
 

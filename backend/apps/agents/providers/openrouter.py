@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import time
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -10,13 +12,13 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # `or:` prefix on picker values so resolve_model_id_for_sdk recognises them
 # without a side-table.
-_OPENROUTER_VALUE_PREFIX = "or:"
+OPENROUTER_VALUE_PREFIX = "or:"
 
-_OR_MODELS_TTL_OK = 3600.0
-_OR_MODELS_TTL_FAIL = 30.0
-_or_models_cache: dict = {"models": None, "fetched_at": 0.0, "ok": False}
+P_OR_MODELS_TTL_OK = 3600.0
+P_OR_MODELS_TTL_FAIL = 30.0
+P_OR_MODELS_CACHE: dict = {"models": None, "fetched_at": 0.0, "ok": False}
 
-_9router_cache: dict = {"available": None, "checked_at": 0}
+P_9ROUTER_CACHE: dict = {"available": None, "checked_at": 0}
 
 
 # Per-model published pricing in $/1M tokens (input, output) for direct
@@ -25,7 +27,7 @@ _9router_cache: dict = {"available": None, "checked_at": 0}
 # Anthropic rates; for any non-Anthropic upstream the SDK number is
 # 50-1000x wrong and we MUST recompute. Used by agent_manager's cost
 # recompute logic.
-_DIRECT_API_PRICING: dict[str, tuple[float, float]] = {
+P_DIRECT_API_PRICING: dict[str, tuple[float, float]] = {
     # OpenAI GPT-5.x family (source: platform.openai.com/docs/pricing).
     "gpt-5.5":             (1.25, 10.00),
     "gpt-5.4":             (1.25, 10.00),
@@ -53,7 +55,7 @@ def get_direct_pricing(model_id: str) -> tuple[float, float] | None:
         if bare.startswith(prefix):
             bare = bare[len(prefix):]
             break
-    return _DIRECT_API_PRICING.get(bare)
+    return P_DIRECT_API_PRICING.get(bare)
 
 
 def get_openrouter_pricing(resolved_model: str) -> tuple[float, float] | None:
@@ -61,7 +63,7 @@ def get_openrouter_pricing(resolved_model: str) -> tuple[float, float] | None:
     if not isinstance(resolved_model, str) or not resolved_model.startswith("openrouter/"):
         return None
     bare = resolved_model[len("openrouter/"):]
-    for m in _or_models_cache.get("models") or []:
+    for m in P_OR_MODELS_CACHE.get("models") or []:
         if m.get("model_id") == bare:
             return (
                 float(m.get("input_cost_per_1m", 0.0)),
@@ -71,26 +73,24 @@ def get_openrouter_pricing(resolved_model: str) -> tuple[float, float] | None:
 
 
 def invalidate_openrouter_cache() -> None:
-    _or_models_cache["models"] = None
-    _or_models_cache["fetched_at"] = 0.0
-    _or_models_cache["ok"] = False
+    P_OR_MODELS_CACHE["models"] = None
+    P_OR_MODELS_CACHE["fetched_at"] = 0.0
+    P_OR_MODELS_CACHE["ok"] = False
 
 
 async def fetch_openrouter_models(api_key: str | None) -> list[dict]:
     """Return OR's tool-capable chat catalog. Cached. Never raises."""
-    import time as _time
     if not api_key:
         invalidate_openrouter_cache()
         return []
 
-    now = _time.monotonic()
-    fetched_at = _or_models_cache["fetched_at"]
-    if _or_models_cache["models"] is not None:
-        ttl = _OR_MODELS_TTL_OK if _or_models_cache["ok"] else _OR_MODELS_TTL_FAIL
+    now = time.monotonic()
+    fetched_at = P_OR_MODELS_CACHE["fetched_at"]
+    if P_OR_MODELS_CACHE["models"] is not None:
+        ttl = P_OR_MODELS_TTL_OK if P_OR_MODELS_CACHE["ok"] else P_OR_MODELS_TTL_FAIL
         if now - fetched_at < ttl:
-            return _or_models_cache["models"]
-
-    import httpx
+            return P_OR_MODELS_CACHE["models"]
+    
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(
@@ -98,12 +98,12 @@ async def fetch_openrouter_models(api_key: str | None) -> list[dict]:
                 headers={"Authorization": f"Bearer {api_key}"},
             )
         if r.status_code != 200:
-            _or_models_cache.update(models=[], fetched_at=now, ok=False)
+            P_OR_MODELS_CACHE.update(models=[], fetched_at=now, ok=False)
             logger.debug(f"OpenRouter /models returned {r.status_code}")
             return []
         raw = r.json().get("data") or []
     except Exception as e:
-        _or_models_cache.update(models=[], fetched_at=now, ok=False)
+        P_OR_MODELS_CACHE.update(models=[], fetched_at=now, ok=False)
         logger.debug(f"OpenRouter /models fetch failed: {e}")
         return []
 
@@ -155,7 +155,7 @@ async def fetch_openrouter_models(api_key: str | None) -> list[dict]:
         except (TypeError, ValueError):
             max_completion = None
         out.append({
-            "value": f"{_OPENROUTER_VALUE_PREFIX}{model_id}",
+            "value": f"{OPENROUTER_VALUE_PREFIX}{model_id}",
             "label": label,
             "context_window": ctx,
             "model_id": model_id,
@@ -170,5 +170,5 @@ async def fetch_openrouter_models(api_key: str | None) -> list[dict]:
             "max_completion_tokens": max_completion,
         })
 
-    _or_models_cache.update(models=out, fetched_at=now, ok=True)
+    P_OR_MODELS_CACHE.update(models=out, fetched_at=now, ok=True)
     return out

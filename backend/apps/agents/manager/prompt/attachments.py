@@ -1,9 +1,9 @@
 import os
 
-from backend.apps.agents.manager.prompt.prompt_context import _resolve_attached_skills, _resolve_forced_tools
+from backend.apps.agents.manager.prompt.prompt_context import resolve_attached_skills, resolve_forced_tools
 
 
-def _build_dir_tree(root: str, max_depth: int = 4, prefix: str = "") -> list[str]:
+def build_dir_tree(root: str, max_depth: int = 4, prefix: str = "") -> list[str]:
     """Build a recursive directory tree listing."""
     lines = []
     try:
@@ -17,12 +17,12 @@ def _build_dir_tree(root: str, max_depth: int = 4, prefix: str = "") -> list[str
     for d in dirs:
         lines.append(f"{prefix}{d}/")
         if max_depth > 1:
-            sub = _build_dir_tree(os.path.join(root, d), max_depth - 1, prefix + "  ")
+            sub = build_dir_tree(os.path.join(root, d), max_depth - 1, prefix + "  ")
             lines.extend(sub)
     return lines
 
 
-def _build_prompt_content(prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, api_type: str = "anthropic", model: str = ""):
+def build_prompt_content(prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, api_type: str = "anthropic", model: str = ""):
     """Build message content for the Anthropic SDK's prompt stream.
 
     Routes attachments per provider:
@@ -42,11 +42,11 @@ def _build_prompt_content(prompt: str, images: list | None = None, context_paths
         anything binary, since native shape varies wildly. Caller can
         opt-in to the OR file-parser via a separate plugins config.
     """
-    context_text, native_blocks, refusals = _resolve_attachments(
+    context_text, native_blocks, refusals = resolve_attachments(
         context_paths, api_type=api_type, model=model,
     )
-    forced_tools_text = _resolve_forced_tools(forced_tools)
-    skills_text = _resolve_attached_skills(attached_skills)
+    forced_tools_text = resolve_forced_tools(forced_tools)
+    skills_text = resolve_attached_skills(attached_skills)
 
     refusal_text = "\n\n".join(refusals)
     parts = [p for p in (forced_tools_text, context_text, refusal_text, skills_text, prompt) if p]
@@ -69,7 +69,7 @@ def _build_prompt_content(prompt: str, images: list | None = None, context_paths
     return content
 
 
-def _resolve_attachments(context_paths: list | None, api_type: str, model: str) -> tuple[str, list[dict], list[str]]:
+def resolve_attachments(context_paths: list | None, api_type: str, model: str) -> tuple[str, list[dict], list[str]]:
     """Split context_paths into:
        - inline text (returned as the existing <context_file> block string)
        - native content blocks for this provider (PDFs/images)
@@ -90,8 +90,8 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
     """
     if not context_paths:
         return "", [], []
-    from backend.apps.settings.settings import _sniff_file_kind
-    import base64 as _b64
+    from backend.apps.settings.settings import sniff_file_kind
+    import base64 as b64
     sections: list[str] = []
     native: list[dict] = []
     refusals: list[str] = []
@@ -164,7 +164,7 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
             sections.append(f"[Context: {path}, not found]")
             continue
         if cp_type == "directory" and os.path.isdir(path):
-            tree_lines = _build_dir_tree(path, max_depth=4)
+            tree_lines = build_dir_tree(path, max_depth=4)
             sections.append(
                 f"<context_directory path=\"{path}\">\n{chr(10).join(tree_lines)}\n</context_directory>"
             )
@@ -176,7 +176,7 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
             size = os.path.getsize(path)
             with open(path, "rb") as fh:
                 head = fh.read(4096)
-            kind, media_type = _sniff_file_kind(head, os.path.basename(path))
+            kind, media_type = sniff_file_kind(head, os.path.basename(path))
 
             if kind == "text":
                 with open(path, "r", errors="replace") as f:
@@ -230,7 +230,7 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
                     )
                     continue
                 with open(path, "rb") as fh:
-                    data_b64 = _b64.b64encode(fh.read()).decode("ascii")
+                    data_b64 = b64.b64encode(fh.read()).decode("ascii")
                 block = {
                     "type": "document",
                     "source": {
@@ -263,7 +263,7 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
                     )
                     continue
                 with open(path, "rb") as fh:
-                    data_b64 = _b64.b64encode(fh.read()).decode("ascii")
+                    data_b64 = b64.b64encode(fh.read()).decode("ascii")
                 native.append({
                     "type": "image",
                     "source": {
@@ -299,7 +299,7 @@ def _resolve_attachments(context_paths: list | None, api_type: str, model: str) 
 # Legacy entry point retained for any external caller; routes to the
 # new attachment resolver with anthropic-default routing (no native
 # blocks emitted, so behavior is the safe text-only old path).
-def _resolve_context_paths(context_paths: list | None) -> str:
-    text, _native, refusals = _resolve_attachments(context_paths, api_type="anthropic", model="")
+def resolve_context_paths(context_paths: list | None) -> str:
+    text, _, refusals = resolve_attachments(context_paths, api_type="anthropic", model="")
     refusal_text = "\n\n".join(refusals)
     return "\n\n".join(p for p in (text, refusal_text) if p)

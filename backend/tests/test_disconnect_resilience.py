@@ -46,27 +46,27 @@ from fastapi.testclient import TestClient
 _TMPROOT = tempfile.mkdtemp(prefix="openswarm-disconnect-test-")
 os.environ.setdefault("OPENSWARM_DATA_DIR", _TMPROOT)
 
-# Push the seq_log persist dir to a deterministic location too.
+# Push the SEQ_LOG persist dir to a deterministic location too.
 _SEQ_DIR = os.path.join(_TMPROOT, "seq_terminals")
 os.makedirs(_SEQ_DIR, exist_ok=True)
 
 
 @pytest.fixture(autouse=True)
 def _patch_persist_dir():
-    """Force the seq_log to use our tmp dir so we can assert on disk state."""
-    from backend.apps.agents.core import seq_log as sl_mod
+    """Point the shared SEQ_LOG singleton at our tmp dir so we can assert on disk state.
 
-    # Rebuild the singleton with our test dir.
-    new_store = sl_mod.SeqLogStore(persist_dir=_SEQ_DIR)
-    monkey = patch.object(sl_mod, "seq_log", new_store)
-    monkey.start()
-    # Also patch the symbol re-exported into ws_manager's import scope.
-    from backend.apps.agents.core import ws_manager as wm_mod
-    wm_monkey = patch.object(wm_mod, "seq_log", new_store)
-    wm_monkey.start()
-    yield new_store
-    monkey.stop()
-    wm_monkey.stop()
+    ws_manager imports SEQ_LOG by value, so both modules hold the same object;
+    patching the object's attribute is visible everywhere with one patch, no
+    need to rebind a name in each import scope.
+    """
+    from backend.apps.agents.core.seq_log import SEQ_LOG
+
+    os.makedirs(_SEQ_DIR, exist_ok=True)
+    with patch.object(SEQ_LOG, "_persist_dir", _SEQ_DIR):
+        # Fresh per-session state so each test is isolated.
+        SEQ_LOG._per_session.clear()
+        yield SEQ_LOG
+        SEQ_LOG._per_session.clear()
 
 
 # ---------------------------------------------------------------------------

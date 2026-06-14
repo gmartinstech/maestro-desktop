@@ -24,19 +24,12 @@ logger = logging.getLogger(__name__)
 async def settings_lifespan():
     os.makedirs(DATA_DIR, exist_ok=True)
     try:
-        from backend.apps.nine_router import (
-            ensure_running as _9r_ensure,
-            is_running as _9r_running,
-            sync_gemini_api_key,
-            sync_openai_api_key,
-            sync_openrouter_api_key,
-            sync_openswarm_pro_as_claude,
-            sync_custom_providers,
-        )
+        from backend.apps.nine_router.process import ensure_running, is_running
+        from backend.apps.nine_router.sync import sync_gemini_api_key, sync_openai_api_key, sync_openrouter_api_key
+        from backend.apps.nine_router.sync_custom import sync_openswarm_pro_as_claude, sync_custom_providers
         s = load_settings()
-        import asyncio as _asyncio
 
-        async def _boot_router_then_sync():
+        async def boot_router_then_sync():
             """Boot 9Router then push key-based connections (sequential: sync helpers no-op pre-boot)."""
             needs_router = any([
                 getattr(s, "google_api_key", None),
@@ -47,7 +40,7 @@ async def settings_lifespan():
             ])
             if needs_router:
                 try:
-                    await _9r_ensure()
+                    await ensure_running()
                 except Exception as e:
                     logger.warning(f"9Router lifespan boot failed: {e}")
             # Reconcile, don't just add: pass the key OR None so a cleared/never-set key
@@ -55,7 +48,7 @@ async def settings_lifespan():
             # old add-only guards left a zombie managed key alive after disconnect, which
             # kept routing to it (the "still defaults to gemini") and blocked the free
             # trial from arming. Only acts when 9Router is already up (_sync no-ops if not).
-            if _9r_running():
+            if is_running():
                 await sync_gemini_api_key(getattr(s, "google_api_key", None) or None)
                 await sync_openai_api_key(getattr(s, "openai_api_key", None) or None)
                 await sync_openrouter_api_key(getattr(s, "openrouter_api_key", None) or None)
@@ -66,14 +59,14 @@ async def settings_lifespan():
                     await sync_openswarm_pro_as_claude(bearer, base)
             await sync_custom_providers(getattr(s, "custom_providers", None) or [])
 
-        _asyncio.create_task(_boot_router_then_sync())
-        _asyncio.create_task(_upload_dir_gc_loop())
+        asyncio.create_task(boot_router_then_sync())
+        asyncio.create_task(p_upload_dir_gc_loop())
     except Exception as e:
         logger.warning(f"9Router sync startup failed: {e}")
     yield
 
 
-async def _upload_dir_gc_loop():
+async def p_upload_dir_gc_loop():
     """Daily GC of UPLOAD_DIR. Without this, every PDF/image the user
     drops sits in the OS temp dir forever, growing unbounded across
     sessions. We keep files for 7 days to make resume-after-restart
@@ -81,7 +74,6 @@ async def _upload_dir_gc_loop():
     by the OS but not aggressively; Windows temp is not. Belt and braces.
     Errors are swallowed: a chmod hiccup or in-use lock should never
     crash the backend."""
-    import asyncio as _a
     while True:
         try:
             now = time.time()
@@ -96,7 +88,7 @@ async def _upload_dir_gc_loop():
                         continue
         except Exception:
             pass
-        await _a.sleep(24 * 3600)
+        await asyncio.sleep(24 * 3600)
 
 
 settings = SubApp("settings", settings_lifespan)
@@ -137,7 +129,7 @@ SERVER_OWNED_FIELDS = (
 
 @settings.router.put("")
 async def update_settings(body: AppSettings):
-    from backend.apps.service.client import sync as _sync
+    from backend.apps.service.client import sync
 
     old = load_settings()
     for k in SERVER_OWNED_FIELDS:
@@ -154,9 +146,8 @@ async def update_settings(body: AppSettings):
             body.free_trial_token = None
             body.free_trial_remaining = None
             try:
-                import asyncio as _aio
-                from backend.apps.nine_router import sync_pro_routing as _spr
-                _aio.create_task(_spr(body))  # drop the now-stale free-trial 9router node
+                from backend.apps.nine_router.sync_custom import sync_pro_routing
+                asyncio.create_task(sync_pro_routing(body))  # drop the now-stale free-trial 9router node
             except Exception:
                 pass
 
@@ -164,11 +155,11 @@ async def update_settings(body: AppSettings):
                    "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
                    "openswarm_bearer_token", "free_trial_token", "installation_id"}
     safe = {k: v for k, v in body.model_dump().items() if k not in secret_keys}
-    _sync(safe)
+    sync(safe)
 
     if (body.user_email and body.user_email != getattr(old, "user_email", None)) or \
        (body.user_name and body.user_name != getattr(old, "user_name", None)):
-        from backend.apps.service.client import identify as _identify
+        from backend.apps.service.client import identify
         id_props = {}
         if body.user_email:
             id_props["email"] = body.user_email
@@ -179,7 +170,7 @@ async def update_settings(body: AppSettings):
         if body.user_referral_source:
             id_props["referral_source"] = body.user_referral_source
         if id_props:
-            _identify(id_props)
+            identify(id_props)
 
     await save_settings_async(body)
 
@@ -208,14 +199,14 @@ async def update_settings(body: AppSettings):
 
     if openrouter_changed:
         try:
-            from backend.apps.agents.providers.registry import invalidate_openrouter_cache
+            from backend.apps.agents.providers.openrouter import invalidate_openrouter_cache
             invalidate_openrouter_cache()
         except Exception:
             pass
 
     # Off the request path: ensure_running() can take 5min on first install (npm pull) and would freeze the loop.
     if google_changed or openai_changed or openrouter_changed or custom_providers_changed:
-        async def _boot_and_sync_keys(
+        async def boot_and_sync_keys(
             google_key: str | None,
             openai_key: str | None,
             openrouter_key: str | None,
@@ -227,16 +218,11 @@ async def update_settings(body: AppSettings):
             need_boot: bool,
         ):
             try:
-                from backend.apps.nine_router import (
-                    ensure_running as _9r_ensure,
-                    is_running as _9r_running,
-                    sync_gemini_api_key,
-                    sync_openai_api_key,
-                    sync_openrouter_api_key,
-                    sync_custom_providers,
-                )
-                if need_boot and not _9r_running():
-                    await _9r_ensure()
+                from backend.apps.nine_router.process import ensure_running, is_running
+                from backend.apps.nine_router.sync import sync_gemini_api_key, sync_openai_api_key, sync_openrouter_api_key
+                from backend.apps.nine_router.sync_custom import sync_custom_providers
+                if need_boot and not is_running():
+                    await ensure_running()
                 if do_google:
                     await sync_gemini_api_key(google_key or None)
                 if do_openai:
@@ -248,7 +234,7 @@ async def update_settings(body: AppSettings):
             except Exception as e:
                 logger.warning(f"Background apikey sync failed: {e}")
 
-        asyncio.create_task(_boot_and_sync_keys(
+        asyncio.create_task(boot_and_sync_keys(
             getattr(body, "google_api_key", None),
             getattr(body, "openai_api_key", None),
             getattr(body, "openrouter_api_key", None),
@@ -306,7 +292,7 @@ UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "self-swarm-uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-def _sniff_file_kind(contents: bytes) -> tuple[str, str | None]:
+def sniff_file_kind(contents: bytes) -> tuple[str, str | None]:
     """Classify an uploaded file as text/pdf/image/binary so the agent
     layer can route it (inline as text, send as native document/image
     block, or refuse). Returns (kind, media_type)."""
@@ -436,7 +422,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
                 pass
             raise
 
-        kind, media_type = _sniff_file_kind(contents, safe_name)
+        kind, media_type = sniff_file_kind(contents, safe_name)
 
         if kind == "text":
             try:

@@ -337,7 +337,8 @@ async def clear_session(session_id: str):
 @agents.router.get("/subscriptions/status")
 async def subscriptions_status():
     """Check if 9Router is running and list connected providers."""
-    from backend.apps.nine_router import is_running, get_providers, get_models
+    from backend.apps.nine_router.process import is_running, get_providers
+    from backend.apps.nine_router.oauth import get_models
     if not is_running():
         return {"running": False, "providers": [], "models": []}
     connections = await get_providers()
@@ -349,7 +350,8 @@ async def subscriptions_status():
 @agents.router.post("/subscriptions/connect")
 async def subscriptions_connect(body: dict):
     """Start OAuth flow for a subscription provider."""
-    from backend.apps.nine_router import is_running, ensure_running, start_oauth
+    from backend.apps.nine_router.process import is_running, ensure_running
+    from backend.apps.nine_router.oauth import start_oauth
     provider = body.get("provider", "")
     if not provider:
         raise HTTPException(status_code=400, detail="provider required")
@@ -386,7 +388,7 @@ async def subscriptions_connect(body: dict):
 @agents.router.post("/subscriptions/poll")
 async def subscriptions_poll(body: dict):
     """Poll for OAuth completion."""
-    from backend.apps.nine_router import poll_oauth
+    from backend.apps.nine_router.oauth import poll_oauth
     provider = body.get("provider", "")
     device_code = body.get("device_code", "")
     if not provider or not device_code:
@@ -410,7 +412,7 @@ async def subscriptions_poll(body: dict):
 @agents.router.post("/subscriptions/exchange")
 async def subscriptions_exchange(body: dict):
     """Exchange OAuth code for tokens via 9Router."""
-    from backend.apps.nine_router import exchange_oauth
+    from backend.apps.nine_router.oauth import exchange_oauth
     provider = body.get("provider", "")
     code = body.get("code", "")
     redirect_uri = body.get("redirect_uri", "")
@@ -434,7 +436,8 @@ async def subscriptions_exchange(body: dict):
 @agents.router.get("/subscriptions/models")
 async def subscriptions_models():
     """List all models available through connected subscriptions."""
-    from backend.apps.nine_router import is_running, get_models
+    from backend.apps.nine_router.process import is_running
+    from backend.apps.nine_router.oauth import get_models
     if not is_running():
         return {"models": []}
     models = await get_models()
@@ -456,7 +459,7 @@ async def probe_model(body: dict):
             _NINEROUTER_MODEL_PREFIXES,
         )
         from backend.apps.settings.settings import load_settings
-        from backend.apps.nine_router import is_running as _9r_running
+        from backend.apps.nine_router.process import is_running
         settings = load_settings()
         api_type = get_api_type(short_name)
         resolved = resolve_model_id_for_sdk(short_name, settings)
@@ -474,7 +477,7 @@ async def probe_model(body: dict):
         )
 
         if resolved_is_9router:
-            if not _9r_running():
+            if not is_running():
                 return {"ok": True, "skipped": True}
             client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
         elif route == "api" and api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
@@ -488,7 +491,7 @@ async def probe_model(body: dict):
         elif api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         else:
-            if not _9r_running():
+            if not is_running():
                 return {"ok": True, "skipped": True}
             client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
 
@@ -521,16 +524,16 @@ async def probe_model(body: dict):
 async def list_models():
     """Picker model list, grouped by provider, intersected with available creds."""
     from backend.apps.agents.providers.registry import BUILTIN_MODELS
-    from backend.apps.nine_router import is_running as _9r_running, get_providers as _9r_providers
+    from backend.apps.nine_router.process import is_running, get_providers
     from backend.apps.settings.settings import load_settings
 
     settings = load_settings()
-    nine_router_up = _9r_running()
+    nine_router_up = is_running()
 
     connected: set[str] = set()
     if nine_router_up:
         try:
-            conns = await _9r_providers()
+            conns = await get_providers()
             raw_providers = {c.get("provider", "") for c in conns if c.get("isActive") or c.get("testStatus") == "active"}
             # 9Router uses "claude"; our models use api="anthropic". Map across.
             _9R_TO_API = {
@@ -697,7 +700,7 @@ async def list_models():
     # Fetch OpenRouter catalog directly (independent of 9Router) so picker fills the moment a key lands.
     if has_openrouter_key:
         try:
-            from backend.apps.agents.providers.registry import fetch_openrouter_models
+            from backend.apps.agents.providers.openrouter import fetch_openrouter_models
             or_models = await fetch_openrouter_models(settings.openrouter_api_key)
         except Exception as e:
             logger.debug(f"OpenRouter catalog fetch failed: {e}")
@@ -743,14 +746,14 @@ async def list_models():
                 result[f"OpenRouter · {pretty}"] = entries
 
     # Custom OpenAI-compatible providers (Ollama Cloud, Together, etc); addressed via custom/<slug>/<model_id>.
-    from backend.apps.agents.providers.registry import _custom_provider_slug_for_lookup
+    from backend.apps.agents.providers.registry import custom_provider_slug_for_lookup
     for cp in (getattr(settings, "custom_providers", None) or []):
         cp_name = (getattr(cp, "name", "") or "").strip()
         cp_base_url = (getattr(cp, "base_url", "") or "").strip()
         cp_models = getattr(cp, "models", None) or []
         if not cp_name or not cp_base_url or not cp_models:
             continue
-        slug = _custom_provider_slug_for_lookup(cp_name)
+        slug = custom_provider_slug_for_lookup(cp_name)
         entries: list[dict] = []
         for m in cp_models:
             bare = (m.get("value") or m.get("id") or "").strip()
@@ -786,7 +789,7 @@ _PROVIDER_CASCADE_REMOVES: dict[str, list[str]] = {
 async def _delete_provider_connections(providers: list[str]) -> int:
     """Delete 9Router connections in `providers`; returns count removed, silent on 9Router unreachable."""
     import httpx
-    from backend.apps.nine_router import NINE_ROUTER_API, get_providers
+    from backend.apps.nine_router.process import NINE_ROUTER_API, get_providers
     try:
         connections = await get_providers()
     except Exception:

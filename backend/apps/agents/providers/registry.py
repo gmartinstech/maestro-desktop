@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import logging
 from typing import Any, TYPE_CHECKING
+import httpx
 
 from .openrouter import (
-    _OPENROUTER_VALUE_PREFIX,
+    OPENROUTER_VALUE_PREFIX,
 )
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Full set of model-id prefixes that force routing through 9Router.
-_NINEROUTER_MODEL_PREFIXES = ("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter/")
+NINEROUTER_MODEL_PREFIXES = ("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter/")
 
 # Entry fields: value, label, context_window, model_id, router_model_id, api,
 # subscription_only, reasoning, route ("cc"|"api"|"openrouter"|None).
@@ -151,10 +152,10 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
 # Model resolution (used by the live claude_agent_sdk path)
 # ---------------------------------------------------------------------------
 
-_CUSTOM_VALUE_PREFIX = "custom/"
+P_CUSTOM_VALUE_PREFIX = "custom/"
 
 
-def _custom_provider_slug_for_lookup(name: str) -> str:
+def custom_provider_slug_for_lookup(name: str) -> str:
     """Mirror nine_router._custom_provider_slug; duplicated here to avoid
     importing from nine_router (circular: nine_router imports from settings)."""
     import re
@@ -162,22 +163,22 @@ def _custom_provider_slug_for_lookup(name: str) -> str:
     return s or "custom"
 
 
-def _find_custom_provider_for_value(settings, value: str):
+def find_custom_provider_for_value(settings, value: str):
     """Look up the CustomProvider whose slug matches the slug encoded in a
     `custom/<slug>/<model_id>` picker value. Returns None if no match."""
-    if not isinstance(value, str) or not value.startswith(_CUSTOM_VALUE_PREFIX):
+    if not isinstance(value, str) or not value.startswith(P_CUSTOM_VALUE_PREFIX):
         return None
-    rest = value[len(_CUSTOM_VALUE_PREFIX):]
-    slug, _sep, _bare = rest.partition("/")
+    rest = value[len(P_CUSTOM_VALUE_PREFIX):]
+    slug, _, _ = rest.partition("/")
     if not slug:
         return None
     for cp in getattr(settings, "custom_providers", None) or []:
-        if _custom_provider_slug_for_lookup(getattr(cp, "name", "")) == slug:
+        if custom_provider_slug_for_lookup(getattr(cp, "name", "")) == slug:
             return cp
     return None
 
 
-def _find_builtin_model(short_name: str) -> dict | None:
+def find_builtin_model(short_name: str) -> dict | None:
     """Look up a model entry by its short `value`.
 
     OpenRouter entries (prefixed `or:<vendor>/<model>`) and custom-provider
@@ -188,8 +189,8 @@ def _find_builtin_model(short_name: str) -> dict | None:
         for m in models:
             if m.get("value") == short_name:
                 return m
-    if isinstance(short_name, str) and short_name.startswith(_OPENROUTER_VALUE_PREFIX):
-        bare = short_name[len(_OPENROUTER_VALUE_PREFIX):]
+    if isinstance(short_name, str) and short_name.startswith(OPENROUTER_VALUE_PREFIX):
+        bare = short_name[len(OPENROUTER_VALUE_PREFIX):]
         if bare:
             return {
                 "value": short_name,
@@ -201,9 +202,9 @@ def _find_builtin_model(short_name: str) -> dict | None:
                 "route": "openrouter",
                 "reasoning": False,
             }
-    if isinstance(short_name, str) and short_name.startswith(_CUSTOM_VALUE_PREFIX):
-        rest = short_name[len(_CUSTOM_VALUE_PREFIX):]
-        slug, _sep, bare_model = rest.partition("/")
+    if isinstance(short_name, str) and short_name.startswith(P_CUSTOM_VALUE_PREFIX):
+        rest = short_name[len(P_CUSTOM_VALUE_PREFIX):]
+        slug, _, bare_model = rest.partition("/")
         if slug and bare_model:
             # Routing string `cp-<slug>/<model>` matches the prefix we use
             # when sync_custom_providers registers the provider node.
@@ -222,13 +223,25 @@ def _find_builtin_model(short_name: str) -> dict | None:
 
 
 def get_api_type(short_name: str) -> str:
-    entry = _find_builtin_model(short_name)
+    entry = find_builtin_model(short_name)
     return (entry or {}).get("api", "anthropic")
 
 
+P_ANTIGRAVITY_MAP = {
+    # gemini-3-pro-preview disabled: AG returns 404 even with active conn.
+    # gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant
+    #   400s every request with "invalid argument" (the `-high` thinking-
+    #   budget alias on AG requires a thinking_config the CLI doesn't
+    #   emit). Falls through to gc/gemini-3.1-pro-preview, which works
+    #   for non-tool turns; multi-step tool turns still hit the
+    #   thoughtSignature validator but that's a separate fight.
+    "gemini-3-flash-preview": "gemini-3-flash",
+    "gemini-3.1-flash-lite-preview": "gemini-3-flash",
+}
+
 def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     """Short model name → id string for ClaudeAgentOptions."""
-    entry = _find_builtin_model(short_name)
+    entry = find_builtin_model(short_name)
     if entry is None:
         return short_name
     if entry.get("route") == "cc":
@@ -250,28 +263,16 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     # AG bypasses the thoughtSignature validator that breaks multi-step tool
     # turns on gc/. Without it, every Gemini turn 400s after the first tool
     # call with "Thought signature is not valid".
-    _ANTIGRAVITY_MAP = {
-        # gemini-3-pro-preview disabled: AG returns 404 even with active conn.
-        # gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant
-        #   400s every request with "invalid argument" (the `-high` thinking-
-        #   budget alias on AG requires a thinking_config the CLI doesn't
-        #   emit). Falls through to gc/gemini-3.1-pro-preview, which works
-        #   for non-tool turns; multi-step tool turns still hit the
-        #   thoughtSignature validator but that's a separate fight.
-        "gemini-3-flash-preview": "gemini-3-flash",
-        "gemini-3.1-flash-lite-preview": "gemini-3-flash",
-    }
     if entry.get("api") == "gemini-cli":
         rid = entry.get("router_model_id", "")
         if isinstance(rid, str) and rid.startswith("gc/"):
             suffix = rid[len("gc/"):]
             if getattr(settings, "google_api_key", None):
                 return "gemini/" + suffix
-            ag_suffix = _ANTIGRAVITY_MAP.get(suffix)
+            ag_suffix = P_ANTIGRAVITY_MAP.get(suffix)
             if ag_suffix:
                 try:
-                    import httpx as _httpx
-                    r = _httpx.get("http://localhost:20128/api/providers", timeout=2.0)
+                    r = httpx.get("http://localhost:20128/api/providers", timeout=2.0)
                     if r.status_code == 200:
                         data = r.json()
                         conns = data.get("connections", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
@@ -305,14 +306,14 @@ async def resolve_aux_model(
     or_sonnet = "openrouter/anthropic/claude-sonnet-4.5"
     bare = haiku_bare if preferred_tier == "haiku" else sonnet_bare
     or_aux = or_haiku if preferred_tier == "haiku" else or_sonnet
-
-    from backend.apps.nine_router import is_running as _9r_running, get_providers as _9r_providers
+    
+    from backend.apps.nine_router.process import is_running, get_providers
 
     base_url = "http://localhost:20128"
     connected: set[str] = set()
-    if _9r_running():
+    if is_running():
         try:
-            connections = await _9r_providers()
+            connections = await get_providers()
             connected = {c.get("provider") for c in connections if c.get("isActive")}
         except Exception:
             connected = set()
@@ -340,7 +341,7 @@ async def resolve_aux_model(
     if getattr(settings, "anthropic_api_key", None):
         return (bare, None)
 
-    if not _9r_running():
+    if not is_running():
         raise ValueError(
             "No AI provider configured for auxiliary LLM call. "
             "Set an Anthropic API key or connect a subscription."
@@ -375,9 +376,9 @@ def get_context_window(model: str, settings: AppSettings | None = None) -> int:
     # bare-model tail against any custom provider's models list.
     if settings:
         bare_model = model
-        if isinstance(model, str) and model.startswith(_CUSTOM_VALUE_PREFIX):
-            rest = model[len(_CUSTOM_VALUE_PREFIX):]
-            _slug, _sep, bare_model = rest.partition("/")
+        if isinstance(model, str) and model.startswith(P_CUSTOM_VALUE_PREFIX):
+            rest = model[len(P_CUSTOM_VALUE_PREFIX):]
+            _, _, bare_model = rest.partition("/")
         for cp in getattr(settings, "custom_providers", []):
             for m in (getattr(cp, "models", None) or []):
                 if m.get("value") == bare_model or m.get("id") == bare_model:

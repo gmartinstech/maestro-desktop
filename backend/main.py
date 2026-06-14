@@ -204,13 +204,13 @@ async def websocket_session(websocket: WebSocket, session_id: str):
                 last_seq = int(payload.get("last_seq") or 0)
                 connection_uuid = payload.get("connection_uuid") or ""
                 ack = await ws_manager.replay_to(session_id, websocket, last_seq)
-                from backend.apps.agents.core.seq_log import seq_log as _sl
+                from backend.apps.agents.core.seq_log import SEQ_LOG
                 await websocket.send_text(json.dumps({
                     "event": "server:hello",
                     "session_id": session_id,
                     "data": {
                         "connection_uuid": connection_uuid,
-                        "current_seq": _sl.current_seq(session_id),
+                        "current_seq": SEQ_LOG.current_seq(session_id),
                         "ack": ack,
                     },
                 }))
@@ -494,7 +494,7 @@ async def subscriptions_callback(request: Request):
         logger.warning(f"OAuth callback with unknown state {state[:8] if state else '(empty)'}...")
         return HTMLResponse('<html><body style="background:#1a1a1a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><div style="text-align:center"><h2>Session expired</h2><p style="color:#888">Please try connecting again.</p></div></body></html>')
 
-    from backend.apps.nine_router import exchange_oauth
+    from backend.apps.nine_router.oauth import exchange_oauth
     try:
         await exchange_oauth(pending["provider"], code, pending["redirect_uri"], pending["code_verifier"], state)
     except Exception as e:

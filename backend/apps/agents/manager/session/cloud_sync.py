@@ -1,10 +1,10 @@
 from datetime import datetime
 
 from backend.apps.agents.core.models import AgentSession
-from backend.apps.service.client import sync as _sync
+from backend.apps.service.client import sync
 
 
-def _sync_session_close(session: AgentSession, close_reason: str = "user"):
+def sync_session_close(session: AgentSession, close_reason: str = "user"):
     """Submit the session state to the cloud on close. The cloud
     consumes the dump however it sees fit; the desktop just hands off
     a snapshot. Skipped for mock sessions so dev runs don't post to
@@ -31,6 +31,6 @@ def _sync_session_close(session: AgentSession, close_reason: str = "user"):
         dump = session.model_dump(mode="json")
         if not dump.get("closed_at"):
             dump["closed_at"] = datetime.now().isoformat()
-        _sync(dump)
+        sync(dump)
     except Exception:
         pass

@@ -1,10 +1,11 @@
 import logging
+import subprocess
 import os
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_cwd_git_repo(cwd: str, home: str | None = None) -> None:
+def ensure_cwd_git_repo(cwd: str, home: str | None = None) -> None:
     """Idempotently make `cwd` into a git repo with a valid HEAD.
 
     The CLI's built-in Agent tool uses `isolation: "worktree"` to spawn
@@ -30,36 +31,35 @@ def _ensure_cwd_git_repo(cwd: str, home: str | None = None) -> None:
             return
         if not os.path.isdir(cwd):
             return
-
-        import subprocess as _sp_git
+        
         # Case A: cwd is inside some git repo (possibly parent). Verify
         # HEAD resolves. If the enclosing repo is broken (e.g. a stray
         # `.git` in $HOME with no commits, which makes workspaces
         # under ~/.openswarm/workspaces/ inherit a broken HEAD), we
         # need to init a fresh repo AT cwd so it shadows the parent.
-        _inside = _sp_git.run(
+        inside = subprocess.run(
             ["git", "rev-parse", "--is-inside-work-tree"],
             cwd=cwd,
-            stdout=_sp_git.PIPE, stderr=_sp_git.DEVNULL, timeout=5,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5,
         )
-        if _inside.returncode == 0 and b"true" in _inside.stdout:
+        if inside.returncode == 0 and b"true" in inside.stdout:
             # Check HEAD resolves (has at least one commit).
-            _head = _sp_git.run(
+            head = subprocess.run(
                 ["git", "rev-parse", "--verify", "HEAD"],
                 cwd=cwd,
-                stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=5,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
             )
-            if _head.returncode == 0:
+            if head.returncode == 0:
                 return  # parent repo is healthy, leave it alone
             # Parent repo exists but HEAD is broken.
             if os.path.isdir(os.path.join(cwd, ".git")):
                 # .git is directly here, commit to fix it.
-                _sp_git.run(
+                subprocess.run(
                     ["git", "-c", "user.email=openswarm@local",
                      "-c", "user.name=OpenSwarm",
                      "commit", "--allow-empty", "-q", "-m", "openswarm init"],
                     cwd=cwd,
-                    stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=10,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
                 )
                 return
             # .git is in a parent dir (broken home-dir repo, etc.).
@@ -68,23 +68,23 @@ def _ensure_cwd_git_repo(cwd: str, home: str | None = None) -> None:
 
         # Case B: cwd is not a git repo at all (or parent is broken):
         # init + empty commit here.
-        _sp_git.run(
+        subprocess.run(
             ["git", "init", "-q", "-b", "main"],
             cwd=cwd,
-            stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=10,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
         )
-        _sp_git.run(
+        subprocess.run(
             ["git", "-c", "user.email=openswarm@local",
              "-c", "user.name=OpenSwarm",
              "commit", "--allow-empty", "-q", "-m", "openswarm init"],
             cwd=cwd,
-            stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=10,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
         )
-    except Exception as _e:
-        logger.info(f"[agent-cwd] git init skipped: {_e}")
+    except Exception as e:
+        logger.info(f"[agent-cwd] git init skipped: {e}")
 
 
-def _detect_git_identity(cwd: str) -> tuple[str | None, str | None]:
+def detect_git_identity(cwd: str) -> tuple[str | None, str | None]:
     """Resolve the origin remote and current branch for `cwd`.
 
     Used to label sessions in the session list ("Agent on owner/repo
@@ -97,10 +97,9 @@ def _detect_git_identity(cwd: str) -> tuple[str | None, str | None]:
     if not cwd or not os.path.isdir(cwd):
         return (None, None)
     try:
-        import subprocess as _sp
-        url_proc = _sp.run(
+        url_proc = subprocess.run(
             ["git", "remote", "get-url", "origin"],
-            cwd=cwd, stdout=_sp.PIPE, stderr=_sp.DEVNULL, timeout=3,
+            cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=3,
         )
         repo_url: str | None = None
         if url_proc.returncode == 0:
@@ -113,9 +112,9 @@ def _detect_git_identity(cwd: str) -> tuple[str | None, str | None]:
                     repo_url = f"{scheme}://{rest}"
                 else:
                     repo_url = raw
-        branch_proc = _sp.run(
+        branch_proc = subprocess.run(
             ["git", "branch", "--show-current"],
-            cwd=cwd, stdout=_sp.PIPE, stderr=_sp.DEVNULL, timeout=3,
+            cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=3,
         )
         branch_name: str | None = None
         if branch_proc.returncode == 0:
