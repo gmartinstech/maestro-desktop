@@ -14,13 +14,13 @@ from jsonschema import validate as schema_validate, ValidationError as SchemaVal
 
 logger = logging.getLogger(__name__)
 
-MODEL_MAP = {
+P_MODEL_MAP = {
     "sonnet": "claude-sonnet-4-20250514",
     "opus": "claude-opus-4-20250514",
     "haiku": "claude-haiku-4-5-20251001",
 }
 
-def _get_anthropic_client(api_model: str | None = None):
+def get_anthropic_client(api_model: str | None = None):
     """Create an AsyncAnthropic client using the API key from app settings.
 
     When `api_model` is provided and carries a 9Router prefix (cc/, cx/, gc/),
@@ -39,7 +39,7 @@ def _get_anthropic_client(api_model: str | None = None):
     return get_anthropic_client(settings)
 
 
-def _validate_against_schema(data: dict, schema: dict) -> str | None:
+def validate_against_schema(data: dict, schema: dict) -> str | None:
     """Validate *data* against *schema*. Return an error string or None."""
     try:
         schema_validate(instance=data, schema=schema)
@@ -49,7 +49,7 @@ def _validate_against_schema(data: dict, schema: dict) -> str | None:
         return f"Schema validation failed at {path}: {exc.message}"
 
 
-def _build_data_injection(input_json: str, result_json: str, backend_url_json: str = "null") -> str:
+def p_build_data_injection(input_json: str, result_json: str, backend_url_json: str = "null") -> str:
     """Build a <script> tag that sets OUTPUT_INPUT / OUTPUT_BACKEND_RESULT /
     OUTPUT_BACKEND_URL and listens for postMessage updates.
 
@@ -76,8 +76,8 @@ def _build_data_injection(input_json: str, result_json: str, backend_url_json: s
     )
 
 
-def _inject_data_into_html(html: str, input_json: str = "{}", result_json: str = "null", backend_url_json: str = "null") -> str:
-    injection = _build_data_injection(input_json, result_json, backend_url_json)
+def inject_data_into_html(html: str, input_json: str = "{}", result_json: str = "null", backend_url_json: str = "null") -> str:
+    injection = p_build_data_injection(input_json, result_json, backend_url_json)
     if "</head>" in html:
         return html.replace("</head>", f"{injection}\n</head>", 1)
     if "<body" in html:
@@ -85,13 +85,13 @@ def _inject_data_into_html(html: str, input_json: str = "{}", result_json: str =
     return f"{injection}\n{html}"
 
 
-def _backend_url_for_workspace(workspace_id: str) -> str:
+def backend_url_for_workspace(workspace_id: str) -> str:
     """Return the JSON-encoded backend URL for the given workspace, or
     "null" if no runtime is active. Cheap inline lookup so serve_workspace_file
     doesn't have to think about it."""
     try:
-        from backend.apps.outputs.runtime import manager as runtime_manager
-        rt = runtime_manager.get(workspace_id)
+        from backend.apps.outputs.runtime import RUNTIME_MANAGER
+        rt = RUNTIME_MANAGER.get(workspace_id)
         if rt and rt.running and rt.port:
             return json.dumps(f"http://127.0.0.1:{rt.port}")
     except Exception:
@@ -103,18 +103,18 @@ def _backend_url_for_workspace(workspace_id: str) -> str:
 # external (CDNs, mailto) or non-network references that the auth middleware
 # never sees. Anything else is treated as a same-origin relative URL pointing
 # at our /api/outputs/.../serve/ subtree, which DOES need the token.
-_ABSOLUTE_URL_PREFIXES = (
+P_ABSOLUTE_URL_PREFIXES = (
     "http://", "https://", "//", "data:", "blob:",
     "mailto:", "tel:", "javascript:", "about:", "#",
 )
 
-_HREF_SRC_ATTR_RE = re.compile(
+P_HREF_SRC_ATTR_RE = re.compile(
     r"""(\s(?:href|src))\s*=\s*(["'])([^"']+)\2""",
     re.IGNORECASE,
 )
 
 
-def _inject_token_into_relative_urls(html: str, token: str) -> str:
+def inject_token_into_relative_urls(html: str, token: str) -> str:
     """Append `?token=<t>` to every relative href/src in the served HTML.
 
     Browsers strip the parent iframe URL's query string before resolving
@@ -126,10 +126,10 @@ def _inject_token_into_relative_urls(html: str, token: str) -> str:
     if not token:
         return html
 
-    def _patch(match: re.Match) -> str:
+    def patch(match: re.Match) -> str:
         attr, quote, url = match.group(1), match.group(2), match.group(3)
         lowered = url.lower().lstrip()
-        if lowered.startswith(_ABSOLUTE_URL_PREFIXES):
+        if lowered.startswith(P_ABSOLUTE_URL_PREFIXES):
             return match.group(0)
         if "token=" in url:
             return match.group(0)
@@ -143,10 +143,10 @@ def _inject_token_into_relative_urls(html: str, token: str) -> str:
         sep = "&" if "?" in base else "?"
         return f'{attr}={quote}{base}{sep}token={token}{frag}{quote}'
 
-    return _HREF_SRC_ATTR_RE.sub(_patch, html)
+    return P_HREF_SRC_ATTR_RE.sub(patch, html)
 
 
-def _decode_data_param(d: str) -> tuple[str, str]:
+def decode_data_param(d: str) -> tuple[str, str]:
     """Decode the base64-encoded _d query param into (input_json, result_json)."""
     try:
         decoded = json.loads(base64.b64decode(d))

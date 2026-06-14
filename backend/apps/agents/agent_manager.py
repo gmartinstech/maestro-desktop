@@ -893,10 +893,8 @@ class AgentManager:
                 if file_path:
                     try:
                         await asyncio.sleep(0.4)
-                        from backend.apps.outputs.runtime import (
-                            manager as _outputs_runtime_manager,
-                        )
-                        errs = _outputs_runtime_manager.drain_errors_for_path(file_path)
+                        from backend.apps.outputs.runtime import RUNTIME_MANAGER
+                        errs = RUNTIME_MANAGER.drain_errors_for_path(file_path)
                     except Exception:
                         errs = []
                     if errs:

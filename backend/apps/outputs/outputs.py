@@ -22,18 +22,18 @@ from backend.apps.outputs.view_builder_templates import (
 from backend.apps.settings.settings import load_settings
 from backend.config.paths import OUTPUTS_DIR as DATA_DIR, OUTPUTS_WORKSPACE_DIR as WORKSPACE_DIR
 from backend.apps.outputs.html_inject import (
-    _get_anthropic_client,
-    _validate_against_schema,
-    _inject_data_into_html,
-    _backend_url_for_workspace,
-    _inject_token_into_relative_urls,
-    _decode_data_param,
+    get_anthropic_client,
+    validate_against_schema,
+    inject_data_into_html,
+    backend_url_for_workspace,
+    inject_token_into_relative_urls,
+    decode_data_param,
 )
 from backend.apps.outputs.workspace_io import (
-    _load_all,
-    _save,
-    _load,
-    _walk_directory,
+    load_all,
+    save,
+    load,
+    walk_directory,
 )
 from backend.apps.outputs.prompts import VIBE_CODE_SYSTEM_PROMPT
 
@@ -52,8 +52,8 @@ async def outputs_lifespan():
         # main backend dies, leaving ghost listeners on the .env-pinned
         # ports that block the next OpenSwarm launch's reload preview.
         try:
-            from backend.apps.outputs.runtime import manager as runtime_manager
-            killed = await runtime_manager.stop_all()
+            from backend.apps.outputs.runtime import RUNTIME_MANAGER
+            killed = await RUNTIME_MANAGER.stop_all()
             if killed:
                 logger.info("outputs lifespan: reaped %d workspace runtimes on shutdown", killed)
         except Exception:
@@ -68,7 +68,7 @@ outputs = SubApp("outputs", outputs_lifespan)
 # ---------------------------------------------------------------------------
 
 @outputs.router.get("/workspace/{workspace_id}/serve/{filepath:path}")
-async def serve_workspace_file(workspace_id: str, filepath: str, _d: str = ""):
+async def serve_workspace_file(workspace_id: str, filepath: str, data: str = ""):
     """Serve a file from a workspace folder. For index.html, inject OUTPUT data."""
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     full_path = os.path.normpath(os.path.join(folder, filepath))
@@ -81,31 +81,31 @@ async def serve_workspace_file(workspace_id: str, filepath: str, _d: str = ""):
         content = f.read()
 
     if filepath == "index.html":
-        input_json, result_json = _decode_data_param(_d) if _d else ("{}", "null")
-        backend_url_json = _backend_url_for_workspace(workspace_id)
-        content = _inject_data_into_html(content, input_json, result_json, backend_url_json)
+        input_json, result_json = decode_data_param(data) if data else ("{}", "null")
+        backend_url_json = backend_url_for_workspace(workspace_id)
+        content = inject_data_into_html(content, input_json, result_json, backend_url_json)
         # Iframe sub-resource fetches (<link>, <script src>, <img>) drop the
         # parent's ?token= query string, so rewrite the HTML to put the token
         # back on every relative URL; otherwise sub-resources 401.
-        content = _inject_token_into_relative_urls(content, get_auth_token())
+        content = inject_token_into_relative_urls(content, get_auth_token())
 
     mime, _ = mimetypes.guess_type(filepath)
     return Response(content=content, media_type=mime or "text/plain")
 
 
 @outputs.router.get("/{output_id}/serve/{filepath:path}")
-async def serve_output_file(output_id: str, filepath: str, _d: str = ""):
+async def serve_output_file(output_id: str, filepath: str, data: str = ""):
     """Serve a file from a saved output's files dict. For index.html, inject OUTPUT data."""
-    output = _load(output_id)
+    output = load(output_id)
     content = output.files.get(filepath)
     if content is None:
         raise HTTPException(status_code=404, detail="File not found in output")
 
     if filepath == "index.html":
-        input_json, result_json = _decode_data_param(_d) if _d else ("{}", "null")
-        backend_url_json = _backend_url_for_workspace(output.workspace_id) if output.workspace_id else "null"
-        content = _inject_data_into_html(content, input_json, result_json, backend_url_json)
-        content = _inject_token_into_relative_urls(content, get_auth_token())
+        input_json, result_json = decode_data_param(data) if data else ("{}", "null")
+        backend_url_json = backend_url_for_workspace(output.workspace_id) if output.workspace_id else "null"
+        content = inject_data_into_html(content, input_json, result_json, backend_url_json)
+        content = inject_token_into_relative_urls(content, get_auth_token())
 
     mime, _ = mimetypes.guess_type(filepath)
     return Response(content=content, media_type=mime or "text/plain")
@@ -117,7 +117,7 @@ async def serve_output_file(output_id: str, filepath: str, _d: str = ""):
 
 @outputs.router.get("/list")
 async def list_outputs():
-    return {"outputs": [o.model_dump() for o in _load_all()]}
+    return {"outputs": [o.model_dump() for o in load_all()]}
 
 
 @outputs.router.get("/workspace/{workspace_id}")
@@ -127,7 +127,7 @@ async def read_workspace(workspace_id: str):
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    files = _walk_directory(folder)
+    files = walk_directory(folder)
 
     meta = None
     if "meta.json" in files:
@@ -171,7 +171,7 @@ def sync_output_from_meta_json(workspace_id: str) -> bool:
         description = str(meta.get("description") or "").strip()
         if not name and not description:
             return False
-        matching = [o for o in _load_all() if o.workspace_id == workspace_id]
+        matching = [o for o in load_all() if o.workspace_id == workspace_id]
         if not matching:
             return False
         output = matching[0]
@@ -187,7 +187,7 @@ def sync_output_from_meta_json(workspace_id: str) -> bool:
             changed = True
         if changed:
             output.updated_at = datetime.now().isoformat()
-            _save(output)
+            save(output)
         return changed
     except (OSError, json.JSONDecodeError, ValueError):
         return False
@@ -223,18 +223,18 @@ def ensure_webapp_workspace_seeded_and_registered(
         os.makedirs(folder, exist_ok=True)
         already_seeded = os.path.exists(os.path.join(folder, "run.sh"))
         if not already_seeded:
-            from backend.apps.outputs.runtime import _find_free_port
-            frontend_port = _find_free_port()
+            from backend.apps.outputs.runtime_proc import find_free_port
+            frontend_port = find_free_port()
             seed_webapp_template_workspace(folder, frontend_port)
             with open(os.path.join(folder, "SKILL.md"), "w", encoding="utf-8") as f:
                 f.write(load_app_builder_skill())
-        existing = [o for o in _load_all() if o.workspace_id == workspace_id]
+        existing = [o for o in load_all() if o.workspace_id == workspace_id]
         if existing:
             output = existing[0]
             if session_id and output.session_id != session_id:
                 output.session_id = session_id
                 output.updated_at = datetime.now().isoformat()
-                _save(output)
+                save(output)
             return output.id
         now = datetime.now().isoformat()
         output = Output(
@@ -247,7 +247,7 @@ def ensure_webapp_workspace_seeded_and_registered(
             created_at=now,
             updated_at=now,
         )
-        _save(output)
+        save(output)
         return output.id
     except Exception:
         logger.exception("ensure_webapp_workspace_seeded_and_registered failed for %s", workspace_id)
@@ -293,16 +293,16 @@ async def seed_workspace(body: WorkspaceSeedRequest):
         # dirs_exist_ok=True + copytree). If `run.sh` already exists,
         # the workspace was seeded on a previous visit; skip the file
         # copy and only re-derive the frontend port from .env.
-        from backend.apps.outputs.runtime import _find_free_port, _read_env_value
+        from backend.apps.outputs.runtime_proc import find_free_port, read_env_value
         already_seeded = os.path.exists(os.path.join(folder, "run.sh"))
         if already_seeded:
-            fp_raw = _read_env_value(os.path.join(folder, ".env"), "FRONTEND_PORT")
+            fp_raw = read_env_value(os.path.join(folder, ".env"), "FRONTEND_PORT")
             try:
-                frontend_port = int(fp_raw) if fp_raw else _find_free_port()
+                frontend_port = int(fp_raw) if fp_raw else find_free_port()
             except (TypeError, ValueError):
-                frontend_port = _find_free_port()
+                frontend_port = find_free_port()
         else:
-            frontend_port = _find_free_port()
+            frontend_port = find_free_port()
             seed_webapp_template_workspace(folder, frontend_port)
             # SKILL.md still goes in workspace root; agent reads it for
             # context. Live content (user-editable via Skills page) is
@@ -323,7 +323,7 @@ async def seed_workspace(body: WorkspaceSeedRequest):
         # remains the source of truth for the code.
         output_id: Optional[str] = None
         try:
-            existing = [o for o in _load_all() if o.workspace_id == body.workspace_id]
+            existing = [o for o in load_all() if o.workspace_id == body.workspace_id]
             if existing:
                 output_id = existing[0].id
             else:
@@ -337,7 +337,7 @@ async def seed_workspace(body: WorkspaceSeedRequest):
                     created_at=now,
                     updated_at=now,
                 )
-                _save(output)
+                save(output)
                 output_id = output.id
         except Exception:
             logger.exception("seed-time Output create failed for %s", body.workspace_id)
@@ -387,10 +387,10 @@ async def seed_workspace(body: WorkspaceSeedRequest):
 # ---------------------------------------------------------------------------
 
 
-def _runtime_status_payload(workspace_id: str) -> dict:
-    from backend.apps.outputs.runtime import manager as runtime_manager
-    from backend.apps.outputs.runtime import _is_new_mode
-    rt = runtime_manager.get(workspace_id)
+def runtime_status_payload(workspace_id: str) -> dict:
+    from backend.apps.outputs.runtime import RUNTIME_MANAGER
+    from backend.apps.outputs.runtime_proc import is_new_mode
+    rt = RUNTIME_MANAGER.get(workspace_id)
     if not rt:
         # Even without a live runtime, the editor needs is_new_mode to
         # decide whether the preview pane should fall back to the legacy
@@ -399,7 +399,7 @@ def _runtime_status_payload(workspace_id: str) -> dict:
         # Compute from disk so a failed runtime/start still gives the
         # client the right hint instead of dumping it onto a 404.
         folder = os.path.join(WORKSPACE_DIR, workspace_id)
-        is_new = _is_new_mode(folder) if os.path.isdir(folder) else False
+        is_new = is_new_mode(folder) if os.path.isdir(folder) else False
         return {
             "running": False,
             "port": None,
@@ -431,16 +431,16 @@ async def runtime_start(workspace_id: str):
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
-    from backend.apps.outputs.runtime import manager as runtime_manager
-    await runtime_manager.attach(workspace_id, os.path.abspath(folder))
-    return _runtime_status_payload(workspace_id)
+    from backend.apps.outputs.runtime import RUNTIME_MANAGER
+    await RUNTIME_MANAGER.attach(workspace_id, os.path.abspath(folder))
+    return runtime_status_payload(workspace_id)
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/stop")
 async def runtime_stop(workspace_id: str):
-    from backend.apps.outputs.runtime import manager as runtime_manager
-    await runtime_manager.detach(workspace_id)
-    return _runtime_status_payload(workspace_id)
+    from backend.apps.outputs.runtime import RUNTIME_MANAGER
+    await RUNTIME_MANAGER.detach(workspace_id)
+    return runtime_status_payload(workspace_id)
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/restart")
@@ -448,19 +448,19 @@ async def runtime_restart(workspace_id: str):
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
-    from backend.apps.outputs.runtime import manager as runtime_manager
+    from backend.apps.outputs.runtime import RUNTIME_MANAGER
     # Restart only if something's attached; otherwise this is a no-op
     # silently (a hard-reload click while the runtime was already torn
     # down; we'd rather not silently respawn an orphan).
-    rt = runtime_manager.get(workspace_id)
+    rt = RUNTIME_MANAGER.get(workspace_id)
     if rt:
-        await runtime_manager.restart(workspace_id, os.path.abspath(folder))
-    return _runtime_status_payload(workspace_id)
+        await RUNTIME_MANAGER.restart(workspace_id, os.path.abspath(folder))
+    return runtime_status_payload(workspace_id)
 
 
 @outputs.router.get("/workspace/{workspace_id}/runtime/status")
 async def runtime_get_status(workspace_id: str):
-    return _runtime_status_payload(workspace_id)
+    return runtime_status_payload(workspace_id)
 
 
 @outputs.router.post("/shutdown-all")
@@ -469,8 +469,8 @@ async def runtime_shutdown_all():
     will-quit so app subprocesses die BEFORE the main backend gets
     SIGTERM'd; without it `bash run.sh` + its vite/uvicorn descendants
     reparent to PID 1 and squat on .env-pinned ports forever."""
-    from backend.apps.outputs.runtime import manager as runtime_manager
-    killed = await runtime_manager.stop_all()
+    from backend.apps.outputs.runtime import RUNTIME_MANAGER
+    killed = await RUNTIME_MANAGER.stop_all()
     return {"ok": True, "killed": killed}
 
 
@@ -519,7 +519,7 @@ async def delete_workspace_file(workspace_id: str, filepath: str):
 
 @outputs.router.get("/{output_id}")
 async def get_output(output_id: str):
-    return _load(output_id).model_dump()
+    return load(output_id).model_dump()
 
 
 @outputs.router.post("/create")
@@ -535,14 +535,14 @@ async def create_output(body: OutputCreate):
         created_at=now,
         updated_at=now,
     )
-    _save(output)
+    save(output)
     pass
     return {"ok": True, "output": output.model_dump()}
 
 
 @outputs.router.put("/{output_id}")
 async def update_output(output_id: str, body: OutputUpdate):
-    output = _load(output_id)
+    output = load(output_id)
     # exclude_unset, NOT exclude_none: a PUT that explicitly sends session_id=null
     # (the Apps stale-link self-heal) must clear the field. exclude_none silently
     # dropped that null, so the dead pointer never cleared and the app 404'd on
@@ -554,13 +554,13 @@ async def update_output(output_id: str, body: OutputUpdate):
     # Only a real screenshot write moves the sort key; files/linkage saves don't reorder.
     if body.thumbnail is not None:
         output.preview_updated_at = now
-    _save(output)
+    save(output)
     return {"ok": True, "output": output.model_dump()}
 
 
 @outputs.router.delete("/{output_id}")
 async def delete_output(output_id: str):
-    _load(output_id)
+    load(output_id)
     path = os.path.join(DATA_DIR, f"{output_id}.json")
     if os.path.exists(path):
         os.remove(path)
@@ -589,7 +589,7 @@ async def vibe_code(body: VibeCodeRequest):
 
     from backend.apps.agents.providers.registry import resolve_aux_model
     try:
-        aux_model, _aux_base = await resolve_aux_model(load_settings(), preferred_tier="sonnet")
+        aux_model, _ = await resolve_aux_model(load_settings(), preferred_tier="sonnet")
     except ValueError as e:
         return {
             "message": f"Error: {str(e)}",
@@ -597,7 +597,7 @@ async def vibe_code(body: VibeCodeRequest):
             "backend_code": body.current_backend_code,
             "input_schema": body.current_schema,
         }
-    client = _get_anthropic_client(aux_model)
+    client = get_anthropic_client(aux_model)
     try:
         resp = await client.messages.create(
             model=aux_model,
@@ -648,9 +648,9 @@ async def vibe_code(body: VibeCodeRequest):
 
 @outputs.router.post("/execute")
 async def execute_output(body: OutputExecute):
-    output = _load(body.output_id)
+    output = load(body.output_id)
 
-    validation_err = _validate_against_schema(body.input_data, output.input_schema)
+    validation_err = validate_against_schema(body.input_data, output.input_schema)
     if validation_err:
         return OutputExecuteResult(
             output_id=output.id,

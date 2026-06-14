@@ -244,7 +244,7 @@ def test_buffer_clear(tmp_path):
     from backend.apps.service import buffer
     spool = str(tmp_path / "s.db")
     buffer.enqueue(spool, "s:/x", {}, now=time.time())
-    buffer.clear(spool)
+    buffer.p_clear(spool) # p-private-ignore
     assert buffer.count(spool) == 0
 
 

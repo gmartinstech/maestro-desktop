@@ -26,18 +26,18 @@ logger = logging.getLogger(__name__)
 # Cap the spool at 50 MB on disk. SQLite's overhead means the actual ceiling
 # on retained payloads is somewhat smaller, which is fine; this is a
 # best-effort cushion, not a guaranteed retention window.
-_MAX_BYTES = 50 * 1024 * 1024
+P_MAX_BYTES = 50 * 1024 * 1024
 
 # Trim 25% when we cross the cap so we don't trim on every insert.
-_TRIM_TARGET_FRACTION = 0.75
+P_TRIM_TARGET_FRACTION = 0.75
 
-_lock = threading.Lock()
+P_LOCK = threading.Lock()
 
 
 @contextmanager
-def _conn(spool_path: str) -> Iterator[sqlite3.Connection]:
+def p_conn(spool_path: str) -> Iterator[sqlite3.Connection]:
     """Open a connection that auto-commits and ensures the table exists.
-    Caller holds `_lock` for the duration of the context."""
+    Caller holds `P_LOCK` for the duration of the context."""
     os.makedirs(os.path.dirname(spool_path), exist_ok=True)
     c = sqlite3.connect(spool_path, isolation_level=None, timeout=5.0)
     try:
@@ -54,11 +54,12 @@ def _conn(spool_path: str) -> Iterator[sqlite3.Connection]:
         c.close()
 
 
+# Public - Used by client.py
 def enqueue(spool_path: str, kind: str, payload: dict, *, now: float) -> None:
     """Append a submission to the spool. Drops the oldest if the spool is
     over the byte cap."""
     body = json.dumps(payload, separators=(",", ":"), default=str)
-    with _lock, _conn(spool_path) as c:
+    with P_LOCK, p_conn(spool_path) as c:
         c.execute(
             "INSERT INTO spool (kind, payload, created_at) VALUES (?, ?, ?)",
             (kind, body, now),
@@ -68,8 +69,8 @@ def enqueue(spool_path: str, kind: str, payload: dict, *, now: float) -> None:
             size = os.path.getsize(spool_path)
         except OSError:
             size = 0
-        if size > _MAX_BYTES:
-            target = int(_MAX_BYTES * _TRIM_TARGET_FRACTION)
+        if size > P_MAX_BYTES:
+            target = int(P_MAX_BYTES * P_TRIM_TARGET_FRACTION)
             # Delete oldest rows until we're back under target. Use a
             # reasonable batch size so we don't block forever.
             dropped = 0
@@ -86,23 +87,24 @@ def enqueue(spool_path: str, kind: str, payload: dict, *, now: float) -> None:
                 if new_size <= target:
                     break
             if dropped:
-                logger.warning("Spool over %d MB cap; dropped %d oldest entries", _MAX_BYTES // (1024 * 1024), dropped)
+                logger.warning("Spool over %d MB cap; dropped %d oldest entries", P_MAX_BYTES // (1024 * 1024), dropped)
             # VACUUM is expensive; only run if we still appear oversized after
             # trimming, otherwise free pages get reused on next insert.
             try:
-                if os.path.getsize(spool_path) > _MAX_BYTES:
+                if os.path.getsize(spool_path) > P_MAX_BYTES:
                     c.execute("VACUUM")
             except (OSError, sqlite3.DatabaseError):
                 pass
 
 
+# Public - Used by client.py
 def drain(spool_path: str, batch_size: int = 50) -> list[tuple[int, str, dict]]:
     """Read up to `batch_size` oldest entries. Returns (id, kind, payload)
     triples; caller is responsible for calling `acknowledge(ids)` once the
     cloud accepts them."""
     if not os.path.exists(spool_path):
         return []
-    with _lock, _conn(spool_path) as c:
+    with P_LOCK, p_conn(spool_path) as c:
         rows = c.execute(
             "SELECT id, kind, payload FROM spool ORDER BY id ASC LIMIT ?",
             (batch_size,),
@@ -113,30 +115,26 @@ def drain(spool_path: str, batch_size: int = 50) -> list[tuple[int, str, dict]]:
             out.append((rid, kind, json.loads(body)))
         except json.JSONDecodeError:
             # Corrupt row; discard so it doesn't block draining behind it.
-            with _lock, _conn(spool_path) as c:
+            with P_LOCK, p_conn(spool_path) as c:
                 c.execute("DELETE FROM spool WHERE id = ?", (rid,))
             logger.warning("Dropped corrupt spool row id=%s", rid)
     return out
 
 
+# Public - Used by client.py
 def acknowledge(spool_path: str, ids: list[int]) -> None:
     """Remove rows the cloud has accepted."""
     if not ids:
         return
-    with _lock, _conn(spool_path) as c:
+    with P_LOCK, p_conn(spool_path) as c:
         c.executemany("DELETE FROM spool WHERE id = ?", [(i,) for i in ids])
 
 
+# Public - Used by service.py
 def count(spool_path: str) -> int:
     """Return the number of pending entries. Used for tests + debug UI."""
     if not os.path.exists(spool_path):
         return 0
-    with _lock, _conn(spool_path) as c:
+    with P_LOCK, p_conn(spool_path) as c:
         row = c.execute("SELECT COUNT(*) FROM spool").fetchone()
     return int(row[0]) if row else 0
-
-
-def clear(spool_path: str) -> None:
-    """Delete all pending entries. Tests + manual reset only."""
-    with _lock, _conn(spool_path) as c:
-        c.execute("DELETE FROM spool")

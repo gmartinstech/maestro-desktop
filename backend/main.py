@@ -288,8 +288,8 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
     if not _ws_auth_ok(websocket):
         return
     await websocket.accept()
-    from backend.apps.outputs.runtime import manager as runtime_manager
-    rt = runtime_manager.get(workspace_id)
+    from backend.apps.outputs.runtime import RUNTIME_MANAGER
+    rt = RUNTIME_MANAGER.get(workspace_id)
     if rt is None:
         # No active runtime, surface that to the client and close. The
         # frontend will call /runtime/start and reconnect. Also emit a
@@ -298,8 +298,8 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
         # webapp_template workspaces instead of falling back to the
         # legacy /serve/index.html URL (which 404s in new-mode).
         try:
-            from backend.apps.outputs.outputs import _runtime_status_payload
-            status = _runtime_status_payload(workspace_id)
+            from backend.apps.outputs.outputs import runtime_status_payload
+            status = runtime_status_payload(workspace_id)
             await websocket.send_text(json.dumps({
                 "event": "runtime:status",
                 "workspace_id": workspace_id,

@@ -7,8 +7,7 @@ path to electron/package.json hops the same three dirnames up to the repo root.
 import json
 import os
 
-
-def _read_app_version() -> str:
+def p_read_app_version() -> str:
     # Preferred: Electron's main process injects this when spawning the
     # backend (see electron/main.js; OPENSWARM_APP_VERSION). Always reliable
     # in packaged builds because it comes from app.getVersion() rather than
@@ -23,13 +22,13 @@ def _read_app_version() -> str:
     # app_version="unknown" pre-fix. Kept for backward compatibility with
     # dev runs and as a safety net if the env var is ever unset.
     try:
-        _here = os.path.dirname(os.path.abspath(__file__))
-        _repo = os.path.dirname(os.path.dirname(os.path.dirname(_here)))
-        _pkg = os.path.join(_repo, "electron", "package.json")
-        with open(_pkg, encoding="utf-8") as _f:
-            return json.load(_f).get("version", "unknown")
+        here = os.path.dirname(os.path.abspath(__file__))
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+        pkg = os.path.join(repo, "electron", "package.json")
+        with open(pkg, encoding="utf-8") as f:
+            return json.load(f).get("version", "unknown")
     except (OSError, ValueError, KeyError):
         return "unknown"
 
 
-APP_VERSION = _read_app_version()
+APP_VERSION = p_read_app_version()

@@ -1,6 +1,6 @@
 """Operational state forwarder.
 
-Single public surface: `submit(kind, payload)`. The desktop hands off
+Single public surface: `p_submit(kind, payload)`. The desktop hands off
 opaque payload dicts; the cloud at api.openswarm.com is responsible for
 parsing and routing them. The desktop has no schema knowledge.
 
@@ -34,26 +34,27 @@ from backend.apps.service.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BASE = "https://api.openswarm.com"
-_PATH_BY_KIND = {
+P_DEFAULT_BASE = "https://api.openswarm.com"
+P_PATH_BY_KIND = {
     "state": "/api/service/state",
     "session": "/api/service/sync",
     "diagnostic": "/api/service/diagnostics",
     "event": "/api/service/event",
 }
 
-_TIMEOUT_SECONDS = 5.0
-_MAX_INFLIGHT = 16
+P_TIMEOUT_SECONDS = 5.0
+P_MAX_INFLIGHT = 16
 
-_test_sink: Optional[Any] = None
-_install_id: Optional[str] = None
-_user_id: Optional[str] = None
-_inflight = 0
-_inflight_lock = asyncio.Lock()
-_drain_lock = asyncio.Lock()
+P_TEST_SINK: Optional[Any] = None
+P_INSTALL_ID: Optional[str] = None
+P_USER_ID: Optional[str] = None
+P_INFLIGHT: int = 0
+P_INFLIGHT_LOCK = asyncio.Lock()
+P_DRAIN_LOCK = asyncio.Lock()
 
 
-def _spool_path() -> str:
+# Public - Used by service.py
+def spool_path() -> str:
     try:
         from backend.config.paths import SETTINGS_DIR
         return os.path.join(SETTINGS_DIR, "service_spool.db")
@@ -61,34 +62,28 @@ def _spool_path() -> str:
         return os.path.expanduser("~/.openswarm/data/service_spool.db")
 
 
-def set_test_sink(fn: Optional[Any]) -> None:
-    """Test seam; receives every submission instead of the network."""
-    global _test_sink
-    _test_sink = fn
-
-
-def _get_install_id() -> str:
-    global _install_id
-    if _install_id:
-        return _install_id
+def p_get_install_id() -> str:
+    global P_INSTALL_ID
+    if P_INSTALL_ID:
+        return P_INSTALL_ID
     try:
-        from backend.apps.settings.store import load_settings, _save_settings
+        from backend.apps.settings.store import load_settings, save_settings
         s = load_settings()
         iid = getattr(s, "installation_id", None)
         if not iid:
             iid = uuid4().hex
             s.installation_id = iid
-            _save_settings(s)
-        _install_id = iid
+            save_settings(s)
+        P_INSTALL_ID = iid
     except Exception:
-        _install_id = uuid4().hex
-    return _install_id
+        P_INSTALL_ID = uuid4().hex
+    return P_INSTALL_ID
 
 
-def _get_user_id() -> Optional[str]:
-    global _user_id
-    if _user_id:
-        return _user_id
+def p_get_user_id() -> Optional[str]:
+    global P_USER_ID
+    if P_USER_ID:
+        return P_USER_ID
     try:
         from backend.apps.settings.store import load_settings
         s = load_settings()
@@ -107,12 +102,8 @@ def _get_user_id() -> Optional[str]:
         return None
 
 
-def set_user_id(uid: Optional[str]) -> None:
-    global _user_id
-    _user_id = uid or None
 
-
-def _is_enabled(kind: str) -> bool:
+def p_is_enabled(kind: str) -> bool:
     """Honour user opt-out. Diagnostic always flows (errors block usability);
     state + session honour the toggle."""
     if kind == "diagnostic":
@@ -130,10 +121,10 @@ def _is_enabled(kind: str) -> bool:
         return True
 
 
-def _envelope() -> dict:
+def p_envelope() -> dict:
     """Identity + environment metadata stamped on every submission."""
-    env: dict[str, Any] = {"install_id": _get_install_id()}
-    uid = _get_user_id()
+    env: dict[str, Any] = {"install_id": p_get_install_id()}
+    uid = p_get_user_id()
     if uid:
         env["user_id"] = uid
     try:
@@ -156,8 +147,8 @@ def _envelope() -> dict:
             except Exception:
                 pass
         if not ianatz:
-            import datetime as _dt
-            local_tz = _dt.datetime.now().astimezone().tzinfo
+            import datetime as dt
+            local_tz = dt.datetime.now().astimezone().tzinfo
             if local_tz:
                 ianatz = str(local_tz)
         if ianatz:
@@ -182,20 +173,20 @@ def _envelope() -> dict:
     return env
 
 
-def _base_url() -> str:
+def p_base_url() -> str:
     try:
         from backend.apps.settings.store import load_settings
         from backend.apps.settings.credentials import OPENSWARM_DEFAULT_PROXY_URL
         s = load_settings()
         return (getattr(s, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL).rstrip("/")
     except Exception:
-        return _DEFAULT_BASE
+        return P_DEFAULT_BASE
 
 
-async def _post(path: str, body: dict) -> int | None:
-    url = f"{_base_url()}{path}"
+async def p_post(path: str, body: dict) -> int | None:
+    url = f"{p_base_url()}{path}"
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as c:
+        async with httpx.AsyncClient(timeout=P_TIMEOUT_SECONDS) as c:
             r = await c.post(url, json=body)
         return r.status_code
     except Exception as e:
@@ -203,42 +194,43 @@ async def _post(path: str, body: dict) -> int | None:
         return None
 
 
-def _delivered(status: int | None) -> bool:
+def p_delivered(status: int | None) -> bool:
     return status is not None and 200 <= status < 300
 
 
 # 429/timeouts/5xx/network are worth retrying; other 4xx means the payload itself is rejected and retrying forever would just poison the spool.
-def _retryable(status: int | None) -> bool:
+def p_retryable(status: int | None) -> bool:
     return status is None or status >= 500 or status in (408, 429)
 
 
-async def _post_or_spool(path: str, body: dict, kind: str) -> None:
-    global _inflight
-    if _test_sink is not None:
+async def p_post_or_spool(path: str, body: dict, kind: str) -> None:
+    global P_INFLIGHT
+    if P_TEST_SINK is not None:
         try:
-            _test_sink(kind, body)
+            P_TEST_SINK(kind, body)
         except Exception as e:
             logger.debug("test sink raised: %s", e)
         return
-    async with _inflight_lock:
-        if _inflight >= _MAX_INFLIGHT:
-            buffer.enqueue(_spool_path(), f"{kind}:{path}", body, now=time.time())
+    async with P_INFLIGHT_LOCK:
+        if P_INFLIGHT >= P_MAX_INFLIGHT:
+            buffer.enqueue(spool_path(), f"{kind}:{path}", body, now=time.time())
             return
-        _inflight += 1
+        P_INFLIGHT += 1
     try:
-        status = await _post(path, body)
-        if _retryable(status):
-            buffer.enqueue(_spool_path(), f"{kind}:{path}", body, now=time.time())
-        elif not _delivered(status):
+        status = await p_post(path, body)
+        if p_retryable(status):
+            buffer.enqueue(spool_path(), f"{kind}:{path}", body, now=time.time())
+        elif not p_delivered(status):
             logger.warning("service POST %s rejected with HTTP %s; payload dropped", path, status)
     finally:
-        async with _inflight_lock:
-            _inflight = max(0, _inflight - 1)
+        async with P_INFLIGHT_LOCK:
+            P_INFLIGHT = max(0, P_INFLIGHT - 1)
 
 
+# Public - Used by service.py
 async def drain_spool(batch_size: int = 50) -> int:
-    async with _drain_lock:
-        entries = buffer.drain(_spool_path(), batch_size=batch_size)
+    async with P_DRAIN_LOCK:
+        entries = buffer.drain(spool_path(), batch_size=batch_size)
         if not entries:
             return 0
         succeeded: list[int] = []
@@ -247,16 +239,16 @@ async def drain_spool(batch_size: int = 50) -> int:
             if not path:
                 succeeded.append(rid)
                 continue
-            status = await _post(path, body)
-            if _delivered(status):
+            status = await p_post(path, body)
+            if p_delivered(status):
                 succeeded.append(rid)
-            elif _retryable(status):
+            elif p_retryable(status):
                 break
             else:
                 logger.warning("service replay %s rejected with HTTP %s; dropping spooled row", path, status)
                 succeeded.append(rid)
         if succeeded:
-            buffer.acknowledge(_spool_path(), succeeded)
+            buffer.acknowledge(spool_path(), succeeded)
         return len(succeeded)
 
 
@@ -264,15 +256,16 @@ async def drain_spool(batch_size: int = 50) -> int:
 # Public API
 # --------------------------------------------------------------------------
 
-def _log(kind: str) -> None:
+def p_log(kind: str) -> None:
     """Append to the rolling operational log for diagnostics."""
     try:
-        from backend.apps.service.ring_buffer import record
-        record(kind)
+        from backend.apps.service.ring_buffer import record as ring_record
+        ring_record(kind)
     except Exception:
         pass
 
 
+# Public - Used by agents.py, settings.py, cloud_sync.py, subscription.router.py, service.py
 def sync(data: dict | None = None) -> None:
     """Sync operational state to the cloud. Single entry point.
 
@@ -288,29 +281,29 @@ def sync(data: dict | None = None) -> None:
     Fire-and-forget; never raises.
     """
     payload = data or {}
-    if not _is_enabled("state"):
+    if not p_is_enabled("state"):
         return
     body = {
-        "client_state": _envelope(),
+        "client_state": p_envelope(),
         "d": payload,
         "t": time.time(),
         "submission_id": uuid4().hex,
     }
-    _log("s")
-    if _test_sink is not None:
+    p_log("s")
+    if P_TEST_SINK is not None:
         try:
-            _test_sink("s", body)
+            P_TEST_SINK("s", body)
         except Exception as e:
             logger.debug("test sink raised: %s", e)
         return
-    _schedule(_post_or_spool(_DEFAULT_SYNC_PATH, body, "s"))
+    p_schedule(p_post_or_spool(P_DEFAULT_SYNC_PATH, body, "s"))
 
 
 # Internal routing; the cloud has one endpoint for everything.
-_DEFAULT_SYNC_PATH = "/api/service/sync"
+P_DEFAULT_SYNC_PATH = "/api/service/sync"
 
 
-def submit(payload: dict) -> None:
+def p_submit(payload: dict) -> None:
     """Routes through sync(). The cloud demuxes by payload shape (state /
     sync / diagnostic / event), so kind here is informational; the routing
     happens server-side in openswarm-cloud/src/routes/service/ingest.ts.
@@ -318,7 +311,7 @@ def submit(payload: dict) -> None:
     sync(payload)
 
 
-def _schedule(coro) -> None:
+def p_schedule(coro) -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -328,75 +321,32 @@ def _schedule(coro) -> None:
         return
     import threading
 
-    def _run():
+    def run_coro():
         try:
             asyncio.run(coro)
         except Exception:
             pass
 
-    threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(target=run_coro, daemon=True).start()
 
 
 # --------------------------------------------------------------------------
-# Backwards-compat shims for legacy call sites. New code calls submit()
+# Backwards-compat shims for legacy call sites. New code calls p_submit(()
 # directly. These keep the ~50 existing import sites in the codebase
 # working unchanged. Removed in a future cleanup once nothing imports
 # from older import paths.
 # --------------------------------------------------------------------------
 
-def submit_event(
-    surface: str,
-    action: str,
-    props: Optional[dict] = None,
-    *,
-    session_id: Optional[str] = None,
-    dashboard_id: Optional[str] = None,
-) -> None:
-    """Legacy event-shape submit. Bundles surface/action into the opaque
-    payload and hands off via submit()."""
-    p = {
-        "surface": surface,
-        "action": action,
-        "props": props or {},
-        "session_id": session_id,
-        "dashboard_id": dashboard_id,
-    }
-    submit("event", p)
-
-
-def submit_session_close(session_dump: dict, activity: Optional[dict] = None) -> None:
-    submit("session", {"usage_window": session_dump, "activity": activity or {}})
-
-
+# Public - Used by agent_manager.py
 def submit_diagnostic(diagnostic: dict) -> None:
     try:
         from backend.apps.service.ring_buffer import snapshot
         diagnostic["recent_log"] = snapshot()
     except Exception:
         pass
-    submit("diagnostic", {"diagnostic": diagnostic})
+    p_submit("diagnostic", {"diagnostic": diagnostic})
 
 
-def update_identity(extra: Optional[dict] = None) -> None:
-    submit("state", {"identity": extra or {}})
-
-
-def record(
-    event_type: str,
-    properties: Optional[dict] = None,
-    session_id: Optional[str] = None,
-    dashboard_id: Optional[str] = None,
-) -> None:
-    """Legacy collector.record() shim; splits dotted name into surface/action."""
-    if "." in event_type:
-        surface, action = event_type.split(".", 1)
-    else:
-        surface, action = event_type, "fired"
-    submit_event(
-        surface=surface, action=action, props=properties or {},
-        session_id=session_id, dashboard_id=dashboard_id,
-    )
-
-
+# Public - Used by settings.py, auth.router.py, subscription.router.py
 def identify(extra_properties: Optional[dict] = None) -> None:
-    update_identity(extra_properties or {})
+    p_submit("state", {"identity": extra_properties or {}})
