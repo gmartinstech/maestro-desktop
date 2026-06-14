@@ -27,7 +27,7 @@ class SSRFBlocked(Exception):
     """A fetch was refused because it targets a forbidden IP range."""
 
 
-_BLOCKED_V4_NETS = [
+P_BLOCKED_V4_NETS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
@@ -38,7 +38,7 @@ _BLOCKED_V4_NETS = [
     ipaddress.ip_network("198.18.0.0/15"),   # benchmarking
 ]
 
-_BLOCKED_V6_NETS = [
+P_BLOCKED_V6_NETS = [
     ipaddress.ip_network("fe80::/10"),       # link-local
     ipaddress.ip_network("fc00::/7"),        # ULA
     ipaddress.ip_network("ff00::/8"),        # multicast
@@ -46,7 +46,7 @@ _BLOCKED_V6_NETS = [
 ]
 
 
-async def _resolve_host_async(host: str) -> list[str]:
+async def p_resolve_host_async(host: str) -> list[str]:
     """Resolve host to all IPs (v4 + v6) without blocking the event loop."""
     loop = asyncio.get_event_loop()
     try:
@@ -56,7 +56,7 @@ async def _resolve_host_async(host: str) -> list[str]:
     return list({info[4][0] for info in infos})
 
 
-def _is_forbidden_ip(ip_str: str) -> bool:
+def p_is_forbidden_ip(ip_str: str) -> bool:
     """True iff this IP is in a blocked range. Loopback is allowed (see module docstring)."""
     try:
         ip = ipaddress.ip_address(ip_str)
@@ -65,8 +65,8 @@ def _is_forbidden_ip(ip_str: str) -> bool:
     if ip.is_loopback:
         return False
     if ip.version == 4:
-        return any(ip in net for net in _BLOCKED_V4_NETS)
-    return any(ip in net for net in _BLOCKED_V6_NETS)
+        return any(ip in net for net in P_BLOCKED_V4_NETS)
+    return any(ip in net for net in P_BLOCKED_V6_NETS)
 
 
 async def assert_safe_url(url: str) -> str:
@@ -88,17 +88,17 @@ async def assert_safe_url(url: str) -> str:
 
     try:
         ipaddress.ip_address(host)
-        if _is_forbidden_ip(host):
+        if p_is_forbidden_ip(host):
             raise SSRFBlocked(f"URL host {host} is in a blocked range.")
         return url
     except ValueError:
         pass
 
-    resolved = await _resolve_host_async(host)
+    resolved = await p_resolve_host_async(host)
     if not resolved:
         raise SSRFBlocked(f"No DNS records for {host}.")
     for ip in resolved:
-        if _is_forbidden_ip(ip):
+        if p_is_forbidden_ip(ip):
             raise SSRFBlocked(f"Host {host} resolves to forbidden IP {ip}.")
     return url
 

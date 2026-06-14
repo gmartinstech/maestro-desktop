@@ -26,8 +26,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_OPENAI_UPSTREAM = "https://api.openai.com/v1"
-_OPENROUTER_UPSTREAM = "https://openrouter.ai/api/v1"
+P_OPENAI_UPSTREAM = "https://api.openai.com/v1"
+P_OPENROUTER_UPSTREAM = "https://openrouter.ai/api/v1"
 
 # Concurrency cap for bypass-route requests. Each in-flight request holds
 # the base64'd PDF (raw_bytes * 1.33) in memory across httpx's request
@@ -37,18 +37,18 @@ _OPENROUTER_UPSTREAM = "https://openrouter.ai/api/v1"
 # concurrent probes. Cap at 2 so a Mehmet-style multi-PDF attach in one
 # session can't take the whole backend down. Requests above the cap
 # queue rather than fail.
-_BYPASS_CONCURRENCY = 2
-_bypass_sema = asyncio.Semaphore(_BYPASS_CONCURRENCY)
+P_BYPASS_CONCURRENCY = 2
+p_bypass_sema = asyncio.Semaphore(P_BYPASS_CONCURRENCY)
 
 # Hard per-request body size ceiling. Anthropic API caps at 32MB,
 # OpenAI Chat Completions at 50MB, OpenRouter at whatever underlying
 # model accepts. We refuse anything over 40MB raw (≈53MB base64) before
 # we even build the request body, so a malicious or accidental huge
 # attach never reaches the in-memory pipeline.
-_BYPASS_MAX_RAW_BYTES = 40 * 1024 * 1024
+P_BYPASS_MAX_RAW_BYTES = 40 * 1024 * 1024
 
 
-def _has_document_block(parsed: dict) -> bool:
+def p_has_document_block(parsed: dict) -> bool:
     msgs = parsed.get("messages")
     if not isinstance(msgs, list):
         return False
@@ -75,7 +75,7 @@ def should_bypass_9router(parsed: dict, api_key: str | None) -> bool:
         return False
     if parsed.get("tools"):
         return False
-    return _has_document_block(parsed)
+    return p_has_document_block(parsed)
 
 
 def should_bypass_9router_for_openrouter(parsed: dict, api_key: str | None) -> bool:
@@ -90,10 +90,10 @@ def should_bypass_9router_for_openrouter(parsed: dict, api_key: str | None) -> b
         return False
     if parsed.get("tools"):
         return False
-    return _has_document_block(parsed)
+    return p_has_document_block(parsed)
 
 
-def _content_blocks_to_openai(content) -> list[dict]:
+def p_content_blocks_to_openai(content) -> list[dict]:
     """Convert Anthropic content blocks → OpenAI Chat Completions parts."""
     if isinstance(content, str):
         return [{"type": "text", "text": content}]
@@ -134,7 +134,7 @@ def _content_blocks_to_openai(content) -> list[dict]:
     return out
 
 
-def translate_request(parsed: dict) -> dict:
+def p_translate_request(parsed: dict) -> dict:
     """Anthropic Messages request → OpenAI Chat Completions request."""
     model = parsed.get("model") or ""
     if "/" in model:
@@ -160,7 +160,7 @@ def translate_request(parsed: dict) -> dict:
         role = m.get("role")
         if role not in ("user", "assistant"):
             continue
-        msgs_out.append({"role": role, "content": _content_blocks_to_openai(m.get("content"))})
+        msgs_out.append({"role": role, "content": p_content_blocks_to_openai(m.get("content"))})
 
     openai_body["messages"] = msgs_out
     mt = parsed.get("max_tokens")
@@ -176,12 +176,12 @@ def translate_request(parsed: dict) -> dict:
     return openai_body
 
 
-def _sse_event(event: str, data: dict) -> bytes:
+def p_sse_event(event: str, data: dict) -> bytes:
     """Encode an Anthropic-format SSE event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n".encode("utf-8")
 
 
-async def _translate_response_stream(
+async def p_translate_response_stream(
     upstream: httpx.Response, model: str,
 ) -> AsyncIterator[bytes]:
     """Convert OpenAI Chat Completions SSE → Anthropic Messages SSE.
@@ -226,7 +226,7 @@ async def _translate_response_stream(
                     if not started:
                         usage = (ev.get("usage") or {})
                         input_tokens = int(usage.get("prompt_tokens") or 0)
-                        yield _sse_event("message_start", {
+                        yield p_sse_event("message_start", {
                             "type": "message_start",
                             "message": {
                                 "id": msg_id,
@@ -255,13 +255,13 @@ async def _translate_response_stream(
                     delta_text = delta.get("content")
                     if isinstance(delta_text, str) and delta_text:
                         if not block_opened:
-                            yield _sse_event("content_block_start", {
+                            yield p_sse_event("content_block_start", {
                                 "type": "content_block_start",
                                 "index": 0,
                                 "content_block": {"type": "text", "text": ""},
                             })
                             block_opened = True
-                        yield _sse_event("content_block_delta", {
+                        yield p_sse_event("content_block_delta", {
                             "type": "content_block_delta",
                             "index": 0,
                             "delta": {"type": "text_delta", "text": delta_text},
@@ -277,15 +277,15 @@ async def _translate_response_stream(
     finally:
         if started:
             if block_opened:
-                yield _sse_event("content_block_stop", {
+                yield p_sse_event("content_block_stop", {
                     "type": "content_block_stop", "index": 0,
                 })
-            yield _sse_event("message_delta", {
+            yield p_sse_event("message_delta", {
                 "type": "message_delta",
                 "delta": {"stop_reason": stop_reason, "stop_sequence": None},
                 "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
             })
-            yield _sse_event("message_stop", {"type": "message_stop"})
+            yield p_sse_event("message_stop", {"type": "message_stop"})
 
 
 async def forward_to_openai(
@@ -293,8 +293,8 @@ async def forward_to_openai(
 ) -> tuple[int, AsyncIterator[bytes], dict[str, str]]:
     """Translate + forward an Anthropic request to OpenAI Chat Completions.
     Returns (status, body_stream, response_headers)."""
-    openai_body = translate_request(parsed)
-    return await _forward(openai_body, api_key, f"{_OPENAI_UPSTREAM}/chat/completions")
+    openai_body = p_translate_request(parsed)
+    return await p_forward(openai_body, api_key, f"{P_OPENAI_UPSTREAM}/chat/completions")
 
 
 async def forward_to_openrouter(
@@ -302,7 +302,7 @@ async def forward_to_openrouter(
 ) -> tuple[int, AsyncIterator[bytes], dict[str, str]]:
     """Translate + forward to OpenRouter, injecting the file-parser plugin
     so any OR model parses the attached PDFs server-side."""
-    openai_body = translate_request(parsed)
+    openai_body = p_translate_request(parsed)
     model = (parsed.get("model") or "").lower()
     bare = model
     for prefix in ("openrouter/", "or:"):
@@ -311,10 +311,10 @@ async def forward_to_openrouter(
             break
     openai_body["model"] = bare
     openai_body["plugins"] = [{"id": "file-parser", "pdf": {"engine": "pdf-text"}}]
-    return await _forward(openai_body, api_key, f"{_OPENROUTER_UPSTREAM}/chat/completions")
+    return await p_forward(openai_body, api_key, f"{P_OPENROUTER_UPSTREAM}/chat/completions")
 
 
-def _estimate_body_bytes(body_json: dict) -> int:
+def p_estimate_body_bytes(body_json: dict) -> int:
     """Sum the base64 payload bytes across content blocks. Used as a
     cheap pre-flight check before httpx serializes the body."""
     total = 0
@@ -336,12 +336,12 @@ def _estimate_body_bytes(body_json: dict) -> int:
     return total
 
 
-async def _forward(
+async def p_forward(
     body_json: dict, api_key: str, url: str,
 ) -> tuple[int, AsyncIterator[bytes], dict[str, str]]:
     # Pre-flight size check. base64 expands ~4/3 so 40MB raw → 53MB b64.
-    raw_estimate = int(_estimate_body_bytes(body_json) * 0.75)
-    if raw_estimate > _BYPASS_MAX_RAW_BYTES:
+    raw_estimate = int(p_estimate_body_bytes(body_json) * 0.75)
+    if raw_estimate > P_BYPASS_MAX_RAW_BYTES:
 
         async def reject():
             payload = json.dumps({
@@ -350,7 +350,7 @@ async def _forward(
                     "type": "invalid_request_error",
                     "message": (
                         f"Attached files total ~{raw_estimate // (1024*1024)} MB, "
-                        f"over the {_BYPASS_MAX_RAW_BYTES // (1024*1024)} MB per-request "
+                        f"over the {P_BYPASS_MAX_RAW_BYTES // (1024*1024)} MB per-request "
                         "cap on this provider lane. Detach a file or split across "
                         "separate turns."
                     ),
@@ -371,14 +371,14 @@ async def _forward(
     # ~40MB request body + a streaming response buffer, and the OS
     # OOM-kills the backend (observed on macOS during a 3-PDF probe
     # burst). Semaphore serializes excess requests instead of failing.
-    await _bypass_sema.acquire()
+    await p_bypass_sema.acquire()
     client = httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=30.0))
     try:
         req = client.build_request("POST", url, json=body_json, headers=headers)
         upstream = await client.send(req, stream=True)
     except Exception:
         await client.aclose()
-        _bypass_sema.release()
+        p_bypass_sema.release()
         raise
 
     async def streamer():
@@ -387,7 +387,7 @@ async def _forward(
                 raw = await upstream.aread()
                 yield raw
                 return
-            async for chunk in _translate_response_stream(upstream, body_json["model"]):
+            async for chunk in p_translate_response_stream(upstream, body_json["model"]):
                 yield chunk
         finally:
             try:
@@ -396,7 +396,7 @@ async def _forward(
                 try:
                     await client.aclose()
                 finally:
-                    _bypass_sema.release()
+                    p_bypass_sema.release()
 
     return upstream.status_code, streamer(), {
         "content-type": "text/event-stream" if upstream.status_code < 400 else "application/json",

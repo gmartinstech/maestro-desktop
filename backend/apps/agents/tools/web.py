@@ -10,9 +10,9 @@ import httpx
 from backend.apps.agents.tools.base import BaseTool
 from backend.apps.agents.tools.ssrf_guard import SSRFBlocked, safe_fetch
 
-_HTTP_TIMEOUT = 30
-_MAX_OUTPUT_BYTES = 250 * 1024  # ~250 KB covers ~95% of articles/wikis/docs.
-_USER_AGENT = (
+P_HTTP_TIMEOUT = 30
+P_MAX_OUTPUT_BYTES = 250 * 1024  # ~250 KB covers ~95% of articles/wikis/docs.
+P_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
@@ -47,13 +47,13 @@ def anthropic_web_search_is_reliable(*, uses_direct_anthropic_api: bool,
     return bool(uses_direct_anthropic_api or is_pro)
 
 
-def _truncate(text: str, limit: int = _MAX_OUTPUT_BYTES) -> str:
+def p_truncate(text: str, limit: int = P_MAX_OUTPUT_BYTES) -> str:
     if len(text) > limit:
         return text[:limit] + "\n... (output truncated)"
     return text
 
 
-def _strip_html(raw_html: str) -> str:
+def p_strip_html(raw_html: str) -> str:
     """Naive but effective HTML to plain-text conversion."""
     text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
     text = re.sub(r"<[^>]+>", " ", text)
@@ -64,13 +64,13 @@ def _strip_html(raw_html: str) -> str:
 
 
 class WebSearchTool(BaseTool):
-    name = "WebSearch"
-    description = (
+    p_name = "WebSearch"
+    p_description = (
         "Search the web using DuckDuckGo and return titles, URLs, and "
         "snippets for the top results."
     )
 
-    def get_schema(self) -> dict:
+    def p_get_schema(self) -> dict:
         return {
             "type": "object",
             "properties": {
@@ -88,12 +88,12 @@ class WebSearchTool(BaseTool):
             "additionalProperties": False,
         }
 
-    async def execute(self, input_data: dict) -> list[dict]:
+    async def p_execute(self, input_data: dict) -> list[dict]:
         query: str = input_data["query"]
         num_results: int = input_data.get("num_results", 5)
 
         try:
-            results = await self._search_ddg(query, num_results)
+            results = await self.search_ddg(query, num_results)
             if not results:
                 return [{"type": "text", "text": f"No search results found for: {query}"}]
             return [{"type": "text", "text": results}]
@@ -106,12 +106,12 @@ class WebSearchTool(BaseTool):
             return [{"type": "text", "text": f"Web search error: {exc}"}]
 
     @staticmethod
-    async def _search_ddg(query: str, num_results: int) -> str:
+    async def search_ddg(query: str, num_results: int) -> str:
         """Query DuckDuckGo HTML endpoint and parse results."""
         async with httpx.AsyncClient(
-            timeout=_HTTP_TIMEOUT,
+            timeout=P_HTTP_TIMEOUT,
             follow_redirects=True,
-            headers={"User-Agent": _USER_AGENT},
+            headers={"User-Agent": P_USER_AGENT},
         ) as client:
             resp = await client.post(
                 "https://html.duckduckgo.com/html/",
@@ -160,14 +160,14 @@ class WebSearchTool(BaseTool):
             if "/y.js?" in raw_url or "ad_provider=" in raw_url or "ad_domain=" in raw_url:
                 continue
 
-            title = _strip_html(link_match.group(2)).strip()
+            title = p_strip_html(link_match.group(2)).strip()
 
             snippet_match = re.search(
                 r'<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>',
                 block,
                 flags=re.DOTALL,
             )
-            snippet = _strip_html(snippet_match.group(1)).strip() if snippet_match else ""
+            snippet = p_strip_html(snippet_match.group(1)).strip() if snippet_match else ""
 
             # DDG wraps URLs in a redirect; extract the real one.
             real_url_match = re.search(r"uddg=([^&]+)", raw_url)
@@ -186,13 +186,13 @@ class WebSearchTool(BaseTool):
 
 
 class WebFetchTool(BaseTool):
-    name = "WebFetch"
-    description = (
+    p_name = "WebFetch"
+    p_description = (
         "Fetch the contents of a URL and return the extracted text. "
         "HTML is stripped to plain text. Output capped at ~250 KB."
     )
 
-    def get_schema(self) -> dict:
+    def p_get_schema(self) -> dict:
         return {
             "type": "object",
             "properties": {
@@ -217,8 +217,8 @@ class WebFetchTool(BaseTool):
             resp = await safe_fetch(
                 url,
                 method="GET",
-                headers={"User-Agent": _USER_AGENT},
-                timeout=_HTTP_TIMEOUT,
+                headers={"User-Agent": P_USER_AGENT},
+                timeout=P_HTTP_TIMEOUT,
             )
             resp.raise_for_status()
         except SSRFBlocked as exc:
@@ -245,11 +245,11 @@ class WebFetchTool(BaseTool):
             except Exception:
                 text = None
             if not text:
-                text = _strip_html(resp.text)
+                text = p_strip_html(resp.text)
         else:
             text = resp.text
 
-        text = _truncate(text)
+        text = p_truncate(text)
 
         header = f"Contents of {url}:"
         if prompt:

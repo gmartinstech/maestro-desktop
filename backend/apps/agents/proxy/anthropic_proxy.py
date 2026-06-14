@@ -21,7 +21,7 @@ async def anthropic_proxy_lifespan():
 anthropic_proxy = SubApp("anthropic-proxy", anthropic_proxy_lifespan)
 
 
-_CLAUDE_MODEL_PREFIXES = (
+P_CLAUDE_MODEL_PREFIXES = (
     "claude-",
     "claude/",
     "sonnet",
@@ -30,13 +30,13 @@ _CLAUDE_MODEL_PREFIXES = (
     "cc/",
 )
 
-_GEMINI_MODEL_PREFIXES = ("gemini/", "gc/", "ag/")
+P_GEMINI_MODEL_PREFIXES = ("gemini/", "gc/", "ag/")
 
 # Own-key Gemini ("gemini-3-flash-api" etc.) skips the gemini/ prefix; match bare names so $schema scrub still fires.
-_GEMINI_BARE_MODEL_PATTERNS = ("gemini-",)
+P_GEMINI_BARE_MODEL_PATTERNS = ("gemini-",)
 
 # Keys 9Router 0.3.60 misses that Gemini's function_declarations validator 400s on. Each was caught in prod.
-_GEMINI_FORBIDDEN_SCHEMA_KEYS = {
+P_GEMINI_FORBIDDEN_SCHEMA_KEYS = {
     "$schema",
     "$id",
     "$ref",
@@ -59,27 +59,27 @@ _GEMINI_FORBIDDEN_SCHEMA_KEYS = {
 }
 
 
-def _scrub_gemini_schema(node):
+def p_scrub_gemini_schema(node):
     """Recursive in-place strip of Gemini-rejected JSON Schema fields."""
     if isinstance(node, dict):
         for k in list(node.keys()):
-            if k in _GEMINI_FORBIDDEN_SCHEMA_KEYS:
+            if k in P_GEMINI_FORBIDDEN_SCHEMA_KEYS:
                 node.pop(k, None)
                 continue
-            node[k] = _scrub_gemini_schema(node[k])
+            node[k] = p_scrub_gemini_schema(node[k])
         return node
     if isinstance(node, list):
         for i, v in enumerate(node):
-            node[i] = _scrub_gemini_schema(v)
+            node[i] = p_scrub_gemini_schema(v)
         return node
     return node
 
 
 # GPT-5.x rejects max_tokens; needs max_completion_tokens. Anthropic-format wire still emits max_tokens; we rename on the way out.
-_OPENAI_MAX_COMPLETION_TOKENS_MODELS = ("gpt-5",)
+P_OPENAI_MAX_COMPLETION_TOKENS_MODELS = ("gpt-5",)
 
 
-def _is_openai_max_completion_tokens_model(model: str) -> bool:
+def p_is_openai_max_completion_tokens_model(model: str) -> bool:
     """Match every shape a GPT-5 name might arrive in (bare, api-suffixed, openai/-prefixed, cx/-routed)."""
     m = (model or "").strip().lower()
     if not m:
@@ -88,10 +88,10 @@ def _is_openai_max_completion_tokens_model(model: str) -> bool:
         if m.startswith(prefix):
             m = m[len(prefix):]
             break
-    return any(m.startswith(p) for p in _OPENAI_MAX_COMPLETION_TOKENS_MODELS)
+    return any(m.startswith(p) for p in P_OPENAI_MAX_COMPLETION_TOKENS_MODELS)
 
 
-def _rewrite_document_to_openai_file(parsed: dict) -> None:
+def p_rewrite_document_to_openai_file(parsed: dict) -> None:
     """In-place: rewrite Anthropic base64 `image` blocks to OpenAI `image_url` (PDFs go via OpenRouter)."""
     msgs = parsed.get("messages") if isinstance(parsed, dict) else None
     if not isinstance(msgs, list):
@@ -131,7 +131,7 @@ def _rewrite_document_to_openai_file(parsed: dict) -> None:
             }
 
 
-def _scrub_request_for_openai_gpt5(body: bytes) -> bytes:
+def p_scrub_request_for_openai_gpt5(body: bytes) -> bytes:
     """Rename max_tokens→max_completion_tokens for GPT-5 AND rewrite any
     Anthropic document blocks to OpenAI type:file shape so PDFs flow
     natively on GPT-5.x vision models. Bytes in/out; never raises."""
@@ -152,7 +152,7 @@ def _scrub_request_for_openai_gpt5(body: bytes) -> bytes:
         mutated = True
     try:
         before = json.dumps(parsed.get("messages"), sort_keys=True) if "messages" in parsed else ""
-        _rewrite_document_to_openai_file(parsed)
+        p_rewrite_document_to_openai_file(parsed)
         after = json.dumps(parsed.get("messages"), sort_keys=True) if "messages" in parsed else ""
         if before != after:
             mutated = True
@@ -161,7 +161,7 @@ def _scrub_request_for_openai_gpt5(body: bytes) -> bytes:
     return json.dumps(parsed).encode("utf-8") if mutated else body
 
 
-def _rewrite_document_to_image(parsed: dict) -> None:
+def p_rewrite_document_to_image(parsed: dict) -> None:
     """In-place: rewrite Anthropic `document` (PDF) AND `image` content
     blocks → OpenAI `image_url` shape with a `data:` URL. Critical fix
     for 9router 0.3.60 which **only translates `image_url` blocks** to
@@ -207,15 +207,15 @@ def _rewrite_document_to_image(parsed: dict) -> None:
             }
 
 
-_OPENROUTER_MODEL_PREFIXES = ("openrouter/", "or:")
+P_OPENROUTER_MODEL_PREFIXES = ("openrouter/", "or:")
 
 
-def _is_openrouter_model(model: str) -> bool:
+def p_is_openrouter_model(model: str) -> bool:
     m = (model or "").strip().lower()
-    return any(m.startswith(p) for p in _OPENROUTER_MODEL_PREFIXES)
+    return any(m.startswith(p) for p in P_OPENROUTER_MODEL_PREFIXES)
 
 
-def _inject_openrouter_file_parser(body: bytes) -> bytes:
+def p_inject_openrouter_file_parser(body: bytes) -> bytes:
     """When the request has document blocks AND is bound for OpenRouter,
     inject the file-parser plugin so OR's universal PDF support kicks in
     on any model (free models get pdf-text engine; native PDF models can
@@ -255,7 +255,7 @@ def _inject_openrouter_file_parser(body: bytes) -> bytes:
     return json.dumps(parsed).encode("utf-8")
 
 
-def _scrub_request_for_gemini(body: bytes) -> bytes:
+def p_scrub_request_for_gemini(body: bytes) -> bytes:
     """Strip Gemini-incompatible schema keys from request tools AND
     rewrite Anthropic document blocks to image-shape so 9router's
     inline_data translator picks them up. Bytes-in/out, never raises."""
@@ -271,19 +271,19 @@ def _scrub_request_for_gemini(body: bytes) -> bytes:
             if not isinstance(t, dict):
                 continue
             if isinstance(t.get("input_schema"), (dict, list)):
-                _scrub_gemini_schema(t["input_schema"])
+                p_scrub_gemini_schema(t["input_schema"])
             if isinstance(t.get("parameters"), (dict, list)):
-                _scrub_gemini_schema(t["parameters"])
+                p_scrub_gemini_schema(t["parameters"])
     try:
         if isinstance(parsed, dict):
-            _rewrite_document_to_image(parsed)
+            p_rewrite_document_to_image(parsed)
     except Exception:
         pass
     return json.dumps(parsed).encode("utf-8")
 
 
 # Hop-by-hop headers or auth we replace with the upstream-specific value.
-_HOP_HEADERS = {
+P_HOP_HEADERS = {
     "host",
     "content-length",
     "authorization",
@@ -299,22 +299,22 @@ _HOP_HEADERS = {
 }
 
 
-def _is_claude_model(model: str) -> bool:
+def p_is_claude_model(model: str) -> bool:
     m = (model or "").strip().lower()
-    return m.startswith(_CLAUDE_MODEL_PREFIXES)
+    return m.startswith(P_CLAUDE_MODEL_PREFIXES)
 
 
-def _is_gemini_model(model: str) -> bool:
+def p_is_gemini_model(model: str) -> bool:
     m = (model or "").strip().lower()
-    if m.startswith(_GEMINI_MODEL_PREFIXES):
+    if m.startswith(P_GEMINI_MODEL_PREFIXES):
         return True
     # Bare-name match for own-key Gemini; excludes anthropic-routed gemini (those carry "/").
     if "/" in m:
         return False
-    return any(m.startswith(p) for p in _GEMINI_BARE_MODEL_PATTERNS)
+    return any(m.startswith(p) for p in P_GEMINI_BARE_MODEL_PATTERNS)
 
 
-def _pick_upstream(model: str) -> tuple[str, dict[str, str]]:
+def p_pick_upstream(model: str) -> tuple[str, dict[str, str]]:
     """Return (base_url_without_v1, auth_headers) for this model.
 
     Routing for Claude-family models:
@@ -326,7 +326,7 @@ def _pick_upstream(model: str) -> tuple[str, dict[str, str]]:
     from backend.apps.settings.settings import load_settings
     s = load_settings()
 
-    if _is_claude_model(model):
+    if p_is_claude_model(model):
         if getattr(s, "connection_mode", "own_key") == "openswarm-pro":
             bearer = getattr(s, "openswarm_bearer_token", "") or ""
             proxy = (getattr(s, "openswarm_proxy_url", "") or "https://api.openswarm.com").rstrip("/")
@@ -352,9 +352,6 @@ def _pick_upstream(model: str) -> tuple[str, dict[str, str]]:
     methods=["GET", "HEAD", "OPTIONS"],
     include_in_schema=False,
 )
-async def _healthcheck():
-    """CLI healthchecks the proxy root; return 200 so it doesn't 404."""
-    return {"ok": True}
 
 
 @anthropic_proxy.router.api_route(
@@ -382,46 +379,46 @@ async def proxy(rest: str, request: Request):
         parsed_for_bypass = None
     if isinstance(parsed_for_bypass, dict):
         from backend.apps.agents.proxy.anthropic_to_openai import (
-            should_bypass_9router as _should_bypass_oai,
-            should_bypass_9router_for_openrouter as _should_bypass_or,
-            forward_to_openai as _forward_oai,
-            forward_to_openrouter as _forward_or,
+            should_bypass_9router,
+            should_bypass_9router_for_openrouter,
+            forward_to_openai,
+            forward_to_openrouter,
         )
-        from backend.apps.settings.settings import load_settings as _load
-        _s = _load()
-        if _is_openai_max_completion_tokens_model(model):
-            _oak = (getattr(_s, "openai_api_key", "") or "").strip()
-            if _should_bypass_oai(parsed_for_bypass, _oak):
-                status, body_stream, hdrs = await _forward_oai(
-                    parsed_for_bypass, _oak,
+        from backend.apps.settings.settings import load_settings
+        s = load_settings()
+        if p_is_openai_max_completion_tokens_model(model):
+            oak = (getattr(s, "openai_api_key", "") or "").strip()
+            if should_bypass_9router(parsed_for_bypass, oak):
+                status, body_stream, hdrs = await forward_to_openai(
+                    parsed_for_bypass, oak,
                 )
                 return StreamingResponse(
                     body_stream, status_code=status, headers=hdrs,
                     media_type=hdrs.get("content-type", "text/event-stream"),
                 )
-        if _is_openrouter_model(model):
-            _ork = (getattr(_s, "openrouter_api_key", "") or "").strip()
-            if _should_bypass_or(parsed_for_bypass, _ork):
-                status, body_stream, hdrs = await _forward_or(
-                    parsed_for_bypass, _ork,
+        if p_is_openrouter_model(model):
+            ork = (getattr(s, "openrouter_api_key", "") or "").strip()
+            if should_bypass_9router_for_openrouter(parsed_for_bypass, ork):
+                status, body_stream, hdrs = await forward_to_openrouter(
+                    parsed_for_bypass, ork,
                 )
                 return StreamingResponse(
                     body_stream, status_code=status, headers=hdrs,
                     media_type=hdrs.get("content-type", "text/event-stream"),
                 )
 
-    if _is_gemini_model(model):
-        body = _scrub_request_for_gemini(body)
-    if _is_openai_max_completion_tokens_model(model):
-        body = _scrub_request_for_openai_gpt5(body)
-    if _is_openrouter_model(model):
-        body = _inject_openrouter_file_parser(body)
+    if p_is_gemini_model(model):
+        body = p_scrub_request_for_gemini(body)
+    if p_is_openai_max_completion_tokens_model(model):
+        body = p_scrub_request_for_openai_gpt5(body)
+    if p_is_openrouter_model(model):
+        body = p_inject_openrouter_file_parser(body)
 
-    base_url, auth_headers = _pick_upstream(model)
+    base_url, auth_headers = p_pick_upstream(model)
 
     forward_headers: dict[str, str] = {}
     for k, v in request.headers.items():
-        if k.lower() in _HOP_HEADERS:
+        if k.lower() in P_HOP_HEADERS:
             continue
         # CLI carries our install token as x-api-key; never forward (leak + shadows real upstream auth).
         if k.lower() == "x-api-key":
@@ -459,7 +456,7 @@ async def proxy(rest: str, request: Request):
                 streamer(),
                 status_code=upstream.status_code,
                 headers={k: v for k, v in upstream.headers.items()
-                         if k.lower() not in _HOP_HEADERS},
+                         if k.lower() not in P_HOP_HEADERS},
                 media_type=upstream.headers.get("content-type", "text/event-stream"),
             )
         else:
@@ -471,7 +468,7 @@ async def proxy(rest: str, request: Request):
                 return JSONResponse(
                     content=r.json() if r.headers.get("content-type", "").startswith("application/json") else {"raw": r.text},
                     status_code=r.status_code,
-                    headers={k: v for k, v in r.headers.items() if k.lower() not in _HOP_HEADERS},
+                    headers={k: v for k, v in r.headers.items() if k.lower() not in P_HOP_HEADERS},
                 )
     except httpx.TimeoutException:
         return JSONResponse({"error": "upstream timeout"}, status_code=504)
