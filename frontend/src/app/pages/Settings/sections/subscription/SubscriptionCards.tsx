@@ -76,19 +76,10 @@ const SubscriptionCards: React.FC = () => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: providerId }),
       });
-      if (!r.ok) {
-        let text = '';
-        try { text = await r.text(); } catch {}
-        console.warn('[oauth] /connect failed', { providerId, status: r.status, body: text });
-        setConnecting(null);
-        return;
-      }
+      if (!r.ok) { setConnecting(null); return; }
       const data = await r.json();
       runConnectFlow({ providerId, data, setConnecting, setUserCode, setPollTimer, fetchStatus, refreshPickerModels, markConnected });
-    } catch (e) {
-      console.warn('[oauth] /connect network error', { providerId, error: String(e) });
-      setConnecting(null);
-    }
+    } catch { setConnecting(null); }
   };
 
   const handleDisconnect = async (providerId: string) => {

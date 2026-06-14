@@ -432,6 +432,11 @@ async def subscriptions_poll(body: dict):
 async def subscriptions_exchange(body: dict):
     """Exchange OAuth code for tokens via 9Router."""
     from backend.apps.nine_router import exchange_oauth
+    from backend.apps.oauth_state import (
+        _pending_oauth as pending_oauth,
+        _completed_oauth as completed_oauth,
+        _mark_oauth_completed as mark_completed,
+    )
     provider = body.get("provider", "")
     code = body.get("code", "")
     redirect_uri = body.get("redirect_uri", "")
@@ -444,11 +449,18 @@ async def subscriptions_exchange(body: dict):
     try:
         result = await exchange_oauth(provider, code, redirect_uri, code_verifier, state)
         if result.get("success"):
-            from backend.apps.service.client import sync as _sync
+            # Claude races this path against /api/subscriptions/callback (popup + 9router patch
+            # 302 to backend); dedup so the loser sees the success page, not "Session expired".
+            if state:
+                pending_oauth.pop(state, None)
+                mark_completed(state)
+            from backend.apps.service.client import sync as do_sync
             from backend.apps.settings.settings import load_settings
-            _sync(load_settings().model_dump())
+            do_sync(load_settings().model_dump())
         return result
     except Exception as e:
+        if state and state in completed_oauth:
+            return {"success": True, "deduped": True}
         raise HTTPException(status_code=500, detail=str(e))
 
 

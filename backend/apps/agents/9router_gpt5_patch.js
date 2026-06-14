@@ -39,6 +39,33 @@ const _http = require('http');
   } catch (_) {}
 })();
 
+// 9Router's /callback page is a client-side relay (postMessage/BroadcastChannel/
+// localStorage) that fails when the OAuth flow runs in the user's system browser:
+// no opener, different cookie jar. 302 to the backend so the exchange happens
+// server-side. Idempotent via _completed_oauth (backend/apps/oauth_state.py) so
+// a racing renderer-driven exchange in popup mode dedups.
+(function patchOauthCallbackRedirect() {
+  try {
+    const http = require('http');
+    const origEmit = http.Server.prototype.emit;
+    http.Server.prototype.emit = function patchedEmit(event, req, res) {
+      if (event === 'request' && req && res) {
+        try {
+          const url = req.url || '';
+          if (url.startsWith('/callback?')) {
+            const backendPort = process.env.OPENSWARM_PORT || '8324';
+            const target = 'http://localhost:' + backendPort + '/api/subscriptions/callback' + url.slice('/callback'.length);
+            res.writeHead(302, { Location: target });
+            res.end();
+            return true;
+          }
+        } catch (_) {}
+      }
+      return origEmit.apply(this, arguments);
+    };
+  } catch (_) {}
+})();
+
 const TARGET_HOSTS = new Set(['api.openai.com']);
 const DEBUG = process.env.OPENSWARM_DEBUG_GPT5_PATCH === '1';
 

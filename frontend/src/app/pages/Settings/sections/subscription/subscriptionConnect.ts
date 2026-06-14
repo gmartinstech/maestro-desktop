@@ -184,13 +184,8 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
       let body: any = null;
       try { body = await r.json(); } catch {}
       succeeded = r.ok && !!body?.success;
-      if (!succeeded) console.warn('[oauth] exchange failed', { providerId, status: r.status, body });
-    } catch (e) {
-      console.warn('[oauth] exchange network error', { providerId, error: String(e) });
-    }
-    // 9Router's /providers list lags /exchange by several seconds; an immediate fetchStatus()
-    // returns stale "not connected" data and overwrites the UI back to Connect. Mark optimistically;
-    // the 30s background poller in SubscriptionCards reconciles once 9Router catches up.
+    } catch {}
+    // 9Router /providers lags /exchange; an immediate fetchStatus would clobber the UI.
     if (succeeded) markConnected(providerId);
     setConnecting(null);
     refreshPickerModels();

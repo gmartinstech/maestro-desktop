@@ -205,9 +205,14 @@ async def _start_codex_callback_listener(timeout: float = 300.0) -> asyncio.base
 #   own Desktop-app OAuth guidance both prescribe the system browser.
 # - codex: auth.openai.com renders blank in our popup on some machines (newer
 #   embed detection + regional checks); system browser surfaces the real error.
+# - claude: email magic-link opens in the user's default browser, which is a
+#   different cookie jar from the embedded popup, so the popup can never receive
+#   the auth. Forcing the OAuth flow into the system browser keeps everything
+#   in one cookie jar.
 # The callback for gemini-cli/antigravity lands on /api/subscriptions/callback
-# and runs the exchange server-side; codex uses its fixed 1455 listener.
-_EXTERNAL_BROWSER_PROVIDERS: set[str] = {"gemini-cli", "antigravity", "codex"}
+# and runs the exchange server-side; codex uses its fixed 1455 listener; claude
+# is special-cased in _callback_uri_for_provider below.
+_EXTERNAL_BROWSER_PROVIDERS: set[str] = {"gemini-cli", "antigravity", "codex", "claude"}
 
 
 def _should_use_external_browser(provider: str) -> bool:
@@ -232,18 +237,21 @@ def _callback_uri_for_provider(provider: str) -> str:
     """Return the redirect URI to pass to 9Router's authorize endpoint.
 
     Most providers accept 9Router's built-in callback page at port 20128.
-    Two special cases:
+    Special cases:
     - Codex/OpenAI's OAuth client is bound to a fixed
       http://localhost:1455/auth/callback URI; handled by
       _start_codex_callback_listener above.
     - Gemini/Google's OAuth consent page rejects embedded browsers, so we
       route the callback through OpenSwarm's backend endpoint at
-      /api/subscriptions/callback (backend/main.py:138) which runs the
-      exchange itself. This is the only provider where the callback lands
-      on OpenSwarm's port rather than 9Router's.
+      /api/subscriptions/callback (backend/main.py) which runs the
+      exchange itself.
     """
     if provider == "codex":
         return f"http://localhost:{_CODEX_CALLBACK_PORT}{_CODEX_CALLBACK_PATH}"
+    # Anthropic's OAuth client only whitelists localhost:20128/callback;
+    # 9router_gpt5_patch.js 302-rewrites the hit to the backend handler.
+    if provider == "claude":
+        return f"http://localhost:{NINE_ROUTER_PORT}/callback"
     if provider in _EXTERNAL_BROWSER_PROVIDERS:
         return f"http://localhost:{_backend_port()}/api/subscriptions/callback"
     return f"http://localhost:{NINE_ROUTER_PORT}/callback"
