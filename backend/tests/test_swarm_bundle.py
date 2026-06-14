@@ -99,6 +99,27 @@ def test_pack_refuses_denied_key():
         pack({"format_version": 1}, {"bid1": {"api_key": "leak"}}, {})
 
 
+def test_app_export_drops_machine_env(tmp_path, monkeypatch):
+    # The live .env holds the source machine's absolute paths + pinned port; it
+    # must never ride along. .env.example (portable) does.
+    from backend.apps.swarm.entities import apps as appmod
+    from backend.apps.outputs.models import Output
+
+    ws = tmp_path / "ws"
+    (ws / "frontend").mkdir(parents=True)
+    (ws / ".env").write_text("FRONTEND_PORT=5\nOPENSWARM_TEMPLATE_BACKEND_PATH=/Users/SECRET/x\n")
+    (ws / ".env.example").write_text("BACKEND_PORT=NONE\nFRONTEND_PORT=4949\n")
+    (ws / "frontend" / "App.tsx").write_text("export default () => null")
+    monkeypatch.setattr(appmod, "OUTPUTS_WORKSPACE_DIR", str(tmp_path))
+
+    ex = appmod.AppExportable(Output(name="A", workspace_id="ws"))
+    files = ex.files()
+    assert "workspace/.env.example" in files
+    assert "workspace/.env" not in files
+    assert "workspace/frontend/App.tsx" in files
+    assert b"/Users/SECRET" not in b"".join(files.values())
+
+
 def _zip_with(name, data=b"x"):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:

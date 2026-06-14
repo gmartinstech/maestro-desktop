@@ -267,6 +267,28 @@ def _read_files(sandbox: str, ref: EntityRef) -> dict[str, bytes]:
     return out
 
 
+def review_bundle(sandbox: str, manifest: Manifest):
+    """Safety read of any app code in the staged bundle. Returns None when the
+    bundle contains no apps (nothing to review)."""
+    from .models import ReviewSummary
+    from .review import scan_app_files
+
+    findings: list[str] = []
+    scanned: list[str] = []
+    verdict = "clean"
+    any_app = False
+    for e in manifest.entities:
+        if e.type != EntityType.app:
+            continue
+        any_app = True
+        r = scan_app_files(_read_files(sandbox, e))
+        findings.extend(r.findings)
+        scanned.extend(r.scanned_files)
+        if r.verdict != "clean":
+            verdict = r.verdict
+    return ReviewSummary(verdict=verdict, findings=findings, scanned_files=scanned) if any_app else None
+
+
 def detect_conflicts(sandbox: str, manifest: Manifest) -> list[IncludeItem]:
     out: list[IncludeItem] = []
     for e in manifest.entities:

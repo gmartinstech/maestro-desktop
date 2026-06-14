@@ -90,6 +90,7 @@ async def import_preflight(file: UploadFile = File(...)) -> ImportPreflightRespo
     try:
         sandbox, manifest, warnings = closure.stage_upload(raw, file.filename or "")
         conflicts = closure.detect_conflicts(sandbox, manifest)
+        review = closure.review_bundle(sandbox, manifest)
     except BundleError as e:
         raise HTTPException(status_code=400, detail=str(e))
     _gc_staging()
@@ -99,6 +100,7 @@ async def import_preflight(file: UploadFile = File(...)) -> ImportPreflightRespo
         summary=closure.summarize(manifest),
         staging_token=token,
         conflicts=conflicts,
+        review=review,
         warnings=warnings,
     )
 
