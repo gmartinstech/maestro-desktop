@@ -3929,6 +3929,11 @@ class AgentManager:
 
             from backend.apps.settings.credentials import get_anthropic_client
             global_settings = load_settings()
+            # Free lane rotates pool accounts per call, so a warm ping primes a cache
+            # the next call won't hit, and worse it'd burn a metered run at idle (this
+            # fires on dashboard mount, not a user query). Skip it on the free trial.
+            if getattr(global_settings, "connection_mode", "own_key") == "free-trial":
+                return
             client = get_anthropic_client(global_settings)
 
             # Single ping with the same system + minimal user message.
@@ -3938,8 +3943,6 @@ class AgentManager:
                 max_tokens=1,
                 system="You are a helpful assistant. Reply with one character.",
                 messages=[{"role": "user", "content": "ping"}],
-                # Binds the cache-warm ping to its query's free-trial run; ignored off the free lane.
-                extra_headers={"X-Openswarm-Task-Id": session_id},
             )
             logger.debug(f"Cache pre-warm fired for session {session_id}")
         except Exception as e:
