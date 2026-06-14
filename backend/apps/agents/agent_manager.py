@@ -1654,13 +1654,12 @@ class AgentManager:
                     # first tool-laden request (the other anthropic branches all set this).
                     "ENABLE_TOOL_SEARCH": "auto",
                 }
-                # Free lane meters one run per USER QUERY: this dispatch is per message, so a
-                # fresh id here tags every call of THIS query (and its subagents, which inherit
-                # the env) with the same task id, and the next query gets a new one. So one query
-                # = one run no matter how many tool calls it makes, or whether the user cancels it.
+                # Free lane meters one run per agent task: tag every call of this task (and its
+                # subagents, which inherit the env) AND its aux calls (title-gen, see generate_title)
+                # with the session id, so a query plus its title generation is ONE run, not two.
                 # The base goes straight to the cloud (no 9Router), so the header rides through.
                 if getattr(global_settings, "connection_mode", "own_key") == "free-trial":
-                    options_kwargs["env"]["ANTHROPIC_CUSTOM_HEADERS"] = f"X-Openswarm-Task-Id: {session.id}-{uuid4().hex[:12]}"
+                    options_kwargs["env"]["ANTHROPIC_CUSTOM_HEADERS"] = f"X-Openswarm-Task-Id: {session.id}"
                     # The cloud serves every free run as Haiku, so keep the subagent on Haiku too:
                     # a sonnet subagent makes the CLI attach `effort`, which Haiku 400s on.
                     options_kwargs["env"]["CLAUDE_CODE_SUBAGENT_MODEL"] = "claude-haiku-4-5-20251001"
@@ -3794,6 +3793,9 @@ class AgentManager:
                 max_tokens=aux_max_tokens_for(aux_model),
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_turn}],
+                # On the free lane this binds the title-gen to its query's run so it doesn't
+                # spend a second one; harmless elsewhere (the paid lane ignores the header).
+                extra_headers={"X-Openswarm-Task-Id": session_id},
             ) as stream:
                 async for text in stream.text_stream:
                     chunks.append(text)
