@@ -11,9 +11,10 @@ export const welcomeOpenStep: OnboardingStep = {
   title: 'Welcome',
   description: '',
   ops: [
-    { kind: 'delay', ms: 750 },                                   // let the pop + spark settle
+    { kind: 'delay', ms: 400 },                                   // brief beat after the pop + spark
     { kind: 'move_to', target: S.newAgentButton },
-    { kind: 'delay', ms: 550 },                                   // pause, then click
+    { kind: 'popup', text: 'Let me open a chat for you.' },
+    { kind: 'delay', ms: 650 },                                   // a moment to read, then click
     { kind: 'click', target: S.newAgentButton, simulate: true },  // spawns the welcome chat
     { kind: 'outro' },
   ],
