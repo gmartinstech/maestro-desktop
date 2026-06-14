@@ -303,6 +303,10 @@ const BrowserCard: React.FC<Props> = ({
           // (the historical Windows mount segfault). Clear the crash-safety marker.
           if (isWindows) markWindowsWebviewSurvived();
           wv.loadURL(targetUrl).catch(() => {});
+          try {
+            (wv as any).setVisualZoomLevelLimits?.(1, 1);
+            (wv as any).setZoomFactor?.(1);
+          } catch (_) {}
         };
         wv.addEventListener('dom-ready', doLoad, { once: true });
         cleanups.push(() => wv.removeEventListener('dom-ready', doLoad));
@@ -323,6 +327,21 @@ const BrowserCard: React.FC<Props> = ({
           setPasskeyDialogOpen(true);
         } else if (e?.channel === 'browser-dblclick') {
           onDoubleClickRef.current?.(browserId, 'browser');
+        } else if (e?.channel === 'canvas-wheel-zoom') {
+          const payload = e.args?.[0] || {};
+          const wvRect = wv.getBoundingClientRect();
+          const fx = typeof payload.fracX === 'number' ? payload.fracX : 0.5;
+          const fy = typeof payload.fracY === 'number' ? payload.fracY : 0.5;
+          window.dispatchEvent(
+            new CustomEvent('openswarm:canvas-wheel-zoom', {
+              detail: {
+                deltaY: payload.deltaY ?? 0,
+                deltaMode: payload.deltaMode ?? 0,
+                clientX: wvRect.left + fx * wvRect.width,
+                clientY: wvRect.top + fy * wvRect.height,
+              },
+            }),
+          );
         } else if (e?.channel === 'canvas-wheel-pan') {
           // Plain wheel inside an unselected webview never bubbles out; the
           // preload forwards it here so the dashboard canvas can pan.

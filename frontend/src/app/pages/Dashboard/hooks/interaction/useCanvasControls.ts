@@ -311,6 +311,23 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
 
     el.addEventListener('wheel', onWheel, { passive: false });
 
+    const onForwardedZoom = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      const dy = detail.deltaMode === 1 ? detail.deltaY * 40 : detail.deltaY;
+      const rect = el.getBoundingClientRect();
+      if (inertiaFrameRef.current) {
+        cancelAnimationFrame(inertiaFrameRef.current);
+        inertiaFrameRef.current = null;
+      }
+      pendingZoomDy += dy;
+      pendingZoomCenter = {
+        cx: (detail.clientX ?? 0) - rect.left,
+        cy: (detail.clientY ?? 0) - rect.top,
+      };
+      scheduleWheelFlush();
+    };
+    window.addEventListener('openswarm:canvas-wheel-zoom', onForwardedZoom);
+
     // Plain wheel inside a webview can't bubble out either; the preload
     // forwards horizontal-dominant scrolls as a pan when the guest page
     // has nothing to scroll horizontally, plus middle-mouse drag deltas.
@@ -330,6 +347,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
 
     return () => {
       el.removeEventListener('wheel', onWheel);
+      window.removeEventListener('openswarm:canvas-wheel-zoom', onForwardedZoom);
       window.removeEventListener('openswarm:canvas-wheel-pan', onForwardedPan);
       if (wheelRafId != null) cancelAnimationFrame(wheelRafId);
       if (wheelIdleTimer != null) clearTimeout(wheelIdleTimer);

@@ -174,8 +174,21 @@ try {
   };
 
   const onWheelCapture = (e) => {
-    // Pinch / ctrl+wheel stays with the page (chromium's in-page zoom).
-    if (e.ctrlKey || e.metaKey) return;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const iw = window.innerWidth || 1;
+      const ih = window.innerHeight || 1;
+      try {
+        ipcRenderer.sendToHost('canvas-wheel-zoom', {
+          deltaY: e.deltaY,
+          deltaMode: e.deltaMode,
+          fracX: Math.max(0, Math.min(1, e.clientX / iw)),
+          fracY: Math.max(0, Math.min(1, e.clientY / ih)),
+        });
+      } catch (_) {}
+      return;
+    }
     // Vertical-dominant scroll stays with the page.
     if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     // Horizontal-dominant: defer to the page if anything inside can absorb
