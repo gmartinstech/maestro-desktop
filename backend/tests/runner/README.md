@@ -31,17 +31,32 @@ parent (rich)  <—— JSON events over a pipe FD ——  worker (pytest, test v
 
 ## Setup
 
-1. Runner venv (the UI):
+The easiest path is the one-command launcher, which provisions both venvs and
+runs the picker:
+
+```
+bash backend/tests/run.sh            # discover -> picker -> run
+bash backend/tests/run.sh -k ingest  # any flags/paths forward to the runner
+```
+
+To wire it up by hand instead:
+
+1. Runner venv (the UI) — install the libs declared in
+   [`pyproject.toml`](./pyproject.toml). The package is imported from the source
+   tree (parent runs with `cwd=backend`), so only its deps need installing:
 
    ```
-   python -m venv .runner-venv
-   .runner-venv/bin/pip install -e tests/runner
+   python -m venv backend/tests/.runner-venv
+   backend/tests/.runner-venv/bin/pip install typer rich textual
    ```
 
 2. Test venv (where tests actually run) — your project's existing venv with
-   `pytest`, `pytest-asyncio`, and `coverage` installed.
+   `pytest`, `pytest-asyncio`, and `coverage` installed (`backend/.venv` via
+   `backend/requirements-dev.txt`).
 
 3. Point the runner at the test venv in [`config.json`](./config.json).
+   `venv_python` is resolved relative to `repo_root` (which is `backend/`), so
+   the value is `.venv/bin/python`, not `backend/.venv/bin/python`.
 
 ## config.json
 
