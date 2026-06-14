@@ -897,10 +897,17 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
   const { role, content } = message;
 
   if (role === 'system') {
+    const sysText = typeof content === 'string' ? content : JSON.stringify(content);
+    // A raw subprocess/API failure ("Command failed with exit code 1", API Error JSON) is dev
+    // jargon, and the same failure is already shown as a friendly card on the assistant side.
+    // Swallow just that stderr dump so the user sees one calm card, not jargon beneath it.
+    if (/Command failed with exit code|API Error:|invalid_request_error|"type"\s*:\s*"error"|Check stderr output/i.test(sysText)) {
+      return null;
+    }
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
         <Typography sx={{ color: c.text.ghost, fontSize: '0.8rem', fontStyle: 'italic' }}>
-          {typeof content === 'string' ? content : JSON.stringify(content)}
+          {sysText}
         </Typography>
       </Box>
     );
