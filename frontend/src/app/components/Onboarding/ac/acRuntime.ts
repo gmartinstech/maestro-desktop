@@ -37,6 +37,8 @@ interface RunContext {
   findStep: (id: string) => OnboardingStep | undefined;
   highlightCleanup: { current: (() => void) | null };
   popupShownAt: { current: number | null };
+  // Per-popup dwell override; null falls back to MIN_POPUP_DWELL_MS. Lets a short one-liner (welcome nudge) move on fast instead of sitting the full 6s.
+  popupDwellMs: { current: number | null };
 }
 
 // 6s = streaming typewriter cadence + ~3s post-stream read time; floor for popups that auto-transition without an explicit user action.
@@ -61,8 +63,9 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
 async function ensurePopupDwell(ctx: RunContext): Promise<void> {
   const shownAt = ctx.popupShownAt.current;
   if (shownAt == null) return;
+  const dwell = ctx.popupDwellMs.current ?? MIN_POPUP_DWELL_MS;
   const elapsed = performance.now() - shownAt;
-  const remaining = MIN_POPUP_DWELL_MS - elapsed;
+  const remaining = dwell - elapsed;
   if (remaining > 0) await abortableSleep(remaining, ctx.signal);
 }
 
@@ -89,6 +92,7 @@ export async function runStep(args: RunStepArgs): Promise<void> {
 
   const highlightCleanup: { current: (() => void) | null } = { current: null };
   const popupShownAt: { current: number | null } = { current: null };
+  const popupDwellMs: { current: number | null } = { current: null };
   const ctx: RunContext = {
     ac,
     store,
@@ -100,6 +104,7 @@ export async function runStep(args: RunStepArgs): Promise<void> {
     findStep,
     highlightCleanup,
     popupShownAt,
+    popupDwellMs,
   };
 
   try {
@@ -119,6 +124,7 @@ export async function runStep(args: RunStepArgs): Promise<void> {
           report('dependency_walk', { step_id: step.id, dep_id: dep.stepId });
           ac.showPopup('Quick setup before we continue.');
           ctx.popupShownAt.current = performance.now();
+          ctx.popupDwellMs.current = null;
           await sleep(700);
           // Non-silent dep-walk so each move_to has a label; telemetry stays per-step to avoid double-count.
           await runOps(depStep.ops, { ...ctx, silent: false, stepId: depStep.id });
@@ -276,6 +282,7 @@ async function runOp(op: ACOp, ctx: RunContext): Promise<void> {
     await ensurePopupDwell(ctx);
     ac.hidePopup();
     ctx.popupShownAt.current = null;
+    ctx.popupDwellMs.current = null;
     ac.stopTracking();
     if (ctx.highlightCleanup.current) {
       ctx.highlightCleanup.current();
@@ -363,6 +370,7 @@ async function runOp(op: ACOp, ctx: RunContext): Promise<void> {
       await ensurePopupDwell(ctx);
       ac.showPopup(op.text);
       ctx.popupShownAt.current = performance.now();
+      ctx.popupDwellMs.current = op.dwellMs ?? null;
       return;
     }
     case 'multi_choice': {
@@ -398,6 +406,7 @@ async function runOp(op: ACOp, ctx: RunContext): Promise<void> {
         await ensurePopupDwell(ctx);
         ac.showPopup(op.popup);
         ctx.popupShownAt.current = performance.now();
+        ctx.popupDwellMs.current = null;
       }
       await sleep(op.durationMs ?? 600);
       return;
@@ -580,6 +589,7 @@ async function runOp(op: ACOp, ctx: RunContext): Promise<void> {
         });
         ac.showPopup("Didn't seem to go through. Try again?");
         ctx.popupShownAt.current = performance.now();
+        ctx.popupDwellMs.current = null;
         await waitForCondition(
           op.condition,
           signal,
