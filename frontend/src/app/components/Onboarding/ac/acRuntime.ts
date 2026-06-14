@@ -60,6 +60,26 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+// Resolve after `ms`, OR early the moment `stepId` lands in completedSteps. Lets a stale recovery
+// popup auto-dismiss when the step it was apologizing for actually completes (e.g. launch_agent
+// auto-completing right after a transient throw), instead of sitting the full read-timeout.
+function sleepOrStepComplete(store: Store<RootState>, stepId: string, ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const isDone = () => (store.getState().onboardingProgress?.completedSteps ?? []).includes(stepId);
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      unsub();
+      resolve();
+    };
+    const timer = window.setTimeout(finish, ms);
+    const unsub = store.subscribe(() => { if (isDone()) finish(); });
+    if (isDone()) finish();
+  });
+}
+
 async function ensurePopupDwell(ctx: RunContext): Promise<void> {
   const shownAt = ctx.popupShownAt.current;
   if (shownAt == null) return;
@@ -199,8 +219,10 @@ export async function runStep(args: RunStepArgs): Promise<void> {
           "No worries, feel free to explore. Tap Show me whenever you're ready." +
             debugSuffix,
         );
-        // 14s: ACPopup streams at ~30ms/char + ~210ms/punct, so a 240-char popup takes ~10s to finish streaming; needs time for streamer + read.
-        await new Promise<void>((r) => window.setTimeout(r, 14000));
+        // 14s read window (ACPopup streams ~30ms/char), but bail the instant the step completes
+        // so a transient throw on a step that then auto-completes doesn't leave a dead-end "Show me".
+        await sleepOrStepComplete(store, step.id, 14000);
+        ac.hidePopup();
       }
     } catch {
       /* defensive; never let cleanup throw */
