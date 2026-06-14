@@ -36,6 +36,11 @@ import { parseMcpToolName, getMcpShortAction } from '@/shared/mcpToolMeta';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useDashboardActive } from '@/shared/hooks/useDashboardActive';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
+import {
+  markHovered as markCaptureHovered,
+  markUnhovered as markCaptureUnhovered,
+  useReportCardSelection,
+} from '../hooks/interaction/useCardCaptureState';
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canvasInteractionState';
 import { getAgentWorkTime, fmtSeconds } from '@/shared/agentWorkTime';
@@ -241,6 +246,7 @@ const AgentCard: React.FC<Props> = ({
     return s;
   }, [session.model, modelsByProvider]);
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
+  useReportCardSelection(session.id, 'agent', isSelected);
 
   const cardBoxRef = useRef<HTMLDivElement>(null);
   // Ref so ResizeObserver sees latest value without re-attaching when active flips.
@@ -556,6 +562,8 @@ const AgentCard: React.FC<Props> = ({
         if (justDraggedRef.current) return;
         onCardSelect?.(session.id, 'agent', e.shiftKey);
       }}
+      onPointerEnter={() => markCaptureHovered(session.id, 'agent')}
+      onPointerLeave={() => markCaptureUnhovered(session.id)}
       onDoubleClick={(e: React.MouseEvent) => {
         e.stopPropagation();
         onDoubleClick?.(session.id, 'agent');

@@ -51,6 +51,12 @@ import { getActionLabel } from '@/shared/browserCommandHandler';
 import { resolveInput, isGoogleSearch } from '@/shared/resolveUrl';
 import BrowserAgentOverlay from './BrowserAgentOverlay';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
+import {
+  markHovered as markCaptureHovered,
+  markUnhovered as markCaptureUnhovered,
+  useReportCardSelection,
+  useCardCapture,
+} from '../hooks/interaction/useCardCaptureState';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 
 type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -198,6 +204,8 @@ const BrowserCard: React.FC<Props> = ({
   const onDoubleClickRef = useRef(onDoubleClick);
   onDoubleClickRef.current = onDoubleClick;
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
+  useReportCardSelection(browserId, 'browser', isSelected);
+  const capture = useCardCapture(browserId, 'browser');
   const browserHomepage = useAppSelector((state) => state.settings.data.browser_homepage);
   const elementSelectionCtx = useElementSelection();
   const isElementSelectMode = elementSelectionCtx?.selectMode ?? false;
@@ -262,6 +270,15 @@ const BrowserCard: React.FC<Props> = ({
   const webviewMap = useRef<Map<string, WebviewElement>>(new Map());
   const initializedTabs = useRef(new Set<string>());
   const tabBarRef = useRef<HTMLDivElement>(null);
+  // In-page zoom factor we drive ourselves when this browser is "captured".
+  // Per-tab so each tab keeps its own zoom across activations within the session.
+  const tabZoomFactors = useRef<Map<string, number>>(new Map());
+  const MIN_PAGE_ZOOM = 0.25;
+  const MAX_PAGE_ZOOM = 5;
+  // Mirror capture.captures into a ref so dom-ready can read the current value
+  // (the useEffect that pushes capture state can race the webview's first ready).
+  const captureRef = useRef(false);
+  captureRef.current = capture.captures;
 
   useEffect(() => {
     setRegistryActiveTab(browserId, activeTabId);
@@ -303,11 +320,16 @@ const BrowserCard: React.FC<Props> = ({
           // (the historical Windows mount segfault). Clear the crash-safety marker.
           if (isWindows) markWindowsWebviewSurvived();
           wv.loadURL(targetUrl).catch(() => {});
-          // Lock guest zoom at 1.0 so ctrl+wheel never triggers Chromium's in-page zoom; canvas zoom takes over (issue #27).
+          // Pin visual (pinch) zoom inside the guest so chromium never fights us;
+          // we drive page zoom ourselves via setZoomFactor from canvas-wheel-zoom
+          // when this card is "captured" (selected or hovered >3s).
           try {
             (wv as any).setVisualZoomLevelLimits?.(1, 1);
-            (wv as any).setZoomFactor?.(1);
+            const initial = tabZoomFactors.current.get(tabId) ?? 1;
+            (wv as any).setZoomFactor?.(initial);
           } catch (_) {}
+          // Sync initial capture state to the preload now that ipc is live.
+          try { (wv as any).send?.('openswarm:set-capture-state', { captures: captureRef.current }); } catch (_) {}
         };
         wv.addEventListener('dom-ready', doLoad, { once: true });
         cleanups.push(() => wv.removeEventListener('dom-ready', doLoad));
@@ -331,9 +353,27 @@ const BrowserCard: React.FC<Props> = ({
         } else if (e?.channel === 'canvas-wheel-zoom') {
           // Convert guest coords to doc coords and dispatch a CustomEvent; synthetic WheelEvent bubble was unreliable through GuestView.
           const payload = e.args?.[0] || {};
+          if (payload.captured) {
+            // In-page zoom: drive setZoomFactor directly so chromium scales
+            // the page itself (Wikipedia text gets bigger), not the canvas.
+            const deltaY = payload.deltaMode === 1 ? (payload.deltaY ?? 0) * 40 : (payload.deltaY ?? 0);
+            const current = tabZoomFactors.current.get(tabId) ?? 1;
+            const factor = Math.pow(2, -deltaY * 0.005);
+            const next = Math.max(MIN_PAGE_ZOOM, Math.min(MAX_PAGE_ZOOM, current * factor));
+            tabZoomFactors.current.set(tabId, next);
+            try { (wv as any).setZoomFactor?.(next); } catch (_) {}
+            return;
+          }
           const wvRect = wv.getBoundingClientRect();
-          const docX = wvRect.left + (payload.clientX ?? 0);
-          const docY = wvRect.top + (payload.clientY ?? 0);
+          // The preload sends fracX/Y (cursor as a fraction of guest viewport).
+          // wvRect is the on-screen rect after all CSS transforms, so frac *
+          // wvRect.size lands on the exact cursor pixel without us needing to
+          // reconstruct any guest->screen scale. (Forwarding raw guest pixels
+          // broke zoom-around-cursor at non-1 canvas zooms.)
+          const fx = typeof payload.fracX === 'number' ? payload.fracX : 0.5;
+          const fy = typeof payload.fracY === 'number' ? payload.fracY : 0.5;
+          const docX = wvRect.left + fx * wvRect.width;
+          const docY = wvRect.top + fy * wvRect.height;
           window.dispatchEvent(
             new CustomEvent('openswarm:canvas-wheel-zoom', {
               detail: {
@@ -341,6 +381,19 @@ const BrowserCard: React.FC<Props> = ({
                 deltaMode: payload.deltaMode ?? 0,
                 clientX: docX,
                 clientY: docY,
+              },
+            }),
+          );
+        } else if (e?.channel === 'canvas-wheel-pan') {
+          // Plain wheel inside an unselected webview never bubbles out; the
+          // preload forwards it here so the dashboard canvas can pan.
+          const payload = e.args?.[0] || {};
+          window.dispatchEvent(
+            new CustomEvent('openswarm:canvas-wheel-pan', {
+              detail: {
+                deltaX: payload.deltaX ?? 0,
+                deltaY: payload.deltaY ?? 0,
+                deltaMode: payload.deltaMode ?? 0,
               },
             }),
           );
@@ -415,6 +468,15 @@ const BrowserCard: React.FC<Props> = ({
     return () => cleanups.forEach((fn) => fn());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabIdKey, browserId, dispatch, updateTabLocal, suspendedSnap]);
+
+  // Push capture-state changes to every live webview so the preload knows
+  // whether to forward wheel events to canvas or let the page handle them.
+  useEffect(() => {
+    if (!isElectron) return;
+    for (const wv of webviewMap.current.values()) {
+      try { (wv as any).send?.('openswarm:set-capture-state', { captures: capture.captures }); } catch (_) {}
+    }
+  }, [capture.captures, tabIdKey]);
 
   const navigate = useCallback((targetUrl: string) => {
     const finalUrl = resolveInput(targetUrl);
@@ -743,6 +805,8 @@ const BrowserCard: React.FC<Props> = ({
       data-select-id={browserId}
       data-select-meta={JSON.stringify({ name: activeTitle || 'Browser', url: activeUrl })}
       onPointerDownCapture={() => onBringToFront?.(browserId, 'browser')}
+      onPointerEnter={() => markCaptureHovered(browserId, 'browser')}
+      onPointerLeave={() => markCaptureUnhovered(browserId)}
       onClick={(e: React.MouseEvent) => {
         if (justDraggedRef.current) return;
         onCardSelect?.(browserId, 'browser', e.shiftKey);
