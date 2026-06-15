@@ -594,6 +594,33 @@ async def test_mcp_gate_only_forwards_activated_servers():
             assert forwarded == (set(active) & set(names)), f"mismatch for active={active}"
 
 
+def test_dashboard_get_strips_only_orphan_session_cards():
+    """A layout card whose session vanished (gone from memory AND disk) makes the
+    frontend GET /sessions/{id} 404 on every load and flash a dead card. The
+    dashboard GET filters those orphan cards out of the response, but must keep
+    live (in-memory) cards, on-disk cards, and drafts. Non-destructive: only the
+    response is filtered, never the stored layout."""
+    from types import SimpleNamespace
+    from backend.apps.dashboards import dashboards as D
+    data = {"layout": {
+        "cards": {
+            "live": {"session_id": "live"},      # in memory
+            "ondisk": {"session_id": "ondisk"},  # closed but on disk
+            "draft-1": {"session_id": "draft-1"},  # unsent draft, no backend session yet
+            "ghost": {"session_id": "ghost"},    # gone from memory AND disk -> would 404
+        },
+        "expanded_session_ids": ["live", "ghost"],
+    }}
+    fake_mgr = SimpleNamespace(sessions={"live": object()})
+    on_disk = {"ondisk": {"id": "ondisk"}}
+    with patch("backend.apps.agents.agent_manager.agent_manager", fake_mgr), \
+         patch("backend.apps.agents.manager.session.session_store._load_session_data",
+               side_effect=lambda sid: on_disk.get(sid)):
+        D._strip_orphan_session_cards(data)
+    assert set(data["layout"]["cards"].keys()) == {"live", "ondisk", "draft-1"}, "only the ghost should be dropped"
+    assert data["layout"]["expanded_session_ids"] == ["live"], "ghost dropped from expanded too"
+
+
 def test_banned_models_not_offered():
     """Claude Fable (banned) and Gemini 3.1 Pro (no working lane: AG can't serve
     it, AI Studio key 429s pro-preview) were pulled from the picker. Guard so a
