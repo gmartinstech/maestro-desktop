@@ -548,6 +548,16 @@ class AgentManager:
 
         _PATH_GATED_TOOLS = ("Write", "Edit", "NotebookEdit")
 
+        # Native-scheduler tools that commit or mutate a recurring schedule.
+        # Always-on MCP servers fall through to the always_allow default, so
+        # these would otherwise fire silently; force them through ApprovalBar.
+        _SCHEDULE_GATED = {
+            "mcp__openswarm-schedule__ScheduleWorkflow",
+            "mcp__openswarm-schedule__UpdateScheduledWorkflow",
+            "mcp__openswarm-schedule__DeleteScheduledWorkflow",
+            "mcp__openswarm-schedule__PauseAllWorkflows",
+        }
+
         # OS-level scheduling across macOS/Linux/Windows. Agent must
         # not install cron entries, launchd plists, Windows scheduled
         # tasks, or PowerShell ScheduledTask cmdlets behind the user's
@@ -666,6 +676,12 @@ class AgentManager:
             don't want the agent silently installing cron entries.
             """
             if tool_name == "Bash" and _looks_like_os_scheduling(tool_input):
+                return "ask", None
+            # Committing or mutating a native recurring schedule is the in-app
+            # twin of the crontab gate above: real, user-visible, hard-to-undo,
+            # so it goes through ApprovalBar every time regardless of the
+            # always_allow default that always-on MCP servers fall through to.
+            if tool_name in _SCHEDULE_GATED:
                 return "ask", None
             if tool_name == "Bash" and isinstance(tool_input, dict):
                 bash_match = _match_bash_catastrophic_pattern(str(tool_input.get("command") or ""))

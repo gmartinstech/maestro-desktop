@@ -62,11 +62,13 @@ TOOLS = [
                 "hour": {"type": "integer", "description": "Hour 0-23 in the user's local time. Required when preset='custom'."},
                 "minute": {"type": "integer", "description": "Minute 0/15/30/45. Required when preset='custom'."},
                 "repeat_unit": {"type": "string", "enum": ["day", "week", "month"], "description": "Required when preset='custom'."},
+                "repeat_every": {"type": "integer", "description": "Interval count for repeat_unit when preset='custom' (e.g. repeat_unit='week' + repeat_every=2 means every other week). Defaults to 1."},
                 "on_days": {
                     "type": "array",
                     "items": {"type": "integer"},
                     "description": "Weekdays (Sun=0..Sat=6) when preset='custom' and repeat_unit='week'.",
                 },
+                "timezone": {"type": "string", "description": "IANA timezone name (e.g. 'America/Los_Angeles'). Omit to use the user's local zone."},
                 "source_session_id": {"type": "string", "description": "Optional; the chat session this workflow was created from. Inherits its tool surface."},
             },
             "required": ["title", "steps", "preset"],
@@ -87,10 +89,12 @@ TOOLS = [
                 "title": {"type": "string"},
                 "steps": {"type": "array", "items": {"type": "string"}},
                 "schedule_enabled": {"type": "boolean", "description": "Quick on/off without changing other schedule fields."},
-                "hour": {"type": "integer"},
-                "minute": {"type": "integer"},
+                "hour": {"type": "integer", "description": "Hour 0-23 in the schedule's timezone."},
+                "minute": {"type": "integer", "description": "Minute 0-59."},
                 "repeat_unit": {"type": "string", "enum": ["day", "week", "month"]},
-                "on_days": {"type": "array", "items": {"type": "integer"}},
+                "repeat_every": {"type": "integer", "description": "Interval count for repeat_unit (e.g. 2 with repeat_unit='week' means every other week)."},
+                "on_days": {"type": "array", "items": {"type": "integer"}, "description": "Weekdays (Sun=0..Sat=6) when repeat_unit='week'."},
+                "timezone": {"type": "string", "description": "IANA timezone name (e.g. 'America/Los_Angeles')."},
             },
             "required": ["workflow_id"],
         },
@@ -237,10 +241,11 @@ def _build_schedule_from_preset(preset: str, args: dict) -> dict:
             **base,
             "enabled": True,
             "repeat_unit": args.get("repeat_unit", "day"),
-            "repeat_every": 1,
+            "repeat_every": int(args.get("repeat_every", 1) or 1),
             "hour": int(args.get("hour", 9)),
             "minute": int(args.get("minute", 0)),
             "on_days": list(args.get("on_days") or []),
+            "timezone": args.get("timezone") or "local",
         }
     preset_def = PRESETS.get(preset)
     if not preset_def:
@@ -306,7 +311,7 @@ def handle_update(args: dict) -> dict:
     if "schedule_enabled" in args:
         sched_patch["enabled"] = bool(args["schedule_enabled"])
         sched_dirty = True
-    for k in ("hour", "minute", "repeat_unit", "on_days"):
+    for k in ("hour", "minute", "repeat_unit", "on_days", "repeat_every", "timezone"):
         if k in args:
             sched_patch[k] = args[k]
             sched_dirty = True

@@ -699,82 +699,68 @@ async def test_run_workflow(workflow_id: str, body: dict):
     return {"session_id": session.id}
 
 
-@workflows.router.post("/{workflow_id}/parse-schedule")
-async def parse_schedule(workflow_id: str, body: dict):
-    """Aux-LLM-parse natural language into a ScheduleConfig.
+@workflows.router.post("/{workflow_id}/schedule-agent-session")
+async def schedule_agent_session(workflow_id: str):
+    """Create (or return existing) embedded scheduling-agent session.
 
-    Frontend SchedulingView (Image #49) hits this on submit; the parsed
-    config rides back to the user for explicit "Schedule it" confirmation
-    before any persistence. Returns the parsed config under {"schedule": ...}.
+    The scheduling agent is a real agent session the user chats with to set
+    the workflow's cadence (Image #49). It interprets the user's natural
+    language ("every Wednesday at 1pm", "this time, this month") itself and
+    commits via UpdateScheduledWorkflow, which is force-gated to "ask" so the
+    user gives a final Approve/Deny through ApprovalBar. No deterministic
+    pre-parse: the cadence is a model decision.
+
+    Singleton per workflow (same reattach contract as edit-agent-session) so
+    re-entering the scheduling view resumes the same conversation.
     """
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    text = (body or {}).get("text", "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Missing text")
-    try:
-        from backend.apps.agents.providers.registry import resolve_aux_model
-        from backend.apps.settings.credentials import get_anthropic_client_for_model
-        from backend.apps.settings.settings import load_settings as _ls
-    except Exception:
-        raise HTTPException(status_code=500, detail="Aux model unavailable")
-    settings = _ls()
-    try:
-        aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku")
-        client = get_anthropic_client_for_model(settings, aux_model)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Aux model unavailable")
-    import json, re
-    prompt = (
-        "Parse the following natural-language schedule into STRICT JSON. "
-        "No prose, no fence, no comments. Schema:\n"
-        '  {"repeat_unit": "day"|"week"|"month", '
-        '"repeat_every": int>=1, '
-        '"on_days": [int 0..6, Sunday=0], '
-        '"hour": int 0..23, "minute": int 0..59, '
-        '"timezone": IANA tz string (default to local)}\n\n'
-        "Rules:\n"
-        "- If user says weekdays, on_days=[1,2,3,4,5], repeat_unit=week.\n"
-        "- If user says weekends, on_days=[0,6], repeat_unit=week.\n"
-        "- If user names a single day (e.g. \"Mondays\"), on_days=[1], repeat_unit=week.\n"
-        "- If user says daily/everyday, repeat_unit=day, on_days=[].\n"
-        "- If no AM/PM, assume PM for 1-7 and AM for 8-12.\n"
-        "- timezone: assume system local if not given.\n\n"
-        f"Input: {text}"
+    existing_id = getattr(wf, "schedule_agent_session_id", None) or None
+    if existing_id:
+        return {"session_id": existing_id}
+
+    from backend.apps.agents.core.models import AgentConfig
+    from backend.apps.agents.agent_manager import agent_manager
+    now_local = datetime.now().astimezone()
+    current_dt = now_local.strftime("%A %Y-%m-%d %H:%M %Z")
+    system_prompt = (
+        f"You are the Scheduling Agent for the user's saved workflow \"{wf.title}\" "
+        f"(id: {wf.id}). Your only job is to set when this workflow runs.\n\n"
+        f"The current local date and time is {current_dt}. Resolve relative "
+        "phrasing (\"this month\", \"next Wednesday\", \"this time\") against it.\n\n"
+        "When the user states a cadence, interpret it yourself and call "
+        "UpdateScheduledWorkflow with:\n"
+        f"  - workflow_id: \"{wf.id}\"\n"
+        "  - schedule_enabled: true\n"
+        "  - hour (0-23) and minute (0-59) in the user's local time\n"
+        "  - repeat_unit: \"day\" | \"week\" | \"month\"\n"
+        "  - repeat_every: the interval count (1 unless they say e.g. \"every other\")\n"
+        "  - on_days: weekday indices when repeat_unit=\"week\" (Sun=0, Mon=1, ... Sat=6)\n"
+        "  - timezone: an IANA name only if the user names a specific zone\n\n"
+        "If no AM/PM is given, assume PM for 1-7 and AM for 8-12. If the cadence "
+        "is genuinely ambiguous, ask ONE short clarifying question first; otherwise "
+        "go straight to the tool call. The user approves or rejects the change in a "
+        "permission prompt, so the tool call IS the confirmation: do not also ask "
+        "\"should I schedule this?\" in text. Do not edit the workflow's steps. Keep "
+        "every reply to one short sentence."
     )
+    config = AgentConfig(
+        name=f"Scheduling: {wf.title}",
+        model=wf.model or "sonnet",
+        mode=wf.mode or "agent",
+        provider=wf.provider or "anthropic",
+        system_prompt=system_prompt,
+        allowed_tools=[],
+        dashboard_id=wf.dashboard_id,
+    )
+    session = await agent_manager.launch_agent(config)
     try:
-        resp = await client.messages.create(
-            model=aux_model,
-            max_tokens=180,
-            messages=[
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": "{"},
-            ],
-        )
-        out = ""
-        if isinstance(resp.content, list):
-            for block in resp.content:
-                if getattr(block, "type", None) == "text":
-                    out += getattr(block, "text", "")
-        raw = "{" + out.strip() if not out.strip().startswith("{") else out.strip()
-        m = re.search(r"\{[^{}]*\}", raw, flags=re.DOTALL)
-        if m:
-            raw = m.group(0)
-        data = json.loads(raw)
-    except Exception as e:
-        logger.warning("parse-schedule: aux LLM failed: %s", e)
-        raise HTTPException(status_code=400, detail="Couldn't parse schedule")
-    cfg = wf.schedule.model_copy(update={
-        "enabled": True,
-        "repeat_unit": str(data.get("repeat_unit") or "week"),
-        "repeat_every": int(data.get("repeat_every") or 1),
-        "on_days": [int(d) for d in (data.get("on_days") or [])],
-        "hour": int(data.get("hour") or 9),
-        "minute": int(data.get("minute") or 0),
-        "timezone": str(data.get("timezone") or wf.schedule.timezone or "UTC"),
-    })
-    return {"schedule": cfg.model_dump(mode="json")}
+        setattr(wf, "schedule_agent_session_id", session.id)
+        storage.save_workflow(wf)
+    except Exception:
+        logger.debug("could not persist schedule_agent_session_id (legacy schema)", exc_info=True)
+    return {"session_id": session.id}
 
 
 @workflows.router.post("/{workflow_id}/run")

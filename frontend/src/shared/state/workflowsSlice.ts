@@ -79,6 +79,8 @@ export interface Workflow {
   cost_estimate?: CostEstimate;
   /** Sticky session id for the Edit Agent embedded in the workflow card. */
   edit_agent_session_id?: string | null;
+  /** Sticky session id for the embedded scheduling agent (cadence -> gated tool call). */
+  schedule_agent_session_id?: string | null;
 }
 
 export interface WorkflowRun {

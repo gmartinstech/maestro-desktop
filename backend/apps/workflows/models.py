@@ -107,6 +107,9 @@ class Workflow(BaseModel):
     # (Image #38, #48). Optional so older workflows don't fail validation
     # on rehydrate.
     edit_agent_session_id: Optional[str] = None
+    # Sticky session id for the embedded scheduling agent (the chat that
+    # turns "every Wednesday at 1pm" into a permission-gated tool call).
+    schedule_agent_session_id: Optional[str] = None
 
 
 class WorkflowRun(BaseModel):
