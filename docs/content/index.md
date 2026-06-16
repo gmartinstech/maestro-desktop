@@ -1,4 +1,4 @@
-# Product Analytics — Documentation
+# Open Swarm — Developer Documentation
 
 This site is **auto-generated from the codebase** and built with
 [Zensical](https://zensical.org/). Nothing here is written by hand except this

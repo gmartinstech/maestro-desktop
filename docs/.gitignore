@@ -2,8 +2,15 @@
 .venv/
 site/
 
+# Manifest of files written by gen_pages.py (used for precise cleanup).
+.gen_manifest
+
 # Doc pages generated from the codebase by gen_pages.py (real files on disk now,
 # since Zensical builds from disk rather than a plugin's virtual filesystem).
-content/reference/
-content/guides/
-content/frontend/
+# Sections are dynamic (one per top-level repo folder), so ignore everything
+# under content/ except the hand-written page and static assets.
+content/*
+!content/index.md
+!content/assets/
+!content/stylesheets/
+!content/javascripts/

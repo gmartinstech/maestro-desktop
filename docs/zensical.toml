@@ -4,13 +4,15 @@
 #
 # Navigation is INFERRED from the directory tree under content/ (Zensical doesn't
 # run the mkdocs-literate-nav plugin). gen_pages.py writes that tree on each run,
-# so the nav mirrors the codebase automatically — top-level dirs become sections:
-#   content/reference/  -> "reference" (backend API, from docstrings via mkdocstrings)
-#   content/guides/     -> "guides"    (every README + loose Markdown doc)
-#   content/frontend/   -> "frontend"  (TypeDoc reference, when present)
+# so the nav mirrors the codebase automatically — every top-level repo folder
+# becomes a sidebar section:
+#   content/<folder>/   -> "<folder>" (its Markdown + mkdocstrings API pages for
+#                          any real Python package, e.g. backend/, frontend/, linter/)
+#   content/general/    -> "general"  (root-level Markdown: README, GETTING_STARTED, ...)
+#   content/frontend/   -> also receives the TypeDoc reference, when present
 
 [project]
-site_name = "Open Swarm Analytics — Docs"
+site_name = "Open Swarm — Developer Documentation"
 site_description = "Auto-generated docs sourced from docstrings, READMEs, and the frontend."
 docs_dir = "content"
 site_dir = "site"

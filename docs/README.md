@@ -19,22 +19,29 @@ there. Output lands in `docs/site/` (git-ignored).
 
 ## What it pulls in
 
+The site **mirrors the repo**: every top-level folder becomes a sidebar section,
+populated by whatever docs live under it.
+
 | Source | Becomes (`content/…`) |
 | --- | --- |
-| `backend/**/*.py` docstrings | `reference/` — one [mkdocstrings](https://mkdocstrings.github.io/) page per module. |
+| Any `**/*.py` in a real Python package (e.g. `backend/`) | `<folder>/…` — one [mkdocstrings](https://mkdocstrings.github.io/) page per module, in that folder's section. |
+| Every `README.md` / loose `*.md` under a folder | `<folder>/…` — copied verbatim into that folder's section. |
+| Root-level Markdown (`README.md`, `GETTING_STARTED.md`, …) | `general/` — grouped under a synthetic "General" section. |
 | `frontend/src` (TSDoc) | `frontend/` — [TypeDoc](https://typedoc.org/) reference (best-effort; needs Node + one-time network). |
-| Every `README.md`, `implementation_plan.md`, `relevant_context.md`, `frontend/DESIGN.md` | `guides/` — copied verbatim. |
 
-Add a module or a README anywhere and it appears on the next run — Zensical
-**infers the navigation from the directory tree**, so there's no nav to maintain.
+Add a module, a README, or a whole new top-level folder and it appears on the
+next run — Zensical **infers the navigation from the directory tree**, so there's
+no nav to maintain. API pages are only generated where a real package exists (a
+complete `__init__.py` chain); non-package folders contribute their Markdown only.
 
 ## How it differs from a plain Zensical site
 
 Zensical doesn't run MkDocs plugins (no `mkdocs-gen-files` / `mkdocs-literate-nav`).
 So instead of generating pages inside the build, `gen_pages.py` runs **before** the
-build as a plain script and writes **real Markdown files** into `content/reference/`,
-`content/guides/`, and `content/frontend/`. Those three directories are wiped and rebuilt
-each run and are git-ignored; only `content/index.md` is hand-written.
+build as a plain script and writes **real Markdown files** into per-folder sections
+under `content/`. Generated files are tracked in `docs/.gen_manifest` and removed
+precisely on the next run; the hand-written `content/index.md` and the static
+`assets/`, `stylesheets/`, and `javascripts/` folders are left untouched.
 
 ## Files
 

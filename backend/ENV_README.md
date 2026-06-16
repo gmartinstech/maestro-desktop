@@ -120,7 +120,7 @@ Apple doesn't let you use your regular password for automated tools. You need to
 
 ### Step 1 — Turn on two-factor authentication (if you haven't already)
 
-1. On your Mac, go to **System Settings** > **[your name]** > **Sign-In & Security** > **Two-Factor Authentication**.
+1. On your Mac, go to **System Settings** > **\[your name\]** > **Sign-In & Security** > **Two-Factor Authentication**.
 2. Turn it on and follow the prompts.
 
 ### Step 2 — Generate the app-specific password
