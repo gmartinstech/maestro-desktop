@@ -4551,9 +4551,29 @@ class AgentManager:
         }
 
     def get_all_sessions(self, dashboard_id: str | None = None) -> list[AgentSession]:
-        if dashboard_id:
-            return [s for s in self.sessions.values() if s.dashboard_id == dashboard_id]
-        return list(self.sessions.values())
+        if not dashboard_id:
+            return list(self.sessions.values())
+        # Memory first, then promote any on-disk sessions for this dashboard
+        # that aren't loaded yet. Imported sessions (and ones not resumed since
+        # a restart) live on disk but not in memory, so without the disk pass
+        # their cards render blank, the frontend's AgentCard returns null when
+        # a card's session is missing from the agents slice. Promoting into
+        # self.sessions bounds the disk read to once per session per run, like
+        # resume_session. Mirrors get_browser_agent_children's memory+disk walk.
+        result = [s for s in self.sessions.values() if s.dashboard_id == dashboard_id]
+        seen = {s.id for s in result}
+        for sid, data in _load_all_session_data():
+            if sid in seen or data.get("dashboard_id") != dashboard_id:
+                continue
+            try:
+                sess = AgentSession(**data)
+            except Exception:
+                logger.warning(f"get_all_sessions: skipping unloadable session {sid}", exc_info=True)
+                continue
+            _apply_context_window(sess)
+            self.sessions[sid] = sess
+            result.append(sess)
+        return result
 
     def get_session(self, session_id: str) -> Optional[AgentSession]:
         return self.sessions.get(session_id)

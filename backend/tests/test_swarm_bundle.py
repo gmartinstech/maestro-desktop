@@ -314,6 +314,14 @@ def test_dashboard_export_import_carries_agent_cards_and_transcript(tmp_path, mo
         assert doc["active_mcps"] == [], "import must not grant MCP access"
     assert total_msgs == 2, "each agent's transcript must carry through"
 
+    # The bug behind "the chats didn't even show up": after import the sessions
+    # are on disk but not in memory, and the dashboard-open fetch
+    # (get_all_sessions) was memory-only, so the cards rendered blank. The fetch
+    # must now see the freshly-imported sessions straight off disk.
+    found = am.agent_manager.get_all_sessions(dashboard_id=root_id)
+    assert len(found) == 2, f"dashboard-open fetch must see imported agent sessions, got {len(found)}"
+    assert sum(len(s.messages) for s in found) == 2, "and with their transcripts"
+
 
 def test_dashboard_serialize_rewrites_refs_to_bundle_ids():
     from backend.apps.swarm.entities.dashboards import DashboardExportable
