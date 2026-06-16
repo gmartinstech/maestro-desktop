@@ -36,8 +36,17 @@ class SessionExportable:
 
     @classmethod
     def load(cls, local_id: str) -> "SessionExportable | None":
-        from backend.apps.agents.manager.session.session_store import _load_session_data
-        d = _load_session_data(local_id)
+        # Memory first, disk fallback, the same order duplicate_session uses.
+        # The live session holds the freshest transcript; a disk-only read would
+        # ship a stale one (missing the latest turns) or drop a just-created
+        # agent that hasn't flushed yet, so its card vanishes from the bundle.
+        from backend.apps.agents.agent_manager import agent_manager
+        sess = agent_manager.sessions.get(local_id)
+        if sess is not None:
+            d = sess.model_dump(mode="json")
+        else:
+            from backend.apps.agents.manager.session.session_store import _load_session_data
+            d = _load_session_data(local_id)
         if d is None:
             return None
         return cls(local_id, d.get("name") or "Agent", d)

@@ -237,6 +237,84 @@ def test_session_import_old_bundle_without_transcript(monkeypatch):
     assert doc["active_branch_id"] == "main" and "main" in doc["branches"]
 
 
+def test_session_load_prefers_live_memory_over_stale_disk(tmp_path, monkeypatch):
+    # The freshest transcript lives in memory; a disk-only load would ship a
+    # stale one. load() must read the live session first, disk only as fallback.
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.swarm.entities.sessions import SessionExportable
+    sdir = tmp_path / "sessions"
+    sdir.mkdir()
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(sdir))
+    (sdir / "s1.json").write_text(json.dumps(
+        {"name": "Stale", "messages": [{"id": "old", "role": "user", "content": "old"}]}))
+
+    class FakeSess:
+        def model_dump(self, mode="json"):
+            return {"name": "Live", "messages": [
+                {"id": "old", "role": "user", "content": "old"},
+                {"id": "new", "role": "assistant", "content": "fresh turn"},
+            ]}
+
+    monkeypatch.setattr(am.agent_manager, "sessions", {"s1": FakeSess()})
+    out = SessionExportable.load("s1").serialize(None)
+    assert out["name"] == "Live"          # not the stale disk copy
+    assert len(out["messages"]) == 2      # the unflushed turn is included
+
+
+def test_dashboard_export_import_carries_agent_cards_and_transcript(tmp_path, monkeypatch):
+    # The path the single-session tests missed: a whole dashboard with agent
+    # cards + a browser card. Both agents (with their transcripts) and the
+    # browser must survive export -> import. An empty-history import is the bug
+    # the user hit ("the chats didn't even show up, let alone the history").
+    import shutil
+    from backend.apps.agents import agent_manager as am
+    import backend.config.paths as paths
+    sdir = tmp_path / "sessions"
+    ddir = tmp_path / "dashboards"
+    sdir.mkdir()
+    ddir.mkdir()
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(sdir))
+    monkeypatch.setattr(paths, "DASHBOARDS_DIR", str(ddir))
+    monkeypatch.setattr(am.agent_manager, "sessions", {})  # nothing live -> disk path
+
+    did, sid1, sid2, bkey = "d1", "sA", "sB", "browser-1"
+
+    def sess(sid, name, text):
+        return {
+            "id": sid, "name": name, "status": "completed", "provider": "anthropic",
+            "model": "sonnet", "mode": "agent", "allowed_tools": [],
+            "messages": [{"id": "m1", "role": "user", "content": text, "branch_id": "main"}],
+            "branches": {"main": {"id": "main", "parent_branch_id": None, "fork_point_message_id": None, "created_at": "2026-01-01"}},
+            "active_branch_id": "main", "tool_group_meta": {}, "active_mcps": [], "dashboard_id": did,
+        }
+
+    (sdir / f"{sid1}.json").write_text(json.dumps(sess(sid1, "Agent One", "from one")))
+    (sdir / f"{sid2}.json").write_text(json.dumps(sess(sid2, "Agent Two", "from two")))
+    (ddir / f"{did}.json").write_text(json.dumps({"id": did, "name": "Board", "layout": {
+        "cards": {sid1: {"session_id": sid1}, sid2: {"session_id": sid2}},
+        "view_cards": {},
+        "browser_cards": {bkey: {"browser_id": bkey, "url": "u", "spawned_by": None}},
+        "notes": {}, "expanded_session_ids": [sid1],
+    }}))
+
+    raw, _ = closure.build_bundle(EntityType.dashboard, did)
+    sandbox, manifest, _w = closure.stage_upload(raw, "board.swarm")
+    try:
+        _rt, root_id, _created, _u = closure.commit(sandbox, manifest, [])
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
+
+    L = json.loads((ddir / f"{root_id}.json").read_text())["layout"]
+    assert len(L["cards"]) == 2, "both agent cards must survive import"
+    assert len(L["browser_cards"]) == 1, "the browser card must survive too"
+    total_msgs = 0
+    for sid in L["cards"]:
+        doc = json.loads((sdir / f"{sid}.json").read_text())
+        total_msgs += len(doc.get("messages") or [])
+        assert doc["active_mcps"] == [], "import must not grant MCP access"
+    assert total_msgs == 2, "each agent's transcript must carry through"
+
+
 def test_dashboard_serialize_rewrites_refs_to_bundle_ids():
     from backend.apps.swarm.entities.dashboards import DashboardExportable
     from backend.apps.swarm.models import EntityType
