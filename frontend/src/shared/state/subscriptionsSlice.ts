@@ -51,6 +51,28 @@ const subscriptionsSlice = createSlice({
     setSubscriptionStatus(state, action: PayloadAction<SubscriptionStatus | null>) {
       state.status = action.payload;
     },
+    // Optimistic: 9Router /providers lags /exchange, so refetching right after would
+    // clobber the just-connected state with stale data. The 30s poller reconciles.
+    markSubscriptionConnected(state, action: PayloadAction<{ provider: string }>) {
+      if (!state.status) return;
+      const { provider } = action.payload;
+      const isArr = Array.isArray(state.status.providers);
+      const conns: SubscriptionConnection[] = isArr
+        ? (state.status.providers as SubscriptionConnection[])
+        : ((state.status.providers as { connections?: SubscriptionConnection[] } | undefined)?.connections ?? []);
+      const existing = conns.find((c) => c.provider === provider);
+      if (existing) {
+        existing.isActive = true;
+        existing.testStatus = 'active';
+      } else {
+        conns.push({ provider, isActive: true, testStatus: 'active' });
+      }
+      if (isArr) {
+        state.status.providers = conns;
+      } else {
+        state.status.providers = { connections: conns };
+      }
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(fetchSubscriptionStatus.fulfilled, (state, action) => {
@@ -59,7 +81,7 @@ const subscriptionsSlice = createSlice({
   },
 });
 
-export const { setSubscriptionStatus } = subscriptionsSlice.actions;
+export const { setSubscriptionStatus, markSubscriptionConnected } = subscriptionsSlice.actions;
 
 // Stable empty ref so the selector doesn't hand back a fresh [] each call (forces needless rerenders).
 const EMPTY_CONNECTIONS: SubscriptionConnection[] = [];

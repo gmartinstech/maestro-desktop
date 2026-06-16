@@ -66,14 +66,8 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "haiku-cc", "label": "Claude Haiku 4.5", "context_window": 200_000,
          "model_id": "claude-haiku-4-5", "router_model_id": "cc/claude-haiku-4-5-20251001", "api": "anthropic", "reasoning": True, "route": "cc"},
 
-        # Fable 5 (released 2026-05-28): new flagship tier ABOVE Opus, 1M ctx,
-        # 128k out, $10/$50. The cc/ sub row is on trial: brand-new ids have 404'd
-        # our pinned 9Router 0.3.60 before (GPT-5.5's cx entry did) and Claude-sub
-        # serving of Fable is unverified, so pull this row if it errors live.
-        {"value": "fable-5-cc", "label": "Claude Fable 5", "context_window": 1_000_000,
-         "model_id": "claude-fable-5", "router_model_id": "cc/claude-fable-5", "api": "anthropic", "reasoning": True, "route": "cc"},
-        {"value": "fable-5-api", "label": "Claude Fable 5 (API key)", "context_window": 1_000_000,
-         "model_id": "claude-fable-5", "router_model_id": "claude-fable-5", "api": "anthropic", "reasoning": True, "route": "api"},
+        # Fable 5 pulled: the model got banned, so both its cc/ sub and api-key
+        # rows are gone. Don't re-add without confirming access is restored.
         {"value": "opus-4-8-api", "label": "Claude Opus 4.8 (API key)", "context_window": 1_000_000,
          "model_id": "claude-opus-4-8", "router_model_id": "claude-opus-4-8", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "opus-4-7-api", "label": "Claude Opus 4.7 (API key)", "context_window": 1_000_000,
@@ -128,9 +122,9 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         # allowlists (every other shipped Gemini sub model IS in 0.3.60), so gc/
         # gemini-3.5-flash would 404. Re-add the gc/ entry once 9Router is bumped
         # past 0.3.60 (gated by the WebSearch-translation regression; see CLAUDE.md).
-        {"value": "gemini-3.1-pro", "label": "Gemini 3.1 Pro",
-         "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-pro-preview",
-         "api": "gemini-cli", "subscription_only": True, "reasoning": True},
+        # gemini-3.1-pro pulled (both sub + api-key rows): Antigravity can't serve
+        # it (its -high variant 400s) and the AI Studio key 429s pro-preview hard,
+        # so it had no working lane and only sold a dead option.
         {"value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-flash-lite-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
@@ -143,9 +137,6 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         # API-key entries: bypass 9Router, call generativelanguage.googleapis.com.
         {"value": "gemini-3.5-flash-api", "label": "Gemini 3.5 Flash (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.5-flash", "model_id": "gemini-3.5-flash",
-         "api": "gemini", "reasoning": True, "route": "api"},
-        {"value": "gemini-3.1-pro-api", "label": "Gemini 3.1 Pro (API key)",
-         "context_window": 1_000_000, "router_model_id": "gemini-3.1-pro-preview", "model_id": "gemini-3.1-pro-preview",
          "api": "gemini", "reasoning": True, "route": "api"},
         {"value": "gemini-3.1-flash-lite-api", "label": "Gemini 3.1 Flash Lite (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.1-flash-lite-preview", "model_id": "gemini-3.1-flash-lite-preview",
@@ -236,6 +227,26 @@ def get_api_type(short_name: str) -> str:
     return (entry or {}).get("api", "anthropic")
 
 
+def _antigravity_connected() -> bool:
+    """True if a live Antigravity OAuth lane exists in 9Router. Synchronous
+    probe (this resolver is sync) with a tight timeout; any hiccup reads as
+    'no' so a slow/absent 9Router never blocks model resolution for long."""
+    try:
+        import httpx as _httpx
+        from backend.apps.nine_router.process import cli_auth_headers
+        r = _httpx.get("http://localhost:20128/api/providers", timeout=2.0, headers=cli_auth_headers())
+        if r.status_code != 200:
+            return False
+        data = r.json()
+        conns = data.get("connections", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        return any(
+            isinstance(c, dict) and c.get("provider") == "antigravity" and c.get("isActive")
+            for c in conns
+        )
+    except Exception:
+        return False
+
+
 def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     """Short model name → id string for ClaudeAgentOptions."""
     entry = _find_builtin_model(short_name)
@@ -244,6 +255,13 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     if entry.get("route") == "cc":
         return entry.get("router_model_id", entry.get("model_id", short_name))
     if entry.get("route") == "api":
+        # OpenAI own-key still rides 9Router (the cp-openai node fixes max_tokens
+        # + translates Anthropic->OpenAI), so it MUST keep its cp-openai/ routing
+        # prefix or 9Router has no node to dispatch to. Anthropic own-key goes
+        # straight to api.anthropic.com and Gemini own-key via the local proxy,
+        # both on the bare id.
+        if entry.get("api") == "openai":
+            return entry.get("router_model_id", entry.get("model_id", short_name))
         return entry.get("model_id", short_name)
     if entry.get("route") == "openrouter":
         return entry.get("router_model_id", short_name)
@@ -256,18 +274,18 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
             return entry.get("model_id", short_name)
         if getattr(settings, "anthropic_api_key", None):
             return entry.get("model_id", short_name)
-    # Gemini lane order: AI Studio apikey, Antigravity OAuth, Gemini CLI.
-    # AG bypasses the thoughtSignature validator that breaks multi-step tool
-    # turns on gc/. Without it, every Gemini turn 400s after the first tool
-    # call with "Thought signature is not valid".
+    # Gemini lane order: Antigravity OAuth (for the models it serves), then AI
+    # Studio apikey, then Gemini CLI. AG bypasses the thoughtSignature validator
+    # that breaks multi-step Gemini turns AND supports real reasoning, so a
+    # connected AG sub is preferred over the AI Studio key, which otherwise
+    # silently shadowed it. The map is AG's allowlist; pro variants 404/400 on
+    # AG and are deliberately absent, so they fall through to the key.
     _ANTIGRAVITY_MAP = {
         # gemini-3-pro-preview disabled: AG returns 404 even with active conn.
         # gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant
         #   400s every request with "invalid argument" (the `-high` thinking-
-        #   budget alias on AG requires a thinking_config the CLI doesn't
-        #   emit). Falls through to gc/gemini-3.1-pro-preview, which works
-        #   for non-tool turns; multi-step tool turns still hit the
-        #   thoughtSignature validator but that's a separate fight.
+        #   budget alias on AG requires a thinking_config the CLI doesn't emit).
+        #   Falls through to the AI Studio key / gc/ instead.
         "gemini-3-flash-preview": "gemini-3-flash",
         "gemini-3.1-flash-lite-preview": "gemini-3-flash",
     }
@@ -275,26 +293,11 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
         rid = entry.get("router_model_id", "")
         if isinstance(rid, str) and rid.startswith("gc/"):
             suffix = rid[len("gc/"):]
+            ag_suffix = _ANTIGRAVITY_MAP.get(suffix)
+            if ag_suffix and _antigravity_connected():
+                return "ag/" + ag_suffix
             if getattr(settings, "google_api_key", None):
                 return "gemini/" + suffix
-            ag_suffix = _ANTIGRAVITY_MAP.get(suffix)
-            if ag_suffix:
-                try:
-                    import httpx as _httpx
-                    r = _httpx.get("http://localhost:20128/api/providers", timeout=2.0)
-                    if r.status_code == 200:
-                        data = r.json()
-                        conns = data.get("connections", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-                        has_ag = any(
-                            isinstance(c, dict)
-                            and c.get("provider") == "antigravity"
-                            and c.get("isActive")
-                            for c in conns
-                        )
-                        if has_ag:
-                            return "ag/" + ag_suffix
-                except Exception:
-                    pass
     return entry.get("router_model_id", entry.get("model_id", short_name))
 
 
@@ -414,7 +417,6 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     ("Anthropic", "opus"): (5.0, 25.0),
     ("Anthropic", "opus-4-7"): (5.0, 25.0),
     ("Anthropic", "opus-4-8"): (5.0, 25.0),
-    ("Anthropic", "fable-5-api"): (10.0, 50.0),
     ("Anthropic", "haiku"): (1.0, 5.0),
     # OpenAI; Codex subscription path, user pays nothing per token
     ("OpenAI", "gpt-5.5"): (0.0, 0.0),
@@ -422,7 +424,6 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     ("OpenAI", "gpt-5.4-mini"): (0.0, 0.0),
     # Google; Gemini CLI subscription path, user pays nothing per token
     ("Google", "gemini-3.5-flash"): (0.0, 0.0),
-    ("Google", "gemini-3.1-pro"): (0.0, 0.0),
     ("Google", "gemini-3.1-flash-lite"): (0.0, 0.0),
     ("Google", "gemini-3-flash"): (0.0, 0.0),
     ("Google", "gemini-2.5-pro"): (0.0, 0.0),

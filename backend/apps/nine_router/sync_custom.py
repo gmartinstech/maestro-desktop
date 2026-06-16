@@ -10,7 +10,7 @@ spawns the subprocess (that's process.py's job).
 
 import logging
 
-from .process import NINE_ROUTER_API
+from .process import NINE_ROUTER_API, cli_auth_headers
 from .sync import (
     NINE_ROUTER_CLAUDE_PRO_NAME,
     NINE_ROUTER_OPENAI_KEYED_PREFIX,
@@ -36,7 +36,7 @@ async def _sync_openai_compat_node(api_key: str | None) -> None:
     managed_name = f"OpenAI{NINE_ROUTER_CUSTOM_NAME_SUFFIX}"
 
     try:
-        async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+        async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             r = await client.get(f"{NINE_ROUTER_API}/provider-nodes")
             existing_nodes = (r.json().get("nodes") if r.status_code == 200 else []) or []
     except Exception as e:
@@ -50,7 +50,7 @@ async def _sync_openai_compat_node(api_key: str | None) -> None:
     if not api_key:
         if existing_node:
             try:
-                async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+                async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
                     await client.delete(f"{NINE_ROUTER_API}/provider-nodes/{existing_node['id']}")
                 logger.info("9Router: removed OpenAI compat node (key cleared)")
             except Exception as e:
@@ -66,7 +66,7 @@ async def _sync_openai_compat_node(api_key: str | None) -> None:
     }
     node_id: str | None = existing_node.get("id") if existing_node else None
     try:
-        async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+        async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             if existing_node:
                 await client.put(
                     f"{NINE_ROUTER_API}/provider-nodes/{existing_node['id']}",
@@ -100,7 +100,7 @@ async def _sync_openai_compat_node(api_key: str | None) -> None:
             "apiKey": api_key,
             "priority": 0,
         }
-        async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+        async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             if existing_conn:
                 await client.patch(
                     f"{NINE_ROUTER_API}/providers/{existing_conn['id']}",
@@ -161,7 +161,7 @@ async def sync_custom_providers(providers: list) -> None:
         return
 
     try:
-        async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+        async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             r = await client.get(f"{NINE_ROUTER_API}/provider-nodes")
             existing_nodes = (r.json().get("nodes") if r.status_code == 200 else []) or []
     except Exception as e:
@@ -201,7 +201,7 @@ async def sync_custom_providers(providers: list) -> None:
             "type": "openai-compatible",
         }
         try:
-            async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+            async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
                 if node:
                     await client.put(
                         f"{NINE_ROUTER_API}/provider-nodes/{node['id']}",
@@ -236,7 +236,7 @@ async def sync_custom_providers(providers: list) -> None:
                 "apiKey": api_key,
                 "priority": 0,
             }
-            async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+            async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
                 if existing_conn:
                     await client.patch(
                         f"{NINE_ROUTER_API}/providers/{existing_conn['id']}",
@@ -259,7 +259,7 @@ async def sync_custom_providers(providers: list) -> None:
         if prefix in seen_prefixes:
             continue
         try:
-            async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+            async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
                 await client.delete(f"{NINE_ROUTER_API}/provider-nodes/{node['id']}")
                 logger.info(f"9Router: removed orphaned custom node {prefix}")
         except Exception as e:
@@ -288,7 +288,7 @@ async def sync_openswarm_pro_as_claude(bearer_token: str | None, proxy_url: str 
     # is the direct-API id. Use `anthropic`.
     existing = await _find_keyed_connection("anthropic", NINE_ROUTER_CLAUDE_PRO_NAME)
     try:
-        async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+        async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             if bearer_token and proxy_url:
                 payload = {
                     "provider": "anthropic",

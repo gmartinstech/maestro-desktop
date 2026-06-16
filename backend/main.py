@@ -39,6 +39,7 @@ from backend.apps.mcp_registry.mcp_registry import mcp_registry
 from backend.apps.skill_registry.skill_registry import skill_registry
 from backend.apps.outputs.outputs import outputs
 from backend.apps.dashboards.dashboards import dashboards
+from backend.apps.swarm.swarm import swarm
 from backend.apps.service.service import service
 from backend.apps.subscription.router import subscription
 from backend.apps.auth.router import auth
@@ -48,7 +49,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 
-main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, dashboards, service, subscription, auth, web, anthropic_proxy])
+main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, dashboards, swarm, service, subscription, auth, web, anthropic_proxy])
 app = main_app.app
 
 # Generate per-install auth token BEFORE we bind the HTTP port. By the
@@ -452,7 +453,7 @@ _SUCCESS_HTML = (
     '<div style="text-align:center">'
     '<div style="width:64px;height:64px;border-radius:50%;background:#22c55e20;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:32px">&#10003;</div>'
     '<h2 style="margin:0 0 8px">Connected!</h2>'
-    '<p style="color:#888;margin:0">You can close this window</p>'
+    '<p style="color:#888;margin:0">You can close this tab, and any other Claude login tab still open.</p>'
     '</div>'
     '<script>setTimeout(()=>window.close(),1500)</script>'
     '</body></html>'

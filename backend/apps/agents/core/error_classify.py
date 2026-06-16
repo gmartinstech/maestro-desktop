@@ -12,7 +12,27 @@ _TRANSIENT_CAPACITY_PATTERNS = re.compile(
     r"|internal\s+server\s+error"
     r"|rate[_\s-]?limit(?:_error)?"
     r"|ECONNRESET|ETIMEDOUT|ENETUNREACH|fetch\s+failed"
+    r"|resource[_\s-]?exhausted"
     r"|upstream\s+connect\s+error)",
+    re.IGNORECASE,
+)
+
+# A first message ships the full tool schema; 9Router rewrites Anthropic
+# tools[].input_schema into Gemini function_declarations / OpenAI params, and a
+# construct it can't translate makes the provider 400 (INVALID_ARGUMENT) with
+# zero tokens. That is NOT auth, reconnecting won't help, the request shape is
+# wrong, so we classify it apart and stop the catch-all from showing a
+# "reconnect your subscription" card for a tool-schema 400.
+_TRANSLATION_ERROR_PATTERNS = re.compile(
+    r"(?:function_declarations"
+    r"|invalid_argument"
+    r"|invalid\s+json\s+payload"
+    r"|unknown\s+name\b"
+    r"|cannot\s+find\s+field"
+    r"|proto\s+field"
+    r"|input_schema"
+    r"|\btools\[\d+\]"
+    r")",
     re.IGNORECASE,
 )
 
@@ -69,6 +89,17 @@ def _is_free_trial_exhausted(exc: BaseException, extra_text: str = "") -> bool:
     ))
 
 
+def _is_translation_error(exc: BaseException, extra_text: str = "") -> bool:
+    """True when the upstream 400 is a tool-schema / protocol translation
+    failure (9Router rewriting Anthropic tools into Gemini function_declarations
+    or OpenAI params), not auth or capacity. Kept distinct so the catch-all
+    stops mislabeling a schema 400 as an expired-subscription reconnect card."""
+    combined = f"{exc!s}\n{extra_text}".strip()
+    if not combined:
+        return False
+    return bool(_TRANSLATION_ERROR_PATTERNS.search(combined))
+
+
 def _is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     """True when the upstream error is a 401/403 auth failure.
 
@@ -79,6 +110,10 @@ def _is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     """
     combined = f"{exc!s}\n{extra_text}".strip()
     if not combined:
+        return False
+    # A tool-schema translation 400 can carry provider/connection wording that
+    # trips the auth regex below; it isn't auth, so don't claim it is.
+    if _is_translation_error(exc, extra_text):
         return False
     return bool(re.search(
         r"\b(401|403)\b"

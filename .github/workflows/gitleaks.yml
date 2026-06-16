@@ -48,11 +48,13 @@ jobs:
           set -euo pipefail
           BEFORE="${{ github.event.before }}"
           AFTER="${{ github.sha }}"
-          # New-branch push: GH sends 40 zeros for `before`. Diff against
-          # main's merge-base instead so we only scan commits unique to the
-          # branch — fast and matches the gitleaks-action default.
+          # New-branch push (incl. a branch rename): GH sends 40 zeros for
+          # `before`. Diff against main's merge-base so we only scan commits
+          # unique to the branch. Fetch main at FULL depth, not --depth=1: a
+          # shallow main can't reach the fork point of a far-behind branch, so
+          # merge-base comes back empty and we'd full-rescan all of history.
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main 2>/dev/null || true
+            git fetch --no-tags origin main:refs/remotes/origin/main 2>/dev/null || true
             if git rev-parse --verify origin/main >/dev/null 2>&1; then
               BEFORE=$(git merge-base origin/main "$AFTER" 2>/dev/null || echo "")
             fi

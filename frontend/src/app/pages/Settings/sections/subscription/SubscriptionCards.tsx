@@ -8,6 +8,7 @@ import { fetchModels } from '@/shared/state/modelsSlice';
 import {
   fetchSubscriptionStatus,
   setSubscriptionStatus,
+  markSubscriptionConnected,
   selectSubscriptionConnections,
 } from '@/shared/state/subscriptionsSlice';
 import { API_BASE } from '@/shared/config';
@@ -36,6 +37,10 @@ const SubscriptionCards: React.FC = () => {
 
   // Refetch model picker after sub changes so newly-connected providers surface in the dropdown immediately.
   const refreshPickerModels = () => { dispatch(fetchModels()); };
+
+  const markConnected = useCallback((provider: string) => {
+    dispatch(markSubscriptionConnected({ provider }));
+  }, [dispatch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +78,7 @@ const SubscriptionCards: React.FC = () => {
       });
       if (!r.ok) { setConnecting(null); return; }
       const data = await r.json();
-      runConnectFlow({ providerId, data, setConnecting, setUserCode, setPollTimer, fetchStatus, refreshPickerModels });
+      runConnectFlow({ providerId, data, setConnecting, setUserCode, setPollTimer, fetchStatus, refreshPickerModels, markConnected });
     } catch { setConnecting(null); }
   };
 

@@ -8,11 +8,12 @@ interface ConnectCtx {
   setPollTimer: (v: any) => void;
   fetchStatus: (opts?: { preserveTransient?: boolean }) => Promise<any>;
   refreshPickerModels: () => void;
+  markConnected: (provider: string) => void;
 }
 
 // Device-code OAuth flow: popup + dual poller (device-code + status) + focus-listener safety net + 5min hard timeout.
 function runDeviceCodeFlow(ctx: ConnectCtx) {
-  const { providerId, data, setConnecting, setUserCode, setPollTimer, fetchStatus, refreshPickerModels } = ctx;
+  const { providerId, data, setConnecting, setUserCode, setPollTimer, fetchStatus, refreshPickerModels, markConnected } = ctx;
   const code = data.user_code || '';
   setUserCode(code);
   // Named window + features so Electron's setWindowOpenHandler spawns a BrowserWindow popup, not a webview tab.
@@ -31,6 +32,7 @@ function runDeviceCodeFlow(ctx: ConnectCtx) {
     setPollTimer(null);
     setConnecting(null);
     setUserCode('');
+    markConnected(providerId);
     fetchStatus();
     refreshPickerModels();
     // Auto-close popup 2s after success so the "Congratulations" page is briefly visible then closes.
@@ -131,7 +133,7 @@ function runDeviceCodeFlow(ctx: ConnectCtx) {
 
 // Authorization-code flow: external-browser or popup + status poller + postMessage/IPC relay + bounded timeout.
 function runAuthCodeFlow(ctx: ConnectCtx) {
-  const { providerId, data, setConnecting, setPollTimer, fetchStatus, refreshPickerModels } = ctx;
+  const { providerId, data, setConnecting, setPollTimer, fetchStatus, refreshPickerModels, markConnected } = ctx;
   // Gemini/Google block embedded browsers; backend sets use_external_browser and exchange happens server-side via /api/subscriptions/callback. Detect via status poller (no postMessage possible).
   const useExternal = !!data.use_external_browser;
   let popup: Window | null = null;
@@ -141,16 +143,24 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
     popup = window.open(data.auth_url, 'oauth_connect', 'width=600,height=700');
   }
 
+  let stopped = false;
+  let resetTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Status polling: primary for external-browser flow, secondary for popup flow (postMessage is faster).
   const statusPoller = setInterval(async () => {
+    if (stopped) return;
     try {
       const sr = await fetch(`${API_BASE}/agents/subscriptions/status`);
       const sd = await sr.json();
       const connections = sd.providers?.connections || [];
       if (connections.some((p: any) => p.provider === providerId && (p.isActive || p.testStatus === 'active'))) {
+        stopped = true;
+        if (resetTimer) clearTimeout(resetTimer);
         clearInterval(statusPoller);
         setPollTimer(null);
         if (!useExternal) window.removeEventListener('message', msgHandler);
+        window.removeEventListener('blur', onBlur);
+        window.removeEventListener('focus', onFocus);
         setConnecting(null);
         fetchStatus();
         refreshPickerModels();
@@ -162,15 +172,20 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
   // Shared exchange helper invoked by whichever relay path delivers the code first.
   let exchanged = false;
   const runExchange = async (code: string, state?: string) => {
-    if (exchanged) return;
+    if (exchanged || stopped) return;
     exchanged = true;
+    stopped = true;
+    if (resetTimer) clearTimeout(resetTimer);
     window.removeEventListener('message', msgHandler);
     if (ipcUnsub) ipcUnsub();
+    window.removeEventListener('blur', onBlur);
+    window.removeEventListener('focus', onFocus);
     clearInterval(statusPoller);
     setPollTimer(null);
     if (popup && !popup.closed) popup.close();
+    let succeeded = false;
     try {
-      await fetch(`${API_BASE}/agents/subscriptions/exchange`, {
+      const r = await fetch(`${API_BASE}/agents/subscriptions/exchange`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: providerId, code,
@@ -178,9 +193,13 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
           state: state || data.state,
         }),
       });
+      let body: any = null;
+      try { body = await r.json(); } catch {}
+      succeeded = r.ok && !!body?.success;
     } catch {}
+    // 9Router /providers lags /exchange; an immediate fetchStatus would clobber the UI.
+    if (succeeded) markConnected(providerId);
     setConnecting(null);
-    fetchStatus();
     refreshPickerModels();
   };
 
@@ -201,13 +220,55 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
     });
   }
 
+  // If the user comes back to openswarm without finishing OAuth (closed the browser, cancelled),
+  // 3s of sustained focus + no active connection means abandoned; clear Connecting so they can retry.
+  // A blur during the wait cancels, so brief tab-backs to check progress don't false-positive.
+  const onBlur = () => {
+    if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
+  };
+  const onFocus = () => {
+    if (stopped) return;
+    if (resetTimer) clearTimeout(resetTimer);
+    resetTimer = setTimeout(async () => {
+      resetTimer = null;
+      if (stopped) return;
+      try {
+        const sr = await fetch(`${API_BASE}/agents/subscriptions/status`);
+        const sd = await sr.json();
+        const conns = sd.providers?.connections || [];
+        if (conns.some((p: any) => p.provider === providerId && (p.isActive || p.testStatus === 'active'))) return;
+      } catch {}
+      if (stopped) return;
+      stopped = true;
+      clearInterval(statusPoller);
+      setPollTimer(null);
+      if (!useExternal) window.removeEventListener('message', msgHandler);
+      if (ipcUnsub) ipcUnsub();
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      setConnecting(null);
+    }, 3000);
+  };
+  // Delay attach; popup mode's window.open blurs/refocuses the parent and would false-trigger.
+  setTimeout(() => {
+    if (!stopped) {
+      window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
+    }
+  }, 2000);
+
   // 3min popup / 5min external-browser; bounds the Connecting indicator, safety-net poller is the real exit.
   const timeoutMs = useExternal ? 300_000 : 180_000;
   setTimeout(() => {
+    if (stopped) return;
+    stopped = true;
+    if (resetTimer) clearTimeout(resetTimer);
     clearInterval(statusPoller);
     setPollTimer(null);
     if (!useExternal) window.removeEventListener('message', msgHandler);
     if (ipcUnsub) ipcUnsub();
+    window.removeEventListener('blur', onBlur);
+    window.removeEventListener('focus', onFocus);
     setConnecting(null);
   }, timeoutMs);
 }

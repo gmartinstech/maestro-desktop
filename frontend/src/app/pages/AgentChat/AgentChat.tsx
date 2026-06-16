@@ -47,6 +47,7 @@ import { createSessionWs, acquireSessionWs, releaseSessionWs } from '@/shared/ws
 import StreamingBubble from './bubbles/StreamingBubble';
 import WelcomeQuickReplies from './WelcomeQuickReplies';
 import { useWelcomeGreeting } from './useWelcomeGreeting';
+import { THINKING_LABELS } from './thinkingLabels';
 import MessageBubble from './bubbles/MessageBubble';
 import { estimateRenderedTextHeight, RECHECK_VISIBILITY_EVENT } from './bubbles/markdownMeasure';
 import CompactionMarker from './bubbles/CompactionMarker';
@@ -166,22 +167,15 @@ const thinkingShimmerKeyframes = `
 }
 `;
 
-// Single-word labels picked deterministically per session-turn so the pill
-// has variety without flickering between renders. Mirrors MessageBubble's list.
-const STREAMING_LABELS: ReadonlyArray<string> = [
-  'Thinking', 'Pondering', 'Cooking', 'Marinating', 'Deliberating',
-  'Reasoning', 'Reflecting', 'Untangling', 'Stewing', 'Locking-in',
-  'Considering', 'Processing', 'Vibing', 'Calculating', 'Chefing',
-  'Geeking', 'Brewing',
-];
-
+// Pick a label deterministically per session-turn so the pill has variety
+// without flickering between renders. Shared list with MessageBubble.
 function streamingLabelFor(seedKey: string | undefined): string {
-  if (!seedKey) return STREAMING_LABELS[0];
+  if (!seedKey) return THINKING_LABELS[0].live;
   let h = 0;
   for (let i = 0; i < seedKey.length; i++) {
     h = ((h << 5) - h + seedKey.charCodeAt(i)) | 0;
   }
-  return STREAMING_LABELS[Math.abs(h) % STREAMING_LABELS.length];
+  return THINKING_LABELS[Math.abs(h) % THINKING_LABELS.length].live;
 }
 
 const ThinkingBubble: React.FC<{ label?: string | null; seedKey?: string }> = ({ label, seedKey }) => {
@@ -671,6 +665,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       // Without this early-out the unconditional stopPropagation below kills
       // ctrl+wheel and the canvas listener never fires.
       if (e.ctrlKey || e.metaKey) return;
+      // Horizontal-dominant gestures must also reach the canvas so a sideways
+      // swipe pans the dashboard (chat has no horizontal scroll to absorb).
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       const atTop = el.scrollTop <= 0;
       const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
       const scrollingDown = e.deltaY > 0;

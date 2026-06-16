@@ -11,8 +11,10 @@ API at localhost:20128/v1.
 """
 
 import asyncio
+import hashlib
 import logging
 import os
+import secrets
 import shutil
 import subprocess
 import time
@@ -27,34 +29,30 @@ NINE_ROUTER_URL = f"http://localhost:{NINE_ROUTER_PORT}"
 NINE_ROUTER_API = f"{NINE_ROUTER_URL}/api"
 NINE_ROUTER_V1 = f"{NINE_ROUTER_URL}/v1"
 
-# Pinned 9router npm package version. Stays at 0.3.60.
+# Pinned 9router npm package version. Prod default stays 0.3.60; set
+# OPENSWARM_ROUTER_VERSION to stage a bump in dev (keys the dev cache by
+# version, so the override pulls a clean install) without shipping it.
 #
-# DO NOT bump to 0.4.x without porting 9Router API auth first. Tested 0.4.66
-# empirically (2026-06-01): it adds an auth gate to its internal /api/* routes,
-# so the endpoints our connect/sync flow calls without a token now 401 instead
-# of working:
-#     endpoint                       0.3.60   0.4.66
-#     /api/oauth/<prov>/device-code   400      401 Unauthorized
-#     POST /api/providers             400      401 Unauthorized
-# That 401 makes start_oauth() throw, which 500s EVERY subscription connect
-# (Claude/Codex/Gemini). oauth.py + sync.py would each need to discover and
-# send 9Router 0.4.x's API token on every /api/* call before a bump is viable.
+# 0.4.x gates its internal /api/* routes behind auth (the old bump blocker):
+# bare `POST /api/providers` / `/api/oauth/<prov>/device-code` now 401 instead
+# of working. That auth is now PORTED here: see cli_auth_token() / cli_auth_headers()
+# below, which compute the `x-9r-cli-token` 9Router checks and which every
+# /api/* call in this package attaches. The header is empty on 0.3.60 (no
+# machine-id file), so the old auth-free path is untouched.
 #
-# What the bump WOULD buy once auth is ported: cc/claude-opus-4-8 and cx/gpt-5.5
-# on the sub routes (gpt-5.5 404s on 0.3.60), and a reworked WebSearch behind a
-# new /api/v1/search route. Gemini 3.5 Flash is Antigravity-only there
-# (ag/gemini-3.5-flash-low), never on the gc/ Gemini-CLI lane.
+# What the bump buys: cc/claude-opus-4-8 and cx/gpt-5.5 on the sub routes
+# (gpt-5.5 404s on 0.3.60), a reworked WebSearch behind /api/v1/search, and
+# 3 months of cross-provider translator robustness.
 #
-# Original 0.3.60 pin reason (still holds): versions 0.3.60-0.3.96 regressed
-# cross-provider WebSearch (a Codex/Gemini primary delegating WebSearch saw
-# "claude-haiku-4-5-20251001 unavailable" or hallucinated output).
-#
-# Note: 0.3.60-0.4.20 ALL emit `max_tokens` (not max_completion_tokens)
-# when translating Anthropic->OpenAI, which OpenAI's GPT-5 family rejects.
-# The fix lives in our /api/openai-passthrough proxy; see core/openai_passthrough.py
-# and sync_openai_api_key for how the translation lane is rerouted via an
-# `openai-compatible` provider-node that honors `baseUrl`.
-NINE_ROUTER_NPM_VERSION = "0.3.60"
+# REMAINING gate before flipping the prod default to 0.4.x: re-qualify
+# cross-provider WebSearch. The original 0.3.60 pin reason was that 0.3.60-0.3.96
+# regressed it (a Codex/Gemini primary delegating WebSearch saw
+# "claude-haiku-4-5-20251001 unavailable" or hallucinated output); 0.4.x reworked
+# it but that's unverified here. Also confirmed on 0.4.80: it STILL emits
+# `max_tokens` (not max_completion_tokens) on Anthropic->OpenAI, so our
+# /api/openai-passthrough rename (core/openai_passthrough.py + sync_openai_api_key,
+# routed via an `openai-compatible` node that honors `baseUrl`) STAYS necessary.
+NINE_ROUTER_NPM_VERSION = os.environ.get("OPENSWARM_ROUTER_VERSION", "0.3.60")
 
 _process: subprocess.Popen | None = None
 
@@ -83,6 +81,83 @@ def is_running() -> bool:
         return False
     except Exception:
         return False
+
+
+def _nine_router_data_dir() -> str:
+    """Where 9Router persists machine-id + auth/cli-secret, the two files we
+    hash into the /api/* auth token on 0.4.x. Mirrors 9Router's own default
+    (DATA_DIR env, else ~/.9router on unix, %APPDATA%/9router on win) so we read
+    the exact files it writes. We never relocate it: that would orphan a user's
+    existing subscription connections."""
+    env_dir = os.environ.get("DATA_DIR")
+    if env_dir:
+        return env_dir
+    if os.name == "nt":
+        base = os.environ.get("APPDATA") or os.path.join(
+            os.path.expanduser("~"), "AppData", "Roaming"
+        )
+        return os.path.join(base, "9router")
+    return os.path.join(os.path.expanduser("~"), ".9router")
+
+
+_cli_token_cache: str | None = None
+
+
+def cli_auth_token() -> str | None:
+    """The token 9Router 0.4.x checks in `x-9r-cli-token` on /api/* calls:
+    sha256(machineId + "9r-cli-auth" + cliSecret)[:16]. machine-id is written
+    at 9Router boot, cli-secret only lazily on its first self-call, so we create
+    cli-secret ourselves (atomic O_EXCL, 0600, identical to 9Router's getter)
+    when missing so connect/sync can auth before that self-call. Returns None on
+    0.3.60 (no machine-id) or when 9Router isn't up, so the caller sends no
+    header and the old auth-free path is untouched. Never raises."""
+    global _cli_token_cache
+    if _cli_token_cache:
+        return _cli_token_cache
+    if not is_running():
+        return None
+    try:
+        data_dir = _nine_router_data_dir()
+        try:
+            with open(os.path.join(data_dir, "machine-id"), encoding="utf-8") as f:
+                machine_id = f.read().strip()
+        except OSError:
+            return None  # 0.3.60 layout, or 9Router hasn't written it yet
+        if not machine_id:
+            return None
+        secret_path = os.path.join(data_dir, "auth", "cli-secret")
+        try:
+            with open(secret_path, encoding="utf-8") as f:
+                cli_secret = f.read().strip()
+        except OSError:
+            cli_secret = ""
+        if not cli_secret:
+            cli_secret = secrets.token_hex(32)
+            try:
+                os.makedirs(os.path.dirname(secret_path), exist_ok=True)
+                # O_EXCL: if 9Router won the race and wrote first, read its value.
+                fd = os.open(secret_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(cli_secret)
+            except FileExistsError:
+                with open(secret_path, encoding="utf-8") as f:
+                    cli_secret = f.read().strip()
+        if not cli_secret:
+            return None
+        tok = hashlib.sha256(
+            (machine_id + "9r-cli-auth" + cli_secret).encode("utf-8")
+        ).hexdigest()[:16]
+        _cli_token_cache = tok
+        return tok
+    except Exception:
+        return None
+
+
+def cli_auth_headers() -> dict[str, str]:
+    """`x-9r-cli-token` header for 9Router 0.4.x /api/* calls; empty dict on
+    0.3.60 (no token), where the old auth-free endpoints still answer."""
+    tok = cli_auth_token()
+    return {"x-9r-cli-token": tok} if tok else {}
 
 
 def _find_9router_dir() -> str | None:
@@ -365,7 +440,7 @@ def stop():
 async def get_usage_stats(period: str = "all") -> dict | None:
     """Get usage statistics from 9Router."""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             r = await client.get(f"{NINE_ROUTER_API}/usage/stats", params={"period": period})
             if r.status_code == 200:
                 return r.json()
@@ -391,7 +466,7 @@ async def get_latest_reasoning_tokens(model_hint: str | None = None) -> int | No
     if not is_running():
         return None
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx.AsyncClient(timeout=2.0, headers=cli_auth_headers()) as client:
             params: dict[str, Any] = {"page": 1, "pageSize": 5}
             if model_hint:
                 params["model"] = model_hint
@@ -422,7 +497,7 @@ async def get_providers() -> list[dict]:
     unwrap so callers always see a plain list of connection dicts.
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             r = await client.get(f"{NINE_ROUTER_API}/providers")
             if r.status_code == 200:
                 data = r.json()

@@ -7,7 +7,7 @@ as OpenSwarm-managed apikey connections. Talks to the already-running
 
 import logging
 
-from .process import NINE_ROUTER_API
+from .process import NINE_ROUTER_API, cli_auth_headers
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ async def _sync_apikey_provider(
 
     existing = await _find_keyed_connection(provider, name)
     try:
-        async with _nr().httpx.AsyncClient(timeout=5.0) as client:
+        async with _nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             if api_key:
                 payload = {
                     "provider": provider,

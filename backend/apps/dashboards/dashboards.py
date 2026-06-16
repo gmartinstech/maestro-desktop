@@ -61,8 +61,8 @@ def _delete(dashboard_id: str):
         os.remove(path)
 
 
-def migrate_if_needed():
-    """One-time migration: if no dashboards exist, create the default from old layout."""
+def _migrate_if_needed():
+    """One-time migration: if no dashboards exist, create 'Dashboard 1' from old layout."""
     existing = _load_all()
     if existing:
         return
@@ -80,7 +80,7 @@ def migrate_if_needed():
         except Exception:
             logger.exception("Failed to read old layout.json, using empty layout")
 
-    dashboard = Dashboard(name="Untitled Dashboard", layout=layout)
+    dashboard = Dashboard(name="Dashboard 1", layout=layout)
     _save(dashboard)
     logger.info(f"Created default dashboard: {dashboard.id}")
 
@@ -105,7 +105,7 @@ def migrate_if_needed():
 @asynccontextmanager
 async def dashboards_lifespan():
     os.makedirs(DATA_DIR, exist_ok=True)
-    migrate_if_needed()
+    _migrate_if_needed()
     yield
 
 
@@ -363,10 +363,45 @@ async def generate_name(dashboard_id: str):
     return {"name": dashboard.name, "auto_named": True}
 
 
+def _strip_orphan_session_cards(data: dict) -> None:
+    """Drop layout cards (and expanded ids) whose agent session no longer exists
+    anywhere, in memory OR on disk. The frontend mounts an AgentChat per card and
+    GETs its session; a card pointing at a vanished session (e.g. an empty
+    never-saved session) 404s on every load and flashes a dead "connect a model"
+    card before the client reconciles it away. The `gone()` test is the exact
+    condition that makes GET /sessions/{id} 404, so it removes precisely those
+    cards and nothing else. Filtering the RESPONSE (never the stored file) is
+    non-destructive: a wrong check can only hide a card for one response, not
+    delete it. Drafts have no backend session yet, so they're always kept."""
+    from backend.apps.agents.agent_manager import agent_manager
+    from backend.apps.agents.manager.session.session_store import _load_session_data
+    layout = data.get("layout")
+    if not isinstance(layout, dict):
+        return
+    cards = layout.get("cards")
+    if not isinstance(cards, dict):
+        return
+
+    def gone(sid: str) -> bool:
+        if sid.startswith("draft-") or sid in agent_manager.sessions:
+            return False
+        return _load_session_data(sid) is None
+
+    orphans = [sid for sid in cards if gone(sid)]
+    for sid in orphans:
+        cards.pop(sid, None)
+    if orphans:
+        exp = layout.get("expanded_session_ids")
+        if isinstance(exp, list):
+            layout["expanded_session_ids"] = [s for s in exp if s not in orphans]
+
+
 @dashboards.router.get("/{dashboard_id}")
 async def get_dashboard(dashboard_id: str):
     dashboard = _load(dashboard_id)
-    return dashboard.model_dump(mode="json")
+    data = dashboard.model_dump(mode="json")
+    _strip_orphan_session_cards(data)
+    return data
 
 
 @dashboards.router.put("/{dashboard_id}")
