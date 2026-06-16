@@ -133,3 +133,95 @@
 .md-search__form {
   border-radius: 0.4rem;
 }
+
+/* ----------------------------------------------------------------------------
+ * Scoped package search (pkg-search.js) — the in-page box on overview pages
+ * ------------------------------------------------------------------------- */
+/* Empty when JS is off or a package is small: collapse it so it leaves no gap. */
+.md-typeset .pkg-search:empty {
+  display: none;
+}
+
+.md-typeset .pkg-search {
+  margin: 0 0 1.2em;
+}
+
+.md-typeset .pkg-search__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55em 0.8em;
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+
+.md-typeset .pkg-search__input::placeholder {
+  color: var(--md-default-fg-color--lighter);
+}
+
+.md-typeset .pkg-search__input:focus {
+  outline: none;
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 0 0 2px var(--md-accent-fg-color--transparent);
+}
+
+.md-typeset .pkg-search__results {
+  margin-top: 0.6em;
+}
+
+.md-typeset .pkg-search__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.md-typeset .pkg-search__list > li {
+  margin: 0;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .pkg-search__list > li > a {
+  display: block;
+  padding: 0.55em 0.4em;
+  border-radius: 0.3rem;
+}
+
+.md-typeset .pkg-search__list > li > a:hover {
+  background: var(--md-accent-fg-color--transparent);
+}
+
+.md-typeset .pkg-search__title {
+  display: block;
+  font-weight: 600;
+  color: var(--md-typeset-a-color);
+}
+
+.md-typeset .pkg-search__crumb {
+  display: block;
+  font-size: 0.66rem;
+  color: var(--md-default-fg-color--lighter);
+  margin-top: 0.1em;
+}
+
+.md-typeset .pkg-search__snip {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--md-default-fg-color--light);
+  margin-top: 0.2em;
+}
+
+.md-typeset .pkg-search__snip mark {
+  background: var(--md-accent-fg-color--transparent);
+  color: inherit;
+  padding: 0 0.1em;
+  border-radius: 0.15em;
+}
+
+.md-typeset .pkg-search__empty {
+  font-size: 0.74rem;
+  color: var(--md-default-fg-color--light);
+  margin: 0.4em 0;
+}

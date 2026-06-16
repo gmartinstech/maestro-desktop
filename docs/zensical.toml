@@ -26,7 +26,7 @@ extra_css = ["stylesheets/openswarm.css"]
 # Seed the search modal with a few "suggested pages" while the query is empty, so
 # it isn't blank on open (command-palette style). See the script header for how it
 # slots into the modal's shadow DOM.
-extra_javascript = ["javascripts/search-suggestions.js"]
+extra_javascript = ["javascripts/search-suggestions.js", "javascripts/pkg-search.js"]
 
 # Drop the "Made with Zensical" attribution from the footer (copyright.html
 # skips the generator block when this is false).

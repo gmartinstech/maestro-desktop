@@ -226,6 +226,11 @@ def _dest_reference(py: Path) -> Path:
 _SUBPKG_ICON = ":material-folder:"
 _MODULE_ICON = ":material-file-code:"
 
+# Below this many children a scoped-search box is more clutter than help, so the
+# overview is just the card grid. The widget itself is wired by
+# content/javascripts/pkg-search.js, keyed off the emitted ``.pkg-search`` marker.
+_SEARCH_MIN_CHILDREN = 6
+
 
 def _module_docstring(py: Path) -> str:
     """Return ``py``'s module-level docstring (stripped), or '' when absent.
@@ -303,6 +308,17 @@ def _render_package_overview(py: Path) -> str:
     pkg_doc = _module_docstring(py)
     if pkg_doc:
         out += [pkg_doc, ""]
+
+    # Scoped-search marker: pkg-search.js fills this with an input that searches
+    # only this package's subtree of the site index (data-scope is the URL prefix
+    # every descendant page shares). Gated on child count so tiny packages stay
+    # clean; degrades to an empty (CSS-hidden) div when JS is off.
+    if len(subpackages) + len(modules) >= _SEARCH_MIN_CHILDREN:
+        scope = "/".join(parts) + "/"
+        out += [
+            f'<div class="pkg-search" data-scope="{scope}" data-label="{parts[-1]}"></div>',
+            "",
+        ]
 
     cards = [_card(_SUBPKG_ICON, n, link, s, "Subpackage") for n, link, s in subpackages]
     cards += [_card(_MODULE_ICON, n, link, s, "Module") for n, link, s in modules]
