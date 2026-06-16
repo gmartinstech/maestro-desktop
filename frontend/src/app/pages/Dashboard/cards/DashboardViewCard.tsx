@@ -80,6 +80,32 @@ const DashboardViewCard: React.FC<Props> = ({
   const [inputData] = useState<Record<string, any>>(() => getDefault(output.input_schema));
   const [backendResult] = useState<Record<string, any> | null>(null);
 
+  // Reload the preview when the session finishes a turn: React holds the
+  // ErrorBoundary's snag page until a reload, so without this the user keeps
+  // seeing the old error even after the agent fixed it. The overlay lingers
+  // through the reload (finishing) so the stale page never flashes.
+  const linkedStatus = useAppSelector(
+    (s) => (output.session_id ? s.agents.sessions[output.session_id]?.status : undefined),
+  );
+  const [finishing, setFinishing] = useState(false);
+  const wasBuildingRef = useRef(false);
+  const finishTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    const building = linkedStatus === 'running' || linkedStatus === 'waiting_approval';
+    if (wasBuildingRef.current && !building) {
+      previewRef.current?.reload();
+      setFinishing(true);
+      if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = window.setTimeout(() => setFinishing(false), 1200);
+    }
+    wasBuildingRef.current = building;
+  }, [linkedStatus]);
+  useEffect(() => () => {
+    if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+  }, []);
+  const showBuildingOverlay = linkedStatus === 'running'
+    || linkedStatus === 'waiting_approval' || finishing;
+
   const DRAG_THRESHOLD = 3;
   const dragState = useRef<{ startX: number; startY: number; origX: number; origY: number; startPanX: number; startPanY: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -408,7 +434,7 @@ const DashboardViewCard: React.FC<Props> = ({
           inputData={inputData}
           backendResult={backendResult}
         />
-        <BuildingOverlay sessionId={output.session_id ?? null} />
+        <BuildingOverlay show={showBuildingOverlay} />
       </Box>
 
       {/* Resize handles */}
@@ -484,15 +510,13 @@ const DashboardViewCard: React.FC<Props> = ({
 export default React.memo(DashboardViewCard);
 
 // Calm overlay shown while the App Builder chat that owns this output is
-// actively editing it. Hides whatever transient half-broken state the agent
-// might be writing through (a missing import, a syntax error mid-keystroke)
-// so the user sees "Building..." instead of an error iframe. Fades in/out.
-const BuildingOverlay: React.FC<{ sessionId: string | null }> = ({ sessionId }) => {
+// actively editing it (and through the post-turn reload). Hides whatever
+// transient half-broken state the agent might be writing through so the
+// user sees "Building..." instead of an error iframe. Fades in/out.
+const BuildingOverlay: React.FC<{ show: boolean }> = ({ show }) => {
   const c = useClaudeTokens();
-  const status = useAppSelector((s) => (sessionId ? s.agents.sessions[sessionId]?.status : undefined));
-  const isBuilding = status === 'running' || status === 'waiting_approval';
   return (
-    <Fade in={isBuilding} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
+    <Fade in={show} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
       <Box
         sx={{
           position: 'absolute',
@@ -548,6 +572,33 @@ const DashboardOutputPreview: React.FC<{
     frontendUrl,
     isNewMode,
   });
+
+  // Declared above every early-return below so React's hook order stays
+  // stable; moving it below would trigger "Rendered more hooks than during
+  // the previous render."
+  const handleConsoleMessage = useCallback((level: string, text: string) => {
+    if (!text || !workspaceId) return;
+    const tok = getAuthToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (tok) headers.Authorization = `Bearer ${tok}`;
+    if (text.includes('[openswarm:app-ready]')) {
+      fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/report-ready`, {
+        method: 'POST', headers,
+      }).catch(() => {});
+      return;
+    }
+    if (level !== 'error' || !text.includes('[openswarm:app-error]')) return;
+    const idx = text.indexOf('[openswarm:app-error]');
+    const tail = text.slice(idx + '[openswarm:app-error]'.length).trim();
+    const firstNewline = tail.indexOf('\n');
+    const message = firstNewline >= 0 ? tail.slice(0, firstNewline).trim() : tail;
+    const componentStack = firstNewline >= 0 ? tail.slice(firstNewline + 1).trim() : '';
+    fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/report-error`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ message, componentStack }),
+    }).catch(() => {});
+  }, [workspaceId]);
 
   // An orphaned record (files deleted on disk) used to render the raw 404 JSON
   // inside the card, or spin on "Starting preview" forever; probe once instead.
@@ -634,6 +685,7 @@ const DashboardOutputPreview: React.FC<{
       frontendCode={output.files?.['index.html'] ?? ''}
       inputData={inputData}
       backendResult={backendResult}
+      onConsoleMessage={handleConsoleMessage}
     />
   );
 };

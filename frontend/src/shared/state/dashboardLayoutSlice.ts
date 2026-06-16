@@ -38,7 +38,6 @@ export interface ViewCardPosition {
   width: number;
   height: number;
   zOrder: number;
-  /** Chat session that spawned this view card; drives column-snap on initial placement. */
   parent_session_id?: string | null;
 }
 
@@ -534,11 +533,6 @@ const dashboardLayoutSlice = createSlice({
       } else {
         const parentCard = parentSessionId ? state.cards[parentSessionId] : null;
         if (parentCard) {
-          // Mirror the agent-spawned browser flow (WebSocketManager.ts): drop the
-          // new card into a column to the right of its parent chat, stacking
-          // under any siblings (browser OR view) already in that column so a
-          // single chat's outputs read as one cluster instead of scattering
-          // across the canvas via the global grid scan.
           const targetX = parentCard.x + parentCard.width + GRID_GAP * 12;
           let targetY = parentCard.y;
           const siblings = [
