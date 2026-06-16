@@ -24,9 +24,20 @@ static NSEvent *ClampOffWindowRelease(NSEvent *event) {
       return event;
     }
     NSWindow *win = [event window];
+    NSPoint p;
+    if (win && [win contentView]) {
+      // Normal case: the captured window rode along on the event.
+      p = [event locationInWindow];
+    } else {
+      // The original gap: a release off the source window (easy with a second
+      // display) can arrive with no window attached, so the old code fail-opened
+      // here and the crash slipped through. Fall back to the key/main window and
+      // map the screen-space location into it so we can still snap it.
+      win = [NSApp keyWindow] ?: [NSApp mainWindow];
+      if (!win || ![win contentView]) return event;
+      p = [win convertPointFromScreen:[event locationInWindow]];
+    }
     NSView *content = [win contentView];
-    if (!content) return event;
-    NSPoint p = [event locationInWindow];
     NSSize ws = [win frame].size;
     NSRect cb = [content frame];
     // all the misfire-prone arithmetic lives in clamp_decision() so the property
@@ -40,7 +51,7 @@ static NSEvent *ClampOffWindowRelease(NSEvent *event) {
                            location:NSMakePoint(d.x, d.y)
                       modifierFlags:[event modifierFlags]
                           timestamp:[event timestamp]
-                       windowNumber:[event windowNumber]
+                       windowNumber:[win windowNumber]
                             context:nil
                         eventNumber:[event eventNumber]
                          clickCount:[event clickCount]
