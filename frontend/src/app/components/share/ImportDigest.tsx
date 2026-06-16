@@ -1,10 +1,10 @@
-// The "digest" flash that plays where you drop a .swarm: an expanding ring of
-// brand-tinted dithered pixels, evoking PixelBlast WITHOUT any WebGL. PixelBlast
-// is a single shared WebGL2 context (one canvas, reparented) and reusing it here
-// would fight an app's loading animation over that one canvas, plus rapid
-// WebGL-context churn is the exact thing that crashed the GPU process. So this is
-// plain Canvas2D on ONE pooled canvas, and play() refuses to start while a burst
-// is already running, so drop-spam can never pile up work.
+// The "digest" flash that plays where you drop a .swarm: a brand-tinted pixel
+// blast that radiates from the drop point all the way to the corners, thinning
+// out and dimming as it travels so the edges dissolve instead of ending in a
+// box. Plain Canvas2D on ONE pooled, full-viewport canvas (reusing PixelBlast's
+// shared WebGL context would fight an app's loading animation, and WebGL-context
+// churn is the exact thing that crashed the GPU process). play() refuses to
+// start while a burst is running, so drop-spam can never pile up work.
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 
 export interface DigestHandle {
@@ -12,10 +12,10 @@ export interface DigestHandle {
   play: (x: number, y: number) => boolean;
 }
 
-const SIZE = 240;
-const CELL = 6;
-const DURATION = 680;
-const RADIUS_MAX = 132;
+const CELL = 12;        // chunky pixels read as a "blast", and fewer cells = cheap
+const DURATION = 820;
+const BAND = 110;       // wave-front thickness in px; wide enough to feel like a wave
+const ALPHA_CAP = 0.62; // keep it a whisper, never a solid flash
 
 function dither(gx: number, gy: number): number {
   const v = Math.sin(gx * 12.9898 + gy * 78.233) * 43758.5453;
@@ -35,8 +35,6 @@ const ImportDigest = forwardRef<DigestHandle, { color?: string }>(({ color = '#c
 
       const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       busyRef.current = true;
-      canvas.style.left = `${x - SIZE / 2}px`;
-      canvas.style.top = `${y - SIZE / 2}px`;
       canvas.style.opacity = '1';
 
       const finish = () => {
@@ -49,35 +47,55 @@ const ImportDigest = forwardRef<DigestHandle, { color?: string }>(({ color = '#c
         return true;
       }
 
+      const W = window.innerWidth;
+      const H = window.innerHeight;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = SIZE * dpr;
-      canvas.height = SIZE * dpr;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         finish();
         return true;
       }
       ctx.scale(dpr, dpr);
-      const cells = Math.ceil(SIZE / CELL);
-      const center = SIZE / 2;
+
+      // Reach the farthest corner so the wave actually clears the whole window.
+      const maxDist = Math.max(
+        Math.hypot(x, y), Math.hypot(W - x, y),
+        Math.hypot(x, H - y), Math.hypot(W - x, H - y),
+      );
+      const cols = Math.ceil(W / CELL);
+      const rows = Math.ceil(H / CELL);
       const start = performance.now();
 
       const frame = () => {
         const t = Math.min(1, (performance.now() - start) / DURATION);
-        const eased = 1 - Math.pow(1 - t, 3);
-        const ring = eased * RADIUS_MAX;
-        ctx.clearRect(0, 0, SIZE, SIZE);
+        const eased = 1 - Math.pow(1 - t, 3); // quick out, like a blast
+        const ring = eased * (maxDist + BAND);
+        const ringSq = ring * ring;
+        const inner = Math.max(0, ring - BAND);
+        const innerSq = inner * inner;
+        ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = color;
-        for (let gy = 0; gy < cells; gy++) {
-          for (let gx = 0; gx < cells; gx++) {
+        for (let gy = 0; gy < rows; gy++) {
+          const py = gy * CELL + CELL / 2;
+          const dy = py - y;
+          for (let gx = 0; gx < cols; gx++) {
             const px = gx * CELL + CELL / 2;
-            const py = gy * CELL + CELL / 2;
-            const dist = Math.hypot(px - center, py - center);
-            const band = 1 - Math.abs(dist - ring) / 34; // bright at the expanding front
-            if (band <= 0) continue;
-            const a = band * (0.35 + 0.65 * dither(gx, gy)) * (1 - t * 0.25);
-            if (a <= 0) continue;
-            ctx.globalAlpha = a > 1 ? 1 : a;
+            const dx = px - x;
+            const distSq = dx * dx + dy * dy;
+            // Cheap annulus reject before the sqrt: skip everything not on the front.
+            if (distSq > ringSq || distSq < innerSq) continue;
+            const dist = Math.sqrt(distSq);
+            const band = 1 - (ring - dist) / BAND; // brightest at the leading edge
+            const distFrac = dist / maxDist;        // 0 at origin, 1 at far corner
+            const d = dither(gx, gy);
+            // Sparser the further out: distant cells need a high dither value to
+            // appear at all, so the wave frays into scattered pixels near the edges.
+            if (d < distFrac * 0.85) continue;
+            const a = band * (1 - distFrac * 0.6) * (1 - t * 0.2) * (0.4 + 0.6 * d) * ALPHA_CAP;
+            if (a <= 0.02) continue;
+            ctx.globalAlpha = a > ALPHA_CAP ? ALPHA_CAP : a;
             ctx.fillRect(gx * CELL, gy * CELL, CELL - 1, CELL - 1);
           }
         }
@@ -95,16 +113,15 @@ const ImportDigest = forwardRef<DigestHandle, { color?: string }>(({ color = '#c
   return (
     <canvas
       ref={canvasRef}
-      width={SIZE}
-      height={SIZE}
       style={{
         position: 'fixed',
-        width: SIZE,
-        height: SIZE,
+        inset: 0,
+        width: '100%',
+        height: '100%',
         pointerEvents: 'none',
         zIndex: 2100,
         opacity: 0,
-        transition: 'opacity 160ms ease',
+        transition: 'opacity 200ms ease',
       }}
     />
   );

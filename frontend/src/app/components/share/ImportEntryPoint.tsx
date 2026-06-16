@@ -20,7 +20,7 @@ import { ImportPreflight } from './shareTypes';
 
 export const IMPORT_OPEN_EVENT = 'openswarm:import-open';
 const ACCEPT = '.swarm,.md,.zip';
-const DIGEST_MS = 700;
+const DIGEST_MS = 820; // keep in step with ImportDigest's wave so the blast reads fully
 
 const DEST: Record<string, (id: string) => string | null> = {
   app: (id) => `/apps/${id}`,
