@@ -76,6 +76,9 @@ class AppSettings(BaseModel):
     free_trial_token: Optional[str] = None
     free_trial_remaining: Optional[int] = None
     free_trial_runs_limit: Optional[int] = None
+    # Epoch seconds when the rolling window refills to a fresh allotment; lets the spent-trial
+    # nudge say "fresh runs in ~3h" instead of a vague "for now". Server-owned.
+    free_trial_resets_at: Optional[float] = None
     openswarm_subscription_plan: Optional[str] = None
     openswarm_subscription_expires: Optional[str] = None
     openswarm_usage_cached: Optional[dict] = None

@@ -64,6 +64,8 @@ export interface AppSettings {
   free_trial_token?: string | null;
   free_trial_remaining?: number | null;
   free_trial_runs_limit?: number | null;
+  /** Epoch seconds when the rolling window refills; powers the "fresh runs in ~Xh" nudge. */
+  free_trial_resets_at?: number | null;
   openswarm_subscription_plan?: string | null;
   openswarm_subscription_expires?: string | null;
   openswarm_usage_cached?: SubscriptionUsage | null;

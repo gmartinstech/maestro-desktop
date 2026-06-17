@@ -136,6 +136,7 @@ SERVER_OWNED_FIELDS = (
     "free_trial_token",
     "free_trial_remaining",
     "free_trial_runs_limit",
+    "free_trial_resets_at",
     "user_id",
     "signin_method",
     "installation_id",

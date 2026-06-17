@@ -21,7 +21,7 @@ import remarkGfm from 'remark-gfm';
 import WindowedMarkdown from './WindowedMarkdown';
 import { estimateRenderedTextHeight, oversizedCharThreshold, RECHECK_VISIBILITY_EVENT } from './markdownMeasure';
 import { THINKING_LABELS } from '../thinkingLabels';
-import { AgentMessage } from '@/shared/state/agentsSlice';
+import { AgentMessage, retryLastUserMessage } from '@/shared/state/agentsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -77,7 +77,7 @@ interface OpenSwarmErrorInfo {
   title: string;
   detail: string;
   ctaLabel?: string;
-  ctaAction?: 'upgrade' | 'retry' | 'settings' | 'waitlist';
+  ctaAction?: 'upgrade' | 'retry' | 'settings' | 'waitlist' | 'retry_last';
 }
 
 interface OverflowContext {
@@ -87,6 +87,7 @@ interface OverflowContext {
   frameworkOverhead?: number;
   activeMcpCount?: number;
   messagesCount?: number;
+  hasModel?: boolean;
 }
 
 function formatTokens(n: number): string {
@@ -121,6 +122,17 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
     };
   }
   if (/free_trial_exhausted|used your free|free OpenSwarm runs/i.test(text)) {
+    // Once a real model is connected, the prompt isn't lost: offer a one-tap pick-up-where-you-left-off
+    // that resends the last ask on the new model. Before connecting, the CTA still routes to Settings.
+    if (ctx?.hasModel) {
+      return {
+        kind: 'cap',
+        title: 'Ready to pick up where you left off',
+        detail: 'Your model is connected. Continue the task you started on the free trial.',
+        ctaLabel: 'Continue',
+        ctaAction: 'retry_last',
+      };
+    }
     return {
       kind: 'cap',
       title: "You've used your free runs",
@@ -966,8 +978,10 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
       frameworkOverhead: s.framework_overhead_tokens,
       activeMcpCount: s.active_mcps?.length ?? 0,
       messagesCount: s.messages?.length ?? 0,
+      hasModel: Object.keys(state.models.byProvider || {}).length > 0,
     } as OverflowContext;
   }, shallowEqual);
+  const activeSessionId = useAppSelector((state) => state.agents.activeSessionId);
   const openswarmError = !isUser ? parseOpenSwarmError(rawText, overflowCtx) : null;
 
   // Reports asynchronously, bc without this an oversized message that mounts in
@@ -1277,6 +1291,8 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                           setPickerOpen(true);
                         } else if (openswarmError.ctaAction === 'settings') {
                           dispatch(openSettingsModal('models'));
+                        } else if (openswarmError.ctaAction === 'retry_last') {
+                          if (activeSessionId) dispatch(retryLastUserMessage({ sessionId: activeSessionId }));
                         } else if (openswarmError.ctaAction === 'waitlist') {
                           const url = 'https://discord.com/channels/1486442924391796896/1486442927554170892';
                           if (api?.openExternal) api.openExternal(url);

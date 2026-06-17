@@ -166,6 +166,17 @@ const AppShell: React.FC = () => {
     const remaining = d.free_trial_remaining ?? limit;
     return limit > 0 && (limit - remaining) >= 1;
   });
+  const freeTrialResetsAt = useAppSelector((s) => (s.settings.data as any)?.free_trial_resets_at ?? null);
+  // Coarse "~3h" / "~20m" label for when the rolling window refills; null when unknown or basically now.
+  // Static (not a ticking countdown) on purpose: a per-second timer is needless churn for a 5h window.
+  const refillLabel = React.useMemo(() => {
+    if (!freeTrialResetsAt) return null;
+    const secs = freeTrialResetsAt - Date.now() / 1000;
+    if (secs <= 90) return null;
+    const h = Math.floor(secs / 3600);
+    if (h >= 1) return `~${h}h`;
+    return `~${Math.max(1, Math.round(secs / 60))}m`;
+  }, [freeTrialResetsAt]);
   // Hold the banner until the boot free-trial mint settles, else a brand-new user sees it
   // flash red for the ~1-3s the trial takes to arm. (Offline shows immediately, it's its own signal.)
   const freeTrialArmSettled = useAppSelector((s) => s.settings.freeTrialArmSettled);
@@ -574,7 +585,9 @@ const AppShell: React.FC = () => {
       <Collapse in={showFreeTrialNudge} timeout={300} unmountOnExit>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, flexShrink: 0 }}>
           <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, flex: 1, letterSpacing: '0.01em' }}>
-            {freeTrialSpent ? "You're out of free runs for now. " : "Nice, you're rolling. "}
+            {freeTrialSpent
+              ? (refillLabel ? `Out of free runs, fresh ones in ${refillLabel}. ` : "You're out of free runs for now. ")
+              : "Nice, you're rolling. "}
             <Box
               component="span"
               onClick={() => dispatch(openSettingsModal('models'))}

@@ -16,6 +16,7 @@ import os
 import platform
 import re
 import subprocess
+import time
 
 import httpx
 
@@ -227,8 +228,14 @@ async def refresh_free_trial(settings_obj) -> dict:
     data = r.json()
     remaining = int(data.get("runs_remaining") or 0)
     settings_obj.free_trial_remaining = remaining
+    # Stash an absolute refill time so the spent nudge can say "fresh runs in ~3h". Set before
+    # clearing (clear keeps it) so it survives the hand-back to own_key. Relative -> absolute here
+    # because the client reads it much later than we fetched it.
+    resets_in = data.get("resets_in_seconds")
+    if isinstance(resets_in, (int, float)) and resets_in > 0:
+        settings_obj.free_trial_resets_at = time.time() + float(resets_in)
     if remaining <= 0:
         await clear_free_trial(settings_obj)
-        return {"connected": False, "runs_remaining": 0}
+        return {"connected": False, "runs_remaining": 0, "resets_at": getattr(settings_obj, "free_trial_resets_at", None)}
     await save_settings_async(settings_obj)
     return {"connected": True, "runs_remaining": remaining, "runs_limit": getattr(settings_obj, "free_trial_runs_limit", None)}

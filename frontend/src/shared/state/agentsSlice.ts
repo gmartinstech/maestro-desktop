@@ -240,6 +240,25 @@ export const sendMessage = createAsyncThunk(
   }
 );
 
+// Carry-the-task: after the free trial runs dry and the user connects their own model, resend the
+// last thing they asked so it picks up on the new model instead of being lost. Explicit (a tap),
+// never auto-fired on a settings change, and it reuses the session's now-current model server-side.
+export const retryLastUserMessage = createAsyncThunk(
+  'agents/retryLastUserMessage',
+  async ({ sessionId }: { sessionId: string }, { getState, dispatch }) => {
+    const s = (getState() as { agents: { sessions: Record<string, AgentSession> } }).agents.sessions[sessionId];
+    if (!s || !s.messages) return;
+    const branch = s.active_branch_id || 'main';
+    const lastUser = [...s.messages]
+      .filter((m) => (m.branch_id || 'main') === branch && m.role === 'user')
+      .pop();
+    if (!lastUser) return;
+    const content = typeof lastUser.content === 'string' ? lastUser.content : JSON.stringify(lastUser.content);
+    if (!content.trim()) return;
+    await dispatch(sendMessage({ sessionId, prompt: content }));
+  }
+);
+
 export const stopAgent = createAsyncThunk(
   'agents/stopAgent',
   async ({ sessionId, removeWorktree = false }: { sessionId: string; removeWorktree?: boolean }) => {
