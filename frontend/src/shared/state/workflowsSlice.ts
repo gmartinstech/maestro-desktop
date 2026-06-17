@@ -81,6 +81,12 @@ export interface Workflow {
   edit_agent_session_id?: string | null;
   /** Sticky session id for the embedded scheduling agent (cadence -> gated tool call). */
   schedule_agent_session_id?: string | null;
+  /** Pending Edit-Agent draft of the steps; present only while editing. */
+  draft_steps?: WorkflowStep[] | null;
+  /** True when a draft is staged (server-computed convenience flag). */
+  has_draft?: boolean;
+  /** Most recent Test Agent session for this workflow. */
+  last_test_session_id?: string | null;
   /** Tool permissions the user answered once and we reuse on later runs so an
    *  unattended scheduled fire doesn't stall on a prompt. tool name -> answer. */
   remembered_approvals?: Record<string, 'allow' | 'deny'>;
@@ -133,6 +139,9 @@ export interface OpenCard {
   sidecarKind?: 'watching' | 'viewing-completed' | 'viewing-error' | 'testing' | null;
   /** Per-step expand state for ExpandedView. Stores step ids. */
   expandedStepIds?: string[];
+  /** One-shot "Schedule this workflow?" prompt shown right after a convert.
+   *  Transient: lives only on the just-created card, never on hub-opened ones. */
+  showScheduleNudge?: boolean;
   /** Pre-seed message for the Fix-with-Agent flow so the EditAgent composer
    *  knows which failure context to lead with. Cleared once consumed. */
   fixSeed?: { runId: string; stepIdx: number; stepLabel: string; error: string } | null;
@@ -209,6 +218,18 @@ export const updateWorkflow = createAsyncThunk<
     }
   },
 );
+
+export const commitDraft = createAsyncThunk('workflows/commitDraft', async (id: string) => {
+  const res = await fetch(`${API}/${id}/draft/commit`, { method: 'POST' });
+  if (!res.ok) throw new Error(`commit failed ${res.status}`);
+  return (await res.json()) as Workflow;
+});
+
+export const discardDraft = createAsyncThunk('workflows/discardDraft', async (id: string) => {
+  const res = await fetch(`${API}/${id}/draft/discard`, { method: 'POST' });
+  if (!res.ok) throw new Error(`discard failed ${res.status}`);
+  return (await res.json()) as Workflow;
+});
 
 export const deleteWorkflow = createAsyncThunk('workflows/delete', async (id: string) => {
   await fetch(`${API}/${id}`, { method: 'DELETE' });
@@ -364,6 +385,8 @@ const slice = createSlice({
       .addCase(fetchWorkflows.rejected, (state) => { state.loading = false; state.loaded = true; })
       .addCase(createWorkflow.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
       .addCase(updateWorkflow.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
+      .addCase(commitDraft.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
+      .addCase(discardDraft.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
       .addCase(deleteWorkflow.fulfilled, (state, action) => {
         delete state.items[action.payload];
         delete state.runs[action.payload];

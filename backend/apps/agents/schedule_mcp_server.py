@@ -191,15 +191,33 @@ TOOLS = [
         "name": "TestWorkflow",
         "description": (
             "Spawn a sibling Test Agent that runs the workflow end-to-end "
-            "(with the latest persisted steps) so the user can watch it "
-            "work. Use after editing a step to verify the change. The Test "
-            "Agent renders as a sibling card on the dashboard with a "
-            "'Testing' arrow chip linking back to this workflow."
+            "(the current draft if one is being edited, else the live steps) "
+            "so the user can watch it work. Use after editing a step to "
+            "verify the change. The Test Agent renders as a sibling card on "
+            "the dashboard with a 'Testing' arrow chip linking back to this "
+            "workflow. After it finishes, call ReadTestTranscript to see what "
+            "it did."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "workflow_id": {"type": "string", "description": "The workflow to test."},
+            },
+            "required": ["workflow_id"],
+        },
+    },
+    {
+        "name": "ReadTestTranscript",
+        "description": (
+            "Fetch the FULL chat transcript of the most recent Test Agent run "
+            "for this workflow: every message, tool call, and result. Call it "
+            "after TestWorkflow has finished to read exactly what the test did "
+            "and where it succeeded or failed, so you can decide what to change."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workflow_id": {"type": "string", "description": "The workflow whose latest test run to read."},
             },
             "required": ["workflow_id"],
         },
@@ -383,7 +401,9 @@ def handle_edit_step(args: dict) -> dict:
     cur = _call("GET", f"/{wid}")
     if "_error" in cur:
         return _err(cur["_error"])
-    steps = cur.get("steps") or []
+    # Edit against the pending draft when one exists (Edit-Agent flow); else
+    # the live steps (main-agent direct edit).
+    steps = cur.get("draft_steps") or cur.get("steps") or []
     if idx < 0 or idx >= len(steps):
         return _err(f"step_idx {idx} out of range (workflow has {len(steps)} steps).")
     # Refresh the at-a-glance label so the card reflects the edit; a preserved
@@ -409,7 +429,7 @@ def handle_add_step(args: dict) -> dict:
     cur = _call("GET", f"/{wid}")
     if "_error" in cur:
         return _err(cur["_error"])
-    steps = list(cur.get("steps") or [])
+    steps = list(cur.get("draft_steps") or cur.get("steps") or [])
     new_step = {"id": "s" + uuid.uuid4().hex[:8], "text": text, "label": label}
     pos = args.get("position")
     if isinstance(pos, int) and 0 <= pos <= len(steps):
@@ -433,7 +453,7 @@ def handle_delete_step(args: dict) -> dict:
     cur = _call("GET", f"/{wid}")
     if "_error" in cur:
         return _err(cur["_error"])
-    steps = list(cur.get("steps") or [])
+    steps = list(cur.get("draft_steps") or cur.get("steps") or [])
     if idx < 0 or idx >= len(steps):
         return _err(f"step_idx {idx} out of range (workflow has {len(steps)} steps).")
     if len(steps) <= 1:
@@ -453,7 +473,23 @@ def handle_test_workflow(args: dict) -> dict:
     if "_error" in r:
         return _err(r["_error"])
     sid = r.get("session_id", "")
-    return _ok(f"Test Agent spawned (session {sid[:8]}...). It runs the latest workflow on the dashboard with a Testing arrow chip.")
+    return _ok(f"Test Agent spawned (session {sid[:8]}...). It runs the latest workflow on the dashboard with a Testing arrow chip. Call ReadTestTranscript once it finishes to see what it did.")
+
+
+def handle_read_test_transcript(args: dict) -> dict:
+    wid = args.get("workflow_id") or ""
+    if not wid:
+        return _err("workflow_id is required.")
+    r = _call("GET", f"/{wid}/test-transcript")
+    if "_error" in r:
+        return _err(r["_error"])
+    status = r.get("status")
+    if status == "none":
+        return _ok("No test has been run yet for this workflow. Call TestWorkflow first.")
+    if status == "unavailable":
+        return _ok("The most recent test session is no longer available. Run TestWorkflow again.")
+    transcript = r.get("transcript") or "(empty transcript)"
+    return _ok(f"Test Agent transcript (status: {status}):\n\n{transcript}")
 
 
 HANDLERS = {
@@ -468,6 +504,7 @@ HANDLERS = {
     "AddWorkflowStep": handle_add_step,
     "DeleteWorkflowStep": handle_delete_step,
     "TestWorkflow": handle_test_workflow,
+    "ReadTestTranscript": handle_read_test_transcript,
 }
 
 

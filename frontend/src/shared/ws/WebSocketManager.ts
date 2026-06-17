@@ -8,6 +8,7 @@ import {
   addApprovalRequest,
   removeApprovalRequest,
   updateSessionStatus,
+  setSessionTestState,
   updateSessionCost,
   updateSessionContext,
   setContextOverflow,
@@ -444,6 +445,13 @@ class WebSocketManager {
     }
 
     switch (event) {
+      case 'agent:test_state':
+        // broadcast_global puts everything under data (no top-level session_id).
+        if (data.session_id && data.state) {
+          store.dispatch(setSessionTestState({ sessionId: data.session_id, state: data.state }));
+        }
+        break;
+
       case 'agent:status':
         // Capture pre-transition status so we only fire a system notification
         // on a real running→terminal transition. Otherwise a session that

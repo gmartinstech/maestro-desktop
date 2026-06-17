@@ -124,6 +124,12 @@ class Workflow(BaseModel):
     # Sticky session id for the embedded scheduling agent (the chat that
     # turns "every Wednesday at 1pm" into a permission-gated tool call).
     schedule_agent_session_id: Optional[str] = None
+    # Pending Edit-Agent draft of the steps. None = no draft in flight. Edits
+    # stage here and only land on `steps` when the user clicks Save; scheduled
+    # runs read `steps`, so a pending draft never affects a fire.
+    draft_steps: Optional[list[WorkflowStep]] = None
+    # Most recent Test Agent session for this workflow; read by ReadTestTranscript.
+    last_test_session_id: Optional[str] = None
     # Tool permissions the user answered once and we reuse on later runs so an
     # unattended scheduled fire doesn't stall waiting for someone to click.
     # tool_name -> decision. Only ordinary "ask" tools land here; sensitive

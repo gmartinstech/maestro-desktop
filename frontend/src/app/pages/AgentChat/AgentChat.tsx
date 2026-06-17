@@ -55,11 +55,13 @@ import MessageActionBar from './shell/MessageActionBar';
 import ToolCallBubble, { ToolPair } from './tool-bubbles/ToolCallBubble';
 import ToolGroupBubble, { RenderItem, ToolGroup, isToolGroup, isToolPair } from './tool-bubbles/ToolGroupBubble';
 import ApprovalBar, { BatchApprovalBar } from './shell/ApprovalBar';
+import ForceStopAgentBar from './ForceStopAgentBar';
 import ChatInput, { ChatInputHandle } from './ChatInput';
 import ContextDrawer from './shell/ContextDrawer';
 import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
 import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
-import { setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCards } from '@/shared/state/dashboardLayoutSlice';
+import { setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCards, removeCard } from '@/shared/state/dashboardLayoutSlice';
+import { setCardSidecar, commitDraft, updateWorkflowCard } from '@/shared/state/workflowsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
 const CONTEXT_WINDOWS: Record<string, number> = {
@@ -255,6 +257,18 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   };
   const { id: routeId } = useParams<{ id: string }>();
   const id = sessionIdProp || routeId;
+  // A card linked as a workflow sidecar (Test Agent, or a watched run) swaps
+  // its composer for a Force Stop button: continuing the chat is meaningless,
+  // but killing the run is the common need. Once a Test Agent finishes, the
+  // button flips to a green "close" (see workflow_test_state + ForceStopAgentBar).
+  const linkedWorkflowId = useAppSelector((s) => {
+    const found = Object.values(s.workflows.openCards).find(
+      (cd) => cd.sidecarSessionId === id && (cd.sidecarKind === 'testing' || cd.sidecarKind === 'watching'),
+    );
+    return found?.workflowId ?? null;
+  });
+  const isStoppableSidecar = !!linkedWorkflowId;
+  const testState = useAppSelector((s) => (id ? s.agents.sessions[id]?.workflow_test_state : null) ?? null);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const session = useAppSelector((state) => (id ? state.agents.sessions[id] : undefined));
@@ -891,6 +905,23 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (!id) return;
     dispatch(stopAgent({ sessionId: id }));
   }, [id, dispatch]);
+
+  // Finished Test Agent card: drop the tether + remove this card, and either
+  // commit the workflow draft (Save, same as the edit card's "save now") or
+  // leave the draft untouched so the user keeps editing.
+  const onTestContinueEditing = useCallback(() => {
+    if (linkedWorkflowId) dispatch(setCardSidecar({ workflowId: linkedWorkflowId, sessionId: null, kind: null }));
+    if (id) dispatch(removeCard(id));
+  }, [linkedWorkflowId, id, dispatch]);
+
+  const onTestSaveWorkflow = useCallback(() => {
+    if (linkedWorkflowId) {
+      dispatch(commitDraft(linkedWorkflowId));
+      dispatch(updateWorkflowCard({ workflowId: linkedWorkflowId, patch: { view: 'saved' } }));
+      dispatch(setCardSidecar({ workflowId: linkedWorkflowId, sessionId: null, kind: null }));
+    }
+    if (id) dispatch(removeCard(id));
+  }, [linkedWorkflowId, id, dispatch]);
 
   const handleResume = useCallback(() => {
     if (!id) return;
@@ -2172,24 +2203,28 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   </Box>
                 );
               })()}
-              <ChatInput
-                ref={chatInputRef}
-                onSend={handleSend}
-                disabled={false}
-                mode={mode}
-                onModeChange={handleModeChange}
-                model={model}
-                onModelChange={handleModelChange}
-                isRunning={agentBusy}
-                onStop={handleStop}
-                queueLength={queueLength}
-                contextEstimate={contextEstimate}
-                sessionId={id}
-                autoFocus={autoFocus}
-                thinkingLevel={session?.thinking_level ?? 'auto'}
-                onThinkingLevelChange={handleThinkingLevelChange}
-                onActivityLabelChange={setPreSendActivityLabel}
-              />
+              {isStoppableSidecar ? (
+                <ForceStopAgentBar onStop={handleStop} onSaveWorkflow={onTestSaveWorkflow} onContinueEditing={onTestContinueEditing} testState={testState} />
+              ) : (
+                <ChatInput
+                  ref={chatInputRef}
+                  onSend={handleSend}
+                  disabled={false}
+                  mode={mode}
+                  onModeChange={handleModeChange}
+                  model={model}
+                  onModelChange={handleModelChange}
+                  isRunning={agentBusy}
+                  onStop={handleStop}
+                  queueLength={queueLength}
+                  contextEstimate={contextEstimate}
+                  sessionId={id}
+                  autoFocus={autoFocus}
+                  thinkingLevel={session?.thinking_level ?? 'auto'}
+                  onThinkingLevelChange={handleThinkingLevelChange}
+                  onActivityLabelChange={setPreSendActivityLabel}
+                />
+              )}
             </Box>
           </ClickAwayListener>
         )}

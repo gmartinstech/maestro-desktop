@@ -10,6 +10,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import {
+  closeWorkflowCard,
   createWorkflow,
   toggleExpandedStep,
   updateWorkflow,
@@ -17,6 +18,8 @@ import {
   type Workflow,
   type WorkflowRun,
 } from '@/shared/state/workflowsSlice';
+import { placeCard, removeWorkflowCard } from '@/shared/state/dashboardLayoutSlice';
+import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
 import { CostChip, humanDuration, routingFor, StreakBadge } from './workflowVisuals';
 import StepList from './StepList';
 
@@ -146,9 +149,9 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   }, [dispatch, workflowId, liveDraft]);
 
   // Both buttons persist the workflow; the only difference is where they land.
-  // Ignore = save and show the saved card. Schedule = save then open the
-  // natural-language scheduling composer. (Ignore used to delete the card,
-  // which surprised people; the schedule prompt is optional, the workflow isn't.)
+  // "Not now" = save and show the saved card. Schedule = save then open the
+  // natural-language scheduling composer. (The schedule prompt is optional,
+  // the workflow isn't, so neither button discards anything.)
   const saveWorkflow = useCallback(async (): Promise<Workflow | null> => {
     const result = await dispatch(createWorkflow({
       title,
@@ -222,7 +225,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
             opacity: busy ? 0.6 : 1,
             '&:hover': { color: c.text.primary },
           }}>
-          Ignore
+          Not now
         </Box>
         <Box
           onClick={onSaveThenSchedule}
@@ -289,7 +292,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
     dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'edit_agent' } }));
   }, [dispatch, workflow.id]);
   const openScheduling = useCallback(() => {
-    dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'scheduling' } }));
+    dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'scheduling', showScheduleNudge: false } }));
   }, [dispatch, workflow.id]);
   const onToggleStep = useCallback((stepId: string) => {
     dispatch(toggleExpandedStep({ workflowId: workflow.id, stepId }));
@@ -308,8 +311,31 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
     }
   }, [deletingStepId, dispatch, workflow.id, workflow.steps, workflow.updated_at]);
 
+  // "Not now" on the post-convert nudge doesn't dump you on a near-identical
+  // saved card: the workflow is already saved (find it in the hub), so we drop
+  // its card and reopen the chat it came from, right in the same slot.
+  const wfCardPos = useAppSelector((s) => s.dashboardLayout.workflowCards[workflow.id]);
+  const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
+  const sourceId = workflow.source_session_id || null;
+  const sourceExists = useAppSelector((s) => (sourceId ? !!s.agents.sessions[sourceId] : false));
+  const onNotNow = useCallback(() => {
+    if (sourceId && sourceExists && wfCardPos) {
+      const { x, y, width, height } = wfCardPos;
+      dispatch(removeWorkflowCard(workflow.id));
+      dispatch(closeWorkflowCard(workflow.id));
+      dispatch(placeCard({ sessionId: sourceId, x, y, width, height, expandedSessionIds }));
+      dispatch(setPendingFocusAgentId(sourceId));
+    } else {
+      // No chat to fall back to (rare): just retire the prompt in place.
+      dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { showScheduleNudge: false } }));
+    }
+  }, [dispatch, sourceId, sourceExists, wfCardPos, expandedSessionIds, workflow.id]);
+
   const scheduleLine = workflow.schedule.enabled ? describeSchedule(workflow) : 'Schedule this workflow';
   const scheduleClickable = !workflow.schedule.enabled;
+  // One-shot prompt right after a convert; hub-opened cards never set the flag,
+  // so they fall straight to the quiet schedule line below.
+  const showNudge = !!card?.showScheduleNudge && !workflow.schedule.enabled;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
@@ -322,7 +348,57 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
         onDeleteStep={onDeleteStep}
       />
       <Box sx={{ flex: 1 }} />
+      {showNudge && (
+        <Box sx={{
+          display: 'flex', alignItems: 'flex-start', gap: 1.25,
+          p: 1.5, borderRadius: `${c.radius.lg}px`,
+          bgcolor: c.accent.primary + '10',
+          border: `1px solid ${c.accent.primary}30`,
+        }}>
+          <Box sx={{
+            width: 32, height: 32, borderRadius: `${c.radius.md}px`,
+            bgcolor: c.accent.primary + '22', color: c.accent.primary,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <CalendarMonthRounded sx={{ fontSize: 18 }} />
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: c.text.primary, lineHeight: 1.3 }}>
+              Schedule this workflow?
+            </Typography>
+            <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, mt: 0.25, lineHeight: 1.45 }}>
+              You can have workflows run on a recurring basis, automatically.
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5, mt: 1.25 }}>
+              <Box
+                onClick={onNotNow}
+                role="button"
+                sx={{
+                  fontSize: '0.86rem', fontWeight: 500, color: c.text.secondary,
+                  cursor: 'pointer', px: 0.75, py: 0.5,
+                  '&:hover': { color: c.text.primary },
+                }}>
+                Not now
+              </Box>
+              <Box
+                onClick={openScheduling}
+                role="button"
+                sx={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                  fontSize: '0.88rem', fontWeight: 700,
+                  px: 1.75, py: 0.6, borderRadius: 999,
+                  color: '#fff', bgcolor: c.accent.primary,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: c.accent.primary, filter: 'brightness(1.06)' },
+                }}>
+                Schedule Workflow
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      )}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+        {showNudge ? <Box /> : (
         <Box
           onClick={scheduleClickable ? openScheduling : undefined}
           role={scheduleClickable ? 'button' : undefined}
@@ -335,6 +411,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
           <CalendarMonthRounded sx={{ fontSize: 16, color: c.text.muted, flexShrink: 0 }} />
           <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scheduleLine}</Box>
         </Box>
+        )}
         <Box
           onClick={openEditAgent}
           role="button"

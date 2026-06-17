@@ -32,7 +32,7 @@ import StepList, { type StepStatus } from './StepList';
 // Helper: open a session next to the workflow card AND mark the card as
 // sidecar-linked so the footer flips to Stop Watching/Viewing and the
 // dashboard draws an arrow chip between the two cards.
-function useOpenSidecar(workflowId: string) {
+export function useOpenSidecar(workflowId: string) {
   const dispatch = useAppDispatch();
   const wfCardPos = useAppSelector((s) => s.dashboardLayout.workflowCards[workflowId]);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
@@ -158,7 +158,7 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
   const activeSubtitle = run?.last_tool_label || null;
   const activeDuration = formatLiveDuration(run);
 
-  const isLinked = mode === 'sidecar-linked' && card?.sidecarKind === 'watching';
+  const isLinked = mode === 'sidecar-linked' && (card?.sidecarKind === 'watching' || card?.sidecarKind === 'testing');
 
   const onStop = useCallback(async () => {
     if (!runId) return;

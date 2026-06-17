@@ -40,7 +40,7 @@ import { useDashboardActive } from '@/shared/hooks/useDashboardActive';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canvasInteractionState';
-import { openWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
+import { createWorkflow, openWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
 import { addWorkflowCard, setWorkflowCardPosition, setWorkflowCardSize } from '@/shared/state/dashboardLayoutSlice';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import { getAgentWorkTime, fmtSeconds } from '@/shared/agentWorkTime';
@@ -252,6 +252,12 @@ const AgentCard: React.FC<Props> = ({
   const hasApiKey = !!useAppSelector((s) => s.settings.data.anthropic_api_key);
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
+  // Convert-to-workflow now persists straight away (no preview interstitial),
+  // so the source chat's model/mode get overridden by the user's configured
+  // default the same way the old PreviewView did it.
+  const defaultModel = useAppSelector((s) => s.settings.data.default_model);
+  const defaultMode = useAppSelector((s) => s.settings.data.default_mode);
+  const [converting, setConverting] = useState(false);
   // Hide the "Convert to workflow" button when this chat is already
   // entangled with a workflow (Image #44 note). Two cases:
   //  (a) The session is one of a workflow's runner sessions, OR
@@ -261,6 +267,9 @@ const AgentCard: React.FC<Props> = ({
   const workflowRunsMap = useAppSelector((s) => s.workflows.runs);
   const workflowItems = useAppSelector((s) => s.workflows.items);
   const isWorkflowRunnerSession = useMemo(() => {
+    // A Test Agent (spawned to validate a workflow draft) isn't a chat to
+    // convert; it carries workflow_test_state.
+    if (session.workflow_test_state) return true;
     for (const arr of Object.values(workflowRunsMap || {})) {
       for (const r of arr || []) {
         if (r.session_id === session.id) return true;
@@ -270,7 +279,7 @@ const AgentCard: React.FC<Props> = ({
       if (wf.source_session_id === session.id) return true;
     }
     return false;
-  }, [workflowRunsMap, workflowItems, session.id]);
+  }, [workflowRunsMap, workflowItems, session.id, session.workflow_test_state]);
   // Curated picker label with a tidy fallback for unknowns.
   const friendlyModelLabel = useMemo(() => {
     const value = session.model;
@@ -854,44 +863,42 @@ const AgentCard: React.FC<Props> = ({
               <Tooltip title="Turn this chat into a reusable, schedulable workflow">
                 <Box
                   role="button"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
+                    if (converting) return;
                     const steps = extractStepsFromSession(session);
                     if (steps.length === 0) return;
-                    const draft: Partial<Workflow> = {
+                    setConverting(true);
+                    // Persist up front while the chat card stays put, then
+                    // swap this card's slot to the saved workflow. No preview
+                    // interstitial: the steps already exist, so the saved card
+                    // (with its one-time schedule nudge) is all we need. On a
+                    // failed create the chat card stays so the user can retry.
+                    const result = await dispatch(createWorkflow({
                       title: session.name || 'New workflow',
                       description: '',
                       steps,
                       source_session_id: session.id,
-                      dashboard_id: session.dashboard_id || null,
-                      model: session.model,
-                      mode: session.mode,
-                      provider: session.provider,
-                    };
-                    const tempId = `draft-${session.id}`;
-                    // The OG chat card BECOMES the workflow card: capture
-                    // its position + size, remove the chat card, and drop
-                    // the workflow card in the same physical slot. The
-                    // chat session itself stays accessible via History.
-                    // Per Image #61 / #62: no tether arrow, no second
-                    // card alongside.
-                    // Capture this card's current position/size, drop the
-                    // workflow card in the same slot, then remove the
-                    // source chat card.
-                    dispatch(addWorkflowCard({
-                      workflowId: tempId,
-                      sourceSessionId: null,
-                      expandedSessionIds,
-                    }));
-                    dispatch(setWorkflowCardPosition({ workflowId: tempId, x: cardX, y: cardY }));
-                    dispatch(setWorkflowCardSize({ workflowId: tempId, width: cardWidth, height: cardHeight }));
+                      use_synced_prompt: true,
+                      model: defaultModel || session.model,
+                      mode: defaultMode || session.mode,
+                    } as Partial<Workflow>));
+                    if (!createWorkflow.fulfilled.match(result)) {
+                      setConverting(false);
+                      return;
+                    }
+                    const wf = result.payload;
+                    // The OG chat card BECOMES the workflow card: same slot,
+                    // same size, no tether arrow (Image #61 / #62). The chat
+                    // session stays accessible via History.
+                    dispatch(addWorkflowCard({ workflowId: wf.id, sourceSessionId: null, expandedSessionIds }));
+                    dispatch(setWorkflowCardPosition({ workflowId: wf.id, x: cardX, y: cardY }));
+                    dispatch(setWorkflowCardSize({ workflowId: wf.id, width: cardWidth, height: cardHeight }));
                     dispatch(removeCard(session.id));
-                    dispatch(openWorkflowCard({
-                      workflowId: tempId,
-                      sourceSessionId: null,
-                      view: 'preview',
-                      draft,
-                    }));
+                    // showScheduleNudge: the one-shot "Schedule this workflow?"
+                    // prompt. "Not now" on it reopens this very chat (the
+                    // session lives on via workflow.source_session_id).
+                    dispatch(openWorkflowCard({ workflowId: wf.id, sourceSessionId: null, view: 'saved', draft: null, showScheduleNudge: true }));
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
                   sx={{
@@ -902,12 +909,13 @@ const AgentCard: React.FC<Props> = ({
                     fontSize: '0.78rem', fontWeight: 700,
                     px: 1.1, py: 0.5,
                     borderRadius: `${c.radius.md}px`,
-                    cursor: 'pointer',
+                    cursor: converting ? 'wait' : 'pointer',
+                    opacity: converting ? 0.7 : 1,
                     '&:hover': { filter: 'brightness(1.05)' },
                   }}
                 >
                   <AutoAwesomeOutlinedIcon sx={{ fontSize: 14 }} />
-                  Convert to workflow
+                  {converting ? 'Converting…' : 'Convert to workflow'}
                 </Box>
               </Tooltip>
             )}

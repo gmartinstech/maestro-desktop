@@ -12,6 +12,7 @@ from backend.apps.workflows.models import (
     WorkflowCreate,
     WorkflowUpdate,
     WorkflowRun,
+    WorkflowStep,
 )
 from backend.apps.workflows import storage, scheduler, executor, audit, escalation
 
@@ -344,7 +345,50 @@ def _enriched(wf: Workflow) -> dict:
         "last_run_usd": round(last, 4),
         "fires_per_month": fires,
     }
+    base["has_draft"] = wf.draft_steps is not None
     return base
+
+
+def p_render_test_transcript(messages: list, max_chars: int = 14000) -> str:
+    """Flatten a Test Agent's messages into a readable role-tagged transcript.
+
+    Tail-biased cap so the end (where a run succeeds or blows up) always
+    survives, protecting the Edit Agent's context window.
+    """
+    import json as json_mod
+    lines: list[str] = []
+    for m in messages:
+        if getattr(m, "hidden", False):
+            continue
+        role = (getattr(m, "role", "") or "?").upper()
+        content = getattr(m, "content", "")
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            parts: list[str] = []
+            for b in content:
+                if not isinstance(b, dict):
+                    parts.append(str(b))
+                    continue
+                kind = b.get("type")
+                if kind == "text":
+                    parts.append(str(b.get("text") or ""))
+                elif kind == "tool_use":
+                    parts.append(f"[tool {b.get('name')}] {json_mod.dumps(b.get('input') or {})[:300]}")
+                elif kind == "tool_result":
+                    inner = b.get("content")
+                    parts.append(f"[result] {inner if isinstance(inner, str) else json_mod.dumps(inner)[:300]}")
+                else:
+                    parts.append(str(b)[:200])
+            text = "\n".join(p for p in parts if p)
+        else:
+            text = ""
+        if text.strip():
+            lines.append(f"{role}: {text.strip()}")
+    out = "\n\n".join(lines)
+    if len(out) > max_chars:
+        out = "...(earlier turns trimmed)...\n\n" + out[-max_chars:]
+    return out
 
 
 @workflows.router.get("/active")
@@ -446,10 +490,37 @@ async def update_workflow(
             )
     before = wf.model_dump(mode="json")
     data = body.model_dump(exclude_unset=True)
+    # While an Edit-Agent draft is in flight, ANY PATCH that touches steps
+    # stages those steps into the draft instead of the live workflow, so the
+    # commit/discard pair is the only thing that moves the live steps. The
+    # match is "steps present", not "steps only", so a mixed patch can never
+    # leak an edit onto the live steps (which commit would then clobber with
+    # the stale draft). The main chat agent never opens an Edit Agent, so it
+    # has no draft and falls through to the live path below.
+    if wf.draft_steps is not None and "steps" in data:
+        wf.draft_steps = data["steps"]
+        # Any non-steps fields in the same patch still apply live (rare from
+        # the Edit Agent, whose tools only touch steps).
+        for k, v in data.items():
+            if k != "steps":
+                setattr(wf, k, v)
+        wf.updated_at = datetime.now()
+        storage.save_workflow(wf)
+        enriched = _enriched(wf)
+        try:
+            from backend.apps.agents.core.ws_manager import ws_manager
+            await ws_manager.broadcast_global("workflow:updated", {
+                "workflow_id": wf.id,
+                "workflow": enriched,
+            })
+        except Exception:
+            pass
+        return enriched
     for k, v in data.items():
         setattr(wf, k, v)
     if "steps" in data:
         await p_relabel_changed_steps(wf, before.get("steps") or [])
+        p_prune_step_tool_usage(wf)
     wf.updated_at = datetime.now()
     if not wf.icon:
         wf.icon = _derive_icon(wf)
@@ -486,120 +557,6 @@ async def delete_workflow(workflow_id: str):
     return {"ok": True}
 
 
-@workflows.router.post("/{workflow_id}/propose-edit")
-async def propose_edit(workflow_id: str, body: dict):
-    """Aux-LLM-propose a single-step edit from a natural-language request.
-
-    Powers the Edit Agent chat (Image #38). Frontend hands us the user's
-    message, the current draft steps, optional failure-context (Fix-with-
-    Agent), AND the prior turns so the model has multi-turn memory. We
-    respond with a reply string PLUS, optionally, a `step_idx` + `new_text`
-    that the FE shows as a proposal card.
-    """
-    wf = storage.get_workflow(workflow_id)
-    if not wf:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    message = (body or {}).get("message", "").strip()
-    steps_in = (body or {}).get("steps") or []
-    context = (body or {}).get("context") or None
-    history = (body or {}).get("history") or []
-    if not message or not isinstance(steps_in, list):
-        raise HTTPException(status_code=400, detail="Missing message or steps")
-    try:
-        from backend.apps.agents.providers.registry import resolve_aux_model
-        from backend.apps.settings.credentials import get_anthropic_client_for_model
-        from backend.apps.settings.settings import load_settings as _ls
-    except Exception:
-        raise HTTPException(status_code=500, detail="Aux model unavailable")
-    settings = _ls()
-    try:
-        aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku")
-        client = get_anthropic_client_for_model(settings, aux_model)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Aux model unavailable")
-    import json, re
-    steps_lines = "\n".join(
-        f"{i+1}. {(s.get('label') or '').strip() or (s.get('text') or '')[:60]}: {(s.get('text') or '')}"
-        for i, s in enumerate(steps_in)
-    )
-    fix_context = ""
-    if context and isinstance(context, dict):
-        fs = context.get("failed_step")
-        err = context.get("error")
-        if fs is not None and err:
-            fix_context = (
-                f"\n\nFAILURE CONTEXT: Step {int(fs) + 1} failed on the most recent run. "
-                f"The error was: {err}\n"
-                f"Your proposed edit should specifically address that failure if possible."
-            )
-    # Build history block so the model remembers prior turns. Each entry
-    # is {role, text}; we only carry assistant/user pairs (proposals get
-    # summarised inline so the assistant has context for follow-ups).
-    history_lines = []
-    if isinstance(history, list):
-        for h in history[-12:]:
-            if not isinstance(h, dict):
-                continue
-            role = str(h.get("role") or "").strip().lower()
-            text = str(h.get("text") or "").strip()
-            if role in ("user", "assistant") and text:
-                history_lines.append(f"{role.capitalize()}: {text}")
-    history_block = ("\n\nPrior conversation:\n" + "\n".join(history_lines)) if history_lines else ""
-
-    prompt = (
-        "You are an Edit Agent helping the user iterate on a saved automation "
-        "workflow. The workflow's current steps are listed below. The user has "
-        "asked for a modification.\n\n"
-        "Respond with STRICT JSON, no prose, no fence. Schema:\n"
-        '  {"reply": string, '
-        '"step_idx": int | null, '
-        '"new_text": string | null, '
-        '"explanation": string | null}\n\n'
-        "Rules:\n"
-        "- `reply` is a short conversational acknowledgement (1-2 sentences).\n"
-        "- If the user is asking a question or for clarification, set step_idx=null and new_text=null.\n"
-        "- If the user is asking to change a specific step, set step_idx (0-based) and new_text to the FULL replacement prompt for that step.\n"
-        "- `explanation` describes the change in user-facing terms.\n"
-        "- Never invent new steps. Never remove steps. Only edit existing ones.\n"
-        "- Use prior conversation context to disambiguate follow-ups (e.g. \"yes do that\" should reference the last proposal).\n\n"
-        f"Workflow steps:\n{steps_lines}{fix_context}{history_block}\n\n"
-        f"User: {message}"
-    )
-    try:
-        resp = await client.messages.create(
-            model=aux_model,
-            max_tokens=400,
-            messages=[
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": "{"},
-            ],
-        )
-        out = ""
-        if isinstance(resp.content, list):
-            for block in resp.content:
-                if getattr(block, "type", None) == "text":
-                    out += getattr(block, "text", "")
-        raw = "{" + out.strip() if not out.strip().startswith("{") else out.strip()
-        m = re.search(r"\{.*\}", raw, flags=re.DOTALL)
-        if m:
-            raw = m.group(0)
-        data = json.loads(raw)
-    except Exception as e:
-        logger.warning("propose-edit: aux LLM failed: %s", e)
-        raise HTTPException(status_code=400, detail="Couldn't generate a proposal")
-    reply = str(data.get("reply") or "").strip()[:600]
-    step_idx = data.get("step_idx")
-    new_text = data.get("new_text")
-    explanation = str(data.get("explanation") or "").strip()[:600]
-    out: dict = {"reply": reply}
-    if isinstance(step_idx, int) and 0 <= step_idx < len(steps_in) and isinstance(new_text, str) and new_text.strip():
-        out["step_idx"] = step_idx
-        out["new_text"] = new_text.strip()
-        if explanation:
-            out["explanation"] = explanation
-    return out
-
-
 @workflows.router.post("/{workflow_id}/edit-agent-session")
 async def edit_agent_session(workflow_id: str):
     """Create (or return existing) Edit Agent session for this workflow.
@@ -617,18 +574,23 @@ async def edit_agent_session(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    # Track the edit-agent session id on the workflow record so the FE
-    # can find it after a reload. Persisted under a private namespace
-    # field added below; we attach it lazily so existing workflows don't
-    # need a migration.
+    # Reattach to an in-progress edit session (the user closed and reopened the
+    # card mid-edit): resume the existing draft, don't reset it. Save/Discard
+    # clear edit_agent_session_id, so once an edit is finished the next entry
+    # falls through to the fresh path below: a brand-new chat against the
+    # current committed workflow.
     existing_id = getattr(wf, "edit_agent_session_id", None) or None
     if existing_id:
-        from backend.apps.agents.agent_manager import agent_manager
-        if existing_id in agent_manager.sessions:
-            return {"session_id": existing_id}
-        # In-memory miss but on disk it's still valid; fall through to
-        # rehydrate via launch_agent OR return id for the FE to fetch.
+        if wf.draft_steps is None:
+            wf.draft_steps = list(wf.steps)
+            storage.save_workflow(wf)
         return {"session_id": existing_id}
+
+    # Fresh edit session: snapshot a clean draft from the current committed
+    # steps so the Edit Agent's edits stage there (never the live workflow)
+    # until the user clicks Save, and Discard reverts to exactly this.
+    wf.draft_steps = list(wf.steps)
+    storage.save_workflow(wf)
 
     from backend.apps.agents.core.models import AgentConfig
     from backend.apps.agents.agent_manager import agent_manager
@@ -652,8 +614,10 @@ async def edit_agent_session(workflow_id: str):
         "1. When the user describes a change, briefly confirm what you'll do.\n"
         "2. If you need to look at files / search / activate an MCP / etc. to "
         "verify your idea, use your tools.\n"
-        "3. To change the workflow's steps, call the matching tool; each "
-        "persists immediately and refreshes the user's card live:\n"
+        "3. To change the workflow's steps, call the matching tool. Your edits "
+        "STAGE to a pending draft and are fully reversible; nothing touches the "
+        "live workflow until the user clicks Save. The card shows your draft as "
+        "you go:\n"
         "   - EditWorkflowStep(workflow_id, step_idx, new_text, new_label) to "
         "rewrite a step. ALWAYS pass new_label (a fresh 3-5 word summary) so "
         "the card reflects the change instead of the stale old label.\n"
@@ -661,8 +625,11 @@ async def edit_agent_session(workflow_id: str):
         "   - DeleteWorkflowStep(workflow_id, step_idx) to remove one.\n"
         "   Confirm via AskUserQuestion FIRST if there's any ambiguity.\n"
         "4. Call TestWorkflow(workflow_id) to spawn a sibling Test Agent that "
-        "runs the latest version end-to-end. Use this after a change to verify "
-        "it works.\n\n"
+        "runs the current draft end-to-end. Use this after a change to verify "
+        "it works.\n"
+        "5. After a test finishes, call ReadTestTranscript(workflow_id) to read "
+        "the Test Agent's full transcript and diagnose what happened before "
+        "proposing further edits.\n\n"
         "Be brief in your replies. Don't restate the whole workflow back; the "
         "user can see it. Just confirm what changed and what you're doing.\n"
         "Write like a normal chat: plain conversational sentences. When you "
@@ -689,6 +656,80 @@ async def edit_agent_session(workflow_id: str):
     return {"session_id": session.id}
 
 
+async def p_end_edit_session(wf) -> None:
+    """End a workflow's Edit-Agent session (after Save or Discard) so the next
+    edit opens a brand-new chat against the current workflow instead of
+    resuming the old conversation that still references the dropped edits."""
+    sid = getattr(wf, "edit_agent_session_id", None)
+    wf.edit_agent_session_id = None
+    if not sid:
+        return
+    try:
+        from backend.apps.agents.agent_manager import agent_manager
+        await agent_manager.close_session(sid)
+    except Exception:
+        logger.debug("could not close edit session %s", sid, exc_info=True)
+
+
+@workflows.router.post("/{workflow_id}/draft/commit")
+async def commit_draft(workflow_id: str):
+    """Commit the Edit-Agent draft: draft_steps become the live steps."""
+    wf = storage.get_workflow(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if wf.draft_steps is None:
+        await p_end_edit_session(wf)
+        storage.save_workflow(wf)
+        return _enriched(wf)
+    before = wf.model_dump(mode="json")
+    wf.steps = wf.draft_steps
+    wf.draft_steps = None
+    await p_relabel_changed_steps(wf, before.get("steps") or [])
+    p_prune_step_tool_usage(wf)
+    wf.updated_at = datetime.now()
+    if not wf.icon:
+        wf.icon = _derive_icon(wf)
+    wf.next_run_at = scheduler.compute_next_fire(wf) if wf.schedule.enabled else None
+    await p_end_edit_session(wf)
+    storage.save_workflow(wf)
+    audit.log_change(wf.id, "user", before, wf.model_dump(mode="json"))
+    scheduler.kick()
+    enriched = _enriched(wf)
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager
+        await ws_manager.broadcast_global("workflow:updated", {
+            "workflow_id": wf.id,
+            "workflow": enriched,
+        })
+    except Exception:
+        pass
+    return enriched
+
+
+@workflows.router.post("/{workflow_id}/draft/discard")
+async def discard_draft(workflow_id: str):
+    """Throw away the Edit-Agent draft; the live workflow is untouched."""
+    wf = storage.get_workflow(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    # Discard wipes the whole edit session: drop the draft AND end the chat, so
+    # reopening Edit is a fresh conversation against the current committed steps.
+    wf.draft_steps = None
+    await p_end_edit_session(wf)
+    p_prune_step_tool_usage(wf)
+    storage.save_workflow(wf)
+    enriched = _enriched(wf)
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager
+        await ws_manager.broadcast_global("workflow:updated", {
+            "workflow_id": wf.id,
+            "workflow": enriched,
+        })
+    except Exception:
+        pass
+    return enriched
+
+
 @workflows.router.post("/{workflow_id}/test-run")
 async def test_run_workflow(workflow_id: str, body: dict):
     """Spawn a Test Agent session running the (possibly-unsaved) draft.
@@ -705,16 +746,29 @@ async def test_run_workflow(workflow_id: str, body: dict):
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
     draft_steps = (body or {}).get("steps")
-    steps_texts: list[str]
+    step_entries: list[WorkflowStep]
     if isinstance(draft_steps, list) and draft_steps:
-        steps_texts = [str(s.get("text") or "") for s in draft_steps if isinstance(s, dict) and s.get("text")]
+        step_entries = [
+            WorkflowStep(**s)
+            for s in draft_steps
+            if isinstance(s, dict) and str(s.get("text") or "").strip()
+        ]
     else:
-        steps_texts = [s.text for s in wf.steps if s.text and s.text.strip()]
-    if not steps_texts:
+        # No explicit override: prefer the pending draft so a mid-edit
+        # TestWorkflow call (from the Edit Agent itself) tests the draft.
+        src = wf.draft_steps if wf.draft_steps is not None else wf.steps
+        step_entries = [s for s in src if s.text and s.text.strip()]
+    if not step_entries:
         raise HTTPException(status_code=400, detail="Workflow has no steps to test")
 
     from backend.apps.agents.core.models import AgentConfig
-    from backend.apps.agents.agent_manager import agent_manager
+    from backend.apps.agents.agent_manager import (
+        agent_manager,
+        clear_workflow_approval_memory,
+        get_workflow_step_usage,
+        set_workflow_approval_memory,
+        set_workflow_approval_step,
+    )
     from backend.apps.workflows import executor
 
     config = AgentConfig(
@@ -729,20 +783,80 @@ async def test_run_workflow(workflow_id: str, body: dict):
         dashboard_id=wf.dashboard_id,
     )
     session = await agent_manager.launch_agent(config)
+    session.workflow_test_state = "running"
+    set_workflow_approval_memory(
+        session.id,
+        decisions=dict(wf.remembered_approvals),
+        step_usage={sid: dict(tools) for sid, tools in wf.step_tool_usage.items()},
+        remember=executor.p_make_remember_approval(wf.id),
+        ask_timeout=600.0,
+    )
+    # Point the workflow at its latest test session so ReadTestTranscript can
+    # fetch the transcript on demand.
+    try:
+        wf.last_test_session_id = session.id
+        storage.save_workflow(wf)
+    except Exception:
+        logger.debug("could not persist last_test_session_id", exc_info=True)
+
+    async def _set_test_state(state: str) -> None:
+        sess = agent_manager.sessions.get(session.id)
+        if sess is not None:
+            sess.workflow_test_state = state
+        try:
+            from backend.apps.agents.core.ws_manager import ws_manager
+            await ws_manager.broadcast_global("agent:test_state", {
+                "session_id": session.id,
+                "state": state,
+            })
+        except Exception:
+            pass
 
     async def _drive_test() -> None:
+        final = "complete"
         try:
-            for step in steps_texts:
-                await agent_manager.send_message(session.id, step)
+            for step in step_entries:
+                set_workflow_approval_step(session.id, step.id)
+                await agent_manager.send_message(session.id, step.text)
                 await executor._await_session_idle(session.id)
                 sess_state = agent_manager.sessions.get(session.id)
                 if sess_state is not None and getattr(sess_state, "status", None) == "error":
+                    final = "error"
                     return
         except Exception:
             logger.exception("test-run drive loop failed")
+            final = "error"
+        finally:
+            try:
+                executor.p_persist_step_tool_usage(wf.id, get_workflow_step_usage(session.id))
+            except Exception:
+                logger.exception("test-run step usage persist failed")
+            set_workflow_approval_step(session.id, None)
+            clear_workflow_approval_memory(session.id)
+            await _set_test_state(final)
     asyncio.create_task(_drive_test())
 
     return {"session_id": session.id}
+
+
+@workflows.router.get("/{workflow_id}/test-transcript")
+async def test_transcript(workflow_id: str):
+    """Full transcript of the workflow's most recent Test Agent session.
+
+    Backs the Edit Agent's ReadTestTranscript tool: it needs the Test Agent's
+    entire chat history (not just a final output) to diagnose a run.
+    """
+    wf = storage.get_workflow(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if not wf.last_test_session_id:
+        return {"transcript": "", "status": "none"}
+    from backend.apps.agents.agent_manager import agent_manager
+    sess = agent_manager.sessions.get(wf.last_test_session_id)
+    if sess is None:
+        return {"transcript": "", "status": "unavailable"}
+    transcript = p_render_test_transcript(getattr(sess, "messages", []) or [])
+    return {"transcript": transcript, "status": getattr(sess, "status", "") or ""}
 
 
 @workflows.router.post("/{workflow_id}/schedule-agent-session")

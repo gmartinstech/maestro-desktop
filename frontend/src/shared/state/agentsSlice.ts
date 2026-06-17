@@ -68,6 +68,9 @@ export interface AgentSession {
   id: string;
   name: string;
   status: 'draft' | 'running' | 'waiting_approval' | 'completed' | 'error' | 'stopped';
+  /** For workflow Test Agent sessions: drives the test card's footer
+   *  (running -> red Force Stop; complete/error -> green close). */
+  workflow_test_state?: 'running' | 'complete' | 'error' | null;
   provider: string;
   model: string;
   mode: string;
@@ -701,6 +704,14 @@ const agentsSlice = createSlice({
       if (action.payload.status === 'running' && !state.trackedNotificationIds.includes(action.payload.sessionId)) {
         state.trackedNotificationIds.push(action.payload.sessionId);
       }
+    },
+
+    setSessionTestState(
+      state,
+      action: PayloadAction<{ sessionId: string; state: 'running' | 'complete' | 'error' }>
+    ) {
+      const session = state.sessions[action.payload.sessionId];
+      if (session) session.workflow_test_state = action.payload.state;
     },
 
     setSessionConnState(
@@ -1408,6 +1419,7 @@ export const {
   updateSession,
   updateSessionStatus,
   setSessionConnState,
+  setSessionTestState,
   addMessage,
   addOptimisticMessage,
   markOptimisticFailed,

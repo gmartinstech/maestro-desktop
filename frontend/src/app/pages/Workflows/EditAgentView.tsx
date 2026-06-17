@@ -6,18 +6,20 @@
 // fills the rest. In fix mode (Image #48) the first message is a
 // failure-context prompt and a red prefix card renders above the chat.
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import BuildRounded from '@mui/icons-material/BuildRounded';
 import KeyboardArrowDownRounded from '@mui/icons-material/KeyboardArrowDownRounded';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { clearFixSeed, type Workflow } from '@/shared/state/workflowsSlice';
+import { clearFixSeed, commitDraft, discardDraft, setCardSidecar, updateWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
 import { fetchSession } from '@/shared/state/agentsSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import StepList from './StepList';
 import AgentChat from '@/app/pages/AgentChat/AgentChat';
+import { useOpenSidecar } from './WorkflowCardLiveViews';
+import EditAgentSavePopovers, { type SavePhase } from './EditAgentSavePopovers';
 
 interface Props {
   workflow: Workflow;
@@ -43,9 +45,15 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
   // (without going through Fix-with-Agent) doesn't re-show the prefix.
   useEffect(() => () => { dispatch(clearFixSeed(workflow.id)); }, [dispatch, workflow.id]);
 
-  // Spawn (or reattach to) the sticky Edit Agent session on mount.
+  // On entering edit, ALWAYS hit edit-agent-session once (not just when the
+  // session is missing): the call reattaches the sticky chat AND, on the
+  // backend, snapshots a fresh draft from the current committed steps. If we
+  // skipped it when a session already existed (re-edit), the draft would never
+  // be created and edits would leak onto the live workflow.
+  const didInit = useRef(false);
   useEffect(() => {
-    if (editSessionId) return;
+    if (didInit.current) return;
+    didInit.current = true;
     let alive = true;
     (async () => {
       try {
@@ -63,7 +71,7 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
       } catch { /* best-effort */ }
     })();
     return () => { alive = false; };
-  }, [editSessionId, workflow.id, dispatch]);
+  }, [workflow.id, dispatch]);
 
   // First-turn seed: post the hidden opener so the agent's first reply
   // is the friendly "How would you like to modify the workflow..." prompt
@@ -96,30 +104,133 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
     })();
   }, [editSessionId, editSession, seedSent, isFixMode, fixSeed, steps.length]);
 
+  // Save flow: Save -> "test first?" popover -> optional test run -> "confirm
+  // save" popover. The step edits are staged in workflow.draft_steps; commit
+  // makes them live, discard throws them away.
+  const openSidecar = useOpenSidecar(workflow.id);
+  const [savePhase, setSavePhase] = useState<SavePhase>('idle');
+  const [saveAnchorEl, setSaveAnchorEl] = useState<HTMLElement | null>(null);
+  const [testSessionId, setTestSessionId] = useState<string | null>(null);
+  const draftSteps = workflow.draft_steps ?? steps;
+  // A draft always exists in edit mode (we snapshot on entry), so only flag
+  // "unsaved" once the draft actually diverges from the committed steps.
+  const hasChanges = workflow.draft_steps != null && JSON.stringify(workflow.draft_steps) !== JSON.stringify(workflow.steps);
+
+  const toSaved = useCallback(() => {
+    dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'saved' } }));
+  }, [dispatch, workflow.id]);
+
+  const clearSidecar = useCallback(() => {
+    dispatch(setCardSidecar({ workflowId: workflow.id, sessionId: null, kind: null }));
+  }, [dispatch, workflow.id]);
+
+  const stopTest = useCallback(async () => {
+    if (!testSessionId) return;
+    try {
+      const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
+      await fetch(`${API_BASE}/agents/sessions/${encodeURIComponent(testSessionId)}/stop`, {
+        method: 'POST', headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+      });
+    } catch { /* best-effort */ }
+  }, [testSessionId]);
+
+  const onSaveClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    setSaveAnchorEl(e.currentTarget);
+    setSavePhase('ask-test');
+  }, []);
+
+  const onSaveNow = useCallback(async () => {
+    setSavePhase('idle');
+    await dispatch(commitDraft(workflow.id));
+    toSaved();
+  }, [dispatch, workflow.id, toSaved]);
+
+  const onRunTest = useCallback(async () => {
+    try {
+      const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
+      const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(workflow.id)}/test-run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        body: JSON.stringify({ steps: draftSteps }),
+      });
+      if (!res.ok) { setSavePhase('idle'); return; }
+      const data = await res.json();
+      const sid = data?.session_id as string | undefined;
+      if (!sid) { setSavePhase('idle'); return; }
+      setTestSessionId(sid);
+      // The Test Agent card now owns the post-test decision (Continue editing /
+      // Save workflow) in its own footer, so just close this popover.
+      setSavePhase('idle');
+      await openSidecar(sid, 'testing');
+    } catch { setSavePhase('idle'); }
+  }, [workflow.id, draftSteps, openSidecar]);
+
+  const onDiscardClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    setSaveAnchorEl(e.currentTarget);
+    setSavePhase('confirm-discard');
+  }, []);
+
+  const onConfirmDiscard = useCallback(async () => {
+    setSavePhase('idle');
+    if (testSessionId) { await stopTest(); clearSidecar(); }
+    await dispatch(discardDraft(workflow.id));
+    toSaved();
+  }, [dispatch, workflow.id, testSessionId, stopTest, clearSidecar, toSaved]);
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* The "tab with the workflow inside": a collapsible strip that peeks
           at the live steps (they update as the agent edits) without leaving
           the chat. The header's Save Workflow button drops back to the card. */}
       <Box sx={{ flexShrink: 0, mb: 1 }}>
-        <Box
-          onClick={() => setStepsOpen((x) => !x)}
-          role="button"
-          sx={{
-            display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'pointer',
-            fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary,
-            '&:hover': { color: c.text.primary },
-          }}>
-          <KeyboardArrowDownRounded sx={{ fontSize: 16, transform: stepsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s ease' }} />
-          Workflow ({steps.length} step{steps.length === 1 ? '' : 's'})
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+          <Box
+            onClick={() => setStepsOpen((x) => !x)}
+            role="button"
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'pointer',
+              fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary,
+              '&:hover': { color: c.text.primary },
+            }}>
+            <KeyboardArrowDownRounded sx={{ fontSize: 16, transform: stepsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s ease' }} />
+            Workflow ({draftSteps.length} step{draftSteps.length === 1 ? '' : 's'})
+          </Box>
+          {hasChanges && (
+            <Typography sx={{ fontSize: '0.74rem', color: c.text.muted }}>· unsaved</Typography>
+          )}
+          <Box sx={{ flex: 1 }} />
+          <Box
+            onClick={onDiscardClick}
+            role="button"
+            sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.muted, cursor: 'pointer', mr: 1, '&:hover': { color: c.status.error } }}>
+            Discard
+          </Box>
+          <Box
+            onClick={onSaveClick}
+            role="button"
+            sx={{
+              fontSize: '0.8rem', fontWeight: 700, color: '#fff', bgcolor: c.accent.primary,
+              px: 1.2, py: 0.35, borderRadius: 999, cursor: 'pointer',
+              '&:hover': { filter: 'brightness(1.05)' },
+            }}>
+            Save
+          </Box>
         </Box>
         {stepsOpen && (
           <Box sx={{ mt: 0.75 }}>
             {isFixMode && fixSeed && <FixPrefixCard seed={fixSeed} expanded={fixPrefixExpanded} onToggle={() => setFixPrefixExpanded((x) => !x)} />}
-            <StepList steps={steps} />
+            <StepList steps={draftSteps} />
           </Box>
         )}
       </Box>
+      <EditAgentSavePopovers
+        phase={savePhase}
+        anchorEl={saveAnchorEl}
+        onClose={() => setSavePhase('idle')}
+        onSaveNow={onSaveNow}
+        onRunTest={onRunTest}
+        onConfirmDiscard={onConfirmDiscard}
+      />
       {/* The card IS the chat. AgentChat owns the composer + message list +
           tool-call cards. Negative margins cancel the card body's p:2 so the
           thread runs edge-to-edge like a normal chat (it supplies its own px). */}
