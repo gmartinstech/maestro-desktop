@@ -343,7 +343,8 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
         if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) return;
 
         const el = target instanceof Element ? target : (target as Node).parentElement;
-        if (el?.closest('[role="dialog"], [role="presentation"], .MuiModal-root, .MuiPopover-root')) {
+
+        if (el?.closest('[role="dialog"], [role="presentation"], .MuiModal-root, .MuiPopover-root, [data-toolbar-pills]')) {
           return;
         }
         if (elementSelection?.selectMode && el?.closest('[data-select-type]')) {
@@ -415,10 +416,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
     return (
       <>
       {(inputOpen || historyOpen) && (
-        // Image #54: paired mode pills above the composer/popover.
-        // The two states are mutually exclusive: opening one closes the
-        // other so the body underneath only renders one thing at a time.
-        <Box sx={{ display: 'flex', gap: 0.5, mb: 0.75, pl: 0.25 }}>
+        <Box data-toolbar-pills sx={{ display: 'flex', gap: 0.5, mb: 0.75, pl: 0.25 }}>
           <Box
             onClick={() => {
               if (historyOpen) {

@@ -6,14 +6,14 @@
 // fills the rest. In fix mode (Image #48) the first message is a
 // failure-context prompt and a red prefix card renders above the chat.
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import BuildRounded from '@mui/icons-material/BuildRounded';
 import KeyboardArrowDownRounded from '@mui/icons-material/KeyboardArrowDownRounded';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { clearFixSeed, updateWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
+import { clearFixSeed, type Workflow } from '@/shared/state/workflowsSlice';
 import { fetchSession } from '@/shared/state/agentsSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import StepList from './StepList';
@@ -23,9 +23,12 @@ interface Props {
   workflow: Workflow;
   steps: Workflow['steps'];
   isFixMode?: boolean;
+  // The card header (in WorkflowCard) renders the model/time subtitle and the
+  // Save Workflow button, so it needs the live edit-agent session id.
+  onEditSessionIdChange?: (sessionId: string | null) => void;
 }
 
-export default function EditAgentView({ workflow, steps, isFixMode = false }: Props) {
+export default function EditAgentView({ workflow, steps, isFixMode = false, onEditSessionIdChange }: Props) {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const card = useAppSelector((s) => s.workflows.openCards[workflow.id]);
@@ -34,6 +37,8 @@ export default function EditAgentView({ workflow, steps, isFixMode = false }: Pr
   const [fixPrefixExpanded, setFixPrefixExpanded] = useState(false);
   const [editSessionId, setEditSessionId] = useState<string | null>(workflow.edit_agent_session_id || null);
   const [seedSent, setSeedSent] = useState(false);
+  // Surface the live session id to the card header (Save button + model/time).
+  useEffect(() => { onEditSessionIdChange?.(editSessionId); }, [editSessionId, onEditSessionIdChange]);
   // Clear the fix seed after the view unmounts so re-entering edit_agent
   // (without going through Fix-with-Agent) doesn't re-show the prefix.
   useEffect(() => () => { dispatch(clearFixSeed(workflow.id)); }, [dispatch, workflow.id]);
@@ -73,7 +78,11 @@ export default function EditAgentView({ workflow, steps, isFixMode = false }: Pr
     }
     const seed = isFixMode && fixSeed
       ? `The most recent run failed on Step ${fixSeed.stepIdx + 1} (${fixSeed.stepLabel}). Error: ${fixSeed.error}\n\nWalk me through what likely went wrong and propose a concrete prompt change for that step.`
-      : 'Greet me briefly, then ask: "How would you like to modify the workflow (e.g. filter out spam emails before summarizing)?"';
+      // A brand-new workflow has no steps yet, so open in build mode ("what
+      // should this do?") rather than the modify-an-existing-flow prompt.
+      : steps.length === 0
+        ? 'Greet me briefly, then ask: "What should this workflow do?"'
+        : 'Greet me briefly, then ask: "How would you like to modify the workflow (e.g. filter out spam emails before summarizing)?"';
     setSeedSent(true);
     (async () => {
       try {
@@ -85,37 +94,24 @@ export default function EditAgentView({ workflow, steps, isFixMode = false }: Pr
         });
       } catch { /* best-effort */ }
     })();
-  }, [editSessionId, editSession, seedSent, isFixMode, fixSeed]);
-
-  const onDone = useCallback(() => {
-    dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'saved' } }));
-  }, [dispatch, workflow.id]);
+  }, [editSessionId, editSession, seedSent, isFixMode, fixSeed, steps.length]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* The "tab with the workflow inside": a collapsible strip that peeks
           at the live steps (they update as the agent edits) without leaving
-          the chat. Done drops back to the compact workflow card. */}
+          the chat. The header's Save Workflow button drops back to the card. */}
       <Box sx={{ flexShrink: 0, mb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-          <Box
-            onClick={() => setStepsOpen((x) => !x)}
-            role="button"
-            sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'pointer',
-              fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary,
-              '&:hover': { color: c.text.primary },
-            }}>
-            <KeyboardArrowDownRounded sx={{ fontSize: 16, transform: stepsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s ease' }} />
-            Workflow ({steps.length} step{steps.length === 1 ? '' : 's'})
-          </Box>
-          <Box sx={{ flex: 1 }} />
-          <Box
-            onClick={onDone}
-            role="button"
-            sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.muted, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>
-            Done
-          </Box>
+        <Box
+          onClick={() => setStepsOpen((x) => !x)}
+          role="button"
+          sx={{
+            display: 'inline-flex', alignItems: 'center', gap: 0.25, cursor: 'pointer',
+            fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary,
+            '&:hover': { color: c.text.primary },
+          }}>
+          <KeyboardArrowDownRounded sx={{ fontSize: 16, transform: stepsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s ease' }} />
+          Workflow ({steps.length} step{steps.length === 1 ? '' : 's'})
         </Box>
         {stepsOpen && (
           <Box sx={{ mt: 0.75 }}>
@@ -187,4 +183,3 @@ function FixPrefixCard({ seed, expanded, onToggle }: { seed: { stepIdx: number; 
     </Box>
   );
 }
-

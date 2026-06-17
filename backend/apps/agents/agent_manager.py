@@ -1634,6 +1634,7 @@ class AgentManager:
             # exit code 1 / Check stderr output for details", which masks
             # transient capacity issues.
             _stderr_buffer: list[str] = []
+            _system_event_buffer: list[str] = []
 
             def _stderr_cb(line: str) -> None:
                 _stderr_buffer.append(line)
@@ -2490,6 +2491,12 @@ class AgentManager:
                     # Log system messages (MCP server status, errors, etc.)
                     if isinstance(message, SystemMessage):
                         raw = message.__dict__ if hasattr(message, '__dict__') else str(message)
+                        try:
+                            _system_event_buffer.append(json.dumps(raw, default=str))
+                            if len(_system_event_buffer) > 200:
+                                del _system_event_buffer[:100]
+                        except Exception:
+                            pass
                         logger.info(f"[MCP-DEBUG] SystemMessage: {raw}")
 
                     if isinstance(message, StreamEvent):
@@ -3063,6 +3070,7 @@ class AgentManager:
                         _current_turn_emitted = False
                         await asyncio.sleep(wait)
                         _stderr_buffer.clear()
+                        _system_event_buffer.clear()
                         if session.sdk_session_id:
                             options_kwargs["resume"] = session.sdk_session_id
                             options = ClaudeAgentOptions(**options_kwargs)
@@ -3105,7 +3113,10 @@ class AgentManager:
             # user can't recover by waiting, this is a tier-gate, not a rate
             # limit, so the UX matters.
             try:
-                _stderr_tail = "\n".join(_stderr_buffer[-50:])
+                _stderr_tail = "\n".join([
+                    "\n".join(_stderr_buffer[-50:]),
+                    "\n".join(_system_event_buffer[-50:]),
+                ])
             except Exception:
                 _stderr_tail = ""
             # If we already streamed a substantive assistant response this
@@ -3278,6 +3289,31 @@ class AgentManager:
                 except Exception:
                     logger.debug("submit_diagnostic model_error failed", exc_info=True)
                 error_msg = Message(role="system", content=f"Error: {str(e)}", branch_id=session.active_branch_id)
+                session.messages.append(error_msg)
+                await ws_manager.send_to_session(session_id, "agent:message", {
+                    "session_id": session_id,
+                    "message": error_msg.model_dump(mode="json"),
+                })
+            elif _is_transient_capacity_error(e, extra_text=_stderr_tail):
+                friendly_msg = (
+                    "provider_rate_limit: This model hit your account or "
+                    "session rate limit. Wait until the reset time shown by "
+                    "your provider, then send your message again, or switch "
+                    "to a different model."
+                )
+                try:
+                    from backend.apps.service.client import submit_diagnostic
+                    submit_diagnostic({
+                        "kind": "model_error",
+                        "subkind": "rate_limit",
+                        "model": session.model,
+                        "provider": session.provider,
+                        "connection_mode": getattr(load_settings(), "connection_mode", "own_key"),
+                        "error_preview": (f"{e!s}\n{_stderr_tail}")[:600],
+                    })
+                except Exception:
+                    logger.debug("submit_diagnostic transient_capacity failed", exc_info=True)
+                error_msg = Message(role="assistant", content=friendly_msg, branch_id=session.active_branch_id)
                 session.messages.append(error_msg)
                 await ws_manager.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,

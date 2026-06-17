@@ -11,8 +11,11 @@
 
 import React from 'react';
 import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
 import TextareaAutosize from '@mui/material/TextareaAutosize';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import KeyboardArrowDownRounded from '@mui/icons-material/KeyboardArrowDownRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
@@ -29,6 +32,7 @@ interface Props {
   framed?: boolean;
   // Edit mode
   onChangeStep?: (idx: number, text: string) => void;
+  onDeleteStep?: (idx: number, id: string) => void;
   // Expand mode
   expandable?: boolean;
   expandedIds?: string[];
@@ -46,7 +50,7 @@ const CONNECTOR_X = CIRCLE_SIZE / 2;
 
 export default function StepList(props: Props) {
   const {
-    steps, framed, onChangeStep,
+    steps, framed, onChangeStep, onDeleteStep,
     expandable, expandedIds, onToggleExpand,
     stepStatuses, activeStepSubtitle, activeStepDuration,
     maxVisible = 4,
@@ -86,6 +90,42 @@ export default function StepList(props: Props) {
           const label = (s.label || '').trim() || firstWords(s.text, 6);
           const rawBody = (s.text || '').trim();
           const hasExpandableBody = Boolean(expandable && rawBody);
+          const canDelete = Boolean(onDeleteStep && steps.length > 1);
+          const deleteButton = onDeleteStep ? (
+            <Tooltip title={canDelete ? 'Remove step' : 'Workflow needs at least one step'}>
+              <span
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{ display: 'inline-flex' }}
+              >
+                <IconButton
+                  size="small"
+                  aria-label={`Remove step ${idx + 1}`}
+                  disabled={!canDelete}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (canDelete) onDeleteStep(idx, s.id);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    p: 0,
+                    color: c.text.muted,
+                    flexShrink: 0,
+                    opacity: canDelete ? 0.72 : 0.35,
+                    '&:hover': {
+                      color: c.status.error,
+                      bgcolor: c.status.errorBg,
+                      opacity: 1,
+                    },
+                  }}
+                >
+                  <DeleteOutlineRounded sx={{ fontSize: 16 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : null;
 
           return (
             <Box key={s.id} sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -151,6 +191,7 @@ export default function StepList(props: Props) {
                           {activeStepDuration}
                         </Typography>
                       )}
+                      {deleteButton}
                       {hasExpandableBody && !isActive && (
                         <KeyboardArrowDownRounded sx={{
                           fontSize: 18,
@@ -185,7 +226,6 @@ export default function StepList(props: Props) {
                       p: 1,
                       borderRadius: `${c.radius.md}px`,
                       bgcolor: c.bg.elevated,
-                      border: `1px solid ${c.border.subtle}`,
                     }}>
                       <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                         {rawBody}

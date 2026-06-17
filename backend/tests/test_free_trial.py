@@ -48,6 +48,17 @@ def test_exhaustion_is_classified_and_not_retried():
     assert not _is_transient_capacity_error(Exception("free_trial_exhausted"))
 
 
+def test_generic_cli_failure_uses_sdk_system_events_for_rate_limits():
+    system_event_tail = (
+        '{"subtype":"api_retry","data":{"error_status":429,'
+        '"error":"rate_limit","max_retries":10}}'
+    )
+    assert _is_transient_capacity_error(
+        Exception("Command failed with exit code 1"),
+        extra_text=system_event_tail,
+    )
+
+
 def test_has_own_model_never_shadows_a_real_provider():
     assert not _has_own_model(AppSettings(connection_mode="free-trial", free_trial_token="x"))
     assert not _has_own_model(AppSettings())

@@ -111,7 +111,17 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
       ctaAction: 'upgrade',
     };
   }
-  // Transient throttle: Anthropic's upstream 429/overload or our own pool-shed. Not the user's
+  if (/provider_rate_limit|account'?s rate limit|session rate limit|This request would exceed your account'?s rate limit/i.test(text)) {
+    const reset = text.match(/reset after ([^)\\.]+)/i)?.[1];
+    return {
+      kind: 'network',
+      title: "You've hit this model's rate limit",
+      detail: reset
+        ? `This model can send more requests after ${reset}. Wait for that reset window, or switch to another model.`
+        : 'Wait for the reset window shown by your provider, or switch to another model.',
+    };
+  }
+  // Transient throttle: Anthropic's upstream overload or our own pool-shed. Not the user's
   // fault and not a plan cap, so don't say "upgrade", just tell them it's busy. claude.ai-style.
   if (/rate_limit_error|free_pool_busy|overloaded_error|too many requests/i.test(text)) {
     return {
