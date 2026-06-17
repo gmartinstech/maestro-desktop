@@ -138,16 +138,18 @@ Takeaways: the archive (Bug #2 fix) turns a broken/∞ first-app into a working
 SAME Defender-on-many-small-files cost as cold app-startup (Task #9) -- the one
 lever that would shrink both.
 
-### Task #10 — VERIFIED on the real code-signed build (v1.3.87)
+### Task #10 — VERIFIED on the real code-signed build (v1.3.86)
 
 Downloaded the signed draft-release installer, verified signature, installed, and
 measured on this Windows 11 box. All numbers are from the packaged app, not dev.
+(Shipped as v1.3.86 on the fixed code; the earlier v1.3.87 build was identical
+bits and is abandoned. Numbers below are the v1.3.86 run; v1.3.87 matched.)
 
-| metric | baseline (1.2.x) | signed v1.3.87 | result |
+| metric | baseline (1.2.x) | signed v1.3.86 | result |
 | --- | --- | --- | --- |
-| installer download | n/a | 371.5 MB @ 23.5 MB/s (15.8 s) | signed: Authenticode **Valid** (CN=Eric Zeng) |
-| install time | n/a | ~9.3 s | Squirrel |
-| **cold backend-http-ready** | **54-138 s** | **22.5 s** | **~75-84% faster** |
+| installer download | n/a | 371.5 MB @ 27.1 MB/s (13.7 s) | signed: Authenticode **Valid** (CN=Eric Zeng) |
+| install time | n/a | ~6.3 s | Squirrel |
+| **cold backend-http-ready** | **54-138 s** | **22.6 s** | **~75-84% faster** |
 | **warm backend-http-ready** | **9-10 s** | **5.0 s** | **~50% faster, under the 10s goal** |
 | app.asar size | ~607 MB | **2.1 MB** | #9 item 4 confirmed |
 | asar contains python-env/build-staging | yes | **no** | confirmed |
