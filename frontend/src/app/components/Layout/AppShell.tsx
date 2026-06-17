@@ -23,7 +23,7 @@ import { LayoutGrid } from 'lucide-react';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Settings as LucideSettings } from 'lucide-react';
 import { Palette } from 'lucide-react';
-import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Sparkles } from 'lucide-react';
 import { AnimatedPanelLeft } from './animatedIcons';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
@@ -150,6 +150,12 @@ const AppShell: React.FC = () => {
   const freeTrialActive = useAppSelector((s) => {
     const d = s.settings.data as any;
     return !!(d && d.connection_mode === 'free-trial' && d.free_trial_token);
+  });
+  // Trial just ran dry (had an allotment, now 0, off the free lane): nudge a connect, but warmly,
+  // an upsell after the win, never the red error wall. Runs refill, so frame it as "for now".
+  const freeTrialSpent = useAppSelector((s) => {
+    const d = s.settings.data as any;
+    return !!(d && (d.free_trial_runs_limit ?? 0) > 0 && d.free_trial_remaining === 0 && d.connection_mode !== 'free-trial');
   });
   // Hold the banner until the boot free-trial mint settles, else a brand-new user sees it
   // flash red for the ~1-3s the trial takes to arm. (Offline shows immediately, it's its own signal.)
@@ -512,8 +518,8 @@ const AppShell: React.FC = () => {
             gap: 1.5,
             px: 2,
             py: 0.6,
-            bgcolor: 'rgba(239, 68, 68, 0.08)',
-            borderBottom: '1px solid rgba(239, 68, 68, 0.18)',
+            bgcolor: isOnline && freeTrialSpent ? `${c.accent.primary}14` : 'rgba(239, 68, 68, 0.08)',
+            borderBottom: isOnline && freeTrialSpent ? `1px solid ${c.accent.primary}30` : '1px solid rgba(239, 68, 68, 0.18)',
             flexShrink: 0,
             animation: showWarningBanner ? 'warning-fade-in 0.4s ease-out' : undefined,
             '@keyframes warning-fade-in': {
@@ -522,10 +528,32 @@ const AppShell: React.FC = () => {
             },
           }}
         >
-          <ErrorSlime size={22} />
-          <Typography sx={{ fontSize: '0.86rem', color: '#ef4444', flex: 1, fontWeight: 500, letterSpacing: '0.01em' }}>
+          {isOnline && freeTrialSpent
+            ? <Sparkles size={18} color={c.accent.primary} style={{ flexShrink: 0 }} />
+            : <ErrorSlime size={22} />}
+          <Typography sx={{ fontSize: '0.86rem', color: isOnline && freeTrialSpent ? c.accent.primary : '#ef4444', flex: 1, fontWeight: 500, letterSpacing: '0.01em' }}>
             {!isOnline
               ? 'No internet connection; agents cannot reach AI models or external services'
+              : freeTrialSpent
+              ? (
+                <>
+                  Your free runs are used up for now.{' '}
+                  <Box
+                    component="span"
+                    onClick={() => dispatch(openSettingsModal('models'))}
+                    sx={{
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      '&:hover': { opacity: 0.8 },
+                      transition: 'opacity 0.15s',
+                    }}
+                  >
+                    Connect your own Claude, ChatGPT, or Gemini
+                  </Box>
+                  {' '}to keep going.
+                </>
+              )
               : (
                 <>
                   No AI model connected.{' '}
