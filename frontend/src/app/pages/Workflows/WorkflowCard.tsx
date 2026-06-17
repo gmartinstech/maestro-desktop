@@ -201,6 +201,7 @@ const WorkflowCard: React.FC<Props> = ({
   // its id up here. The Save button pulses once when a turn finishes adding a
   // step, nudging the user that there's something worth saving.
   const isEditAgentView = card?.view === 'edit_agent' || card?.view === 'fix_agent';
+  const showHeaderSaveWorkflow = isEditAgentView && !(card?.view === 'edit_agent' && workflow?.source_session_id);
   const [editSessionId, setEditSessionId] = useState<string | null>(null);
   const editSession = useAppSelector((s) => editSessionId ? s.agents.sessions[editSessionId] : undefined);
   const [savePulseNonce, setSavePulseNonce] = useState(0);
@@ -516,7 +517,7 @@ const WorkflowCard: React.FC<Props> = ({
           </>
         )}
         {runs && runs.length > 0 && <RunSparkline runs={runs} />}
-        {!isDraft && workflow && isEditAgentView && (
+        {!isDraft && workflow && showHeaderSaveWorkflow && (
           <Tooltip title={steps.length > 0 ? 'Save the workflow and close the editor' : 'Add at least one step before saving'}>
             <Box
               role="button"

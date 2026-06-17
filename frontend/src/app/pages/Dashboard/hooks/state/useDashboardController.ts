@@ -150,6 +150,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     isActive,
     sessions,
     cards,
+    workflowOpenCards,
     layoutInitialized,
     autoRevealSubAgents,
     expandedSessionIds,

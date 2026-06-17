@@ -17,6 +17,7 @@ interface UseSubAgentLifecycleArgs {
   isActive: boolean;
   sessions: Record<string, AgentSession>;
   cards: Record<string, CardPosition>;
+  workflowOpenCards: Record<string, { sidecarSessionId?: string | null; sidecarKind?: string | null }>;
   layoutInitialized: boolean;
   autoRevealSubAgents: boolean;
   expandedSessionIds: string[];
@@ -26,6 +27,7 @@ export function useSubAgentLifecycle({
   isActive,
   sessions,
   cards,
+  workflowOpenCards,
   layoutInitialized,
   autoRevealSubAgents,
   expandedSessionIds,
@@ -42,6 +44,11 @@ export function useSubAgentLifecycle({
 
     const subSessions = Object.values(sessions).filter(
       (s) => (s.mode === 'sub-agent' || s.mode === 'invoked-agent') && s.parent_session_id,
+    );
+    const workflowSidecarSessionIds = new Set(
+      Object.values(workflowOpenCards || {})
+        .map((card) => card.sidecarSessionId || null)
+        .filter((id): id is string => Boolean(id)),
     );
 
     // 1) Auto-reveal newly spawned sub-agents (skip already-terminal ones on load)
@@ -103,6 +110,7 @@ export function useSubAgentLifecycle({
     // 2) Auto-collapse sub-agents when they complete
     const TERMINAL = new Set(['completed', 'error', 'stopped']);
     for (const sub of subSessions) {
+      if (workflowSidecarSessionIds.has(sub.id)) continue;
       const prev = prevSubStatusRef.current[sub.id];
       if (prev !== sub.status && TERMINAL.has(sub.status) && cards[sub.id]) {
         dispatch(collapseSession(sub.id));
@@ -121,6 +129,7 @@ export function useSubAgentLifecycle({
       if (prev !== parent.status && TERMINAL.has(parent.status)) {
         const children = subSessions.filter((s) => s.parent_session_id === pid);
         for (const child of children) {
+          if (workflowSidecarSessionIds.has(child.id)) continue;
           if (!cards[child.id]) continue;
           dispatch(collapseSession(child.id));
           dispatch(removeCard(child.id));
@@ -136,5 +145,5 @@ export function useSubAgentLifecycle({
       if (parent) newParentStatuses[pid] = parent.status;
     }
     prevParentStatusRef.current = newParentStatuses;
-  }, [isActive, sessions, cards, layoutInitialized, autoRevealSubAgents, dispatch]);
+  }, [isActive, sessions, cards, workflowOpenCards, layoutInitialized, autoRevealSubAgents, dispatch]);
 }

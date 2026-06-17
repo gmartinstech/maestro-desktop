@@ -13,6 +13,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import CloseIcon from '@mui/icons-material/Close';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import CalendarMonthRounded from '@mui/icons-material/CalendarMonthRounded';
 import { motion } from 'framer-motion';
 import {
   AgentSession,
@@ -40,7 +41,7 @@ import { useDashboardActive } from '@/shared/hooks/useDashboardActive';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canvasInteractionState';
-import { createWorkflow, openWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
+import { createWorkflow, openWorkflowCard, setCardSidecar, type Workflow } from '@/shared/state/workflowsSlice';
 import { addWorkflowCard, setWorkflowCardPosition, setWorkflowCardSize } from '@/shared/state/dashboardLayoutSlice';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import { getAgentWorkTime, fmtSeconds } from '@/shared/agentWorkTime';
@@ -266,6 +267,16 @@ const AgentCard: React.FC<Props> = ({
   //      which is confusing identity collapse.
   const workflowRunsMap = useAppSelector((s) => s.workflows.runs);
   const workflowItems = useAppSelector((s) => s.workflows.items);
+  const linkedWorkflowSidecarId = useAppSelector((s) => {
+    const entry = Object.values(s.workflows.openCards).find((card) => card.sidecarSessionId === session.id);
+    return entry?.workflowId ?? null;
+  });
+  const sourceWorkflow = useMemo(() => {
+    for (const wf of Object.values(workflowItems || {})) {
+      if (wf.source_session_id === session.id) return wf;
+    }
+    return null;
+  }, [workflowItems, session.id]);
   const isWorkflowRunnerSession = useMemo(() => {
     // A Test Agent (spawned to validate a workflow draft) isn't a chat to
     // convert; it carries workflow_test_state.
@@ -275,11 +286,22 @@ const AgentCard: React.FC<Props> = ({
         if (r.session_id === session.id) return true;
       }
     }
-    for (const wf of Object.values(workflowItems || {})) {
-      if (wf.source_session_id === session.id) return true;
-    }
-    return false;
-  }, [workflowRunsMap, workflowItems, session.id, session.workflow_test_state]);
+    return Boolean(sourceWorkflow);
+  }, [workflowRunsMap, sourceWorkflow, session.id, session.workflow_test_state]);
+  const openSourceWorkflowScheduling = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (!sourceWorkflow) return;
+    dispatch(addWorkflowCard({ workflowId: sourceWorkflow.id, sourceSessionId: null, expandedSessionIds }));
+    dispatch(setWorkflowCardPosition({ workflowId: sourceWorkflow.id, x: cardX, y: cardY }));
+    dispatch(setWorkflowCardSize({ workflowId: sourceWorkflow.id, width: cardWidth, height: cardHeight }));
+    dispatch(removeCard(session.id));
+    dispatch(openWorkflowCard({ workflowId: sourceWorkflow.id, sourceSessionId: null, view: 'saved', draft: null, showScheduleNudge: true }));
+  }, [cardHeight, cardWidth, cardX, cardY, dispatch, expandedSessionIds, session.id, sourceWorkflow]);
+  const showSourceWorkflowSchedule =
+    !!sourceWorkflow &&
+    !sourceWorkflow.schedule?.enabled &&
+    (session.status === 'completed' || session.status === 'stopped') &&
+    session.messages.length >= 2;
   // Curated picker label with a tidy fallback for unknowns.
   const friendlyModelLabel = useMemo(() => {
     const value = session.model;
@@ -522,6 +544,9 @@ const AgentCard: React.FC<Props> = ({
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (linkedWorkflowSidecarId) {
+      dispatch(setCardSidecar({ workflowId: linkedWorkflowSidecarId, sessionId: null, kind: null }));
+    }
     dispatch(collapseSession(session.id));
     dispatch(removeCard(session.id));
     if (glowEntry) {
@@ -803,7 +828,7 @@ const AgentCard: React.FC<Props> = ({
             <InlineEditableTitle
               value={displayChatTitle(session)}
               onCommit={(name) => dispatch(renameSession({ sessionId: session.id, name }))}
-              sx={{ flex: 1, color: c.text.primary, fontWeight: 600, fontSize: '0.95rem' }}
+              sx={{ flex: '0 1 auto', minWidth: 0, maxWidth: '100%', color: c.text.primary, fontWeight: 600, fontSize: '0.95rem' }}
             >
               <Typewriter
                 value={displayChatTitle(session)}
@@ -859,6 +884,29 @@ const AgentCard: React.FC<Props> = ({
             onPointerDown={(e) => e.stopPropagation()}
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, ml: 0.5 }}
           >
+            {showSourceWorkflowSchedule && (
+              <Tooltip title="Schedule the workflow made from this chat">
+                <Box
+                  role="button"
+                  onClick={openSourceWorkflowScheduling}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  sx={{
+                    display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                    color: '#fff',
+                    bgcolor: c.accent.primary,
+                    border: `1px solid ${c.accent.primary}`,
+                    fontSize: '0.78rem', fontWeight: 700,
+                    px: 1.1, py: 0.5,
+                    borderRadius: `${c.radius.md}px`,
+                    cursor: 'pointer',
+                    '&:hover': { filter: 'brightness(1.05)' },
+                  }}
+                >
+                  <CalendarMonthRounded sx={{ fontSize: 14 }} />
+                  Schedule Workflow
+                </Box>
+              </Tooltip>
+            )}
             {(session.status === 'completed' || session.status === 'stopped') && session.messages.length >= 2 && !isWorkflowRunnerSession && (
               <Tooltip title="Turn this chat into a reusable, schedulable workflow">
                 <Box

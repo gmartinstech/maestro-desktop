@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import InputBase from '@mui/material/InputBase';
@@ -28,6 +28,8 @@ export default function InlineEditableTitle({ value, onCommit, sx, placeholder, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [inputWidth, setInputWidth] = useState<number | null>(null);
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -35,6 +37,12 @@ export default function InlineEditableTitle({ value, onCommit, sx, placeholder, 
       inputRef.current.select();
     }
   }, [editing]);
+
+  useLayoutEffect(() => {
+    if (!editing) return;
+    const measured = measureRef.current?.getBoundingClientRect().width ?? 0;
+    setInputWidth(Math.ceil(measured) + 2);
+  }, [draft, editing, placeholder]);
 
   const begin = useCallback(() => { setDraft(value); setEditing(true); }, [value]);
 
@@ -46,20 +54,43 @@ export default function InlineEditableTitle({ value, onCommit, sx, placeholder, 
 
   if (editing) {
     return (
-      <InputBase
-        inputRef={inputRef}
-        data-no-drag
-        value={draft}
-        placeholder={placeholder}
-        onPointerDown={(e) => e.stopPropagation()}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(); }
-          else if (e.key === 'Escape') { e.preventDefault(); setEditing(false); }
-        }}
-        sx={{ ...sx, '& input::placeholder': { color: c.text.muted, opacity: 1 } }}
-      />
+      <>
+        <Box
+          ref={measureRef}
+          component="span"
+          aria-hidden
+          sx={{
+            position: 'absolute',
+            visibility: 'hidden',
+            whiteSpace: 'pre',
+            pointerEvents: 'none',
+            ...sx,
+          }}
+        >
+          {draft || placeholder || ' '}
+        </Box>
+        <InputBase
+          inputRef={inputRef}
+          data-no-drag
+          value={draft}
+          placeholder={placeholder}
+          onPointerDown={(e) => e.stopPropagation()}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            else if (e.key === 'Escape') { e.preventDefault(); setEditing(false); }
+          }}
+          sx={{
+            ...sx,
+            width: inputWidth ? `${inputWidth}px` : 'auto',
+            minWidth: 0,
+            maxWidth: '100%',
+            '& input': { width: '100%', minWidth: 0, p: 0 },
+            '& input::placeholder': { color: c.text.muted, opacity: 1 },
+          }}
+        />
+      </>
     );
   }
 
