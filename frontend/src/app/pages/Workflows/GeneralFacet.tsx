@@ -1,9 +1,12 @@
 import React from 'react';
 import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import InputBase from '@mui/material/InputBase';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import Tooltip from '@mui/material/Tooltip';
+import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch } from '@/shared/hooks';
@@ -124,6 +127,33 @@ export default function GeneralFacet({ draft, setDraft }: { draft: Workflow; set
               }}
               sx={{ flex: 1, fontSize: INPUT_FS, color: c.text.primary, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, px: 1.25, py: 0.6, lineHeight: 1.4 }}
             />
+            <Tooltip title={draft.steps.length > 1 ? 'Remove step' : 'Workflow needs at least one step'}>
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label={`Remove step ${idx + 1}`}
+                  disabled={draft.steps.length <= 1}
+                  onClick={() => {
+                    if (draft.steps.length <= 1) return;
+                    setDraft({ ...draft, steps: draft.steps.filter((_, i) => i !== idx) });
+                  }}
+                  sx={{
+                    width: 26,
+                    height: 26,
+                    p: 0,
+                    mt: 0.3,
+                    color: c.text.muted,
+                    flexShrink: 0,
+                    '&:hover': {
+                      color: c.status.error,
+                      bgcolor: c.status.errorBg,
+                    },
+                  }}
+                >
+                  <DeleteOutlineRounded sx={{ fontSize: 16 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
           </Box>
         ))}
       </Box>

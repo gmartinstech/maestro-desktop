@@ -126,6 +126,21 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
     dispatch(toggleExpandedStep({ workflowId, stepId }));
   }, [dispatch, workflowId]);
 
+  const onDeleteStep = useCallback((idx: number, stepId: string) => {
+    if (steps.length <= 1) return;
+    const nextSteps = steps.filter((_, i) => i !== idx);
+    dispatch(updateWorkflowCard({
+      workflowId,
+      patch: {
+        draft: {
+          ...liveDraft,
+          steps: nextSteps,
+        },
+        expandedStepIds: (card?.expandedStepIds || []).filter((id) => id !== stepId),
+      },
+    }));
+  }, [card?.expandedStepIds, dispatch, liveDraft, steps, workflowId]);
+
   const onChangeDescription = useCallback((value: string) => {
     dispatch(updateWorkflowCard({ workflowId, patch: { draft: { ...liveDraft, description: value } } }));
   }, [dispatch, workflowId, liveDraft]);
@@ -171,7 +186,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   void onChangeDescription;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
-      <StepList steps={steps} expandable expandedIds={expandedIds} onToggleExpand={onToggleStep} />
+      <StepList steps={steps} expandable expandedIds={expandedIds} onToggleExpand={onToggleStep} onDeleteStep={onDeleteStep} />
       <Box sx={{ flex: 1 }} />
       {/* Schedule prompt card. Soft accent tint + calendar icon. Accent is the
           same color the human-intervention (AskUserQuestion) popup uses. */}
@@ -267,6 +282,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
   void runs; void activeRunId;
   const card = useAppSelector((s) => s.workflows.openCards[workflow.id]);
   const expandedIds = card?.expandedStepIds || [];
+  const [deletingStepId, setDeletingStepId] = useState<string | null>(null);
   const openEditAgent = useCallback(() => {
     dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'edit_agent' } }));
   }, [dispatch, workflow.id]);
@@ -276,6 +292,19 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
   const onToggleStep = useCallback((stepId: string) => {
     dispatch(toggleExpandedStep({ workflowId: workflow.id, stepId }));
   }, [dispatch, workflow.id]);
+  const onDeleteStep = useCallback(async (idx: number, stepId: string) => {
+    if (workflow.steps.length <= 1 || deletingStepId) return;
+    setDeletingStepId(stepId);
+    try {
+      await dispatch(updateWorkflow({
+        id: workflow.id,
+        patch: { steps: workflow.steps.filter((_, i) => i !== idx) },
+        ifMatch: workflow.updated_at || null,
+      }));
+    } finally {
+      setDeletingStepId(null);
+    }
+  }, [deletingStepId, dispatch, workflow.id, workflow.steps, workflow.updated_at]);
 
   const scheduleLine = workflow.schedule.enabled ? describeSchedule(workflow) : 'Schedule this workflow';
   const scheduleClickable = !workflow.schedule.enabled;
@@ -288,6 +317,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
         expandable
         expandedIds={expandedIds}
         onToggleExpand={onToggleStep}
+        onDeleteStep={onDeleteStep}
       />
       <Box sx={{ flex: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
