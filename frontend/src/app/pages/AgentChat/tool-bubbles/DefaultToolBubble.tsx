@@ -61,6 +61,7 @@ export const DefaultToolBubble: React.FC<DefaultToolBubbleProps> = ({
   // already on screen. mcpCompact rows opt out (the group's row-fade handles them).
   const reveal = useMountReveal();
   const enterStyle = (!mcpCompact && !suppressReveal) ? reveal : {};
+  const canToggleDetails = !!inputSummary && !isStreaming;
 
   return (
     <Box
@@ -89,16 +90,16 @@ export const DefaultToolBubble: React.FC<DefaultToolBubbleProps> = ({
         } as any}
       >
         <Box
-          onClick={toggle}
+          onClick={canToggleDetails ? toggle : undefined}
           sx={{
             display: 'flex',
             alignItems: 'center',
             gap: 0.75,
             px: 1.5,
             py: mcpCompact ? 0.6 : 0.75,
-            cursor: isStreaming ? 'default' : 'pointer',
-            borderBottom: mcpCompact && showBody ? `1px solid ${c.border.subtle}` : 'none',
-            '&:hover': isStreaming ? {} : { bgcolor: 'rgba(0,0,0,0.02)' },
+            cursor: canToggleDetails ? 'pointer' : 'default',
+            borderBottom: mcpCompact && showBody && canToggleDetails ? `1px solid ${c.border.subtle}` : 'none',
+            '&:hover': canToggleDetails ? { bgcolor: 'rgba(0,0,0,0.02)' } : {},
           }}
         >
           {mcpInfo.isMcp && mcpInfo.service
@@ -186,7 +187,7 @@ export const DefaultToolBubble: React.FC<DefaultToolBubbleProps> = ({
           )}
           {showTimer && <ElapsedTimer startTime={call.timestamp} />}
 
-          {!isStreaming && (
+          {canToggleDetails && (
             <IconButton size="small" sx={{ color: c.text.tertiary, p: mcpCompact ? 0.15 : 0.25, flexShrink: 0 }}>
               {showBody ? (
                 <ExpandLessIcon sx={{ fontSize: mcpCompact ? 16 : 18 }} />
@@ -197,7 +198,7 @@ export const DefaultToolBubble: React.FC<DefaultToolBubbleProps> = ({
           )}
         </Box>
 
-        <Collapse in={showBody}>
+        <Collapse in={showBody && canToggleDetails}>
           <Box
             sx={{
               bgcolor: tc.TERM_BG,

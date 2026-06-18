@@ -10,6 +10,7 @@ import { AgentMessage, ToolGroupMeta } from '@/shared/state/agentsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useMountReveal } from './useMountReveal';
 import { sanitizeSvgString } from '@/shared/sanitizeSvg';
+import { parseMcpToolName, getWorkflowToolLabel } from '@/shared/mcpToolMeta';
 import ToolCallBubble, { ToolPair } from './ToolCallBubble';
 
 export interface ToolGroup {
@@ -83,13 +84,21 @@ const ToolGroupBubble: React.FC<Props> = React.memo(({ group, isSessionRunning =
   ).length;
   const allDone = pendingCount === 0 || !isSessionRunning;
 
-  const displayName = meta?.name || group.label;
-  const hasSvg = !!meta?.svg;
-
   const toolNames = group.pairs.map((p) => {
     const c2 = typeof p.call.content === 'object' ? p.call.content : {};
     return c2.tool || 'unknown';
   });
+  const workflowGroupLabel = (() => {
+    if (group.mcpServer !== 'openswarm-schedule') return null;
+    const parsedLabels = Array.from(new Set(toolNames.map((name) => {
+      const parsed = parseMcpToolName(name);
+      return parsed.isMcp ? getWorkflowToolLabel(parsed.action) : null;
+    }).filter(Boolean))) as string[];
+    return parsedLabels.length === 1 ? parsedLabels[0] : 'Workflow actions';
+  })();
+  const displayName = workflowGroupLabel || meta?.name || group.label;
+  const hasSvg = !!meta?.svg && !workflowGroupLabel;
+  const canToggleGroup = group.pairs.length > 1;
 
   return (
     <Box
@@ -116,15 +125,15 @@ const ToolGroupBubble: React.FC<Props> = React.memo(({ group, isSessionRunning =
         }}
       >
         <Box
-          onClick={() => setExpanded(!expanded)}
+          onClick={canToggleGroup ? () => setExpanded(!expanded) : undefined}
           sx={{
             display: 'flex',
             alignItems: 'center',
             gap: 0.75,
             px: 1.5,
             py: 0.7,
-            cursor: 'pointer',
-            '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' },
+            cursor: canToggleGroup ? 'pointer' : 'default',
+            '&:hover': canToggleGroup ? { bgcolor: 'rgba(0,0,0,0.02)' } : undefined,
           }}
         >
           {!meta ? (
@@ -171,9 +180,11 @@ const ToolGroupBubble: React.FC<Props> = React.memo(({ group, isSessionRunning =
               {completedCount}/{group.callCount}
             </Typography>
           )}
+          {canToggleGroup && (
           <IconButton size="small" sx={{ color: c.text.tertiary, p: 0.15 }}>
             {expanded ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
           </IconButton>
+          )}
         </Box>
 
         <Collapse in={expanded}>

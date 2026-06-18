@@ -28,7 +28,7 @@ import Tooltip from '@mui/material/Tooltip';
 import { useEffect } from 'react';
 import ScheduleCalendar from './ScheduleCalendar';
 import AddToSchedulePopover from './AddToSchedulePopover';
-import { WEEKDAY_LABEL, addDays, sameDay, startOfMonthGrid } from './scheduleUtils';
+import { WEEKDAY_LABEL, addDays, sameDay, startOfMonthGrid, isWorkflowSchedulable } from './scheduleUtils';
 
 type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -149,8 +149,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
   // consistent. closeMenu wipes both state + DOM-focus.
   const [sidebarCtxMenu, setSidebarCtxMenu] = useState<{ x: number; y: number; workflow: Workflow } | null>(null);
   const closeSidebarCtxMenu = useCallback(() => setSidebarCtxMenu(null), []);
-  // Anchored off an Un-scheduled row's "+" icon: offers keep-this-cadence vs
-  // open-the-scheduler, then enabling moves the row into Scheduled.
+  // Anchored off an Unscheduled row's "+" icon: opens the scheduler.
   const [schedulePopover, setSchedulePopover] = useState<{ anchorEl: HTMLElement; workflow: Workflow } | null>(null);
   const closeSchedulePopover = useCallback(() => setSchedulePopover(null), []);
 
@@ -163,8 +162,8 @@ const WorkflowsHubCard: React.FC<Props> = ({
   // Hide brand-new "+ New" workflows that the user is still building and
   // hasn't saved yet; commit (Save) clears `unsaved` and they appear.
   const saved = useMemo(() => Object.values(workflows).filter((w) => !w.unsaved), [workflows]);
-  const scheduled = useMemo(() => saved.filter((w) => isSchedulable(w)), [saved]);
-  const unscheduled = useMemo(() => saved.filter((w) => !isSchedulable(w)), [saved]);
+  const scheduled = useMemo(() => saved.filter((w) => isWorkflowSchedulable(w)), [saved]);
+  const unscheduled = useMemo(() => saved.filter((w) => !isWorkflowSchedulable(w)), [saved]);
 
   const monthLabel = refDate.toLocaleString('en', { month: 'long', year: 'numeric' });
 
@@ -501,8 +500,8 @@ const WorkflowsHubCard: React.FC<Props> = ({
           </Box>
           <MiniMonth refDate={refDate} onPick={setRefDate} />
           <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pb: 1.5 }}>
-            <SidebarSection title="Scheduled workflows" items={scheduled.filter((w) => match(w.title, search))} onPick={onSelectWorkflow} scheduled onContext={(wf, e) => setSidebarCtxMenu({ x: e.clientX, y: e.clientY, workflow: wf })} />
-            <SidebarSection title="Un-scheduled workflows" items={unscheduled.filter((w) => match(w.title, search))} onPick={onSelectWorkflow} scheduled={false} onContext={(wf, e) => setSidebarCtxMenu({ x: e.clientX, y: e.clientY, workflow: wf })} onSchedule={(wf, el) => setSchedulePopover({ anchorEl: el, workflow: wf })} />
+            <SidebarSection title="Scheduled" items={scheduled.filter((w) => match(w.title, search))} onPick={onSelectWorkflow} scheduled onContext={(wf, e) => setSidebarCtxMenu({ x: e.clientX, y: e.clientY, workflow: wf })} />
+            <SidebarSection title="Unscheduled" items={unscheduled.filter((w) => match(w.title, search))} onPick={onSelectWorkflow} scheduled={false} onContext={(wf, e) => setSidebarCtxMenu({ x: e.clientX, y: e.clientY, workflow: wf })} onSchedule={(wf, el) => setSchedulePopover({ anchorEl: el, workflow: wf })} />
           </Box>
         </Box>
         )}
@@ -524,6 +523,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
           dispatch(runWorkflowNow(sidebarCtxMenu.workflow.id));
           closeSidebarCtxMenu();
         }}>Run now</MenuItem>
+        {sidebarCtxMenu && isWorkflowSchedulable(sidebarCtxMenu.workflow) && (
         <MenuItem onClick={() => {
           if (!sidebarCtxMenu) return;
           const wf = sidebarCtxMenu.workflow;
@@ -533,7 +533,8 @@ const WorkflowsHubCard: React.FC<Props> = ({
             ifMatch: wf.updated_at || null,
           }));
           closeSidebarCtxMenu();
-        }}>{sidebarCtxMenu?.workflow.schedule.enabled ? 'Pause schedule' : 'Resume schedule'}</MenuItem>
+        }}>{sidebarCtxMenu.workflow.schedule.enabled ? 'Pause schedule' : 'Resume schedule'}</MenuItem>
+        )}
         <MenuItem onClick={() => {
           if (!sidebarCtxMenu) return;
           dispatch(addWorkflowCard({ workflowId: sidebarCtxMenu.workflow.id }));
@@ -552,7 +553,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
         </MenuItem>
       </Menu>
 
-      {/* "+" on an Un-scheduled row -> keep cadence or open the scheduler */}
+      {/* "+" on an Unscheduled row -> open the scheduler */}
       <AddToSchedulePopover
         anchorEl={schedulePopover?.anchorEl ?? null}
         workflow={schedulePopover?.workflow ?? null}
@@ -612,8 +613,8 @@ function SidebarSection({ title, items, onPick, scheduled, onContext, onSchedule
   onPick: (id: string) => void;
   scheduled: boolean;
   onContext: (workflow: Workflow, e: React.MouseEvent) => void;
-  // Only the Un-scheduled section wires this: clicking the "+" opens the
-  // add-to-schedule popover anchored to the icon.
+  // Only the Unscheduled section wires this: clicking the "+" opens the
+  // schedule creation popover anchored to the icon.
   onSchedule?: (workflow: Workflow, anchorEl: HTMLElement) => void;
 }) {
   const c = useClaudeTokens();
@@ -679,20 +680,14 @@ function SidebarSection({ title, items, onPick, scheduled, onContext, onSchedule
               </Box>
             </Tooltip>
           )}
-          <Typography sx={{ flex: 1, fontSize: '0.82rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: scheduled && !w.schedule.enabled ? 'line-through' : 'none', opacity: scheduled && !w.schedule.enabled ? 0.6 : 1 }}>{w.title}</Typography>
+          <Typography sx={{ flex: 1, fontSize: '0.82rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: scheduled && !w.schedule.enabled ? 0.7 : 1 }}>{w.title}</Typography>
+          {scheduled && !w.schedule.enabled && (
+            <Box sx={{ flexShrink: 0, px: 0.6, py: 0.1, borderRadius: '3px', bgcolor: c.bg.elevated, color: c.text.muted, fontSize: '0.62rem', fontWeight: 600, lineHeight: 1.5, letterSpacing: '0.02em' }}>Paused</Box>
+          )}
         </Box>
       ))}
     </Box>
   );
-}
-
-function isSchedulable(w: Workflow): boolean {
-  if (w.schedule.enabled) return true;
-  // Heuristic: any prior config means the user already opened the
-  // Schedule facet and committed something. Pure defaults stay in
-  // "Un-scheduled" so brand-new workflows don't pollute the list.
-  const s = w.schedule;
-  return Boolean(s.on_days?.length || s.ends_at || s.max_runs || s.runs_count);
 }
 
 function match(title: string, query: string): boolean {
