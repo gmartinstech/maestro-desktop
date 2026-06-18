@@ -431,7 +431,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
             sx={{
               display: 'inline-flex', alignItems: 'center', gap: 0.3,
               fontSize: '0.74rem', fontWeight: 600,
-              color: c.text.primary,
+              color: inputOpen && !historyOpen ? c.text.primary : c.text.secondary,
               bgcolor: c.bg.surface,
               border: `1px solid ${inputOpen && !historyOpen ? c.border.medium : c.border.subtle}`,
               boxShadow: inputOpen && !historyOpen ? c.shadow.sm : 'none',
