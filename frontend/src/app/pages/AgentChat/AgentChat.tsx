@@ -63,6 +63,7 @@ import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCards, removeCard } from '@/shared/state/dashboardLayoutSlice';
 import { setCardSidecar, commitDraft, updateWorkflowCard } from '@/shared/state/workflowsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { parseMcpToolName, getMcpInputSummary } from '@/shared/mcpToolMeta';
 
 const CONTEXT_WINDOWS: Record<string, number> = {
   'opus-4-8': 1_000_000,
@@ -1285,7 +1286,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
           const c = p.call.content;
           const tool = typeof c === 'object' ? c.tool || '' : '';
           const input = typeof c === 'object' ? c.input : '';
-          const summary = typeof input === 'string' ? input.slice(0, 120) : JSON.stringify(input).slice(0, 120);
+          const mcp = parseMcpToolName(tool);
+          const friendly = mcp.isMcp ? getMcpInputSummary(input, mcp.action, mcp.serverSlug) : '';
+          const summary = friendly || (typeof input === 'string' ? input.slice(0, 120) : JSON.stringify(input).slice(0, 120));
           return { tool, input_summary: summary };
         });
         dispatch(generateGroupMeta({ sessionId: id, groupId: group.id, toolCalls }));
@@ -1297,7 +1300,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
           const c = p.call.content;
           const tool = typeof c === 'object' ? c.tool || '' : '';
           const input = typeof c === 'object' ? c.input : '';
-          const summary = typeof input === 'string' ? input.slice(0, 120) : JSON.stringify(input).slice(0, 120);
+          const mcp = parseMcpToolName(tool);
+          const friendly = mcp.isMcp ? getMcpInputSummary(input, mcp.action, mcp.serverSlug) : '';
+          const summary = friendly || (typeof input === 'string' ? input.slice(0, 120) : JSON.stringify(input).slice(0, 120));
           return { tool, input_summary: summary };
         });
         const resultsSummary = group.pairs
