@@ -24,10 +24,22 @@ import {
   type Workflow,
   type WorkflowRun,
 } from '@/shared/state/workflowsSlice';
-import { DEFAULT_CARD_W, DEFAULT_CARD_H, placeCard } from '@/shared/state/dashboardLayoutSlice';
+import { DEFAULT_CARD_W, DEFAULT_CARD_H, placeCard, removeCard } from '@/shared/state/dashboardLayoutSlice';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
-import { fetchSession } from '@/shared/state/agentsSlice';
+import { fetchSession, closeSession, collapseSession } from '@/shared/state/agentsSlice';
+import type { AppDispatch } from '@/shared/state/store';
 import StepList, { type StepStatus } from './StepList';
+
+// Unlink the sidecar AND close the chat card it opened. closeSession is
+// what makes removal stick: a bare removeCard gets re-added by
+// reconcileSessions since the run session shares the dashboard.
+function stopViewingSidecar(dispatch: AppDispatch, workflowId: string, sessionId: string | null | undefined) {
+  dispatch(setCardSidecar({ workflowId, sessionId: null, kind: null }));
+  if (!sessionId) return;
+  dispatch(collapseSession(sessionId));
+  dispatch(removeCard(sessionId));
+  void dispatch(closeSession({ sessionId }));
+}
 
 // Helper: open a session next to the workflow card AND mark the card as
 // sidecar-linked so the footer flips to Stop Watching/Viewing and the
@@ -287,8 +299,8 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
     if (run?.session_id) void openSidecar(run.session_id, 'viewing-completed');
   }, [openSidecar, run?.session_id]);
   const onStopViewing = useCallback(() => {
-    dispatch(setCardSidecar({ workflowId: workflow.id, sessionId: null, kind: null }));
-  }, [dispatch, workflow.id]);
+    stopViewingSidecar(dispatch, workflow.id, card?.sidecarSessionId);
+  }, [dispatch, workflow.id, card?.sidecarSessionId]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
@@ -391,8 +403,8 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
     if (run?.session_id) void openSidecar(run.session_id, 'viewing-error');
   }, [openSidecar, run?.session_id]);
   const onStopViewing = useCallback(() => {
-    dispatch(setCardSidecar({ workflowId: workflow.id, sessionId: null, kind: null }));
-  }, [dispatch, workflow.id]);
+    stopViewingSidecar(dispatch, workflow.id, card?.sidecarSessionId);
+  }, [dispatch, workflow.id, card?.sidecarSessionId]);
   const onFixWithAgent = useCallback(() => {
     if (!run) return;
     const stepLabel = steps[failedIdx]?.label || steps[failedIdx]?.text?.slice(0, 60) || `Step ${failedIdx + 1}`;
