@@ -346,6 +346,13 @@ const slice = createSlice({
           card.view = 'failed';
           card.runId = r.id;
         }
+        // A run that finishes while the user is watching it live becomes a
+        // "viewing" link so the sibling chat stays open with Stop Viewing,
+        // not a stale "watching" arrow pointing at a finished run.
+        if (card.sidecarSessionId && card.sidecarKind === 'watching' && prev && prev.status === 'running') {
+          if (r.status === 'failure') card.sidecarKind = 'viewing-error';
+          else if (r.status === 'success' || r.status === 'ran_late') card.sidecarKind = 'viewing-completed';
+        }
       }
     },
     toggleExpandedStep(state, action: { payload: { workflowId: string; stepId: string } }) {

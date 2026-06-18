@@ -1001,11 +1001,18 @@ const agentsSlice = createSlice({
       }
     },
 
-    closeSessionFromWs(state, action: PayloadAction<HistorySession>) {
-      const entry = action.payload;
+    closeSessionFromWs(state, action: PayloadAction<HistorySession & { keepSession?: boolean }>) {
+      const { keepSession, ...entry } = action.payload;
       state.history[entry.id] = entry;
 
       const session = state.sessions[entry.id];
+      // keepSession: the user is watching this run live, so a workflow finishing
+      // shouldn't yank the chat out from under them. Keep it as a normal
+      // completed chat (continue / exit) instead of deleting the card.
+      if (keepSession && session) {
+        session.status = (entry.status as AgentSession['status']) || 'completed';
+        return;
+      }
       if (session?.mode === 'browser-agent' && session.parent_session_id) {
         session.status = (entry.status as AgentSession['status']) || 'completed';
       } else {

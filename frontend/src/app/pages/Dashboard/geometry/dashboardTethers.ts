@@ -56,6 +56,19 @@ export function elbowPath(x1: number, y1: number, x2: number, y2: number): strin
 
 type Anchor = { x: number; y: number; side: 'left' | 'right' | 'top' | 'bottom' };
 
+// Where the ray from a rect's center toward (tx,ty) crosses the rect border.
+// Pins a tether endpoint to the card edge facing the other card, so it can
+// never float in empty space the way nearest-corner anchoring could.
+function borderPoint(x: number, y: number, w: number, h: number, tx: number, ty: number): { x: number; y: number } {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const scale = 1 / Math.max(Math.abs(dx) / (w / 2), Math.abs(dy) / (h / 2));
+  return { x: cx + dx * scale, y: cy + dy * scale };
+}
+
 interface UseTethersArgs {
   glowingAgentCards: Record<string, GlowingAgentCard>;
   glowingBrowserCards: Record<string, GlowingBrowserCard>;
@@ -88,6 +101,8 @@ export function useTethers({
   sessionList,
 }: UseTethersArgs): Tether[] {
   return useMemo(() => {
+    const wfHeight = (wc: WorkflowCardPosition): number =>
+      measuredHeightsRef.current![wc.workflow_id] ?? wc.height;
     const agentTethers = Object.entries(glowingAgentCards).map(([copyId, { sourceId, fading, label }]) => {
       const src = cards[sourceId];
       const dst = cards[copyId];
@@ -262,6 +277,7 @@ export function useTethers({
         ? Math.max(EXPANDED_CARD_MIN_H, src.height)
         : src.height);
 
+      const wcH = wfHeight(wc);
       const srcCx = srcX + src.width / 2;
       const dstCx = dstX + wc.width / 2;
       const srcAnchors: Anchor[] = [
@@ -271,10 +287,10 @@ export function useTethers({
         { x: srcCx, y: srcY + srcH, side: 'bottom' },
       ];
       const dstAnchors: Anchor[] = [
-        { x: dstX, y: dstY + wc.height * 0.54, side: 'left' },
-        { x: dstX + wc.width, y: dstY + wc.height * 0.54, side: 'right' },
+        { x: dstX, y: dstY + wcH * 0.54, side: 'left' },
+        { x: dstX + wc.width, y: dstY + wcH * 0.54, side: 'right' },
         { x: dstCx, y: dstY, side: 'top' },
-        { x: dstCx, y: dstY + wc.height, side: 'bottom' },
+        { x: dstCx, y: dstY + wcH, side: 'bottom' },
       ];
       let bestSrc = srcAnchors[0], bestDst = dstAnchors[0];
       let bestDist = Infinity;
@@ -340,30 +356,13 @@ export function useTethers({
       const dstH = dstMeasured ?? (expandedSessionIds.includes(sidecarId)
         ? Math.max(EXPANDED_CARD_MIN_H, sidecar.height)
         : sidecar.height);
-      const srcCx = srcX + wc.width / 2;
-      const dstCx = dstX + sidecar.width / 2;
-      const srcAnchors: Anchor[] = [
-        { x: srcX + wc.width, y: srcY + wc.height * 0.54, side: 'right' },
-        { x: srcX, y: srcY + wc.height * 0.54, side: 'left' },
-        { x: srcCx, y: srcY, side: 'top' },
-        { x: srcCx, y: srcY + wc.height, side: 'bottom' },
-      ];
-      const dstAnchors: Anchor[] = [
-        { x: dstX, y: dstY + dstH * 0.54, side: 'left' },
-        { x: dstX + sidecar.width, y: dstY + dstH * 0.54, side: 'right' },
-        { x: dstCx, y: dstY, side: 'top' },
-        { x: dstCx, y: dstY + dstH, side: 'bottom' },
-      ];
-      let bestSrc = srcAnchors[0], bestDst = dstAnchors[0];
-      let bestDist = Infinity;
-      for (const sa of srcAnchors) {
-        for (const da of dstAnchors) {
-          const d = Math.hypot(sa.x - da.x, sa.y - da.y);
-          if (d < bestDist) { bestDist = d; bestSrc = sa; bestDst = da; }
-        }
-      }
-      const x1 = bestSrc.x, y1 = bestSrc.y;
-      const x2 = bestDst.x, y2 = bestDst.y;
+      const wcH = wfHeight(wc);
+      const srcCx = srcX + wc.width / 2, srcCy = srcY + wcH / 2;
+      const dstCx = dstX + sidecar.width / 2, dstCy = dstY + dstH / 2;
+      const a = borderPoint(srcX, srcY, wc.width, wcH, dstCx, dstCy);
+      const b = borderPoint(dstX, dstY, sidecar.width, dstH, srcCx, srcCy);
+      const x1 = a.x, y1 = a.y;
+      const x2 = b.x, y2 = b.y;
       const pathD = elbowPath(x1, y1, x2, y2);
       const midX = x1 + (x2 - x1) / 2;
       const midY = y1 + (y2 - y1) / 2;
@@ -388,13 +387,14 @@ export function useTethers({
       if (liveDragInfo) {
         if (liveDragInfo.cardId === p.workflow_id) { srcX += liveDragInfo.dx; srcY += liveDragInfo.dy; }
       }
+      const wcH = wfHeight(wc);
       const srcCx = srcX + wc.width / 2;
       const dstCx = dstX + p.width / 2;
       const srcAnchors: Anchor[] = [
-        { x: srcX + wc.width, y: srcY + wc.height * 0.5, side: 'right' },
-        { x: srcX, y: srcY + wc.height * 0.5, side: 'left' },
+        { x: srcX + wc.width, y: srcY + wcH * 0.5, side: 'right' },
+        { x: srcX, y: srcY + wcH * 0.5, side: 'left' },
         { x: srcCx, y: srcY, side: 'top' },
-        { x: srcCx, y: srcY + wc.height, side: 'bottom' },
+        { x: srcCx, y: srcY + wcH, side: 'bottom' },
       ];
       const dstAnchors: Anchor[] = [
         { x: dstX, y: dstY + p.height * 0.5, side: 'left' },

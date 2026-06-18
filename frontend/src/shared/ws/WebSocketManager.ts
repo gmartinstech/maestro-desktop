@@ -723,6 +723,11 @@ class WebSocketManager {
       case 'agent:closed':
         if (session_id) {
           const closedStatus = data.status ?? 'stopped';
+          // Don't evict a chat the user is actively watching from a workflow
+          // card; let it settle into a normal completed chat they can continue
+          // or close themselves.
+          const watchedSidecar = Object.values(store.getState().workflows.openCards)
+            .some((oc) => oc.sidecarSessionId === session_id);
           store.dispatch(closeSessionFromWs({
             id: session_id,
             name: data.name ?? 'Untitled',
@@ -733,6 +738,7 @@ class WebSocketManager {
             closed_at: data.closed_at ?? new Date().toISOString(),
             cost_usd: data.cost_usd ?? 0,
             dashboard_id: data.dashboard_id,
+            keepSession: watchedSidecar,
           }));
           // Auto-delete browsers spawned by this agent when it finishes
           // normally or errors out. We intentionally skip 'stopped' , the

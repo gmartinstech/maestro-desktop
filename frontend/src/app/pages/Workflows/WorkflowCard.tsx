@@ -14,6 +14,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import {
   closeWorkflowCard,
+  createWorkflow,
   deleteWorkflow,
   fetchRuns,
   openWorkflowCard as openWorkflowCardAction,
@@ -94,6 +95,7 @@ interface Props {
   onDragEnd?: (dx: number, dy: number, didDrag: boolean) => void;
   onDoubleClick?: (id: string, type: 'agent' | 'view' | 'browser' | 'note' | 'workflow') => void;
   onBringToFront?: (id: string, type: 'agent' | 'view' | 'browser' | 'note' | 'workflow') => void;
+  onMeasuredHeight?: (id: string, height: number) => void;
 }
 
 const WorkflowCard: React.FC<Props> = ({
@@ -102,6 +104,7 @@ const WorkflowCard: React.FC<Props> = ({
   zoom = 1, panX = 0, panY = 0,
   isSelected = false, isHighlighted = false, multiDragDelta,
   onCardSelect, onDragStart, onDragMove, onDragEnd, onDoubleClick, onBringToFront,
+  onMeasuredHeight,
 }) => {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
@@ -110,6 +113,19 @@ const WorkflowCard: React.FC<Props> = ({
   const workflow = useAppSelector((s) => s.workflows.items[workflowId]);
   const runs = useAppSelector((s) => s.workflows.runs[workflowId]);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
+  const defaultModel = useAppSelector((s) => s.settings.data.default_model);
+  const defaultMode = useAppSelector((s) => s.settings.data.default_mode);
+
+  const cardBoxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = cardBoxRef.current;
+    if (!el || !onMeasuredHeight) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) onMeasuredHeight(workflowId, entry.contentRect.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [workflowId, onMeasuredHeight]);
 
   // Transient "Starting…" label state on the Run button. See onClick handler
   // for the full rationale (avoid no-feedback flicker on fast manual runs).
@@ -356,6 +372,34 @@ const WorkflowCard: React.FC<Props> = ({
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   }, [computeResize, dispatch, workflowId]);
 
+  // History / Run on an unsaved draft have nothing to hit yet, so persist the
+  // draft first (mirrors PreviewView's save), rekey the card to the real id,
+  // and hand back the saved workflow so the caller can act on it.
+  const persistingRef = useRef(false);
+  const persistDraft = useCallback(async (): Promise<Workflow | null> => {
+    const d = card?.draft;
+    if (!d || persistingRef.current) return null;
+    persistingRef.current = true;
+    try {
+      const result = await dispatch(createWorkflow({
+        title: (d.title as string) || 'New workflow',
+        description: (d.description as string) || '',
+        steps: (d.steps || []).map((s) => ({ id: s.id, text: s.text })),
+        source_session_id: (d.source_session_id as string | undefined) || card?.sourceSessionId || null,
+        use_synced_prompt: true,
+        model: defaultModel || (d.model as string),
+        mode: defaultMode || (d.mode as string),
+      } as Partial<Workflow>));
+      const wf = (result as unknown as { payload: Workflow }).payload;
+      if (!wf?.id) return null;
+      dispatch(rekeyOpenCard({ oldId: workflowId, newId: wf.id }));
+      dispatch(rekeyWorkflowCard({ oldId: workflowId, newId: wf.id }));
+      return wf;
+    } finally {
+      persistingRef.current = false;
+    }
+  }, [card?.draft, card?.sourceSessionId, defaultModel, defaultMode, dispatch, workflowId]);
+
   const discardDraft = useCallback(() => {
     const sourceId = card?.sourceSessionId || (card?.draft?.source_session_id as string | undefined) || null;
     dispatch(closeWorkflowCard(workflowId));
@@ -471,6 +515,10 @@ const WorkflowCard: React.FC<Props> = ({
         '&:hover .resize-handle': { opacity: 1 },
       }}
     >
+      {/* Plain sentinel that fills the card so a ResizeObserver can read the
+          real auto-height. Measuring the motion.div root directly is flaky
+          (ref forwarding through MUI component + framer-motion). */}
+      <Box ref={cardBoxRef} aria-hidden sx={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
       {/* ===== Title bar / drag handle =====
           Matches target image #54 spec: drag-grip on the far left, then a
           single bold title (no pill prefix), then a quiet close X. The
@@ -570,8 +618,36 @@ const WorkflowCard: React.FC<Props> = ({
             fallbackSourceSessionId={card?.draft?.source_session_id}
           />
           <Box sx={{ flex: 1 }} />
-          <TabBtn label="History" icon={<HistoryIcon sx={{ fontSize: 16 }} />} active={false} onClick={() => {}} />
-          <TabBtn label="Run" icon={<PlayArrowIcon sx={{ fontSize: 16 }} />} active={false} accent onClick={() => {}} />
+          <TabBtn
+            label="History"
+            icon={<HistoryIcon sx={{ fontSize: 16 }} />}
+            active={false}
+            onClick={async () => {
+              const wf = await persistDraft();
+              if (!wf) return;
+              dispatch(openWorkflowCardAction({ workflowId: wf.id, sourceSessionId: card?.sourceSessionId || null, view: 'history', draft: null }));
+              dispatch(fetchRuns(wf.id));
+            }}
+          />
+          <TabBtn
+            label={runStarting ? 'Starting…' : 'Run'}
+            icon={<PlayArrowIcon sx={{ fontSize: 16 }} />}
+            active={false}
+            accent
+            onClick={async () => {
+              if (runStarting) return;
+              setRunStarting(true);
+              try {
+                const wf = await persistDraft();
+                if (!wf) return;
+                dispatch(openWorkflowCardAction({ workflowId: wf.id, sourceSessionId: card?.sourceSessionId || null, view: 'saved', draft: null }));
+                await dispatch(runWorkflowNow(wf.id));
+                await dispatch(fetchRuns(wf.id));
+              } finally {
+                setTimeout(() => setRunStarting(false), 600);
+              }
+            }}
+          />
         </Box>
       )}
       {!isDraft && workflow && !isHeaderlessView(card.view) && card.view !== 'running' && (

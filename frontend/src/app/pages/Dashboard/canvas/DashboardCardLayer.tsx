@@ -304,6 +304,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
           onDragEnd={onDragEnd}
           onDoubleClick={onDoubleClick}
           onBringToFront={onBringToFront}
+          onMeasuredHeight={onMeasuredHeight}
         />
       ))}
       {Object.values(configurePanels).map((p) => (
