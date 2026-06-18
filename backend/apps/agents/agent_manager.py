@@ -2145,6 +2145,11 @@ class AgentManager:
             stream_text_msg_id = None
             stream_tool_msg_ids_ordered = []
             stream_block_index_map = {}
+            # Mirror of the streamed assistant text. The SDK envelope that
+            # normally commits a reply never lands when a turn is stopped
+            # mid-stream, so without this the text the user just watched
+            # appear would evaporate. Cleared the instant a block commits.
+            _stream_text_accum = ""
             # Per-turn aggregate trackers for the consolidated thinking
             # message. We accumulate across every AssistantMessage in the
             # turn (think → tool → think → tool → answer) and stream
@@ -2443,6 +2448,7 @@ class AgentManager:
 
             async def _run_streaming_turn():
                 nonlocal stream_text_msg_id, stream_tool_msg_ids_ordered, stream_block_index_map
+                nonlocal _stream_text_accum
                 nonlocal _turn_number, _first_event, _current_turn_emitted
                 # Per-turn thinking aggregation trackers (added for the
                 # "Thought for Ns · M tokens" persisted label). Without
@@ -2603,6 +2609,7 @@ class AgentManager:
                             if msg_id and delta_type == "text_delta":
                                 _text_chunk = delta.get("text", "")
                                 _turn_assistant_text_chars += len(_text_chunk)
+                                _stream_text_accum += _text_chunk
                                 await ws_manager.send_to_session(session_id, "agent:stream_delta", {
                                     "session_id": session_id,
                                     "message_id": msg_id,
@@ -2809,6 +2816,7 @@ class AgentManager:
                                     branch_id=session.active_branch_id,
                                 )
                                 session.messages.append(asst_msg)
+                                _stream_text_accum = ""
                                 await ws_manager.send_to_session(session_id, "agent:message", {
                                     "session_id": session_id,
                                     "message": asst_msg.model_dump(mode="json"),
@@ -3081,6 +3089,7 @@ class AgentManager:
                                 "message_id": stream_text_msg_id,
                             })
                             stream_text_msg_id = None
+                        _stream_text_accum = ""
                         for _tool_msg_id in stream_tool_msg_ids_ordered:
                             await ws_manager.send_to_session(session_id, "agent:stream_end", {
                                 "session_id": session_id,
@@ -3123,6 +3132,32 @@ class AgentManager:
                 logger.exception("auto-continuation dispatch failed")
         except asyncio.CancelledError:
             session.status = "stopped"
+            # Stopped mid-stream. The SDK's commit envelope never arrives on
+            # cancel, so persist whatever text already streamed; otherwise the
+            # reply the user just watched appear vanishes (the frontend wipes
+            # its streaming overlay the moment the status goes 'stopped') and
+            # the chat is left with a dangling, unanswered question.
+            if stream_text_msg_id and _stream_text_accum.strip():
+                partial = Message(
+                    id=stream_text_msg_id,
+                    role="assistant",
+                    content=_stream_text_accum,
+                    branch_id=session.active_branch_id,
+                )
+                session.messages.append(partial)
+                try:
+                    await ws_manager.send_to_session(session_id, "agent:message", {
+                        "session_id": session_id,
+                        "message": partial.model_dump(mode="json"),
+                    })
+                    await ws_manager.send_to_session(session_id, "agent:stream_end", {
+                        "session_id": session_id,
+                        "message_id": stream_text_msg_id,
+                    })
+                except Exception:
+                    pass
+                stream_text_msg_id = None
+                _stream_text_accum = ""
         except Exception as e:
             logger.exception(f"Agent {session_id} error: {e}")
             session.status = "error"
