@@ -113,6 +113,7 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
   const [testSessionId, setTestSessionId] = useState<string | null>(null);
   const draftSteps = workflow.draft_steps ?? steps;
   const canSave = draftSteps.some((s) => (s.text || '').trim().length > 0);
+  const allowDiscard = !workflow.unsaved;
   // A draft always exists in edit mode (we snapshot on entry), so only flag
   // "unsaved" once the draft actually diverges from the committed steps.
   const hasChanges = workflow.draft_steps != null && JSON.stringify(workflow.draft_steps) !== JSON.stringify(workflow.steps);
@@ -205,12 +206,14 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
             <Typography sx={{ fontSize: '0.74rem', color: c.text.muted }}>· unsaved</Typography>
           )}
           <Box sx={{ flex: 1 }} />
-          <Box
-            onClick={onDiscardClick}
-            role="button"
-            sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.muted, cursor: 'pointer', mr: 1, '&:hover': { color: c.status.error } }}>
-            Discard
-          </Box>
+          {allowDiscard && (
+            <Box
+              onClick={onDiscardClick}
+              role="button"
+              sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.muted, cursor: 'pointer', mr: 1, '&:hover': { color: c.status.error } }}>
+              Discard
+            </Box>
+          )}
           <Box
             onClick={canSave ? onSaveClick : undefined}
             role="button"
