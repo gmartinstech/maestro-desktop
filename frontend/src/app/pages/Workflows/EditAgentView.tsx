@@ -112,6 +112,7 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
   const [saveAnchorEl, setSaveAnchorEl] = useState<HTMLElement | null>(null);
   const [testSessionId, setTestSessionId] = useState<string | null>(null);
   const draftSteps = workflow.draft_steps ?? steps;
+  const canSave = draftSteps.some((s) => (s.text || '').trim().length > 0);
   // A draft always exists in edit mode (we snapshot on entry), so only flag
   // "unsaved" once the draft actually diverges from the committed steps.
   const hasChanges = workflow.draft_steps != null && JSON.stringify(workflow.draft_steps) !== JSON.stringify(workflow.steps);
@@ -140,10 +141,15 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
   }, []);
 
   const onSaveNow = useCallback(async () => {
+    if (!canSave) return;
     setSavePhase('idle');
-    await dispatch(commitDraft(workflow.id));
+    try {
+      await dispatch(commitDraft(workflow.id)).unwrap();
+    } catch {
+      return;
+    }
     toSaved();
-  }, [dispatch, workflow.id, toSaved]);
+  }, [canSave, dispatch, workflow.id, toSaved]);
 
   const onRunTest = useCallback(async () => {
     try {
@@ -206,11 +212,13 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
             Discard
           </Box>
           <Box
-            onClick={onSaveClick}
+            onClick={canSave ? onSaveClick : undefined}
             role="button"
+            title={canSave ? undefined : 'Add at least one step before saving'}
             sx={{
               fontSize: '0.8rem', fontWeight: 700, color: '#fff', bgcolor: c.accent.primary,
-              px: 1.2, py: 0.35, borderRadius: 999, cursor: 'pointer',
+              px: 1.2, py: 0.35, borderRadius: 999, cursor: canSave ? 'pointer' : 'not-allowed',
+              opacity: canSave ? 1 : 0.45,
               '&:hover': { filter: 'brightness(1.05)' },
             }}>
             Save

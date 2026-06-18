@@ -123,6 +123,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   const liveDraft = (card?.draft ?? initialDraft ?? {}) as Partial<Workflow>;
   const title = (liveDraft.title as string) || 'New workflow';
   const description = (liveDraft.description as string) || '';
+  const canSave = steps.some((s) => (s.text || '').trim().length > 0);
   // The new workflow runs with the user's configured default model/mode (their
   // subscription, etc.), falling back to whatever the source chat used. Without
   // this the backend picks its own default, which surprised users who'd set a
@@ -161,6 +162,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   }, [closeRequestNonce]);
 
   const saveWorkflow = useCallback(async (): Promise<Workflow | null> => {
+    if (!canSave) return null;
     const result = await dispatch(createWorkflow({
       title,
       description,
@@ -175,7 +177,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
     const wf = (result as unknown as { payload: Workflow }).payload;
     if (wf?.id) return wf;
     return null;
-  }, [dispatch, title, description, steps, sourceSessionId, liveDraft, defaultModel, defaultMode]);
+  }, [canSave, dispatch, title, description, steps, sourceSessionId, liveDraft, defaultModel, defaultMode]);
 
   const onIgnore = useCallback(async () => {
     if (busy) return;
@@ -183,7 +185,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   }, [busy]);
 
   const onSaveThenSchedule = useCallback(async () => {
-    if (busy) return;
+    if (busy || !canSave) return;
     setBusy(true);
     try {
       const wf = await saveWorkflow();
@@ -191,10 +193,10 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
     } finally {
       setBusy(false);
     }
-  }, [busy, saveWorkflow, onSaved]);
+  }, [busy, canSave, saveWorkflow, onSaved]);
 
   const onSaveDraft = useCallback(async () => {
-    if (busy) return;
+    if (busy || !canSave) return;
     setBusy(true);
     try {
       const wf = await saveWorkflow();
@@ -203,7 +205,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
       setBusy(false);
       setSavePromptOpen(false);
     }
-  }, [busy, saveWorkflow, onSaved]);
+  }, [busy, canSave, saveWorkflow, onSaved]);
 
   const onDontSave = useCallback(() => {
     setSavePromptOpen(false);
@@ -252,15 +254,16 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
           Not now
         </Box>
         <Box
-          onClick={onSaveThenSchedule}
+          onClick={canSave ? onSaveThenSchedule : undefined}
           role="button"
+          title={canSave ? undefined : 'Add at least one step before saving'}
           sx={{
             display: 'inline-flex', alignItems: 'center', gap: 0.5,
             fontSize: '0.88rem', fontWeight: 700,
             px: 1.75, py: 0.6, borderRadius: 999,
             color: '#fff', bgcolor: c.accent.primary,
-            cursor: busy ? 'wait' : 'pointer',
-            opacity: busy ? 0.6 : 1,
+            cursor: busy ? 'wait' : canSave ? 'pointer' : 'not-allowed',
+            opacity: busy || !canSave ? 0.6 : 1,
             '&:hover': { bgcolor: c.accent.primary, filter: 'brightness(1.06)' },
           }}>
           Schedule Workflow
@@ -288,8 +291,9 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
           </Box>
           <Box
             role="button"
-            onClick={onSaveDraft}
-            sx={{ fontSize: '0.84rem', fontWeight: 700, color: '#fff', bgcolor: c.accent.primary, borderRadius: 999, cursor: busy ? 'wait' : 'pointer', px: 1.5, py: 0.6, opacity: busy ? 0.6 : 1, '&:hover': { filter: 'brightness(1.06)' } }}>
+            onClick={canSave ? onSaveDraft : undefined}
+            title={canSave ? undefined : 'Add at least one step before saving'}
+            sx={{ fontSize: '0.84rem', fontWeight: 700, color: '#fff', bgcolor: c.accent.primary, borderRadius: 999, cursor: busy ? 'wait' : canSave ? 'pointer' : 'not-allowed', px: 1.5, py: 0.6, opacity: busy || !canSave ? 0.6 : 1, '&:hover': { filter: 'brightness(1.06)' } }}>
             Save
           </Box>
         </DialogActions>

@@ -937,9 +937,13 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (id) dispatch(removeCard(id));
   }, [linkedWorkflowId, id, dispatch]);
 
-  const onTestSaveWorkflow = useCallback(() => {
+  const onTestSaveWorkflow = useCallback(async () => {
     if (linkedWorkflowId) {
-      dispatch(commitDraft(linkedWorkflowId));
+      try {
+        await dispatch(commitDraft(linkedWorkflowId)).unwrap();
+      } catch {
+        return;
+      }
       dispatch(updateWorkflowCard({ workflowId: linkedWorkflowId, patch: { view: 'saved' } }));
       dispatch(setCardSidecar({ workflowId: linkedWorkflowId, sessionId: null, kind: null }));
     }

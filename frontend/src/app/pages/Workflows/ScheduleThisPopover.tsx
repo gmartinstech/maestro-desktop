@@ -30,6 +30,30 @@ const PRESETS: Preset[] = [
   { label: 'Every month on the 1st', hint: 'Monthly summary, billing report', build: () => ({ enabled: true, repeat_unit: 'month', repeat_every: 1, hour: 9, minute: 0 }) },
 ];
 
+function extractStepsFromSession(session: { messages?: Array<{ role: string; content: unknown; hidden?: boolean }> } | null | undefined): Array<{ id: string; text: string }> {
+  const out: Array<{ id: string; text: string }> = [];
+  for (const msg of session?.messages || []) {
+    if (msg.role !== 'user' || msg.hidden) continue;
+    const text = typeof msg.content === 'string'
+      ? msg.content
+      : Array.isArray(msg.content)
+        ? msg.content.map((b: any) => (typeof b === 'string' ? b : b?.text || '')).join(' ')
+        : '';
+    const trimmed = text.trim();
+    if (trimmed.length < 6) continue;
+    out.push({ id: `step-${out.length + 1}-${Date.now().toString(36)}`, text: trimmed.slice(0, 400) });
+    if (out.length === 3) break;
+  }
+  if (out.length === 0 && session?.messages?.length) {
+    const fallback = session.messages.find((m) => m.role === 'user');
+    if (fallback) {
+      const text = typeof fallback.content === 'string' ? fallback.content : '';
+      out.push({ id: `step-1-${Date.now().toString(36)}`, text: text.slice(0, 400) || 'Run the original task' });
+    }
+  }
+  return out;
+}
+
 interface Props {
   anchorEl: HTMLElement | null;
   onClose: () => void;
@@ -61,6 +85,7 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
   const sessionDashboardId = useAppSelector(
     (s) => sessionId ? s.agents.sessions[sessionId]?.dashboard_id : null,
   );
+  const sourceSession = useAppSelector((s) => sessionId ? s.agents.sessions[sessionId] : null);
 
   // Dup-detect: a chat session can only sanely have one schedule attached.
   // If we find one already, offer "Open existing" instead of silently
@@ -82,6 +107,7 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
       const result = await dispatch(createWorkflow({
         title,
         source_session_id: sessionId,
+        steps: extractStepsFromSession(sourceSession),
         schedule,
       } as Partial<Workflow>));
       if (createWorkflow.fulfilled.match(result)) {
@@ -98,7 +124,7 @@ export default function ScheduleThisPopover({ anchorEl, onClose, sessionId, sess
     } finally {
       setBusy(false);
     }
-  }, [busy, dispatch, sessionId, title, onClose, onCreated]);
+  }, [busy, dispatch, sessionId, sourceSession, title, onClose, onCreated]);
 
   const openCustom = useCallback(() => {
     // Open a local draft. NO backend create yet — the workflow only

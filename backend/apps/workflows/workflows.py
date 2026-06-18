@@ -151,6 +151,10 @@ def _normalize_schedule_state(wf: Workflow) -> None:
     wf.next_run_at = scheduler.compute_next_fire(wf) if wf.schedule.enabled else None
 
 
+def _has_nonempty_steps(steps: list[WorkflowStep] | None) -> bool:
+    return any(bool((s.text or "").strip()) for s in (steps or []))
+
+
 def _parse_calendar_bound(value: str, label: str) -> datetime:
     raw = (value or "").strip()
     if raw.endswith("Z"):
@@ -166,6 +170,8 @@ def _parse_calendar_bound(value: str, label: str) -> datetime:
 
 @workflows.router.post("/create")
 async def create_workflow(body: WorkflowCreate):
+    if not body.unsaved and not _has_nonempty_steps(body.steps):
+        raise HTTPException(status_code=400, detail="Workflow must have at least one step")
     actions = body.actions
     # Scheduled workflows default to freeze=on for safety. The user can
     # flip "Full agent access" in the editor with an explicit confirm.
@@ -785,15 +791,21 @@ async def commit_draft(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    # Clicking Save is the user committing to this workflow, so reveal it in
-    # the hub (clears the "+ New" build-in-progress flag) even if there's no
-    # pending draft to flush.
-    wf.unsaved = False
     if wf.draft_steps is None:
+        if not _has_nonempty_steps(wf.steps):
+            raise HTTPException(status_code=400, detail="Workflow must have at least one step")
+        # Clicking Save is the user committing to this workflow, so reveal it
+        # in the hub (clears the "+ New" build-in-progress flag).
+        wf.unsaved = False
         await p_end_edit_session(wf)
         storage.save_workflow(wf)
         return _enriched(wf)
     before = wf.model_dump(mode="json")
+    if not _has_nonempty_steps(wf.draft_steps):
+        raise HTTPException(status_code=400, detail="Workflow must have at least one step")
+    # Clicking Save is the user committing to this workflow, so reveal it in
+    # the hub (clears the "+ New" build-in-progress flag).
+    wf.unsaved = False
     wf.steps = wf.draft_steps
     wf.draft_steps = None
     await p_relabel_changed_steps(wf, before.get("steps") or [])

@@ -381,12 +381,14 @@ const WorkflowCard: React.FC<Props> = ({
   const persistDraft = useCallback(async (): Promise<Workflow | null> => {
     const d = card?.draft;
     if (!d || persistingRef.current) return null;
+    const draftSteps = d.steps || [];
+    if (!draftSteps.some((s) => (s.text || '').trim().length > 0)) return null;
     persistingRef.current = true;
     try {
       const result = await dispatch(createWorkflow({
         title: (d.title as string) || 'New workflow',
         description: (d.description as string) || '',
-        steps: (d.steps || []).map((s) => ({ id: s.id, text: s.text })),
+        steps: draftSteps.map((s) => ({ id: s.id, text: s.text })),
         source_session_id: (d.source_session_id as string | undefined) || card?.sourceSessionId || null,
         use_synced_prompt: true,
         model: defaultModel || (d.model as string),
