@@ -149,7 +149,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
   // consistent. closeMenu wipes both state + DOM-focus.
   const [sidebarCtxMenu, setSidebarCtxMenu] = useState<{ x: number; y: number; workflow: Workflow } | null>(null);
   const closeSidebarCtxMenu = useCallback(() => setSidebarCtxMenu(null), []);
-  // Anchored off a Needs Schedule row's "+" icon: opens the scheduler.
+  // Anchored off an Unscheduled row's "+" icon: opens the scheduler.
   const [schedulePopover, setSchedulePopover] = useState<{ anchorEl: HTMLElement; workflow: Workflow } | null>(null);
   const closeSchedulePopover = useCallback(() => setSchedulePopover(null), []);
 
@@ -498,7 +498,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
           <MiniMonth refDate={refDate} onPick={setRefDate} />
           <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pb: 1.5 }}>
             <SidebarSection title="Scheduled" items={scheduled.filter((w) => match(w.title, search))} onPick={onSelectWorkflow} scheduled onContext={(wf, e) => setSidebarCtxMenu({ x: e.clientX, y: e.clientY, workflow: wf })} />
-            <SidebarSection title="Needs Schedule" items={unscheduled.filter((w) => match(w.title, search))} onPick={onSelectWorkflow} scheduled={false} onContext={(wf, e) => setSidebarCtxMenu({ x: e.clientX, y: e.clientY, workflow: wf })} onSchedule={(wf, el) => setSchedulePopover({ anchorEl: el, workflow: wf })} />
+            <SidebarSection title="Unscheduled" items={unscheduled.filter((w) => match(w.title, search))} onPick={onSelectWorkflow} scheduled={false} onContext={(wf, e) => setSidebarCtxMenu({ x: e.clientX, y: e.clientY, workflow: wf })} onSchedule={(wf, el) => setSchedulePopover({ anchorEl: el, workflow: wf })} />
           </Box>
         </Box>
         )}
@@ -550,7 +550,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
         </MenuItem>
       </Menu>
 
-      {/* "+" on a Needs Schedule row -> open the scheduler */}
+      {/* "+" on an Unscheduled row -> open the scheduler */}
       <AddToSchedulePopover
         anchorEl={schedulePopover?.anchorEl ?? null}
         workflow={schedulePopover?.workflow ?? null}
@@ -610,7 +610,7 @@ function SidebarSection({ title, items, onPick, scheduled, onContext, onSchedule
   onPick: (id: string) => void;
   scheduled: boolean;
   onContext: (workflow: Workflow, e: React.MouseEvent) => void;
-  // Only the Needs Schedule section wires this: clicking the "+" opens the
+  // Only the Unscheduled section wires this: clicking the "+" opens the
   // schedule creation popover anchored to the icon.
   onSchedule?: (workflow: Workflow, anchorEl: HTMLElement) => void;
 }) {

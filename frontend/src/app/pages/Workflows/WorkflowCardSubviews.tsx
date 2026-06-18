@@ -270,7 +270,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
         <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700 }}>Save workflow?</DialogTitle>
         <DialogContent>
           <Typography sx={{ fontSize: '0.86rem', color: c.text.secondary }}>
-            Save this workflow under Needs Schedule. It will not run until you choose a schedule.
+            Save this workflow under Unscheduled. It will not run until you choose a schedule.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>

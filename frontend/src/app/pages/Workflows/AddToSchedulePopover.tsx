@@ -14,7 +14,7 @@ interface Props {
   onClose: () => void;
 }
 
-// Opens off a Needs Schedule workflow's "+" icon. These workflows have no
+// Opens off an Unscheduled workflow's "+" icon. These workflows have no
 // real cadence yet, so the only safe action is to create one.
 export default function AddToSchedulePopover({ anchorEl, workflow, onClose }: Props) {
   const c = useClaudeTokens();

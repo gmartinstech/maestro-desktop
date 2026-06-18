@@ -268,7 +268,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.lg}px`, overflow: 'hidden', bgcolor: c.bg.surface }}>
       {upcoming.length === 0 && (
-        <Typography sx={{ fontSize: '0.85rem', color: c.text.muted, textAlign: 'center', py: 3 }}>No scheduled workflows</Typography>
+        <Typography sx={{ fontSize: '0.85rem', color: c.text.muted, textAlign: 'center', py: 3 }}>No scheduled</Typography>
       )}
       {upcoming.map(({ date, events, isToday }, rowIdx) => (
         <Box
