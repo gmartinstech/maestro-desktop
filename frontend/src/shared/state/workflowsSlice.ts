@@ -156,6 +156,16 @@ export interface OpenCard {
   fixSeed?: { runId: string; stepIdx: number; stepLabel: string; error: string } | null;
 }
 
+// Transient ping for the global "a scheduled run just started" toast. nonce
+// bumps on every fresh scheduled start so the toast re-fires even when the
+// same workflow runs again. Cleared once the toast finishes fading out.
+interface RunStartSignal {
+  workflowId: string;
+  runId: string;
+  title: string;
+  nonce: number;
+}
+
 interface State {
   items: Record<string, Workflow>;
   runs: Record<string, WorkflowRun[]>;
@@ -167,10 +177,11 @@ interface State {
   cloudSmsEnabled: boolean;
   allRuns: WorkflowRun[];
   allRunsLoading: boolean;
+  runStartSignal: RunStartSignal | null;
   runControlPending: Record<string, WorkflowRunControlAction>;
 }
 
-const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false, runControlPending: {} };
+const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false, runStartSignal: null, runControlPending: {} };
 
 function mergeRunIntoState(state: State, r: WorkflowRun) {
   const arr = state.runs[r.workflow_id] || [];
@@ -202,6 +213,21 @@ function mergeRunIntoState(state: State, r: WorkflowRun) {
   // Only nudge from views that the user hasn't actively navigated away
   // from (saved / running). Edit, history, scheduling etc. stay put.
   const card = state.openCards[r.workflow_id];
+  // Ping the global toast when an unattended scheduled run begins, so the
+  // user notices even when they aren't looking at the card. Fire once per
+  // run (first running event has no prior, later step bumps do), skip if
+  // they're already watching the card live, and skip manual runs they
+  // just clicked themselves.
+  const watching = !!card && (card.view === 'running' || card.view === 'saved');
+  const startedFresh = (!prev || prev.status !== 'running') && r.status === 'running';
+  if (startedFresh && r.triggered_by === 'schedule' && !watching) {
+    state.runStartSignal = {
+      workflowId: r.workflow_id,
+      runId: r.id,
+      title: state.items[r.workflow_id]?.title || 'Workflow',
+      nonce: (state.runStartSignal?.nonce ?? 0) + 1,
+    };
+  }
   if (card) {
     const fromRunnable = card.view === 'saved' || card.view === 'running';
     if (r.status === 'running' && fromRunnable) {
@@ -431,6 +457,9 @@ const slice = createSlice({
       delete state.runs[action.payload];
       state.allRuns = state.allRuns.filter((r) => r.workflow_id !== action.payload);
     },
+    clearRunStartSignal(state) {
+      state.runStartSignal = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -516,5 +545,6 @@ export const {
   clearFixSeed,
   upsertWorkflow,
   removeWorkflow,
+  clearRunStartSignal,
 } = slice.actions;
 export default slice.reducer;

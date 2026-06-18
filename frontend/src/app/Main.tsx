@@ -23,6 +23,7 @@ import AppShell from './components/Layout/AppShell';
 import ImportEntryPoint from './components/share/ImportEntryPoint';
 import DashboardSelection from './pages/DashboardSelection/DashboardSelection';
 import ErrorBoundary from './components/feedback/ErrorBoundary';
+import ScheduledRunToast from './components/feedback/ScheduledRunToast';
 import { setPanelMode, disableOnboardingAfterCrash } from '@/shared/state/onboardingProgressSlice';
 
 const Skills = React.lazy(() => import('./pages/Skills/Skills'));
@@ -469,6 +470,7 @@ const ThemedApp: React.FC = () => {
             <DefaultModelGuard>
             <UpdateListener>
               <CrashRecoveryChip />
+              <ScheduledRunToast />
               <ImportEntryPoint />
               <DeepLinkListener>
                 <ErrorBoundary scope="routes">
