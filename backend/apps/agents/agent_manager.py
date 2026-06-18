@@ -3132,6 +3132,14 @@ class AgentManager:
                 logger.exception("auto-continuation dispatch failed")
         except asyncio.CancelledError:
             session.status = "stopped"
+            # A cancelled turn desyncs the CLI's resume transcript from
+            # session.messages: the SDK never recorded the interrupted turn,
+            # so resuming that sdk_session_id replays a history with no trace
+            # of the stopped reply and the model insists it wrote nothing
+            # ("nothing to continue"). Force the next turn (resume OR a fresh
+            # message) to rebuild history from session.messages so the model
+            # sees the same conversation the user does.
+            session.needs_fresh_session = True
             # Stopped mid-stream. The SDK's commit envelope never arrives on
             # cancel, so persist whatever text already streamed; otherwise the
             # reply the user just watched appear vanishes (the frontend wipes
