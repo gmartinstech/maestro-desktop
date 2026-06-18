@@ -200,8 +200,9 @@ class AgentManager:
                 continue
 
             if tool.auth_type == "oauth2" and tool.auth_status == "connected":
-                if tool.name.lower() == "discord":
-                    # Discord uses a shared bot token from .env, not user OAuth tokens.
+                if tool.name.lower() in ("discord", "github"):
+                    # Discord uses a shared bot token; GitHub OAuth-app tokens don't
+                    # expire and carry no refresh_token. Nothing to refresh either way.
                     refreshed = True
                 elif tool.name.lower() == "airtable":
                     refreshed = await refresh_airtable_token(tool)

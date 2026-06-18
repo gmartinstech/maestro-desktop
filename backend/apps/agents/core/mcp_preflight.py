@@ -57,6 +57,11 @@ CURATED_SHORTLIST: list[CuratedEntry] = [
         "description": "Read and write records, manage bases, tables, and fields in the user's Airtable.",
     },
     {
+        "id": "GitHub",
+        "title": "GitHub",
+        "description": "Repos, issues, pull requests, Actions, code search, gists; when the task involves the user's GitHub.",
+    },
+    {
         "id": "Reddit",
         "title": "Reddit",
         "description": "Browse subreddits, search posts, analyze users; when the task involves public Reddit content.",
