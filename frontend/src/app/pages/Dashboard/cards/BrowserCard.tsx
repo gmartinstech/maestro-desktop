@@ -1118,6 +1118,21 @@ const BrowserCard: React.FC<Props> = ({
 
       {/* Browser body: stacked webviews */}
       <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {/* Select-then-interact: the body is a live webview that swallows clicks, so
+            only the header used to select/drag the card. While the card is unselected
+            (and not cmd-panning or element-picking) lay a transparent catcher over the
+            body: a plain click bubbles to the card onClick (select), a drag runs the
+            same move handler as the header. It lifts the instant the card is selected,
+            so the page goes live again. Sits above the webview but below the end/crash
+            pills (z5/z6) and the agent overlay (z16) so it never steals their clicks. */}
+        {!isSelected && !cmdHeld && !isElementSelectMode && (
+          <Box
+            onPointerDown={handleDragPointerDown}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={handleDragPointerUp}
+            sx={{ position: 'absolute', inset: 0, zIndex: 4, cursor: isDragging ? 'grabbing' : 'grab' }}
+          />
+        )}
         {isElementSelectMode && (
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'none' }} />
         )}
