@@ -3,6 +3,7 @@ import os
 import tempfile
 import time
 import logging
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import HTTPException, Query, UploadFile, File
 from fastapi.responses import JSONResponse
@@ -290,6 +291,21 @@ async def put_app_theme_override(body: AppThemeOverridePayload):
     current.app_template_theme_override = body.mode
     await save_settings_async(current)
     return {"ok": True, "mode": current.app_template_theme_override}
+
+
+class DismissMcpSuggestionPayload(BaseModel):
+    ids: list[str]
+
+
+@settings.router.put("/dismiss-mcp-suggestion")
+async def put_dismiss_mcp_suggestion(body: DismissMcpSuggestionPayload):
+    """MERGE dismissed integration suggestions; the general PUT replaces the whole object and would blank secrets."""
+    current = load_settings()
+    now = datetime.now(timezone.utc).isoformat()
+    for tool_id in body.ids:
+        current.dismissed_mcp_suggestions[tool_id] = now
+    await save_settings_async(current)
+    return {"ok": True, "settings": current.model_dump()}
 
 
 @settings.router.get("/default-system-prompt")

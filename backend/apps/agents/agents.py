@@ -9,8 +9,14 @@ from fastapi.responses import JSONResponse
 import asyncio
 import json
 import logging
+import time
 
 logger = logging.getLogger(__name__)
+
+# Soft per-session throttle so the integration suggestion can fire on any turn
+# without nagging every message; only stamped when a suggestion actually emits.
+MCP_SUGGEST_COOLDOWN_S = 300.0
+p_mcp_suggest_cooldown: dict[str, float] = {}
 
 # Dedup concurrent generate-group-meta calls; collapses the 429 thundering herd by sharing one upstream Future per (session, group).
 _group_meta_inflight: dict[tuple[str, str], asyncio.Future] = {}
@@ -74,24 +80,26 @@ async def send_message(session_id: str, body: dict):
         raise HTTPException(status_code=400, detail="prompt is required")
 
     # Run MCP-suggestion classifier in parallel with the agent launch; fails open.
+    # Fires on any turn, but a per-session cooldown keeps it from nagging every message.
     try:
-        from backend.apps.agents.core.mcp_preflight import run_preflight
-        from backend.apps.agents.core.ws_manager import ws_manager as _ws
+        last_suggested = p_mcp_suggest_cooldown.get(session_id, 0.0)
+        if time.monotonic() - last_suggested >= MCP_SUGGEST_COOLDOWN_S:
+            from backend.apps.agents.core.mcp_preflight import run_preflight
 
-        async def _emit_preflight():
-            try:
-                result = await run_preflight(prompt, task_id=session_id)
-                if result.get("suggestions") or result.get("is_vague"):
-                    await _ws.send_to_session(session_id, "agent:mcp_suggestions", {
-                        "session_id": session_id,
-                        "suggestions": result.get("suggestions", []),
-                        "is_vague": bool(result.get("is_vague")),
-                    })
-            except Exception:
-                pass
+            async def _emit_preflight():
+                try:
+                    result = await run_preflight(prompt, task_id=session_id)
+                    if result.get("suggestions"):
+                        p_mcp_suggest_cooldown[session_id] = time.monotonic()
+                        await ws_manager.send_to_session(session_id, "agent:mcp_suggestions", {
+                            "session_id": session_id,
+                            "suggestions": result.get("suggestions", []),
+                            "is_vague": bool(result.get("is_vague")),
+                        })
+                except Exception:
+                    pass
 
-        import asyncio as _asyncio
-        _asyncio.create_task(_emit_preflight())
+            asyncio.create_task(_emit_preflight())
     except Exception:
         pass
 

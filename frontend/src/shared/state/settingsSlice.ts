@@ -168,6 +168,19 @@ export const resetSystemPrompt = createAsyncThunk(
   }
 );
 
+export const dismissMcpSuggestion = createAsyncThunk(
+  'settings/dismissMcpSuggestion',
+  async (ids: string[]) => {
+    const res = await fetch(`${SETTINGS_API}/dismiss-mcp-suggestion`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    return data.settings as AppSettings;
+  }
+);
+
 export const browseDirectories = createAsyncThunk(
   'settings/browseDirectories',
   async (path: string) => {
@@ -298,6 +311,10 @@ const settingsSlice = createSlice({
         state.data = action.payload;
         state.draft = null;
         state.draftTab = null;
+      })
+      .addCase(dismissMcpSuggestion.fulfilled, (state, action) => {
+        state.latestWriteId = action.meta.requestId;
+        state.data = action.payload;
       });
   },
 });
