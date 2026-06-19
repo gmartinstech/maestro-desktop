@@ -365,6 +365,11 @@ async def resolve_community_skill(source: str, skill_id: str) -> dict:
             raise ValueError("SKILL.md could not be fetched")
 
     meta, _body = _parse_frontmatter(files["SKILL.md"])
+    # Reuse the .swarm importer's content scan: flag files holding secret-shaped
+    # literals (the author's leaked key, or a sketchy skill) so the user sees it
+    # before installing from an unvetted repo.
+    from backend.apps.swarm.redact import find_secrets_in_files
+    secret_findings = find_secrets_in_files({rel: data.encode("utf-8", "ignore") for rel, data in files.items()})
     return {
         "name": meta.get("name") or skill_id,
         "description": meta.get("description", ""),
@@ -372,6 +377,7 @@ async def resolve_community_skill(source: str, skill_id: str) -> dict:
         "skill_id": skill_id,
         "files": files,
         "scripts": sorted(rel for rel in files if _is_script_path(rel)),
+        "secret_findings": secret_findings,
     }
 
 
@@ -436,6 +442,7 @@ async def registry_install(req: _InstallRequest):
         "files": sorted(resolved["files"].keys()),
         "scripts": resolved["scripts"],
         "has_scripts": bool(resolved["scripts"]),
+        "secret_findings": resolved.get("secret_findings", []),
     }
     if not req.confirm:
         return {"installed": False, "disclosure": disclosure}

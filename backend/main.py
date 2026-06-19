@@ -766,7 +766,7 @@ async def settings_meta(action: str, request: Request):
     from backend.apps.settings.store import load_settings
     from backend.apps.settings.models import AppSettings
     from backend.apps.settings.redaction import redact_settings
-    from backend.apps.settings.settings import SERVER_OWNED_FIELDS, update_settings
+    from backend.apps.settings.settings import SERVER_OWNED_FIELDS, apply_settings_update
     from backend.apps.agents.session_credential import (
         PoweringCredential, resolve_powering_credential, write_would_suicide,
     )
@@ -786,7 +786,7 @@ async def settings_meta(action: str, request: Request):
 
         valid_fields = set(AppSettings.model_fields.keys())
         outcomes: dict[str, dict] = {}
-        # Serialize the read-modify-write: SettingsWrite goes through update_settings,
+        # Serialize the read-modify-write: SettingsWrite goes through apply_settings_update,
         # which awaits (so two autonomous agents would interleave and clobber each
         # other's fields while BOTH got an "applied" result). The lock makes agent
         # writes serial so the last load always sees the prior write. (Agent vs the
@@ -828,7 +828,7 @@ async def settings_meta(action: str, request: Request):
                         new_body = AppSettings(**merged)
                 if staged and new_body is not None:
                     try:
-                        await update_settings(new_body)
+                        await apply_settings_update(new_body)
                         for f in staged:
                             outcomes[f] = {"status": "applied"}
                     except Exception as e:

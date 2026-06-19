@@ -177,6 +177,18 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
                   {selected.source} <OpenInNewIcon sx={{ fontSize: 13 }} />
                 </Box>
 
+                {/* The real risk for an agent platform: SKILL.md is injected as instructions the
+                    agent follows, with its full tool surface. Say that plainly, not just "scripts". */}
+                <Alert severity="info" icon={<WarningAmberIcon fontSize="small" />} sx={{ fontSize: '0.78rem', py: 0 }}>
+                  This is an unvetted community skill. Its SKILL.md becomes instructions your agent will follow, and it can use your agent's tools (files, browser, settings). Only install from a source you trust, read it below first.
+                </Alert>
+
+                {disclosure.secret_findings.length > 0 && (
+                  <Alert severity="error" icon={<WarningAmberIcon fontSize="small" />} sx={{ fontSize: '0.78rem', py: 0 }}>
+                    {disclosure.secret_findings.length} file{disclosure.secret_findings.length === 1 ? '' : 's'} contain secret-shaped text ({disclosure.secret_findings.slice(0, 3).join(', ')}{disclosure.secret_findings.length > 3 ? '…' : ''}). A trustworthy skill shouldn't ship credentials; treat this as a red flag.
+                  </Alert>
+                )}
+
                 {disclosure.has_scripts && (
                   <Alert severity="warning" icon={<WarningAmberIcon fontSize="small" />} sx={{ fontSize: '0.78rem', py: 0 }}>
                     Includes {disclosure.scripts.length} script file{disclosure.scripts.length === 1 ? '' : 's'} that can run code when an agent uses this skill. Installing only writes the files; nothing runs until an agent does, and that still goes through normal command approval.

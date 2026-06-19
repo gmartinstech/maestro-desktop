@@ -149,6 +149,7 @@ export interface InstallDisclosure {
   files: string[];
   scripts: string[];
   has_scripts: boolean;
+  secret_findings: string[];
 }
 
 export async function searchCommunitySkills(q: string): Promise<CommunitySkill[]> {

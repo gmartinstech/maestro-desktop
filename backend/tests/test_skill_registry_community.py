@@ -47,6 +47,19 @@ def test_missing_skill_raises():
         _select_skill_paths([{"type": "blob", "path": "a/SKILL.md"}], "nonexistent")
 
 
+def test_install_disclosure_flags_secret_shaped_files():
+    # The scan we wire into the install disclosure (reused from the .swarm importer)
+    # must flag a community skill shipping credentials, and leave clean files alone.
+    from backend.apps.swarm.redact import find_secrets_in_files
+    files = {
+        "SKILL.md": b"Renders PDFs. No secrets.",
+        "config.py": b'API_KEY = "sk-ant-api03-AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH"',
+    }
+    hits = find_secrets_in_files(files)
+    assert "config.py" in hits
+    assert "SKILL.md" not in hits
+
+
 def test_script_classification():
     assert _is_script_path("run.sh")
     assert _is_script_path("helper.py")

@@ -148,6 +148,16 @@ SERVER_OWNED_FIELDS = (
 
 @settings.router.put("")
 async def update_settings(body: AppSettings):
+    saved = await apply_settings_update(body)
+    return {"ok": True, "settings": saved.model_dump()}
+
+
+async def apply_settings_update(body: AppSettings) -> AppSettings:
+    """Persist a full settings object with all the safety side effects: restore
+    server-owned fields, hand the wheel back from the free trial when a real
+    model is connected, reconcile 9router provider connections, and sync
+    analytics/identity. The PUT route and the agent settings tool both call this
+    so the write semantics can't drift between them. Returns the saved body."""
     from backend.apps.service.client import sync as _sync
 
     old = load_settings()
@@ -271,7 +281,7 @@ async def update_settings(body: AppSettings):
             any_keyed_added,
         ))
 
-    return {"ok": True, "settings": body.model_dump()}
+    return body
 
 
 class AppThemeOverridePayload(BaseModel):
