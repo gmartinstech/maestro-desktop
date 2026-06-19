@@ -8,7 +8,8 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
-from fastapi import Query
+from fastapi import HTTPException, Query
+from pydantic import BaseModel
 from backend.config.Apps import SubApp
 
 logger = logging.getLogger(__name__)
@@ -230,7 +231,16 @@ async def registry_search(
     offset: int = Query(0, ge=0),
     sort: str = Query("name", description="Sort by: name"),
     category: str = Query("", description="Filter by category"),
+    source: str = Query("curated", description="curated (vetted) | community (skills.sh wild registry)"),
 ):
+    # The wild registry is a remote 600k-entry index, searched live, not mirrored.
+    if source == "community":
+        try:
+            return await _community_search(q, limit)
+        except Exception as e:
+            logger.warning(f"community skill search failed: {e}")
+            return {"skills": [], "total": 0, "offset": 0, "limit": limit, "source": "community", "error": "skills.sh unreachable"}
+
     pool = list(_cache.values())
     if category:
         cat_lower = category.lower()
@@ -268,3 +278,169 @@ async def registry_detail(skill_name: str):
     if not sk:
         return {"error": "Skill not found"}, 404
     return {"skill": sk}
+
+
+# ---------------------------------------------------------------------------
+# Community source: the skills.sh wild registry (~600k+ telemetry-ranked,
+# zero-curation community skills, GitHub-repo backed). The curated source above
+# (anthropics/skills) stays the default; community is opt-in via ?source=community
+# and the UI flags it as unvetted. See .claude/SECURITY.md for the posture: this
+# installs INERT files only (never executes), discloses scripts before commit,
+# and any skill script later runs through the same gated Bash path as anything.
+# ---------------------------------------------------------------------------
+
+_COMMUNITY_SEARCH_URL = "https://skills.sh/api/search"
+_GH_API = "https://api.github.com"
+_GH_RAW = "https://raw.githubusercontent.com"
+_MAX_SKILL_FILES = 60
+_SCRIPT_EXTS = (".sh", ".py", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl", ".ps1", ".bat", ".php")
+
+
+def _is_script_path(rel: str) -> bool:
+    """Whether a skill file is executable code worth disclosing before install."""
+    if rel.lower().endswith(_SCRIPT_EXTS):
+        return True
+    head = rel.split("/", 1)[0].lower()
+    return head in ("scripts", "bin", "hooks")
+
+
+def _select_skill_paths(tree: list[dict], skill_id: str) -> tuple[str, list[str]]:
+    """From a GitHub recursive tree, pick the SKILL.md for `skill_id` (shortest
+    matching path) and every file living beside it. Pure so the resolution logic
+    is unit-tested without a network round-trip."""
+    blobs = [t["path"] for t in tree if t.get("type") == "blob" and isinstance(t.get("path"), str)]
+    candidates = [p for p in blobs if p.endswith(f"/{skill_id}/SKILL.md") or p == f"{skill_id}/SKILL.md"]
+    if not candidates:
+        raise ValueError(f"no SKILL.md for '{skill_id}' in this repo")
+    skill_md = min(candidates, key=len)
+    skill_dir = skill_md[: -len("/SKILL.md")] if "/" in skill_md else ""
+    prefix = (skill_dir + "/") if skill_dir else ""
+    members = [p for p in blobs if (p.startswith(prefix) if prefix else "/" not in p)]
+    return skill_md, members[:_MAX_SKILL_FILES]
+
+
+class RegistryRateLimited(Exception):
+    """GitHub's unauthenticated API (60/hr) is exhausted; the caller surfaces a
+    'try again shortly' rather than a generic failure."""
+
+
+async def _fetch_repo_tree(client: httpx.AsyncClient, owner: str, repo: str) -> tuple[str, list[dict]]:
+    """Recursive tree of owner/repo, trying main then master (one API call each,
+    usually just one). Avoids a separate repo-meta call to halve GitHub API use.
+    Raises RegistryRateLimited on a 403, ValueError if no usable branch."""
+    last_status = None
+    for branch in ("main", "master"):
+        r = await client.get(f"{_GH_API}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1")
+        if r.status_code == 200:
+            return branch, r.json().get("tree", [])
+        if r.status_code == 403:
+            raise RegistryRateLimited()
+        last_status = r.status_code
+    raise ValueError(f"repo {owner}/{repo} has no main/master branch (last status {last_status})")
+
+
+async def resolve_community_skill(source: str, skill_id: str) -> dict:
+    """Resolve a skills.sh entry (source='owner/repo', skill_id=folder name) to
+    its files via the GitHub trees API. Returns name/description/repo_url plus
+    {relpath: content} and the list of script files. Fetches text only; never
+    runs anything. Raises ValueError on a bad source or a missing skill, and
+    RegistryRateLimited when GitHub's anon API is exhausted."""
+    owner, _, repo = source.partition("/")
+    if not owner or not repo:
+        raise ValueError(f"unrecognized source '{source}' (expected owner/repo)")
+    headers = {"User-Agent": "openswarm-skill-registry", "Accept": "application/vnd.github+json"}
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+        branch, tree = await _fetch_repo_tree(client, owner, repo)
+        skill_md, members = _select_skill_paths(tree, skill_id)
+        skill_dir = skill_md[: -len("/SKILL.md")] if "/" in skill_md else ""
+        prefix = (skill_dir + "/") if skill_dir else ""
+
+        files: dict[str, str] = {}
+        for p in members:
+            rel = p[len(prefix):] if prefix else p
+            raw = await client.get(f"{_GH_RAW}/{owner}/{repo}/{branch}/{p}")
+            if raw.status_code == 200:
+                files[rel] = raw.text
+        if "SKILL.md" not in files:
+            raise ValueError("SKILL.md could not be fetched")
+
+    meta, _body = _parse_frontmatter(files["SKILL.md"])
+    return {
+        "name": meta.get("name") or skill_id,
+        "description": meta.get("description", ""),
+        "repo_url": f"https://github.com/{owner}/{repo}/tree/{branch}/{skill_dir}".rstrip("/"),
+        "skill_id": skill_id,
+        "files": files,
+        "scripts": sorted(rel for rel in files if _is_script_path(rel)),
+    }
+
+
+async def _community_search(q: str, limit: int) -> dict:
+    """Live-proxy a query to the skills.sh wild registry. Not cached: it's a
+    600k-entry remote index, so we search it on demand rather than mirror it."""
+    async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "openswarm"}) as client:
+        r = await client.get(_COMMUNITY_SEARCH_URL, params={"q": q or "skill"})
+        r.raise_for_status()
+        data = r.json()
+    skills = []
+    for s in (data.get("skills") or [])[:limit]:
+        src = s.get("source", "")
+        installs = s.get("installs", 0)
+        skills.append({
+            "name": s.get("name", ""),
+            "description": f"{installs:,} installs",
+            "folder": s.get("skillId", ""),
+            "category": src,
+            "repositoryUrl": f"https://github.com/{src}" if src else "",
+            "source": src,
+            "skillId": s.get("skillId", ""),
+            "installs": installs,
+            "community": True,
+        })
+    return {"skills": skills, "total": len(skills), "offset": 0, "limit": limit, "source": "community"}
+
+
+class _InstallRequest(BaseModel):
+    source: str
+    skill_id: str
+    confirm: bool = False
+
+
+@skill_registry.router.post("/install")
+async def registry_install(req: _InstallRequest):
+    """Install a community (skills.sh) skill, in two honest steps.
+
+    confirm=false (default): resolve + return a disclosure (the SKILL.md and the
+    list of files, flagging scripts) WITHOUT writing anything, so the user sees
+    exactly what they're about to install from an unvetted repo.
+    confirm=true: write the skill folder to ~/.claude/skills/. Files only; no
+    script is executed here. Curated skills install via the normal skills CRUD;
+    this endpoint is the wild-registry path."""
+    try:
+        resolved = await resolve_community_skill(req.source, req.skill_id)
+    except RegistryRateLimited:
+        raise HTTPException(status_code=429, detail="GitHub rate limit hit fetching this skill; try again in a few minutes.")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"could not fetch skill: {e}")
+
+    disclosure = {
+        "name": resolved["name"],
+        "description": resolved["description"],
+        "repo_url": resolved["repo_url"],
+        "skill_md": resolved["files"].get("SKILL.md", ""),
+        "files": sorted(resolved["files"].keys()),
+        "scripts": resolved["scripts"],
+        "has_scripts": bool(resolved["scripts"]),
+    }
+    if not req.confirm:
+        return {"installed": False, "disclosure": disclosure}
+
+    from backend.apps.skills.skills import write_folder_skill
+    skill = write_folder_skill(
+        resolved["skill_id"],
+        resolved["files"],
+        {"name": resolved["name"], "description": resolved["description"]},
+    )
+    return {"installed": True, "skill": skill.model_dump(), "disclosure": disclosure}

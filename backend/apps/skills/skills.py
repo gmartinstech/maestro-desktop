@@ -273,6 +273,46 @@ async def get_skill(skill_id: str):
     raise HTTPException(status_code=404, detail="Skill not found")
 
 
+def _safe_slug(raw: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", (raw or "").strip().lower()).strip("-")
+    return slug or "skill"
+
+
+def write_folder_skill(skill_id: str, files: dict[str, str], meta: dict) -> Skill:
+    """Write a multi-file skill folder (relpath -> content) under SKILLS_DIR and
+    index it. `files` must include a 'SKILL.md'. Shared by registry install and
+    zip/.swarm import. Relpaths that try to escape the skill folder (../, abs
+    paths) are dropped, an untrusted registry archive can't write outside its
+    own dir."""
+    slug = _safe_slug(skill_id)
+    base = os.path.join(SKILLS_DIR, slug)
+    base_abs = os.path.abspath(base)
+    os.makedirs(base, exist_ok=True)
+    for rel, content in files.items():
+        dest = os.path.abspath(os.path.join(base, rel))
+        if os.path.commonpath([base_abs, dest]) != base_abs:
+            logger.warning("skill import: dropped path-escape entry %r", rel)
+            continue
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    index = _load_index()
+    index[slug] = {
+        "name": meta.get("name") or slug,
+        "description": meta.get("description", ""),
+        "command": meta.get("command", slug),
+    }
+    _save_index(index)
+
+    md_path, kind = _skill_md_path(slug)
+    if not md_path:
+        raise HTTPException(status_code=400, detail="skill had no SKILL.md")
+    with open(md_path, encoding="utf-8") as f:
+        content = f.read()
+    return _build_skill(slug, content, md_path, kind, index)
+
+
 @skills.router.post("/create")
 async def create_skill(body: SkillCreate):
     slug = body.name.lower().replace(" ", "-")
