@@ -23,6 +23,7 @@ import asyncio
 import json
 import os
 import shutil
+import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -37,6 +38,7 @@ def isolated_data_dir(monkeypatch, tmp_path):
     starts with empty caches."""
     from backend.apps.workflows import storage as _storage
     from backend.apps.workflows import escalation as _escalation
+    from backend.apps.workflows import executor as _executor
     monkeypatch.setattr(_storage, "DATA_DIR", str(tmp_path / "workflows"))
     monkeypatch.setattr(_storage, "RUNS_DIR", str(tmp_path / "workflows" / "runs"))
     monkeypatch.setattr(_storage, "PAUSED_FILE", str(tmp_path / "workflows" / "paused.json"))
@@ -47,6 +49,8 @@ def isolated_data_dir(monkeypatch, tmp_path):
     # Reset escalation registry between tests.
     _escalation._tasks.clear()
     _escalation._state.clear()
+    _executor._run_control.clear()
+    _executor._run_pause_override.clear()
     # Also clear audit dir reference; audit.py reads DATA_DIR at import via
     # module-level expression, so reach in and override the AUDIT_DIR too.
     from backend.apps.workflows import audit as _audit
@@ -63,6 +67,11 @@ def _make_wf(**overrides):
     )
     base.update(overrides)
     return Workflow(**base)
+
+
+class _NoopDebug:
+    def __call__(self, *args, **kwargs):
+        return None
 
 
 # --- DST tests ---------------------------------------------------------------
@@ -180,6 +189,122 @@ def test_month_repeat_no_longer_clamps_to_28():
     assert nxt.astimezone(tz).date() == datetime(2025, 4, 30).date()
 
 
+def test_calendar_occurrences_use_schedule_timezone_not_viewer_timezone():
+    """A 9am New York schedule returns UTC instants. The frontend can then
+    render those instants in the viewer's current timezone."""
+    from backend.apps.workflows import scheduler
+    from backend.apps.workflows.models import ScheduleConfig
+    wf = _make_wf(
+        schedule=ScheduleConfig(
+            enabled=True,
+            repeat_unit="day",
+            repeat_every=1,
+            hour=9,
+            minute=0,
+            timezone="America/New_York",
+        )
+    )
+    wf.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    start = datetime(2026, 6, 18, 0, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 6, 20, 0, 0, tzinfo=timezone.utc)
+    fires = scheduler.occurrences_between(wf, start, end)
+    assert len(fires) == 2
+    assert fires[0].astimezone(ZoneInfo("America/New_York")).hour == 9
+    assert fires[0].astimezone(ZoneInfo("America/Los_Angeles")).hour == 6
+
+
+def test_calendar_occurrences_stay_wall_clock_across_dst():
+    from backend.apps.workflows import scheduler
+    from backend.apps.workflows.models import ScheduleConfig
+    wf = _make_wf(
+        schedule=ScheduleConfig(
+            enabled=True,
+            repeat_unit="day",
+            repeat_every=1,
+            hour=9,
+            minute=0,
+            timezone="America/New_York",
+        )
+    )
+    wf.created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    fires = scheduler.occurrences_between(
+        wf,
+        datetime(2025, 3, 8, 0, 0, tzinfo=timezone.utc),
+        datetime(2025, 3, 11, 0, 0, tzinfo=timezone.utc),
+    )
+    ny = ZoneInfo("America/New_York")
+    locals_ = [f.astimezone(ny) for f in fires]
+    assert [d.date() for d in locals_] == [
+        datetime(2025, 3, 8).date(),
+        datetime(2025, 3, 9).date(),
+        datetime(2025, 3, 10).date(),
+    ]
+    assert all((d.hour, d.minute) == (9, 0) for d in locals_)
+    assert [f.hour for f in fires] == [14, 13, 13]
+
+
+def test_calendar_occurrences_honor_end_conditions():
+    from backend.apps.workflows import scheduler
+    from backend.apps.workflows.models import ScheduleConfig
+    start = datetime(2026, 6, 18, 0, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 6, 22, 0, 0, tzinfo=timezone.utc)
+    wf = _make_wf(
+        schedule=ScheduleConfig(
+            enabled=True,
+            repeat_unit="day",
+            repeat_every=1,
+            hour=9,
+            minute=0,
+            timezone="UTC",
+            max_runs=3,
+            runs_count=1,
+            ends_at=datetime(2026, 6, 21, 0, 0, tzinfo=timezone.utc),
+        )
+    )
+    wf.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    fires = scheduler.occurrences_between(wf, start, end)
+    assert [f.date() for f in fires] == [
+        datetime(2026, 6, 18).date(),
+        datetime(2026, 6, 19).date(),
+    ]
+
+    wf.schedule.enabled = False
+    assert scheduler.occurrences_between(wf, start, end) == []
+
+    wf.schedule.enabled = True
+    wf.schedule.repeat_unit = "week"
+    wf.schedule.on_days = []
+    assert scheduler.occurrences_between(wf, start, end) == []
+
+
+def test_calendar_endpoint_returns_sorted_utc_events():
+    from backend.apps.workflows import storage
+    from backend.apps.workflows.workflows import list_calendar_events
+    from backend.apps.workflows.models import ScheduleConfig
+    wf = _make_wf(
+        schedule=ScheduleConfig(
+            enabled=True,
+            repeat_unit="day",
+            repeat_every=1,
+            hour=9,
+            minute=0,
+            timezone="America/New_York",
+        )
+    )
+    wf.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    storage.save_workflow(wf)
+
+    async def runner():
+        return await list_calendar_events(
+            from_="2026-06-18T00:00:00+00:00",
+            to="2026-06-20T00:00:00+00:00",
+        )
+
+    res = asyncio.new_event_loop().run_until_complete(runner())
+    assert [e["workflow_id"] for e in res["events"]] == [wf.id, wf.id]
+    assert res["events"][0]["fire_at"].startswith("2026-06-18T13:00:00")
+
+
 # --- Cost cap ----------------------------------------------------------------
 
 def test_cost_cap_skips_with_clear_error(monkeypatch):
@@ -232,6 +357,59 @@ def test_freeze_not_forced_when_source_session_present():
     )
     result = asyncio.new_event_loop().run_until_complete(create_workflow(body))
     assert result["actions"]["freeze"] is False
+
+
+def test_create_enabled_schedule_normalizes_local_timezone(monkeypatch):
+    from backend.apps.workflows import scheduler
+    from backend.apps.workflows.workflows import create_workflow
+    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig
+    monkeypatch.setenv("OPENSWARM_TIMEZONE", "America/Chicago")
+    monkeypatch.setattr(scheduler, "_host_tz_cache", None)
+    body = WorkflowCreate(
+        title="local-tz-create",
+        schedule=ScheduleConfig(
+            enabled=True,
+            repeat_unit="day",
+            repeat_every=1,
+            hour=9,
+            minute=0,
+            timezone="local",
+        ),
+    )
+    result = asyncio.new_event_loop().run_until_complete(create_workflow(body))
+    assert result["schedule"]["timezone"] == "America/Chicago"
+
+
+def test_enable_schedule_normalizes_local_timezone_and_preserves_concrete_timezone(monkeypatch):
+    from backend.apps.workflows import storage, scheduler
+    from backend.apps.workflows.workflows import update_workflow
+    from backend.apps.workflows.models import WorkflowUpdate, ScheduleConfig
+    monkeypatch.setenv("OPENSWARM_TIMEZONE", "America/Denver")
+    monkeypatch.setattr(scheduler, "_host_tz_cache", None)
+
+    wf = _make_wf()
+    wf.schedule.enabled = False
+    wf.schedule.timezone = "local"
+    storage.save_workflow(wf)
+
+    async def enable_runner():
+        sched = ScheduleConfig(**wf.schedule.model_dump(mode="json"))
+        sched.enabled = True
+        return await update_workflow(wf.id, WorkflowUpdate(schedule=sched), if_match=None)
+
+    enabled = asyncio.new_event_loop().run_until_complete(enable_runner())
+    assert enabled["schedule"]["timezone"] == "America/Denver"
+
+    stored = storage.get_workflow(wf.id)
+    sched = ScheduleConfig(**stored.schedule.model_dump(mode="json"))
+    sched.hour = 10
+
+    async def edit_runner():
+        return await update_workflow(wf.id, WorkflowUpdate(schedule=sched), if_match=None)
+
+    edited = asyncio.new_event_loop().run_until_complete(edit_runner())
+    assert edited["schedule"]["timezone"] == "America/Denver"
+    assert edited["schedule"]["hour"] == 10
 
 
 # --- Audit log ---------------------------------------------------------------
@@ -317,6 +495,83 @@ def test_paused_flag_persists_and_blocks_tick():
     asyncio.new_event_loop().run_until_complete(scheduler._tick())
     after = storage.get_workflow(wf.id).next_run_at
     assert before == after
+
+
+def test_pause_run_returns_confirmed_state_before_agent_stop_finishes(monkeypatch):
+    async def scenario():
+        from backend.apps.workflows import storage
+        from backend.apps.workflows.models import WorkflowRun
+        monkeypatch.setitem(sys.modules, "debug", _NoopDebug())
+        from backend.apps.workflows import workflows as routes
+        from backend.apps.agents import agent_manager as agent_manager_module
+
+        wf = _make_wf()
+        storage.save_workflow(wf)
+        run = WorkflowRun(workflow_id=wf.id, status="running", session_id="s1", triggered_by="manual")
+        storage.record_run(run)
+        broadcasts: list[bool] = []
+
+        async def fake_broadcast(_workflow_id, updated_run):
+            broadcasts.append(updated_run.paused)
+
+        stop_started = asyncio.Event()
+        stop_release = asyncio.Event()
+
+        async def fake_stop_agent(_session_id):
+            stop_started.set()
+            await stop_release.wait()
+
+        monkeypatch.setattr(routes, "_broadcast_run", fake_broadcast)
+        monkeypatch.setattr(agent_manager_module.agent_manager, "stop_agent", fake_stop_agent)
+
+        result = await asyncio.wait_for(routes.pause_run(run.id), timeout=0.05)
+        assert result["run"]["paused"] is True
+        assert storage.list_runs(wf.id)[0].paused is True
+        assert broadcasts[-1] is True
+        await asyncio.wait_for(stop_started.wait(), timeout=0.05)
+        stop_release.set()
+        await asyncio.sleep(0)
+
+    asyncio.run(scenario())
+
+
+def test_resume_run_returns_confirmed_state_before_resume_message_finishes(monkeypatch):
+    async def scenario():
+        from backend.apps.workflows import storage
+        from backend.apps.workflows.models import WorkflowRun
+        monkeypatch.setitem(sys.modules, "debug", _NoopDebug())
+        from backend.apps.workflows import workflows as routes
+        from backend.apps.agents import agent_manager as agent_manager_module
+
+        wf = _make_wf()
+        storage.save_workflow(wf)
+        run = WorkflowRun(workflow_id=wf.id, status="running", session_id="s1", triggered_by="manual", paused=True)
+        storage.record_run(run)
+        broadcasts: list[bool] = []
+
+        async def fake_broadcast(_workflow_id, updated_run):
+            broadcasts.append(updated_run.paused)
+
+        send_started = asyncio.Event()
+        send_release = asyncio.Event()
+
+        async def fake_send_message(_session_id, _prompt, hidden=False):
+            assert hidden is True
+            send_started.set()
+            await send_release.wait()
+
+        monkeypatch.setattr(routes, "_broadcast_run", fake_broadcast)
+        monkeypatch.setattr(agent_manager_module.agent_manager, "send_message", fake_send_message)
+
+        result = await asyncio.wait_for(routes.resume_run(run.id), timeout=0.05)
+        assert result["run"]["paused"] is False
+        assert storage.list_runs(wf.id)[0].paused is False
+        assert broadcasts[-1] is False
+        await asyncio.wait_for(send_started.wait(), timeout=0.05)
+        send_release.set()
+        await asyncio.sleep(0)
+
+    asyncio.run(scenario())
 
 
 # --- Escalation --------------------------------------------------------------

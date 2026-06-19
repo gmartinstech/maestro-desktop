@@ -28,7 +28,7 @@ import Tooltip from '@mui/material/Tooltip';
 import { useEffect } from 'react';
 import ScheduleCalendar from './ScheduleCalendar';
 import AddToSchedulePopover from './AddToSchedulePopover';
-import { WEEKDAY_LABEL, addDays, sameDay, startOfMonthGrid, isWorkflowSchedulable } from './scheduleUtils';
+import { WEEKDAY_LABEL, addDays, sameDay, startOfMonthGrid, isWorkflowSchedulable, stepsSignature } from './scheduleUtils';
 import { isRealTitle } from './workflowVisuals';
 import { Typewriter } from '@/app/components/feedback/Animated';
 
@@ -144,6 +144,23 @@ const WorkflowsHubCard: React.FC<Props> = ({
   const [view, setView] = useState<CalendarView>('List');
   const [viewOpen, setViewOpen] = useState(false);
   const [refDate, setRefDate] = useState(new Date());
+
+  // The hub card lives on the canvas for days at a time, so a refDate frozen
+  // at mount leaves the calendar stuck on the day it was opened (e.g. still
+  // showing "yesterday" past midnight). Roll it forward when the day flips,
+  // but only if the user was parked on today, so manual navigation is left be.
+  const refDateRef = useRef(refDate);
+  refDateRef.current = refDate;
+  useEffect(() => {
+    let lastToday = new Date();
+    const id = window.setInterval(() => {
+      const now = new Date();
+      if (sameDay(now, lastToday)) return;
+      if (sameDay(refDateRef.current, lastToday)) setRefDate(now);
+      lastToday = now;
+    }, 60000);
+    return () => window.clearInterval(id);
+  }, []);
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // Right-click on a sidebar row opens this menu pinned to the cursor.
@@ -522,7 +539,10 @@ const WorkflowsHubCard: React.FC<Props> = ({
         anchorPosition={sidebarCtxMenu ? { top: sidebarCtxMenu.y, left: sidebarCtxMenu.x } : undefined}>
         <MenuItem onClick={() => {
           if (!sidebarCtxMenu) return;
-          dispatch(runWorkflowNow(sidebarCtxMenu.workflow.id));
+          dispatch(runWorkflowNow({
+            id: sidebarCtxMenu.workflow.id,
+            signature: stepsSignature(sidebarCtxMenu.workflow.steps),
+          }));
           closeSidebarCtxMenu();
         }}>Run now</MenuItem>
         {sidebarCtxMenu && isWorkflowSchedulable(sidebarCtxMenu.workflow) && (

@@ -20,6 +20,8 @@ import StepList from './StepList';
 import AgentChat from '@/app/pages/AgentChat/AgentChat';
 import { useOpenSidecar } from './WorkflowCardLiveViews';
 import EditAgentSavePopovers, { type SavePhase } from './EditAgentSavePopovers';
+import { runWorkflowTest } from './runWorkflowTest';
+import { needsScheduleTestWarning } from './scheduleUtils';
 
 interface Props {
   workflow: Workflow;
@@ -112,6 +114,8 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
   const [saveAnchorEl, setSaveAnchorEl] = useState<HTMLElement | null>(null);
   const [testSessionId, setTestSessionId] = useState<string | null>(null);
   const draftSteps = workflow.draft_steps ?? steps;
+  const canSave = draftSteps.some((s) => (s.text || '').trim().length > 0);
+  const allowDiscard = !workflow.unsaved;
   // A draft always exists in edit mode (we snapshot on entry), so only flag
   // "unsaved" once the draft actually diverges from the committed steps.
   const hasChanges = workflow.draft_steps != null && JSON.stringify(workflow.draft_steps) !== JSON.stringify(workflow.steps);
@@ -134,35 +138,31 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
     } catch { /* best-effort */ }
   }, [testSessionId]);
 
+  const onSaveNow = useCallback(async () => {
+    if (!canSave) return;
+    setSavePhase('idle');
+    try {
+      await dispatch(commitDraft(workflow.id)).unwrap();
+    } catch {
+      return;
+    }
+    toSaved();
+  }, [canSave, dispatch, workflow.id, toSaved]);
+
   const onSaveClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    if (!canSave) return;
+    // Already validated this exact version? Skip the "test first?" nudge.
+    if (!needsScheduleTestWarning(workflow)) { void onSaveNow(); return; }
     setSaveAnchorEl(e.currentTarget);
     setSavePhase('ask-test');
-  }, []);
-
-  const onSaveNow = useCallback(async () => {
-    setSavePhase('idle');
-    await dispatch(commitDraft(workflow.id));
-    toSaved();
-  }, [dispatch, workflow.id, toSaved]);
+  }, [canSave, workflow, onSaveNow]);
 
   const onRunTest = useCallback(async () => {
-    try {
-      const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
-      const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(workflow.id)}/test-run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ steps: draftSteps }),
-      });
-      if (!res.ok) { setSavePhase('idle'); return; }
-      const data = await res.json();
-      const sid = data?.session_id as string | undefined;
-      if (!sid) { setSavePhase('idle'); return; }
-      setTestSessionId(sid);
-      // The Test Agent card now owns the post-test decision (Continue editing /
-      // Save workflow) in its own footer, so just close this popover.
-      setSavePhase('idle');
-      await openSidecar(sid, 'testing');
-    } catch { setSavePhase('idle'); }
+    setSavePhase('idle');
+    // The Test Agent card now owns the post-test decision (Continue editing /
+    // Save workflow) in its own footer, so just close this popover.
+    const sid = await runWorkflowTest(workflow.id, draftSteps, openSidecar);
+    if (sid) setTestSessionId(sid);
   }, [workflow.id, draftSteps, openSidecar]);
 
   const onDiscardClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
@@ -199,18 +199,22 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
             <Typography sx={{ fontSize: '0.74rem', color: c.text.muted }}>· unsaved</Typography>
           )}
           <Box sx={{ flex: 1 }} />
+          {allowDiscard && (
+            <Box
+              onClick={onDiscardClick}
+              role="button"
+              sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.muted, cursor: 'pointer', mr: 1, '&:hover': { color: c.status.error } }}>
+              Discard
+            </Box>
+          )}
           <Box
-            onClick={onDiscardClick}
+            onClick={canSave ? onSaveClick : undefined}
             role="button"
-            sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.muted, cursor: 'pointer', mr: 1, '&:hover': { color: c.status.error } }}>
-            Discard
-          </Box>
-          <Box
-            onClick={onSaveClick}
-            role="button"
+            title={canSave ? undefined : 'Add at least one step before saving'}
             sx={{
               fontSize: '0.8rem', fontWeight: 700, color: '#fff', bgcolor: c.accent.primary,
-              px: 1.2, py: 0.35, borderRadius: 999, cursor: 'pointer',
+              px: 1.2, py: 0.35, borderRadius: 999, cursor: canSave ? 'pointer' : 'not-allowed',
+              opacity: canSave ? 1 : 0.45,
               '&:hover': { filter: 'brightness(1.05)' },
             }}>
             Save
@@ -218,8 +222,12 @@ export default function EditAgentView({ workflow, steps, isFixMode = false, onEd
         </Box>
         {stepsOpen && (
           <Box sx={{ mt: 0.75 }}>
-            {isFixMode && fixSeed && <FixPrefixCard seed={fixSeed} expanded={fixPrefixExpanded} onToggle={() => setFixPrefixExpanded((x) => !x)} />}
             <StepList steps={draftSteps} />
+            {isFixMode && fixSeed && (
+              <Box sx={{ mt: 0.75 }}>
+                <FixPrefixCard seed={fixSeed} expanded={fixPrefixExpanded} onToggle={() => setFixPrefixExpanded((x) => !x)} />
+              </Box>
+            )}
           </Box>
         )}
       </Box>

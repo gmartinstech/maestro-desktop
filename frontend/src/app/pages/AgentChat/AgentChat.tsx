@@ -6,6 +6,7 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
 import ClickAwayListener from '@mui/material/ClickAwayListener';
+import Fade from '@mui/material/Fade';
 import CloseIcon from '@mui/icons-material/Close';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -17,7 +18,7 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
-import { openSettingsModal } from '@/shared/state/settingsSlice';
+import { openSettingsModal, dismissMcpSuggestion } from '@/shared/state/settingsSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import {
   sendMessage as sendMessageThunk,
@@ -269,6 +270,25 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     return found?.workflowId ?? null;
   });
   const isStoppableSidecar = !!linkedWorkflowId;
+  // A live workflow run being watched owns pause/resume from its workflow
+  // card, so the chat's own "Resume Agent Response" bubble is redundant and
+  // would go stale against the card's Resume. Suppress it for any workflow-run
+  // sidecar, not just the fragile exact "watching" value. Test-run sidecars
+  // keep their chat-level resume behavior.
+  const isWorkflowRunSidecar = useAppSelector((s) => {
+    if (!id) return false;
+    for (const cd of Object.values(s.workflows.openCards)) {
+      if (cd.sidecarSessionId !== id || cd.sidecarKind === 'testing') continue;
+      if (cd.runId) {
+        const run = (s.workflows.runs[cd.workflowId] || []).find((r) => r.id === cd.runId);
+        if (!run || run.session_id === id) return true;
+      }
+      if (cd.sidecarKind === 'watching' || cd.sidecarKind === 'viewing-completed' || cd.sidecarKind === 'viewing-error') return true;
+    }
+    return Object.values(s.workflows.runs).some((runs) =>
+      runs.some((r) => r.session_id === id && r.status === 'running'),
+    );
+  });
   const testState = useAppSelector((s) => (id ? s.agents.sessions[id]?.workflow_test_state : null) ?? null);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -316,10 +336,16 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const [heightVersion, setHeightVersion] = useState(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showResumeBubble, setShowResumeBubble] = useState(false);
+  useEffect(() => {
+    if (isWorkflowRunSidecar) setShowResumeBubble(false);
+  }, [isWorkflowRunSidecar]);
   const [awaitingResponse, setAwaitingResponse] = useState(false);
   const [preSendActivityLabel, setPreSendActivityLabel] = useState<string | null>(null);
   const [activatingMcp, setActivatingMcp] = useState<string | null>(null);
   const [activateError, setActivateError] = useState<string | null>(null);
+  // Holds the last non-empty suggestions so the docked banner's exit fade renders
+  // them instead of going blank the instant the array is cleared.
+  const mcpSnapshotRef = useRef<Array<{ id: string; title: string; description: string; reason?: string }>>([]);
   const [mode, setMode] = useState('agent');
   const [model, setModel] = useState('sonnet');
 
@@ -471,7 +497,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
         didDispatchQueued = true;
       } else {
         if (curr === 'stopped') {
-          setShowResumeBubble(true);
+          setShowResumeBubble(!isWorkflowRunSidecar);
         }
       }
 
@@ -489,7 +515,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (curr !== 'draft' && !didDispatchQueued) {
       setAwaitingResponse(false);
     }
-  }, [session?.status, mode, modesMap, id, isDraft, dispatch, dispatchMessage]);
+  }, [session?.status, mode, modesMap, id, isDraft, dispatch, dispatchMessage, isWorkflowRunSidecar]);
 
   // Idle reconcile: if the session has been 'running' for 5s with no
   // WebSocket activity (no new messages, no streaming updates), do a
@@ -915,9 +941,13 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (id) dispatch(removeCard(id));
   }, [linkedWorkflowId, id, dispatch]);
 
-  const onTestSaveWorkflow = useCallback(() => {
+  const onTestSaveWorkflow = useCallback(async () => {
     if (linkedWorkflowId) {
-      dispatch(commitDraft(linkedWorkflowId));
+      try {
+        await dispatch(commitDraft(linkedWorkflowId)).unwrap();
+      } catch {
+        return;
+      }
       dispatch(updateWorkflowCard({ workflowId: linkedWorkflowId, patch: { view: 'saved' } }));
       dispatch(setCardSidecar({ workflowId: linkedWorkflowId, sessionId: null, kind: null }));
     }
@@ -1562,123 +1592,6 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             }}
           >
             <Box>
-            {(session.mcp_suggestions && session.mcp_suggestions.length > 0) && (
-              <Box sx={{
-                mt: 1,
-                mb: 1.5,
-                p: 1.5,
-                borderRadius: 1.5,
-                border: `1px solid ${c.border.medium}`,
-                bgcolor: c.bg.secondary,
-                position: 'relative',
-              }}>
-                <Box
-                  role="button"
-                  aria-label="Dismiss integration suggestion"
-                  onClick={() => id && dispatch(clearMcpSuggestions({ sessionId: id }))}
-                  sx={{
-                    position: 'absolute',
-                    top: 6,
-                    right: 8,
-                    width: 20,
-                    height: 20,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1rem',
-                    lineHeight: 1,
-                    color: c.text.muted,
-                    cursor: 'pointer',
-                    borderRadius: 0.75,
-                    '&:hover': { color: c.text.primary, bgcolor: c.bg.elevated },
-                  }}
-                >
-                  ×
-                </Box>
-                <Typography variant="body2" sx={{ color: c.text.primary, fontWeight: 500, mb: 0.5, pr: 3 }}>
-                  Looks like this might need an integration
-                </Typography>
-                <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 1 }}>
-                  Activating one of these will let the agent answer in a single round-trip.
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {session.mcp_suggestions.map((s) => (
-                    <Box key={s.id} sx={{ flexBasis: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="caption" sx={{ color: c.text.primary, fontWeight: 500 }}>
-                          {s.title}
-                        </Typography>
-                        {s.reason && (
-                          <Typography variant="caption" sx={{ display: 'block', color: c.text.tertiary }}>
-                            {s.reason}
-                          </Typography>
-                        )}
-                      </Box>
-                      <Typography
-                        component="button"
-                        variant="caption"
-                        disabled={activatingMcp === s.id}
-                        onClick={async () => {
-                          if (activatingMcp) return;
-                          setActivateError(null);
-                          setActivatingMcp(s.id);
-                          try {
-                            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-                            const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
-                            if (tok) headers['Authorization'] = `Bearer ${tok}`;
-                            const r = await fetch(`${API_BASE}/mcp-meta/activate`, {
-                              method: 'POST',
-                              headers,
-                              body: JSON.stringify({
-                                server_name: s.id.toLowerCase().replace(/\s+/g, '-'),
-                                reason: s.reason || 'preflight suggestion',
-                                parent_session_id: session.id,
-                              }),
-                            });
-                            const body = await r.json().catch(() => ({} as any));
-                            if (!r.ok) {
-                              setActivateError(`Activation failed (${r.status})`);
-                            } else if (body?.status === 'unknown_server') {
-                              // Not yet connected; jump straight to Actions
-                              // so the user can finish OAuth. Nothing here
-                              // can do it on their behalf.
-                              navigate('/actions');
-                            } else if (id) {
-                              // Activation succeeded; clear the banner so the user
-                              // gets visual confirmation the click did something.
-                              dispatch(clearMcpSuggestions({ sessionId: id }));
-                            }
-                          } catch (e: any) {
-                            setActivateError(e?.message || 'Activation failed');
-                          } finally {
-                            setActivatingMcp(null);
-                          }
-                        }}
-                        sx={{
-                          cursor: activatingMcp === s.id ? 'wait' : 'pointer',
-                          border: `1px solid ${c.border.medium}`,
-                          borderRadius: 1,
-                          px: 1.25,
-                          py: 0.5,
-                          bgcolor: 'transparent',
-                          color: c.text.primary,
-                          opacity: activatingMcp === s.id ? 0.5 : 1,
-                          '&:hover': { bgcolor: activatingMcp ? 'transparent' : c.bg.elevated },
-                          flexShrink: 0,
-                        }}
-                      >
-                        {activatingMcp === s.id ? 'Activating…' : 'Activate'}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-                {activateError && (
-                  <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: c.status.error }}>
-                    {activateError}
-                  </Typography>
-                )}
-              </Box>
-            )}
             {session.context_overflow && (() => {
               const reason = session.context_overflow.reason;
               const isAuth = reason === 'openswarm_pro_auth_expired' || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
@@ -1872,7 +1785,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 />
               </Box>
             )}
-            {showResumeBubble && session.status === 'stopped' && (
+            {showResumeBubble && session.status === 'stopped' && !isWorkflowRunSidecar && (
               <Box sx={{ display: 'flex', justifyContent: 'flex-start', my: 0.75 }}>
                 <Box
                   onClick={handleResume}
@@ -2178,6 +2091,134 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                       </Typography>
                     </Box>
                   </Box>
+                );
+              })()}
+              {(() => {
+                const list = session.mcp_suggestions ?? [];
+                if (list.length) mcpSnapshotRef.current = list;
+                const display = mcpSnapshotRef.current;
+                return (
+                  <Fade in={list.length > 0} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
+                    <Box sx={{
+                      mx: 2,
+                      mb: 1,
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      border: `1px solid ${c.border.medium}`,
+                      bgcolor: c.bg.secondary,
+                      position: 'relative',
+                    }}>
+                      <Box
+                        role="button"
+                        aria-label="Dismiss integration suggestion"
+                        onClick={() => {
+                          if (!id) return;
+                          dispatch(clearMcpSuggestions({ sessionId: id }));
+                          dispatch(dismissMcpSuggestion(display.map((s) => s.id)));
+                        }}
+                        sx={{
+                          position: 'absolute',
+                          top: 6,
+                          right: 8,
+                          width: 20,
+                          height: 20,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '1rem',
+                          lineHeight: 1,
+                          color: c.text.muted,
+                          cursor: 'pointer',
+                          borderRadius: 0.75,
+                          '&:hover': { color: c.text.primary, bgcolor: c.bg.elevated },
+                        }}
+                      >
+                        ×
+                      </Box>
+                      <Typography variant="body2" sx={{ color: c.text.primary, fontWeight: 500, mb: 0.5, pr: 3 }}>
+                        Looks like this might need an integration
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 1 }}>
+                        Activating one of these will let the agent answer in a single round-trip.
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {display.map((s) => (
+                          <Box key={s.id} sx={{ flexBasis: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="caption" sx={{ color: c.text.primary, fontWeight: 500 }}>
+                                {s.title}
+                              </Typography>
+                              {s.reason && (
+                                <Typography variant="caption" sx={{ display: 'block', color: c.text.tertiary }}>
+                                  {s.reason}
+                                </Typography>
+                              )}
+                            </Box>
+                            <Typography
+                              component="button"
+                              variant="caption"
+                              disabled={activatingMcp === s.id}
+                              onClick={async () => {
+                                if (activatingMcp) return;
+                                setActivateError(null);
+                                setActivatingMcp(s.id);
+                                try {
+                                  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                                  const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
+                                  if (tok) headers['Authorization'] = `Bearer ${tok}`;
+                                  const r = await fetch(`${API_BASE}/mcp-meta/activate`, {
+                                    method: 'POST',
+                                    headers,
+                                    body: JSON.stringify({
+                                      server_name: s.id.toLowerCase().replace(/\s+/g, '-'),
+                                      reason: s.reason || 'preflight suggestion',
+                                      parent_session_id: session.id,
+                                    }),
+                                  });
+                                  const body = await r.json().catch(() => ({} as any));
+                                  if (!r.ok) {
+                                    setActivateError(`Activation failed (${r.status})`);
+                                  } else if (body?.status === 'unknown_server') {
+                                    // Not yet connected; jump straight to Actions
+                                    // so the user can finish OAuth. Nothing here
+                                    // can do it on their behalf.
+                                    navigate('/actions');
+                                  } else if (id) {
+                                    // Activation succeeded; clear the banner so the user
+                                    // gets visual confirmation the click did something.
+                                    dispatch(clearMcpSuggestions({ sessionId: id }));
+                                  }
+                                } catch (e: any) {
+                                  setActivateError(e?.message || 'Activation failed');
+                                } finally {
+                                  setActivatingMcp(null);
+                                }
+                              }}
+                              sx={{
+                                cursor: activatingMcp === s.id ? 'wait' : 'pointer',
+                                border: `1px solid ${c.border.medium}`,
+                                borderRadius: 1,
+                                px: 1.25,
+                                py: 0.5,
+                                bgcolor: 'transparent',
+                                color: c.text.primary,
+                                opacity: activatingMcp === s.id ? 0.5 : 1,
+                                '&:hover': { bgcolor: activatingMcp ? 'transparent' : c.bg.elevated },
+                                flexShrink: 0,
+                              }}
+                            >
+                              {activatingMcp === s.id ? 'Activating…' : 'Activate'}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                      {activateError && (
+                        <Typography variant="caption" sx={{ display: 'block', mt: 0.75, color: c.status.error }}>
+                          {activateError}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Fade>
                 );
               })()}
               {isStoppableSidecar ? (

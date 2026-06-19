@@ -91,10 +91,16 @@ export interface Workflow {
    *  unattended scheduled fire doesn't stall on a prompt. tool name -> answer. */
   remembered_approvals?: Record<string, 'allow' | 'deny'>;
   step_tool_usage?: Record<string, Record<string, boolean>>;
+  /** Tool names observed in the source chat when this workflow was generated. */
+  source_tools?: string[];
   /** False once the user explicitly renames the workflow; backend may auto-rename while true. */
   auto_named?: boolean;
   /** True while a brand-new "+ New" workflow is still being built and hasn't been saved; hub hides these. */
   unsaved?: boolean;
+  /** Signature of the steps last validated by a test run (or seeded at chat
+   *  conversion). Compared against the current steps to decide whether to warn
+   *  before scheduling. See scheduleUtils.needsScheduleTestWarning. */
+  tested_signature?: string | null;
 }
 
 export interface WorkflowRun {
@@ -113,7 +119,12 @@ export interface WorkflowRun {
   /** Currently-executing 0-based step index while status is 'running';
    *  freezes on the failed step when status flips to 'failure'. */
   active_step_idx?: number | null;
+  /** True while the user has paused the in-flight agent turn (chat-style
+   *  stop/resume). Drives the running card's Pause/Resume button. */
+  paused?: boolean;
 }
+
+export type WorkflowRunControlAction = 'pause' | 'resume' | 'stop';
 
 /** Transient view-only state per card; position lives in dashboardLayoutSlice.workflowCards. */
 export interface OpenCard {
@@ -169,9 +180,73 @@ interface State {
   allRuns: WorkflowRun[];
   allRunsLoading: boolean;
   runningToast: RunningToast | null;
+  runControlPending: Record<string, WorkflowRunControlAction>;
 }
 
-const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false, runningToast: null };
+const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false, runningToast: null, runControlPending: {} };
+
+function mergeRunIntoState(state: State, r: WorkflowRun) {
+  const arr = state.runs[r.workflow_id] || [];
+  const idx = arr.findIndex((x) => x.id === r.id);
+  const prev = idx >= 0 ? arr[idx] : null;
+  if (idx >= 0) arr[idx] = r; else arr.unshift(r);
+  state.runs[r.workflow_id] = arr.slice(0, 100);
+  // Keep the cross-workflow log (Scheduled tasks history tab) live without a refetch.
+  const aIdx = state.allRuns.findIndex((x) => x.id === r.id);
+  if (aIdx >= 0) state.allRuns[aIdx] = r; else state.allRuns.unshift(r);
+  state.allRuns.sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
+  state.allRuns = state.allRuns.slice(0, 200);
+  const pending = state.runControlPending[r.id];
+  if (
+    (pending === 'pause' && r.paused) ||
+    (pending === 'resume' && !r.paused) ||
+    (pending === 'stop' && r.status !== 'running')
+  ) {
+    delete state.runControlPending[r.id];
+  }
+  const wf = state.items[r.workflow_id];
+  if (wf) {
+    wf.last_run_at = r.finished_at || r.started_at;
+    wf.last_run_status = r.status === 'skipped' ? wf.last_run_status : (r.status as Workflow['last_run_status']);
+    wf.last_run_id = r.id;
+  }
+  // Auto-flip the card view on run state transitions so the user sees
+  // Running while it streams, Completed on success, Failed on failure.
+  // Only nudge from views that the user hasn't actively navigated away
+  // from (saved / running). Edit, history, scheduling etc. stay put.
+  const card = state.openCards[r.workflow_id];
+  // A scheduled run flipping into 'running' fired unattended, so nudge the
+  // user with a clickable toast. Only on the into-running edge (not every
+  // tool-label/step bump), and only for schedule (manual runs they kicked
+  // off themselves don't need a "surprise, it's running" popup).
+  if (r.status === 'running' && r.triggered_by === 'schedule' && (!prev || prev.status !== 'running')) {
+    state.runningToast = {
+      workflowId: r.workflow_id,
+      runId: r.id,
+      workflowTitle: state.items[r.workflow_id]?.title || 'Workflow',
+    };
+  }
+  if (card) {
+    const fromRunnable = card.view === 'saved' || card.view === 'running';
+    if (r.status === 'running' && fromRunnable) {
+      card.view = 'running';
+      card.runId = r.id;
+    } else if (prev && prev.status === 'running' && r.status === 'success' && (card.view === 'running' || card.view === 'saved')) {
+      card.view = 'completed';
+      card.runId = r.id;
+    } else if (prev && prev.status === 'running' && r.status === 'failure' && (card.view === 'running' || card.view === 'saved')) {
+      card.view = 'failed';
+      card.runId = r.id;
+    }
+    // A run that finishes while the user is watching it live becomes a
+    // "viewing" link so the sibling chat stays open with Stop Viewing,
+    // not a stale "watching" arrow pointing at a finished run.
+    if (card.sidecarSessionId && card.sidecarKind === 'watching' && prev && prev.status === 'running') {
+      if (r.status === 'failure') card.sidecarKind = 'viewing-error';
+      else if (r.status === 'success' || r.status === 'ran_late') card.sidecarKind = 'viewing-completed';
+    }
+  }
+}
 
 export const fetchWorkflows = createAsyncThunk(
   'workflows/fetch',
@@ -249,8 +324,18 @@ export const deleteWorkflow = createAsyncThunk('workflows/delete', async (id: st
   return id;
 });
 
-export const runWorkflowNow = createAsyncThunk('workflows/run', async (id: string) => {
-  const res = await fetch(`${API}/${id}/run`, { method: 'POST' });
+type RunWorkflowNowArg = string | { id: string; signature?: string | null };
+
+export const runWorkflowNow = createAsyncThunk('workflows/run', async (arg: RunWorkflowNowArg) => {
+  const id = typeof arg === 'string' ? arg : arg.id;
+  const signature = typeof arg === 'string' ? null : arg.signature;
+  const res = await fetch(`${API}/${id}/run`, {
+    method: 'POST',
+    ...(signature ? {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signature }),
+    } : {}),
+  });
   if (!res.ok) throw new Error(`run failed ${res.status}`);
   const data = await res.json();
   return {
@@ -260,6 +345,20 @@ export const runWorkflowNow = createAsyncThunk('workflows/run', async (id: strin
     error: (data.error || null) as string | null,
   };
 });
+
+export const controlWorkflowRun = createAsyncThunk(
+  'workflows/controlRun',
+  async ({ runId, action }: { runId: string; action: WorkflowRunControlAction }) => {
+    const res = await fetch(`${API}/runs/${encodeURIComponent(runId)}/${action}`, { method: 'POST' });
+    if (!res.ok) throw new Error(`${action} failed ${res.status}`);
+    const data = await res.json();
+    return {
+      runId,
+      action,
+      run: (data.run || null) as WorkflowRun | null,
+    };
+  },
+);
 
 export const fetchRuns = createAsyncThunk(
   'workflows/runs',
@@ -335,62 +434,7 @@ const slice = createSlice({
       state.openCards[action.payload.newId] = { ...entry, workflowId: action.payload.newId };
     },
     upsertRun(state, action: { payload: WorkflowRun }) {
-      const r = action.payload;
-      const arr = state.runs[r.workflow_id] || [];
-      const idx = arr.findIndex((x) => x.id === r.id);
-      const prev = idx >= 0 ? arr[idx] : null;
-      if (idx >= 0) arr[idx] = r; else arr.unshift(r);
-      state.runs[r.workflow_id] = arr.slice(0, 100);
-      // Keep the cross-workflow log (Scheduled tasks history tab) live without a refetch.
-      const aIdx = state.allRuns.findIndex((x) => x.id === r.id);
-      if (aIdx >= 0) state.allRuns[aIdx] = r; else state.allRuns.unshift(r);
-      state.allRuns.sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
-      state.allRuns = state.allRuns.slice(0, 200);
-      const wf = state.items[r.workflow_id];
-      if (wf) {
-        wf.last_run_at = r.finished_at || r.started_at;
-        wf.last_run_status = r.status === 'skipped' ? wf.last_run_status : (r.status as Workflow['last_run_status']);
-        wf.last_run_id = r.id;
-      }
-      // Auto-flip the card view on run state transitions so the user sees
-      // Running while it streams, Completed on success, Failed on failure.
-      // Only nudge from views that the user hasn't actively navigated away
-      // from (saved / running). Edit, history, scheduling etc. stay put.
-      const card = state.openCards[r.workflow_id];
-      if (card) {
-        const fromRunnable = card.view === 'saved' || card.view === 'running';
-        if (r.status === 'running' && fromRunnable) {
-          card.view = 'running';
-          card.runId = r.id;
-        } else if (prev && prev.status === 'running' && r.status === 'success' && (card.view === 'running' || card.view === 'saved')) {
-          card.view = 'completed';
-          card.runId = r.id;
-        } else if (prev && prev.status === 'running' && r.status === 'failure' && (card.view === 'running' || card.view === 'saved')) {
-          card.view = 'failed';
-          card.runId = r.id;
-        }
-        // A run that finishes while the user is watching it live becomes a
-        // "viewing" link so the sibling chat stays open with Stop Viewing,
-        // not a stale "watching" arrow pointing at a finished run.
-        if (card.sidecarSessionId && card.sidecarKind === 'watching' && prev && prev.status === 'running') {
-          if (r.status === 'failure') card.sidecarKind = 'viewing-error';
-          else if (r.status === 'success' || r.status === 'ran_late') card.sidecarKind = 'viewing-completed';
-        }
-      }
-      // A scheduled run flipping into 'running' fired unattended, so nudge the
-      // user with a clickable toast. Only on the into-running edge (not every
-      // tool-label/step bump), and only for schedule (manual runs they kicked
-      // off themselves don't need a "surprise, it's running" popup).
-      if (r.status === 'running' && r.triggered_by === 'schedule' && (!prev || prev.status !== 'running')) {
-        state.runningToast = {
-          workflowId: r.workflow_id,
-          runId: r.id,
-          workflowTitle: state.items[r.workflow_id]?.title || 'Workflow',
-        };
-      }
-    },
-    dismissRunningToast(state) {
-      state.runningToast = null;
+      mergeRunIntoState(state, action.payload);
     },
     toggleExpandedStep(state, action: { payload: { workflowId: string; stepId: string } }) {
       const card = state.openCards[action.payload.workflowId];
@@ -421,6 +465,9 @@ const slice = createSlice({
       delete state.runs[action.payload];
       state.allRuns = state.allRuns.filter((r) => r.workflow_id !== action.payload);
     },
+    dismissRunningToast(state) {
+      state.runningToast = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -441,8 +488,46 @@ const slice = createSlice({
         delete state.runs[action.payload];
         state.allRuns = state.allRuns.filter((r) => r.workflow_id !== action.payload);
       })
+      .addCase(runWorkflowNow.fulfilled, (state, action) => {
+        // Enter the running view the moment the run kicks off, off the run_id
+        // the REST call returns. Don't wait for the workflow:run WS event:
+        // if it's missed or races the view, the Stop/Pause header never shows.
+        const { id, run_id, status } = action.payload;
+        const card = state.openCards[id];
+        if (!card || !run_id || status !== 'running') return;
+        if (['saved', 'running', 'completed', 'failed', 'history', 'history_detail'].includes(card.view)) {
+          card.view = 'running';
+          card.runId = run_id;
+        }
+      })
+      .addCase(controlWorkflowRun.pending, (state, action) => {
+        state.runControlPending[action.meta.arg.runId] = action.meta.arg.action;
+      })
+      .addCase(controlWorkflowRun.fulfilled, (state, action) => {
+        if (action.payload.run) {
+          mergeRunIntoState(state, action.payload.run);
+        }
+        if (action.payload.action !== 'stop') {
+          delete state.runControlPending[action.payload.runId];
+        } else if (action.payload.run && action.payload.run.status !== 'running') {
+          delete state.runControlPending[action.payload.runId];
+        }
+      })
+      .addCase(controlWorkflowRun.rejected, (state, action) => {
+        delete state.runControlPending[action.meta.arg.runId];
+      })
       .addCase(fetchRuns.fulfilled, (state, action) => {
         state.runs[action.payload.id] = action.payload.runs;
+        for (const r of action.payload.runs) {
+          const pending = state.runControlPending[r.id];
+          if (
+            (pending === 'pause' && r.paused) ||
+            (pending === 'resume' && !r.paused) ||
+            (pending === 'stop' && r.status !== 'running')
+          ) {
+            delete state.runControlPending[r.id];
+          }
+        }
       })
       .addCase(fetchAllRuns.pending, (state) => { state.allRunsLoading = true; })
       .addCase(fetchAllRuns.fulfilled, (state, action) => {

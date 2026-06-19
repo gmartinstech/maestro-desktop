@@ -1,10 +1,10 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import HTTPException, Header, Request
+from fastapi import HTTPException, Header, Query, Request
 
 from backend.config.Apps import SubApp
 from backend.apps.workflows.models import (
@@ -96,30 +96,79 @@ def _derive_icon(wf: Workflow) -> str:
     return "W"
 
 
-def p_source_session_approvals(session_id: Optional[str]) -> dict[str, str]:
+def _source_tool_name(value) -> str:
+    if not isinstance(value, str):
+        return ""
+    name = value.strip()
+    return name if name else ""
+
+
+def _collect_tool_names_from_content(content, out: set[str]) -> None:
+    if isinstance(content, list):
+        for item in content:
+            _collect_tool_names_from_content(item, out)
+        return
+    if not isinstance(content, dict):
+        return
+    block_type = content.get("type")
+    if block_type == "tool_use":
+        name = _source_tool_name(content.get("name") or content.get("tool"))
+        if name:
+            out.add(name)
+    for key in ("tool_name", "tool"):
+        name = _source_tool_name(content.get(key))
+        if name:
+            out.add(name)
+    nested = content.get("content")
+    if nested is not content:
+        _collect_tool_names_from_content(nested, out)
+
+
+def p_source_session_memory(session_id: Optional[str]) -> tuple[dict[str, str], list[str]]:
     if not session_id:
-        return {}
+        return {}, []
     try:
         from backend.apps.agents.agent_manager import agent_manager
         sess = agent_manager.sessions.get(session_id)
         decisions = getattr(sess, "approval_decisions", None) if sess is not None else None
+        messages = getattr(sess, "messages", None) if sess is not None else None
+        tool_latencies = getattr(sess, "tool_latencies", None) if sess is not None else None
         if decisions is None:
             from backend.apps.agents.manager.session.session_store import _load_session_data
             data = _load_session_data(session_id) or {}
             decisions = data.get("approval_decisions") or []
+            messages = data.get("messages") or []
+            tool_latencies = data.get("tool_latencies") or {}
     except Exception:
-        return {}
-    out: dict[str, str] = {}
+        return {}, []
+    approvals: dict[str, str] = {}
+    tools: set[str] = set()
     for entry in decisions or []:
         if not isinstance(entry, dict):
             continue
+        tool = _source_tool_name(entry.get("tool"))
+        if tool:
+            tools.add(tool)
         if entry.get("sensitive_pattern"):
             continue
-        tool = str(entry.get("tool") or "")
         behavior = entry.get("behavior")
         if tool and behavior in ("allow", "deny"):
-            out[tool] = behavior
-    return out
+            approvals[tool] = behavior
+    if isinstance(tool_latencies, dict):
+        for tool in tool_latencies.keys():
+            name = _source_tool_name(tool)
+            if name:
+                tools.add(name)
+    for msg in messages or []:
+        role = getattr(msg, "role", None) if not isinstance(msg, dict) else msg.get("role")
+        content = getattr(msg, "content", None) if not isinstance(msg, dict) else msg.get("content")
+        if role == "tool_call":
+            tool_name = getattr(msg, "tool_name", None) if not isinstance(msg, dict) else msg.get("tool_name")
+            name = _source_tool_name(tool_name)
+            if name:
+                tools.add(name)
+        _collect_tool_names_from_content(content, tools)
+    return approvals, sorted(tools)
 
 
 def p_prune_step_tool_usage(wf: Workflow) -> None:
@@ -144,13 +193,34 @@ async def list_workflows(dashboard_id: Optional[str] = None):
 
 
 def _normalize_schedule_state(wf: Workflow) -> None:
+    if wf.schedule.timezone == "local" and wf.schedule.enabled:
+        wf.schedule.timezone = scheduler.host_timezone_name()
     if wf.schedule.enabled and not scheduler.is_schedule_configured(wf.schedule):
         wf.schedule.enabled = False
     wf.next_run_at = scheduler.compute_next_fire(wf) if wf.schedule.enabled else None
 
 
+def _has_nonempty_steps(steps: list[WorkflowStep] | None) -> bool:
+    return any(bool((s.text or "").strip()) for s in (steps or []))
+
+
+def _parse_calendar_bound(value: str, label: str) -> datetime:
+    raw = (value or "").strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid {label} timestamp")
+    if dt.tzinfo is None:
+        raise HTTPException(status_code=400, detail=f"{label} timestamp must include a timezone")
+    return dt.astimezone(timezone.utc)
+
+
 @workflows.router.post("/create")
 async def create_workflow(body: WorkflowCreate):
+    if not body.unsaved and not _has_nonempty_steps(body.steps):
+        raise HTTPException(status_code=400, detail="Workflow must have at least one step")
     actions = body.actions
     # Scheduled workflows default to freeze=on for safety. The user can
     # flip "Full agent access" in the editor with an explicit confirm.
@@ -178,7 +248,13 @@ async def create_workflow(body: WorkflowCreate):
         auto_named=body.auto_named,
         unsaved=body.unsaved,
     )
-    wf.remembered_approvals = p_source_session_approvals(body.source_session_id)
+    source_approvals, source_tools = p_source_session_memory(body.source_session_id)
+    wf.remembered_approvals = source_approvals
+    wf.source_tools = source_tools
+    # Convert-from-chat passes the steps signature so the workflow counts as
+    # already validated (the chat already prompted for permissions); a blank
+    # "New" create leaves it None so the first schedule warns to test first.
+    wf.tested_signature = body.tested_signature
     if not wf.icon:
         wf.icon = _derive_icon(wf)
     _normalize_schedule_state(wf)
@@ -507,6 +583,30 @@ async def list_all_runs(limit: int = 200):
     return {"runs": [r.model_dump(mode="json") for r in runs]}
 
 
+@workflows.router.get("/calendar")
+async def list_calendar_events(
+    from_: str = Query(..., alias="from"),
+    to: str = Query(...),
+    dashboard_id: Optional[str] = None,
+):
+    start_utc = _parse_calendar_bound(from_, "from")
+    end_utc = _parse_calendar_bound(to, "to")
+    if end_utc <= start_utc:
+        raise HTTPException(status_code=400, detail="to must be after from")
+    items = storage.list_workflows()
+    if dashboard_id:
+        items = [w for w in items if not w.dashboard_id or w.dashboard_id == dashboard_id]
+    events: list[dict] = []
+    for wf in items:
+        for fire_at in scheduler.occurrences_between(wf, start_utc, end_utc):
+            events.append({
+                "workflow_id": wf.id,
+                "fire_at": fire_at.astimezone(timezone.utc).isoformat(),
+            })
+    events.sort(key=lambda e: (e["fire_at"], e["workflow_id"]))
+    return {"events": events}
+
+
 @workflows.router.get("/{workflow_id}")
 async def get_workflow(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
@@ -746,15 +846,21 @@ async def commit_draft(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    # Clicking Save is the user committing to this workflow, so reveal it in
-    # the hub (clears the "+ New" build-in-progress flag) even if there's no
-    # pending draft to flush.
-    wf.unsaved = False
     if wf.draft_steps is None:
+        if not _has_nonempty_steps(wf.steps):
+            raise HTTPException(status_code=400, detail="Workflow must have at least one step")
+        # Clicking Save is the user committing to this workflow, so reveal it
+        # in the hub (clears the "+ New" build-in-progress flag).
+        wf.unsaved = False
         await p_end_edit_session(wf)
         storage.save_workflow(wf)
         return _enriched(wf)
     before = wf.model_dump(mode="json")
+    if not _has_nonempty_steps(wf.draft_steps):
+        raise HTTPException(status_code=400, detail="Workflow must have at least one step")
+    # Clicking Save is the user committing to this workflow, so reveal it in
+    # the hub (clears the "+ New" build-in-progress flag).
+    wf.unsaved = False
     wf.steps = wf.draft_steps
     wf.draft_steps = None
     await p_relabel_changed_steps(wf, before.get("steps") or [])
@@ -818,6 +924,7 @@ async def test_run_workflow(workflow_id: str, body: dict):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    tested_signature = body.get("signature") if isinstance(body, dict) else None
     draft_steps = (body or {}).get("steps")
     step_entries: list[WorkflowStep]
     if isinstance(draft_steps, list) and draft_steps:
@@ -891,9 +998,8 @@ async def test_run_workflow(workflow_id: str, body: dict):
             for step in step_entries:
                 set_workflow_approval_step(session.id, step.id)
                 await agent_manager.send_message(session.id, step.text)
-                await executor._await_session_idle(session.id)
-                sess_state = agent_manager.sessions.get(session.id)
-                if sess_state is not None and getattr(sess_state, "status", None) == "error":
+                disp = await executor._await_session_idle(session.id)
+                if disp == "error":
                     final = "error"
                     return
         except Exception:
@@ -901,7 +1007,11 @@ async def test_run_workflow(workflow_id: str, body: dict):
             final = "error"
         finally:
             try:
-                executor.p_persist_step_tool_usage(wf.id, get_workflow_step_usage(session.id))
+                executor.p_persist_step_tool_usage(
+                    wf.id,
+                    get_workflow_step_usage(session.id),
+                    tested_signature=tested_signature if isinstance(tested_signature, str) else None,
+                )
             except Exception:
                 logger.exception("test-run step usage persist failed")
             set_workflow_approval_step(session.id, None)
@@ -956,11 +1066,12 @@ async def schedule_agent_session(workflow_id: str):
     from backend.apps.agents.core.models import AgentConfig
     from backend.apps.agents.agent_manager import agent_manager
     now_local = datetime.now().astimezone()
+    local_tz = scheduler.host_timezone_name()
     current_dt = now_local.strftime("%A %Y-%m-%d %H:%M %Z")
     system_prompt = (
         f"You are the Scheduling Agent for the user's saved workflow \"{wf.title}\" "
         f"(id: {wf.id}). Your only job is to set when this workflow runs.\n\n"
-        f"The current local date and time is {current_dt}. Resolve relative "
+        f"The current local date and time is {current_dt} in {local_tz}. Resolve relative "
         "phrasing (\"this month\", \"next Wednesday\", \"this time\") against it.\n\n"
         "When the user states a cadence, interpret it yourself and call "
         "UpdateScheduledWorkflow with:\n"
@@ -971,7 +1082,7 @@ async def schedule_agent_session(workflow_id: str):
         "  - repeat_every: the interval count (1 unless they say e.g. \"every other\"; "
         "for repeat_unit=\"minute\" the minimum is 15, e.g. \"every 15 minutes\")\n"
         "  - on_days: weekday indices when repeat_unit=\"week\" (Sun=0, Mon=1, ... Sat=6)\n"
-        "  - timezone: an IANA name only if the user names a specific zone\n\n"
+        f"  - timezone: \"{local_tz}\" unless the user names a different specific zone\n\n"
         "If no AM/PM is given, assume PM for 1-7 and AM for 8-12. If the cadence "
         "is genuinely ambiguous, ask ONE short clarifying question first; otherwise "
         "go straight to the tool call. The user approves or rejects the change in a "
@@ -998,7 +1109,7 @@ async def schedule_agent_session(workflow_id: str):
 
 
 @workflows.router.post("/{workflow_id}/run")
-async def run_workflow_now(workflow_id: str):
+async def run_workflow_now(workflow_id: str, body: Optional[dict] = None):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -1006,7 +1117,12 @@ async def run_workflow_now(workflow_id: str):
     # or we end up with two rows per manual fire (one orphan "running"
     # row from this handler plus the real one from the executor).
     pre_ids = {r.id for r in storage.list_runs(wf.id, limit=10)}
-    asyncio.create_task(executor.execute(wf, triggered_by="manual"))
+    tested_signature = body.get("signature") if isinstance(body, dict) else None
+    asyncio.create_task(executor.execute(
+        wf,
+        triggered_by="manual",
+        tested_signature=tested_signature if isinstance(tested_signature, str) else None,
+    ))
 
     # Poll briefly for the newly created run id. We also surface the
     # run's status + error string when it lands quickly (e.g. cost-cap
@@ -1024,52 +1140,115 @@ async def run_workflow_now(workflow_id: str):
     return {"run_id": "", "status": None, "error": None}
 
 
-@workflows.router.post("/runs/{run_id}/stop")
-async def stop_run(run_id: str):
-    """Force-terminate a running workflow's underlying agent session.
-
-    Fired by RunningView's Stop button (Image #40). The run record gets
-    marked failure with a "stopped by user" error so it surfaces correctly
-    in History instead of looking like it succeeded.
-    """
-    target_wf_id = None
-    target_run = None
+def _find_active_run(run_id: str):
+    """Locate a currently-running run by id, returning (workflow_id, run)."""
     for wf in storage.list_workflows():
         for r in storage.list_runs(wf.id, limit=50):
             if r.id == run_id and r.status == "running":
-                target_wf_id = wf.id
-                target_run = r
-                break
-        if target_run:
-            break
-    if not target_run or not target_wf_id:
-        raise HTTPException(status_code=404, detail="Run not found or not active")
-    if target_run.session_id:
-        try:
-            from backend.apps.agents.agent_manager import agent_manager
-            await agent_manager.close_session(target_run.session_id)
-        except Exception:
-            logger.exception("stop_run: close_session failed for %s", target_run.session_id)
-    target_run.status = "failure"
-    target_run.error = "Stopped by user"
-    target_run.finished_at = datetime.now()
-    storage.record_run(target_run)
-    wf = storage.get_workflow(target_wf_id)
-    if wf:
-        _persist_run_fields(wf, {
-            "last_run_status": "failure",
-            "last_run_at": target_run.finished_at,
-            "last_run_id": target_run.id,
-        })
+                return wf.id, r
+    return None, None
+
+
+async def _broadcast_run(workflow_id: str, run) -> None:
     try:
         from backend.apps.agents.core.ws_manager import ws_manager
         await ws_manager.broadcast_global("workflow:run", {
-            "workflow_id": target_wf_id,
-            "run": target_run.model_dump(mode="json"),
+            "workflow_id": workflow_id,
+            "run": run.model_dump(mode="json"),
         })
     except Exception:
         pass
+
+
+@workflows.router.post("/runs/{run_id}/stop")
+async def stop_run(run_id: str):
+    """Fully stop a running workflow, failing it with a manual-stop reason.
+
+    Fired by the running card's Stop button. We signal the executor (which
+    owns the run's terminal write) and halt the in-flight agent turn now; the
+    executor marks the run failure "Stopped by user" and closes the session in
+    its finally block. Signalling instead of writing the row here avoids the
+    old race where the still-looping executor overwrote the failure.
+    """
+    target_wf_id, target_run = _find_active_run(run_id)
+    if not target_run or not target_wf_id:
+        raise HTTPException(status_code=404, detail="Run not found or not active")
+    executor.request_stop(run_id)
+    if target_run.session_id:
+        try:
+            from backend.apps.agents.agent_manager import agent_manager
+            await agent_manager.stop_agent(target_run.session_id)
+        except Exception:
+            logger.exception("stop_run: stop_agent failed for %s", target_run.session_id)
     return {"ok": True}
+
+
+@workflows.router.post("/runs/{run_id}/pause")
+async def pause_run(run_id: str):
+    """Pause the in-flight agent turn, same mechanic as the chat's Stop.
+
+    The executor holds on the current step (see _await_session_idle) until the
+    matching resume. We flag the run paused so the card reflects it even when
+    the live chat isn't open.
+    """
+    target_wf_id, target_run = _find_active_run(run_id)
+    if not target_run or not target_wf_id:
+        raise HTTPException(status_code=404, detail="Run not found or not active")
+    target_run.paused = True
+    executor.set_pause_override(run_id, True)
+    storage.record_run(target_run)
+    await _broadcast_run(target_wf_id, target_run)
+
+    async def _stop_agent_for_pause() -> None:
+        if not target_run.session_id:
+            return
+        try:
+            from backend.apps.agents.agent_manager import agent_manager
+            await agent_manager.stop_agent(target_run.session_id)
+        except Exception:
+            logger.exception("pause_run: stop_agent failed for %s", target_run.session_id)
+            target_run.paused = False
+            executor.set_pause_override(run_id, False, ttl_s=0.1)
+            storage.record_run(target_run)
+            await _broadcast_run(target_wf_id, target_run)
+
+    asyncio.create_task(_stop_agent_for_pause())
+    return {"ok": True, "run": target_run.model_dump(mode="json")}
+
+
+@workflows.router.post("/runs/{run_id}/resume")
+async def resume_run(run_id: str):
+    """Resume a paused run, same mechanic as the chat's Resume Agent Response:
+    a hidden "continue where you left off" message restarts the current step's
+    turn. The executor advances once that turn completes.
+    """
+    target_wf_id, target_run = _find_active_run(run_id)
+    if not target_run or not target_wf_id:
+        raise HTTPException(status_code=404, detail="Run not found or not active")
+    target_run.paused = False
+    executor.set_pause_override(run_id, False)
+    storage.record_run(target_run)
+    await _broadcast_run(target_wf_id, target_run)
+
+    async def _send_resume_message() -> None:
+        if not target_run.session_id:
+            return
+        try:
+            from backend.apps.agents.agent_manager import agent_manager
+            await agent_manager.send_message(
+                target_run.session_id,
+                "Continue where you left off. Start your response EXACTLY with 'Sorry, let me pick up where I left off'",
+                hidden=True,
+            )
+        except Exception:
+            logger.exception("resume_run: send_message failed for %s", target_run.session_id)
+            target_run.paused = True
+            executor.set_pause_override(run_id, True, ttl_s=0.1)
+            storage.record_run(target_run)
+            await _broadcast_run(target_wf_id, target_run)
+
+    asyncio.create_task(_send_resume_message())
+    return {"ok": True, "run": target_run.model_dump(mode="json")}
 
 
 @workflows.router.get("/{workflow_id}/runs")
