@@ -804,10 +804,10 @@ const WorkflowCard: React.FC<Props> = ({
           <RunningView workflow={workflow} steps={steps} runs={runs} mode={card.sidecarKind === 'watching' ? 'sidecar-linked' : 'card'} />
         )}
         {card.view === 'completed' && workflow && (
-          <CompletedView workflow={workflow} steps={steps} runs={runs} mode={card.sidecarKind === 'viewing-completed' ? 'sidecar-linked' : 'card'} />
+          <CompletedView workflow={workflow} steps={steps} runs={runs} mode={(card.sidecarKind === 'viewing-completed' || card.sidecarKind === 'watching') ? 'sidecar-linked' : 'card'} />
         )}
         {card.view === 'failed' && workflow && (
-          <FailedView workflow={workflow} steps={steps} runs={runs} mode={card.sidecarKind === 'viewing-error' ? 'sidecar-linked' : 'card'} />
+          <FailedView workflow={workflow} steps={steps} runs={runs} mode={(card.sidecarKind === 'viewing-error' || card.sidecarKind === 'watching') ? 'sidecar-linked' : 'card'} />
         )}
         {card.view === 'scheduling' && workflow && (
           <SchedulingView workflow={workflow} steps={steps} />

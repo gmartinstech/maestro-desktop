@@ -265,7 +265,11 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
   const runId = card?.runId || null;
   const run = useMemo(() => (runs || []).find((r) => r.id === runId) || null, [runs, runId]);
   const statuses: StepStatus[] = steps.map(() => 'done');
-  const isLinked = mode === 'sidecar-linked' && card?.sidecarKind === 'viewing-completed';
+  // A run that was being watched live stays tethered to the same chat when it
+  // finishes, so the still-'watching' kind counts as linked too (the slice's
+  // watching->viewing-completed flip can miss on fast runs). Without this the
+  // card offers "View Agent", which spawns a duplicate chat.
+  const isLinked = mode === 'sidecar-linked' && (card?.sidecarKind === 'viewing-completed' || card?.sidecarKind === 'watching');
 
   const onDone = useCallback(() => {
     dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'saved', runId: null, sidecarSessionId: null, sidecarKind: null } }));
@@ -368,7 +372,10 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
   const statuses: StepStatus[] = steps.map((_, i) =>
     i < failedIdx ? 'done' : i === failedIdx ? 'failed' : 'pending',
   );
-  const isLinked = mode === 'sidecar-linked' && card?.sidecarKind === 'viewing-error';
+  // Same as CompletedView: a watched run that fails stays tethered, so treat the
+  // still-'watching' kind as linked and show Stop Viewing instead of View Error
+  // (which would open a second chat).
+  const isLinked = mode === 'sidecar-linked' && (card?.sidecarKind === 'viewing-error' || card?.sidecarKind === 'watching');
 
   const onIgnore = useCallback(() => {
     dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'saved', runId: null, sidecarSessionId: null, sidecarKind: null } }));
