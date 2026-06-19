@@ -4,9 +4,9 @@
 Why this exists: the agent should be able to schedule recurring work on
 the user's behalf, but ALWAYS through the native scheduler (visible,
 auditable, cost-capped) rather than `crontab`. Each tool is a thin
-wrapper around /api/workflows/*. The descriptions are written to nudge
-the agent toward AskUserQuestion-first behavior (confirm cadence with
-the user before calling ScheduleWorkflow).
+wrapper around /api/workflows/*. The descriptions are written to prefer
+UI-owned workflow conversion for vague recurring asks, and to reserve
+ScheduleWorkflow for exact, user-specified live schedules.
 """
 
 import json
@@ -52,8 +52,13 @@ TOOLS = [
         "name": "ScheduleWorkflow",
         "description": (
             "Create a recurring scheduled workflow for the user. Use this "
-            "ONLY after confirming cadence with the user via AskUserQuestion "
-            "(do not assume — the user must pick or accept the time). "
+            "ONLY when the user explicitly asks you to create a live schedule "
+            "and has already supplied an exact cadence and time. Do not use "
+            "this after a generic convert-to-workflow suggestion, and do not "
+            "ask follow-up questions like 'what time should it run' from a "
+            "normal chat. If cadence or time is missing, call "
+            "SuggestConvertToWorkflow instead so the UI can open the workflow "
+            "conversion prompt. "
             "The workflow runs the listed steps on the schedule and is "
             "visible in the user's Workflows hub. Never use crontab, "
             "launchctl, or schtasks to schedule recurring work; always use "
@@ -240,13 +245,25 @@ TOOLS = [
     {
         "name": "SuggestConvertToWorkflow",
         "description": (
-            "Call this at the end of a response when you have just completed a task "
-            "the user is likely to want to repeat on a schedule (e.g. a daily report, "
-            "a weekly digest, a recurring data check, a monitoring ping). Do NOT call "
-            "it for one-off tasks, debugging sessions, creative work, or anything "
-            "where 'repeat it tomorrow' would be odd. Use sparingly — once per session "
-            "maximum, only with high confidence. This nudges the frontend to highlight "
-            "the 'Convert to Workflow' button and suggest a cadence."
+            "Call this at the end of a response when the completed task is a clear "
+            "candidate for repeatable scheduled work (e.g. a daily report, weekly "
+            "digest, recurring data check, monitoring ping, inbox triage, or status "
+            "briefing). Prefer this native workflow nudge over Claude's internal "
+            "schedule skill or CronCreate/CronList/CronDelete tools. Use it whenever "
+            "the user explicitly mentions daily, weekly, every, each, mornings, "
+            "standup, monitoring, alerts, or keeping something updated, and when you "
+            "have just done a sequence that would naturally be useful again later. Do "
+            "NOT call it for one-off tasks, debugging sessions, creative work, or "
+            "anything where 'repeat it tomorrow' would be odd. It is OK to call this "
+            "more than once per session for distinct workflow candidates, but avoid "
+            "repeated nudges for the same task. This nudges the frontend to highlight "
+            "the 'Convert to Workflow' button and open the workflow-conversion "
+            "prompt. In user-facing text, say at most one short sentence, such "
+            "as: 'This is a good fit for built-in Workflows.' Do not repeat the "
+            "advice after this tool returns, do not say you are nudging the UI, "
+            "and do not ask what time it should run. After this tool returns, "
+            "do not send another assistant message like 'Done'; the UI prompt "
+            "will handle the next step."
         ),
         "inputSchema": {
             "type": "object",
@@ -324,6 +341,7 @@ def handle_schedule_workflow(args: dict) -> dict:
         "steps": [{"id": f"s{i+1}", "text": s} for i, s in enumerate(steps_in) if s],
         "schedule": schedule,
         "source_session_id": args.get("source_session_id") or PARENT_SESSION_ID or None,
+        "dashboard_id": DASHBOARD_ID or None,
     }
     r = _call("POST", "/create", body)
     if "_error" in r:
