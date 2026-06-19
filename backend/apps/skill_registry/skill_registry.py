@@ -304,15 +304,36 @@ def _is_script_path(rel: str) -> bool:
     return head in ("scripts", "bin", "hooks")
 
 
+def _github_headers() -> dict:
+    """GitHub request headers, with auth if a token is set. Unauthenticated is
+    60 req/hr/IP (fine for the odd install, the wall for a power user); a token
+    (OPENSWARM_GITHUB_TOKEN or GITHUB_TOKEN) raises it to 5000/hr."""
+    headers = {"User-Agent": "openswarm-skill-registry", "Accept": "application/vnd.github+json"}
+    token = os.environ.get("OPENSWARM_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def _select_skill_paths(tree: list[dict], skill_id: str) -> tuple[str, list[str]]:
-    """From a GitHub recursive tree, pick the SKILL.md for `skill_id` (shortest
-    matching path) and every file living beside it. Pure so the resolution logic
-    is unit-tested without a network round-trip."""
+    """From a GitHub recursive tree, pick the SKILL.md for `skill_id` and every
+    file beside it. Pure, so the resolution logic is unit-tested without a network
+    round-trip. When a repo has several `<x>/<skill_id>/SKILL.md` matches the pick
+    is deterministic: prefer a top-level `<skill_id>/`, then `skills/<skill_id>/`,
+    then the shallowest, then alphabetical, never an arbitrary tie."""
     blobs = [t["path"] for t in tree if t.get("type") == "blob" and isinstance(t.get("path"), str)]
     candidates = [p for p in blobs if p.endswith(f"/{skill_id}/SKILL.md") or p == f"{skill_id}/SKILL.md"]
     if not candidates:
         raise ValueError(f"no SKILL.md for '{skill_id}' in this repo")
-    skill_md = min(candidates, key=len)
+
+    def _rank(p: str) -> tuple:
+        if p == f"{skill_id}/SKILL.md":
+            return (0, 0, p)
+        if p == f"skills/{skill_id}/SKILL.md":
+            return (1, p.count("/"), p)
+        return (2, p.count("/"), p)
+
+    skill_md = min(candidates, key=_rank)
     skill_dir = skill_md[: -len("/SKILL.md")] if "/" in skill_md else ""
     prefix = (skill_dir + "/") if skill_dir else ""
     members = [p for p in blobs if (p.startswith(prefix) if prefix else "/" not in p)]
@@ -324,19 +345,35 @@ class RegistryRateLimited(Exception):
     'try again shortly' rather than a generic failure."""
 
 
+async def _tree_at(client: httpx.AsyncClient, owner: str, repo: str, branch: str):
+    """(tree | None) for a branch. None on 404 (branch absent); raises on 403."""
+    r = await client.get(f"{_GH_API}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1")
+    if r.status_code == 200:
+        return r.json().get("tree", [])
+    if r.status_code == 403:
+        raise RegistryRateLimited()
+    return None
+
+
 async def _fetch_repo_tree(client: httpx.AsyncClient, owner: str, repo: str) -> tuple[str, list[dict]]:
-    """Recursive tree of owner/repo, trying main then master (one API call each,
-    usually just one). Avoids a separate repo-meta call to halve GitHub API use.
-    Raises RegistryRateLimited on a 403, ValueError if no usable branch."""
-    last_status = None
+    """Recursive tree of owner/repo. Tries main then master first (one call, the
+    99% case, no quota wasted on a repo-meta lookup); only if BOTH are absent
+    does it ask the repo for its real default branch (handles develop/trunk/etc).
+    Raises RegistryRateLimited on a 403, ValueError if no branch resolves."""
     for branch in ("main", "master"):
-        r = await client.get(f"{_GH_API}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1")
-        if r.status_code == 200:
-            return branch, r.json().get("tree", [])
-        if r.status_code == 403:
-            raise RegistryRateLimited()
-        last_status = r.status_code
-    raise ValueError(f"repo {owner}/{repo} has no main/master branch (last status {last_status})")
+        tree = await _tree_at(client, owner, repo, branch)
+        if tree is not None:
+            return branch, tree
+    meta = await client.get(f"{_GH_API}/repos/{owner}/{repo}")
+    if meta.status_code == 403:
+        raise RegistryRateLimited()
+    if meta.status_code == 200:
+        default = meta.json().get("default_branch")
+        if default and default not in ("main", "master"):
+            tree = await _tree_at(client, owner, repo, default)
+            if tree is not None:
+                return default, tree
+    raise ValueError(f"repo {owner}/{repo} has no resolvable default branch")
 
 
 async def resolve_community_skill(source: str, skill_id: str) -> dict:
@@ -348,8 +385,7 @@ async def resolve_community_skill(source: str, skill_id: str) -> dict:
     owner, _, repo = source.partition("/")
     if not owner or not repo:
         raise ValueError(f"unrecognized source '{source}' (expected owner/repo)")
-    headers = {"User-Agent": "openswarm-skill-registry", "Accept": "application/vnd.github+json"}
-    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+    async with httpx.AsyncClient(timeout=30.0, headers=_github_headers()) as client:
         branch, tree = await _fetch_repo_tree(client, owner, repo)
         skill_md, members = _select_skill_paths(tree, skill_id)
         skill_dir = skill_md[: -len("/SKILL.md")] if "/" in skill_md else ""

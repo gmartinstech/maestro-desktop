@@ -47,6 +47,33 @@ def test_missing_skill_raises():
         _select_skill_paths([{"type": "blob", "path": "a/SKILL.md"}], "nonexistent")
 
 
+def test_ambiguous_match_picks_deterministically():
+    # Several <x>/pdf/SKILL.md: a top-level pdf/ wins, else skills/pdf/, never arbitrary.
+    tree = [
+        {"type": "blob", "path": "plugins/z/pdf/SKILL.md"},
+        {"type": "blob", "path": "skills/pdf/SKILL.md"},
+        {"type": "blob", "path": "pdf/SKILL.md"},
+    ]
+    skill_md, _ = _select_skill_paths(tree, "pdf")
+    assert skill_md == "pdf/SKILL.md"
+    # Without a top-level one, prefer skills/<id>/.
+    tree2 = [
+        {"type": "blob", "path": "plugins/z/pdf/SKILL.md"},
+        {"type": "blob", "path": "skills/pdf/SKILL.md"},
+    ]
+    skill_md2, _ = _select_skill_paths(tree2, "pdf")
+    assert skill_md2 == "skills/pdf/SKILL.md"
+
+
+def test_github_headers_adds_token_when_set(monkeypatch):
+    from backend.apps.skill_registry.skill_registry import _github_headers
+    monkeypatch.delenv("OPENSWARM_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    assert "Authorization" not in _github_headers()
+    monkeypatch.setenv("OPENSWARM_GITHUB_TOKEN", "ghp_test")
+    assert _github_headers()["Authorization"] == "Bearer ghp_test"
+
+
 def test_install_disclosure_flags_secret_shaped_files():
     # The scan we wire into the install disclosure (reused from the .swarm importer)
     # must flag a community skill shipping credentials, and leave clean files alone.
