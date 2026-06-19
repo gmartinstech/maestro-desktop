@@ -35,6 +35,13 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   const dispatch = useAppDispatch();
   const workflows = useAppSelector((s) => Object.values(s.workflows.items));
   const allPaused = useAppSelector((s) => s.workflows.paused);
+  // Live clock for the "now" line; a snapshot would drift and refDate may be
+  // a navigated week, so it can't double as the current moment.
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
   // Right-click menu: pinned position + the workflow whose pill was
   // clicked. Same anchor pattern as MUI's menu examples.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; workflow: Workflow } | null>(null);
@@ -163,6 +170,8 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     const start = startOfWeek(today);
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     const HOURS = HOURS_24;
+    const nowColIdx = days.findIndex((d) => sameDay(d, now));
+    const nowTopPx = (now.getHours() + now.getMinutes() / 60) * SLOT_H;
     // Prefer the short zone name ("PDT", "EST", "JST") so the label
     // reads in plain English instead of "GMT-7". formatToParts is wide-
     // supported; if it ever fails we degrade silently rather than show
@@ -194,7 +203,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
             );
           })}
         </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '64px repeat(7, 1fr)', borderTop: `1px solid ${c.border.subtle}` }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '64px repeat(7, 1fr)', borderTop: `1px solid ${c.border.subtle}`, position: 'relative' }}>
           {HOURS.map((hour, hourIdx) => (
             <React.Fragment key={hour}>
               {/* Hour label sits inside its row (top-aligned) rather than
@@ -247,6 +256,17 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
               })}
             </React.Fragment>
           ))}
+          {nowColIdx >= 0 && (
+            <Box sx={{
+              position: 'absolute', pointerEvents: 'none', zIndex: 3,
+              top: `${nowTopPx}px`,
+              left: `calc(64px + ${nowColIdx} * ((100% - 64px) / 7))`,
+              width: 'calc((100% - 64px) / 7)',
+              height: 0, borderTop: `2px solid ${c.status.error}`,
+            }}>
+              <Box sx={{ position: 'absolute', left: -3, top: -4, width: 7, height: 7, borderRadius: '50%', bgcolor: c.status.error }} />
+            </Box>
+          )}
         </Box>
         {ctxMenuEl}
       </Box>
@@ -264,7 +284,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
             reads cleanly in both light and dark themes. */}
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', position: 'sticky', top: 0, bgcolor: c.bg.surface, zIndex: 2, borderBottom: `1px solid ${c.border.subtle}`, py: 0.6 }}>
           {WEEKDAY_LABEL_SHORT.map((l, i) => (
-            <Typography key={`${l}-${i}`} sx={{ textAlign: 'center', fontSize: '0.74rem', color: c.text.secondary, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{l}</Typography>
+            <Typography key={`${l}-${i}`} sx={{ textAlign: 'center', fontSize: '0.74rem', color: c.text.muted, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{l}</Typography>
           ))}
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0, borderLeft: `1px solid ${c.border.subtle}` }}>
@@ -357,7 +377,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
                     fontSize: '0.88rem', color: c.text.secondary, cursor: 'pointer',
                     '&:hover .ev-title': { color: accent },
                   }}>
-                  <Box sx={{ width: 3, alignSelf: 'stretch', minHeight: 22, bgcolor: accent, borderRadius: 1, flexShrink: 0 }} />
+                  <Box sx={{ width: 3, alignSelf: 'stretch', minHeight: 22, bgcolor: accent, borderRadius: c.radius.sm, flexShrink: 0 }} />
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     <Typography className="ev-title" sx={{ fontSize: '0.9rem', fontWeight: 500, color: c.text.primary, lineHeight: 1.3 }}>{e.workflow.title}</Typography>
                     <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.3 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</Typography>
@@ -412,7 +432,7 @@ function EventStack({ events, paused, onSelectWorkflow, eventFontSize, onContext
             bgcolor: accent + '14',
             color: c.text.primary,
             borderLeft: `3px solid ${accent}`,
-            borderRadius: '4px',
+            borderRadius: c.radius.sm,
             px: 0.65, py: 0,
             fontSize: eventFontSize, fontWeight: 500,
             overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
@@ -435,7 +455,7 @@ function EventStack({ events, paused, onSelectWorkflow, eventFontSize, onContext
             minWidth: 20, px: 0.4,
             bgcolor: accent + '22',
             color: accent,
-            borderRadius: '4px',
+            borderRadius: c.radius.sm,
             fontSize: eventFontSize, fontWeight: 700,
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             '&:hover': { bgcolor: accent + '33' },
