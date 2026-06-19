@@ -2824,7 +2824,7 @@ class AgentManager:
                                     content=_asst_text,
                                     branch_id=session.active_branch_id,
                                 )
-                                session.messages.append(asst_msg)
+                                self._upsert_message(session, asst_msg)
                                 _stream_text_accum = ""
                                 self._live_partial.pop(session_id, None)
                                 await ws_manager.send_to_session(session_id, "agent:message", {
@@ -2835,7 +2835,7 @@ class AgentManager:
                         for i, tu in enumerate(tool_uses):
                             msg_id = stream_tool_msg_ids_ordered[i] if i < len(stream_tool_msg_ids_ordered) else uuid4().hex
                             tool_msg = Message(id=msg_id, role="tool_call", content=tu, branch_id=session.active_branch_id)
-                            session.messages.append(tool_msg)
+                            self._upsert_message(session, tool_msg)
                             await ws_manager.send_to_session(session_id, "agent:message", {
                                 "session_id": session_id,
                                 "message": tool_msg.model_dump(mode="json"),
@@ -3912,7 +3912,7 @@ class AgentManager:
             content=text,
             branch_id=live.get("branch_id") or session.active_branch_id,
         )
-        session.messages.append(partial)
+        self._upsert_message(session, partial)
         try:
             await ws_manager.send_to_session(session.id, "agent:message", {
                 "session_id": session.id,
@@ -3932,6 +3932,17 @@ class AgentManager:
             await task
         except (asyncio.CancelledError, Exception):
             pass
+
+    def _upsert_message(self, session, msg) -> None:
+        """Append msg, or replace it in place if its id is already present.
+        Makes a duplicate-id row unrepresentable when a stream commit races a
+        stop's early partial commit (both carry the same stream message id).
+        Same pattern the consolidated-thinking pill already uses inline."""
+        for i, existing in enumerate(session.messages):
+            if getattr(existing, "id", None) == msg.id:
+                session.messages[i] = msg
+                return
+        session.messages.append(msg)
 
     def handle_approval(self, request_id: str, decision: dict):
         """Resolve a pending HITL approval."""
