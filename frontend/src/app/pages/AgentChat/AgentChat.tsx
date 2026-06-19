@@ -64,7 +64,8 @@ import ContextDrawer from './shell/ContextDrawer';
 import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
 import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCards, removeCard } from '@/shared/state/dashboardLayoutSlice';
-import { setCardSidecar, commitDraft, updateWorkflowCard } from '@/shared/state/workflowsSlice';
+import { setCardSidecar, commitDraft, updateWorkflowCard, controlWorkflowRun } from '@/shared/state/workflowsSlice';
+import { shallowEqual } from 'react-redux';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { parseMcpToolName, getMcpInputSummary } from '@/shared/mcpToolMeta';
 
@@ -268,12 +269,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   // its composer for a Force Stop button: continuing the chat is meaningless,
   // but killing the run is the common need. Once a Test Agent finishes, the
   // button flips to a green "close" (see workflow_test_state + ForceStopAgentBar).
-  const linkedWorkflowId = useAppSelector((s) => {
+  const linkedSidecar = useAppSelector((s) => {
     const found = Object.values(s.workflows.openCards).find(
       (cd) => cd.sidecarSessionId === id && (cd.sidecarKind === 'testing' || cd.sidecarKind === 'watching'),
     );
-    return found?.workflowId ?? null;
-  });
+    return found
+      ? { workflowId: found.workflowId, runId: found.runId ?? null, kind: found.sidecarKind ?? null }
+      : null;
+  }, shallowEqual);
+  const linkedWorkflowId = linkedSidecar?.workflowId ?? null;
   const isStoppableSidecar = !!linkedWorkflowId;
   // A live workflow run being watched owns pause/resume from its workflow
   // card, so the chat's own "Resume Agent Response" bubble is redundant and
@@ -946,8 +950,14 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
 
   const handleStop = useCallback(() => {
     if (!id) return;
+    // A watched live workflow run mirrors the workflow card's Stop: fully stop the
+    // run, not just pause the agent. Test Agent + plain chats stop the session.
+    if (linkedSidecar?.kind === 'watching' && linkedSidecar.runId) {
+      dispatch(controlWorkflowRun({ runId: linkedSidecar.runId, action: 'stop' }));
+      return;
+    }
     dispatch(stopAgent({ sessionId: id }));
-  }, [id, dispatch]);
+  }, [id, dispatch, linkedSidecar]);
 
   // Finished Test Agent card: drop the tether + remove this card, and either
   // commit the workflow draft (Save, same as the edit card's "save now") or
