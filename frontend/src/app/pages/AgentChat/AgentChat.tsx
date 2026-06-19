@@ -32,6 +32,7 @@ import {
   duplicateSession,
   setActiveSession,
   updateSessionModel,
+  clearContextOverflow,
   updateSessionMode,
   updateSessionThinkingLevel,
   updateThinkingLevel,
@@ -246,9 +247,12 @@ interface AgentChatProps {
   onDismissGlow?: () => void;
   initialContextPaths?: ContextPath[];
   onBranch?: (newSessionId: string) => void;
+  // Set when this chat is the workflow build/edit agent: the out-of-tokens card
+  // then warns that switching models here also changes the workflow's run model.
+  workflowEditId?: string;
 }
 
-const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose, embedded, autoFocus, initialContextPaths, onBranch }) => {
+const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose, embedded, autoFocus, initialContextPaths, onBranch, workflowEditId }) => {
   const c = useClaudeTokens();
   const STATUS_STYLES: Record<string, { color: string; bg: string }> = {
     running: { color: c.status.success, bg: c.status.successBg },
@@ -1595,10 +1599,18 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             {session.context_overflow && (() => {
               const reason = session.context_overflow.reason;
               const isAuth = reason === 'openswarm_pro_auth_expired' || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
-              const title = isAuth ? 'Sign-in required' : 'Context full';
-              const primaryLabel = isAuth ? 'Open Settings' : 'Start a fresh chat';
+              const isOutOfTokens = reason === 'out_of_tokens';
+              const title = isOutOfTokens ? 'Out of tokens' : isAuth ? 'Sign-in required' : 'Context full';
+              const primaryLabel = isOutOfTokens ? 'Got it' : isAuth ? 'Open Settings' : 'Start a fresh chat';
+              // In the workflow build chat, switching models here also sets the
+              // workflow's scheduled run model, so spell that consequence out.
+              const message = isOutOfTokens && workflowEditId
+                ? `${session.context_overflow.message} Whichever model you switch to here becomes the model this workflow runs on.`
+                : session.context_overflow.message;
               const onPrimary = () => {
-                if (isAuth) {
+                if (isOutOfTokens) {
+                  if (id) dispatch(clearContextOverflow({ sessionId: id }));
+                } else if (isAuth) {
                   dispatch(openSettingsModal('models'));
                 } else {
                   const did = session?.dashboard_id;
@@ -1618,7 +1630,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                     {title}
                   </Typography>
                   <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 1.25 }}>
-                    {session.context_overflow.message}
+                    {message}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Typography

@@ -680,6 +680,18 @@ class WebSocketManager {
         }
         break;
 
+      case 'agent:out_of_tokens':
+        // Reuses the context_overflow card slot, same "this session is blocked,
+        // here's what to do" shape. Reason field disambiguates from auth/overflow.
+        if (session_id) {
+          store.dispatch(setContextOverflow({
+            sessionId: session_id,
+            reason: 'out_of_tokens',
+            message: data.message ?? "You're out of tokens on this model.",
+          }));
+        }
+        break;
+
       case 'agent:mcp_suggestions':
         if (session_id) {
           store.dispatch(setMcpSuggestions({

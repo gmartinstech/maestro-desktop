@@ -32,8 +32,10 @@ from backend.apps.agents.core.error_classify import (
     _is_auth_error,
     _is_free_trial_exhausted,
     _is_long_context_error,
+    _is_out_of_tokens,
     _is_transient_capacity_error,
     _is_unknown_model_error,
+    _extract_reset_hint,
 )
 from backend.apps.agents.manager.session.session_store import (
     _delete_session_file,
@@ -3200,6 +3202,31 @@ class AgentManager:
                 session.messages.append(error_msg)
                 await ws_manager.send_to_session(session_id, "agent:free_trial_exhausted", {
                     "session_id": session_id,
+                    "message": friendly_msg,
+                })
+                await ws_manager.send_to_session(session_id, "agent:message", {
+                    "session_id": session_id,
+                    "message": error_msg.model_dump(mode="json"),
+                })
+            elif _is_out_of_tokens(e, extra_text=_stderr_tail):
+                # Usage/quota spent (plan cap, API credit balance, provider quota).
+                # Not a bug and not transient: tell the user plainly it's a token
+                # limit and let them wait for the reset or switch models. Drives the
+                # blocking out_of_tokens card (same slot as auth/context_overflow).
+                _reset = _extract_reset_hint(f"{e!s}\n{_stderr_tail}")
+                friendly_msg = (
+                    f"You're out of tokens on {session.model or 'this model'}. "
+                    "This isn't a bug, and nothing's wrong on your end. Your usage "
+                    "for this model is just spent for now. "
+                    + (f"It resets {_reset}. " if _reset else "")
+                    + "Switch to a different model to keep going, or wait for your "
+                    "limit to reset."
+                )
+                error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
+                session.messages.append(error_msg)
+                await ws_manager.send_to_session(session_id, "agent:out_of_tokens", {
+                    "session_id": session_id,
+                    "model": session.model,
                     "message": friendly_msg,
                 })
                 await ws_manager.send_to_session(session_id, "agent:message", {

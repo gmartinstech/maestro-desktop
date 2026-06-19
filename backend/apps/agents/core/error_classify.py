@@ -69,6 +69,46 @@ def _is_free_trial_exhausted(exc: BaseException, extra_text: str = "") -> bool:
     ))
 
 
+def _is_out_of_tokens(exc: BaseException, extra_text: str = "") -> bool:
+    """True when the turn was rejected because the user's usage/quota is spent: a
+    plan cap, API credit balance, or provider quota. This is a 'wait for the reset
+    window or switch models' situation, NOT a transient rate-limit blip (handled by
+    _is_transient_capacity_error) and NOT an auth/connection failure. Drives the
+    friendly 'just a token issue' card.
+    """
+    combined = f"{exc!s}\n{extra_text}".strip()
+    if not combined:
+        return False
+    return bool(re.search(
+        r"usage\s+cap\s+exceeded"
+        r"|reached\s+your\s+OpenSwarm.*plan\s+limit"
+        r"|usage\s+limit"
+        r"|insufficient_quota"
+        r"|exceeded\s+your\s+current\s+quota"
+        r"|quota\s+exceeded"
+        r"|credit\s+balance\s+is\s+too\s+low"
+        r"|out\s+of\s+credits",
+        combined,
+        re.IGNORECASE,
+    ))
+
+
+def _extract_reset_hint(text: str) -> str:
+    """Pull a human reset phrase ('at 7:42 AM', 'in 2h 30m', 'after 1m 59s') out of
+    a provider usage error so we can tell the user when their limit comes back.
+    Keeps the leading preposition so it slots into 'It resets <hint>.'. Empty when
+    the provider didn't say.
+    """
+    if not text:
+        return ""
+    m = re.search(
+        r"(?:try\s+again|resets?|reset)\s+((?:in|at|after)\s+[^.\n)]{1,40})",
+        text,
+        re.IGNORECASE,
+    )
+    return m.group(1).strip() if m else ""
+
+
 def _is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     """True when the upstream error is a 401/403 auth failure.
 
