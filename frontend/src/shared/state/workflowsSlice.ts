@@ -151,6 +151,12 @@ export interface OpenCard {
   fixSeed?: { runId: string; stepIdx: number; stepLabel: string; error: string } | null;
 }
 
+export interface RunningToast {
+  workflowId: string;
+  runId: string;
+  workflowTitle: string;
+}
+
 interface State {
   items: Record<string, Workflow>;
   runs: Record<string, WorkflowRun[]>;
@@ -162,9 +168,10 @@ interface State {
   cloudSmsEnabled: boolean;
   allRuns: WorkflowRun[];
   allRunsLoading: boolean;
+  runningToast: RunningToast | null;
 }
 
-const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false };
+const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false, runningToast: null };
 
 export const fetchWorkflows = createAsyncThunk(
   'workflows/fetch',
@@ -370,6 +377,20 @@ const slice = createSlice({
           else if (r.status === 'success' || r.status === 'ran_late') card.sidecarKind = 'viewing-completed';
         }
       }
+      // A scheduled run flipping into 'running' fired unattended, so nudge the
+      // user with a clickable toast. Only on the into-running edge (not every
+      // tool-label/step bump), and only for schedule (manual runs they kicked
+      // off themselves don't need a "surprise, it's running" popup).
+      if (r.status === 'running' && r.triggered_by === 'schedule' && (!prev || prev.status !== 'running')) {
+        state.runningToast = {
+          workflowId: r.workflow_id,
+          runId: r.id,
+          workflowTitle: state.items[r.workflow_id]?.title || 'Workflow',
+        };
+      }
+    },
+    dismissRunningToast(state) {
+      state.runningToast = null;
     },
     toggleExpandedStep(state, action: { payload: { workflowId: string; stepId: string } }) {
       const card = state.openCards[action.payload.workflowId];
@@ -447,5 +468,6 @@ export const {
   clearFixSeed,
   upsertWorkflow,
   removeWorkflow,
+  dismissRunningToast,
 } = slice.actions;
 export default slice.reducer;

@@ -332,7 +332,7 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
         open={!!warning}
         autoHideDuration={8000}
         onClose={() => setWarning(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
         <Alert
           severity="warning"
