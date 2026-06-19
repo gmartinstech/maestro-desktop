@@ -237,6 +237,32 @@ TOOLS = [
             "required": ["workflow_id"],
         },
     },
+    {
+        "name": "SuggestConvertToWorkflow",
+        "description": (
+            "Call this at the end of a response when you have just completed a task "
+            "the user is likely to want to repeat on a schedule (e.g. a daily report, "
+            "a weekly digest, a recurring data check, a monitoring ping). Do NOT call "
+            "it for one-off tasks, debugging sessions, creative work, or anything "
+            "where 'repeat it tomorrow' would be odd. Use sparingly — once per session "
+            "maximum, only with high confidence. This nudges the frontend to highlight "
+            "the 'Convert to Workflow' button and suggest a cadence."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "description": "A brief, user-friendly explanation of why this task is a good candidate for a recurring workflow (e.g. 'This is a daily report that stays the same'). Shown in the tool bubble.",
+                },
+                "suggested_cadence": {
+                    "type": "string",
+                    "description": "Optional freeform cadence hint (e.g. 'every weekday morning at 9am' or 'weekly on Monday'). Leave blank if uncertain. The frontend will parse it to prefill the schedule.",
+                },
+            },
+            "required": ["reason"],
+        },
+    },
 ]
 
 
@@ -507,6 +533,15 @@ def handle_read_test_transcript(args: dict) -> dict:
     return _ok(f"Test Agent transcript (status: {status}):\n\n{transcript}")
 
 
+def handle_suggest_convert_to_workflow(args: dict) -> dict:
+    reason = (args.get("reason") or "").strip()
+    if not reason:
+        return _err("reason is required.")
+    cadence = (args.get("suggested_cadence") or "").strip()
+    result = json.dumps({"reason": reason, "cadence": cadence})
+    return {"content": [{"type": "text", "text": result}]}
+
+
 HANDLERS = {
     "ScheduleWorkflow": handle_schedule_workflow,
     "ListScheduledWorkflows": handle_list,
@@ -520,6 +555,7 @@ HANDLERS = {
     "DeleteWorkflowStep": handle_delete_step,
     "TestWorkflow": handle_test_workflow,
     "ReadTestTranscript": handle_read_test_transcript,
+    "SuggestConvertToWorkflow": handle_suggest_convert_to_workflow,
 }
 
 

@@ -68,6 +68,29 @@ function extractStepsFromSession(session: { messages: Array<{ role: string; cont
   return out;
 }
 
+/** Detect if the session has a completed SuggestConvertToWorkflow tool call. */
+function findWorkflowSuggestion(session: AgentSession): { reason: string; cadence: string } | null {
+  for (const msg of session.messages || []) {
+    if (msg.role !== 'assistant') continue;
+    const content = Array.isArray(msg.content) ? msg.content : [];
+    for (const block of content) {
+      if (block?.type === 'tool_result' && block?.tool_name === 'SuggestConvertToWorkflow') {
+        const mcpServer = (block as any)?.mcpServer || '';
+        if (!mcpServer.includes('openswarm-schedule')) continue;
+        const text = block?.content?.[0]?.text;
+        if (!text) continue;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.reason) return { reason: parsed.reason, cadence: parsed.cadence || '' };
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+  }
+  return null;
+}
+
 const GoogleServiceIcon: React.FC<{ service: string; size?: number }> = ({ service, size = 16 }) => {
   if (service === 'gmail') {
     return (
@@ -259,6 +282,8 @@ const AgentCard: React.FC<Props> = ({
   const defaultModel = useAppSelector((s) => s.settings.data.default_model);
   const defaultMode = useAppSelector((s) => s.settings.data.default_mode);
   const [converting, setConverting] = useState(false);
+  const [suggestAnimationFired, setSuggestAnimationFired] = useState(false);
+  const workflowSuggestion = useMemo(() => findWorkflowSuggestion(session), [session]);
   // Hide the "Convert to workflow" button when this chat is already
   // entangled with a workflow (Image #44 note). Two cases:
   //  (a) The session is one of a workflow's runner sessions, OR
@@ -317,6 +342,15 @@ const AgentCard: React.FC<Props> = ({
     return s;
   }, [session.model, modelsByProvider]);
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
+
+  const suggestGlowRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (workflowSuggestion && !suggestAnimationFired && !suggestGlowRef.current) {
+      suggestGlowRef.current = true;
+      setSuggestAnimationFired(true);
+      dispatch(fadeGlowingAgentCard(session.id, 3000));
+    }
+  }, [workflowSuggestion, suggestAnimationFired, dispatch, session.id]);
 
   const cardBoxRef = useRef<HTMLDivElement>(null);
   // Ref so ResizeObserver sees latest value without re-attaching when active flips.
@@ -907,7 +941,7 @@ const AgentCard: React.FC<Props> = ({
                 </Box>
               </Tooltip>
             )}
-            {(session.status === 'completed' || session.status === 'stopped') && session.messages.length >= 2 && !isWorkflowRunnerSession && (
+            {((session.status === 'completed' || session.status === 'stopped') && session.messages.length >= 2 && !isWorkflowRunnerSession || !!workflowSuggestion) && (
               <Tooltip title="Turn this chat into a reusable, schedulable workflow">
                 <Box
                   role="button"
@@ -918,9 +952,6 @@ const AgentCard: React.FC<Props> = ({
                     if (steps.length === 0) return;
                     setConverting(true);
                     const draftId = `draft-${session.id}-${Date.now()}`;
-                    // The chat card becomes a temporary workflow draft in the
-                    // same slot. Nothing is persisted until the user chooses
-                    // Save Draft or Schedule Workflow from the draft card.
                     dispatch(addWorkflowCard({ workflowId: draftId, sourceSessionId: session.id, expandedSessionIds }));
                     dispatch(setWorkflowCardPosition({ workflowId: draftId, x: cardX, y: cardY }));
                     dispatch(setWorkflowCardSize({ workflowId: draftId, width: cardWidth, height: cardHeight }));
@@ -937,10 +968,12 @@ const AgentCard: React.FC<Props> = ({
                         use_synced_prompt: true,
                         model: defaultModel || session.model,
                         mode: defaultMode || session.mode,
+                        suggested_cadence: workflowSuggestion?.cadence || undefined,
                       } as Partial<Workflow>,
                     }));
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
+                  className={workflowSuggestion && suggestAnimationFired ? 'workflow-suggest-glow' : undefined}
                   sx={{
                     display: 'inline-flex', alignItems: 'center', gap: 0.5,
                     color: '#fff',
@@ -952,6 +985,20 @@ const AgentCard: React.FC<Props> = ({
                     cursor: converting ? 'wait' : 'pointer',
                     opacity: converting ? 0.7 : 1,
                     '&:hover': { filter: 'brightness(1.05)' },
+                    '&.workflow-suggest-glow': {
+                      animation: 'workflow-suggest-glow 600ms ease-in-out 3',
+                      '@keyframes workflow-suggest-glow': {
+                        '0%': {
+                          boxShadow: `0 0 0 2px ${c.accent.primary}, 0 0 8px 2px ${c.accent.primary}88`,
+                        },
+                        '50%': {
+                          boxShadow: `0 0 0 4px ${c.accent.primary}66, 0 0 16px 4px ${c.accent.primary}44`,
+                        },
+                        '100%': {
+                          boxShadow: `0 0 0 2px ${c.accent.primary}, 0 0 8px 2px ${c.accent.primary}88`,
+                        },
+                      },
+                    },
                   }}
                 >
                   <AutoAwesomeOutlinedIcon sx={{ fontSize: 14 }} />
