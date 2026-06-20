@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
@@ -12,6 +12,7 @@ import type { Workflow } from '@/shared/state/workflowsSlice';
 import { runWorkflowNow, deleteWorkflow, updateWorkflow, openWorkflowCard } from '@/shared/state/workflowsSlice';
 import { addWorkflowCard } from '@/shared/state/dashboardLayoutSlice';
 import { WEEKDAY_FULL, WEEKDAY_LABEL_SHORT, addDays, sameDay, startOfMonthGrid, startOfWeek, formatTime, formatHourLabel, stepsSignature } from './scheduleUtils';
+import { useWindowedList } from '@/shared/hooks/useWindowedList';
 
 interface Props {
   view: 'Week' | 'Month' | 'List';
@@ -25,10 +26,23 @@ interface Props {
 // starting hour. The scroll container caps the visible window.
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
 
+// At/above this many list rows (day headers + event rows), window the list so
+// only near-viewport rows stay mounted. Below it, render whole; spacers aren't
+// worth the churn on a short list.
+const LIST_WINDOW_MIN_ROWS = 60;
+
 interface CalendarEvent {
   workflow_id: string;
   fire_at: string;
 }
+
+// One flattened list row. Windowing unmounts at this granularity, so a dense
+// single day no longer mounts all ~96 of its rows just for being near the
+// viewport: only the rows actually in view (plus buffer) stay in the DOM.
+type ListRow =
+  | { kind: 'header'; id: string; date: Date; isToday: boolean }
+  | { kind: 'event'; id: string; ev: { workflow: Workflow; date: Date } }
+  | { kind: 'empty'; id: string };
 
 export default function ScheduleCalendar({ view, density, onSelectWorkflow, refDate }: Props) {
   const c = useClaudeTokens();
@@ -106,18 +120,32 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   const rangeEndExclusive = useMemo(() => addDays(rangeStart, range), [rangeStart, range]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [calendarFetchKey, setCalendarFetchKey] = useState('');
+  // Key off only the fields that change which occurrences exist. Deliberately
+  // NOT updated_at: the scheduler bumps it every tick (recomputing next_run_at)
+  // and pushes a workflow:updated over the socket, which would churn this key
+  // and blank the calendar (the eventsByDay gate) until the next fetch lands.
   const workflowScheduleKey = workflows
-    .map((w) => `${w.id}:${w.updated_at}:${w.schedule.enabled}:${w.schedule.timezone}:${w.schedule.repeat_unit}:${w.schedule.repeat_every}:${w.schedule.hour}:${w.schedule.minute}:${w.schedule.on_days.join(',')}:${w.schedule.ends_at || ''}:${w.schedule.max_runs ?? ''}:${w.schedule.runs_count}`)
+    .map((w) => `${w.id}:${w.schedule.enabled}:${w.schedule.timezone}:${w.schedule.repeat_unit}:${w.schedule.repeat_every}:${w.schedule.hour}:${w.schedule.minute}:${w.schedule.on_days.join(',')}:${w.schedule.ends_at || ''}:${w.schedule.max_runs ?? ''}:${w.schedule.runs_count}`)
     .sort()
     .join('|');
   const fromIso = rangeStart.toISOString();
   const toIso = rangeEndExclusive.toISOString();
   const calendarRequestKey = `${view}:${fromIso}:${toIso}:${workflowScheduleKey}`;
+  // The visible window alone decides whether shown events are even plausible.
+  // Gating on this (not the full request key) means a schedule edit refetches
+  // without blanking the calendar first: we keep the current events until the
+  // fresh ones land. Only a view/date change, where old events are for the
+  // wrong window, clears them.
+  const calendarWindowKey = `${view}:${fromIso}:${toIso}`;
 
   useEffect(() => {
+    // No AbortController: the global fetch interceptor (shared/config) dedupes
+    // GETs by URL onto ONE underlying request, so aborting on cleanup (which
+    // fires when this effect re-runs as workflows hydrate) rejects the shared
+    // request and the re-fired fetch with it, leaving the calendar empty on
+    // first load. The `cancelled` guard already stops stale state writes.
     let cancelled = false;
-    const ctrl = new AbortController();
-    fetch(`${API_BASE}/workflows/calendar?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`, { signal: ctrl.signal })
+    fetch(`${API_BASE}/workflows/calendar?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`)
       .then((res) => {
         if (!res.ok) throw new Error(`calendar failed ${res.status}`);
         return res.json();
@@ -125,22 +153,20 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
       .then((data) => {
         if (cancelled) return;
         setCalendarEvents((data.events || []) as CalendarEvent[]);
-        setCalendarFetchKey(calendarRequestKey);
+        setCalendarFetchKey(calendarWindowKey);
       })
       .catch(() => {
         if (cancelled) return;
-        setCalendarEvents([]);
-        setCalendarFetchKey(calendarRequestKey);
+        setCalendarFetchKey(calendarWindowKey);
       });
     return () => {
       cancelled = true;
-      ctrl.abort();
     };
   }, [fromIso, toIso, calendarRequestKey]);
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, { workflow: Workflow; date: Date }[]>();
-    if (calendarFetchKey !== calendarRequestKey) {
+    if (calendarFetchKey !== calendarWindowKey) {
       return { map, start: rangeStart, end: rangeEndExclusive, key: calendarFetchKey };
     }
     const workflowById = new Map(workflows.map((wf) => [wf.id, wf]));
@@ -158,7 +184,51 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
       arr.sort((a, b) => a.date.getTime() - b.date.getTime());
     }
     return { map, start: rangeStart, end: rangeEndExclusive, key: calendarFetchKey };
-  }, [calendarEvents, calendarFetchKey, calendarRequestKey, workflows, rangeStart, rangeEndExclusive]);
+  }, [calendarEvents, calendarFetchKey, calendarWindowKey, workflows, rangeStart, rangeEndExclusive]);
+
+  // List view can fan out to ~1300 rows for a dense schedule (every 15 min over
+  // 14 days). Flatten days into rows and window at the row level so off-screen
+  // rows unmount instead of weighing the whole app down. Computed up here (not
+  // in the List branch) so the windowing hook runs before the Week/Month early
+  // returns.
+  const upcoming = useMemo(() => {
+    const out: { date: Date; events: { workflow: Workflow; date: Date }[]; isToday: boolean }[] = [];
+    for (let i = 0; i < 14; i += 1) {
+      const day = addDays(today, i);
+      const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+      const arr = eventsByDay.map.get(key) || [];
+      const isToday = sameDay(day, today);
+      if (arr.length || isToday) out.push({ date: day, events: arr, isToday });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventsByDay, dayKey]);
+  const rows = useMemo<ListRow[]>(() => {
+    const out: ListRow[] = [];
+    for (const day of upcoming) {
+      const iso = day.date.toISOString();
+      out.push({ kind: 'header', id: `h:${iso}`, date: day.date, isToday: day.isToday });
+      if (day.events.length === 0) {
+        out.push({ kind: 'empty', id: `x:${iso}` });
+      } else {
+        for (const ev of day.events) {
+          out.push({ kind: 'event', id: `${iso}#${ev.workflow.id}#${ev.date.getTime()}`, ev });
+        }
+      }
+    }
+    return out;
+  }, [upcoming]);
+  const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const estimateRowHeight = useCallback((index: number) => {
+    const r = rows[index];
+    if (!r) return 41;
+    return r.kind === 'header' ? 52 : r.kind === 'empty' ? 36 : 41;
+  }, [rows]);
+  const windowing = useWindowedList({
+    ids: rowIds,
+    estimateHeight: estimateRowHeight,
+    enabled: view === 'List' && rows.length >= LIST_WINDOW_MIN_ROWS,
+  });
 
   const SLOT_H = compact ? 32 : 44;
   const ROW_LABEL = compact ? '0.7rem' : '0.74rem';
@@ -337,69 +407,81 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     );
   }
 
-  // Apple-Calendar-style list: big day number + weekday on the left, a
-  // vertical colored bar separating it from events on the right. Today
-  // renders even with no events (shows a "No events today" placeholder)
-  // so the list doesn't feel empty for new users.
-  const upcoming: { date: Date; events: { workflow: Workflow; date: Date }[]; isToday: boolean }[] = [];
-  for (let i = 0; i < 14; i += 1) {
-    const day = addDays(today, i);
-    const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
-    const arr = eventsByDay.map.get(key) || [];
-    const isToday = sameDay(day, now);
-    if (arr.length || isToday) upcoming.push({ date: day, events: arr, isToday });
-  }
+  // Apple-Calendar-style list: each day is a stacked group with the date as a
+  // header and its events listed underneath, so a busy day stays readable top
+  // to bottom instead of crammed beside a date column. Today renders even with
+  // no events (shows a "No events today" placeholder)
+  // so the list doesn't feel empty for new users. Off-screen day groups
+  // unmount (useWindowedList) and leave a measured-height spacer behind, so a
+  // dense schedule stays light no matter how far down you scroll.
   const accent = c.accent.primary;
+  const visibleRows = rows.slice(windowing.start, windowing.end);
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.lg}px`, overflow: 'hidden', bgcolor: c.bg.surface }}>
-      {upcoming.length === 0 && (
+    <Box
+      ref={windowing.setScrollEl}
+      onScroll={windowing.onScroll}
+      sx={{ display: 'flex', flexDirection: 'column', maxHeight: '100%', overflow: 'auto', overflowAnchor: 'auto', bgcolor: c.bg.surface }}>
+      {rows.length === 0 && (
         <Typography sx={{ fontSize: '0.85rem', color: c.text.muted, textAlign: 'center', py: 3 }}>No scheduled</Typography>
       )}
-      {upcoming.map(({ date, events, isToday }, rowIdx) => (
-        <Box
-          key={date.toISOString()}
-          sx={{
-            display: 'flex', alignItems: 'stretch',
-            borderTop: rowIdx === 0 ? 'none' : `1px dashed ${c.border.subtle}`,
-            minHeight: 64,
-          }}>
-          <Box sx={{ width: 96, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 0.75, pl: 2, pr: 1.25 }}>
-            <Typography sx={{ fontSize: '1.55rem', fontWeight: 600, color: isToday ? accent : c.text.primary, lineHeight: 1, letterSpacing: '-0.01em' }}>
-              {date.getDate()}
-            </Typography>
-            <Box>
-              <Typography sx={{ fontSize: '0.78rem', color: isToday ? accent : c.text.secondary, fontWeight: 500, lineHeight: 1.2 }}>
-                {date.toLocaleString('en', { month: 'short' })}
+      {windowing.topSpacer > 0 && (
+        <Box aria-hidden sx={{ height: windowing.topSpacer, flexShrink: 0, overflowAnchor: 'none' }} />
+      )}
+      {visibleRows.map((row, i) => {
+        const rowIdx = windowing.start + i;
+        if (row.kind === 'header') {
+          return (
+            <Box
+              key={row.id}
+              data-wl-id={row.id}
+              sx={{
+                display: 'flex', alignItems: 'baseline', gap: 0.75,
+                px: 2, pt: rowIdx === 0 ? 1.5 : 2, pb: 0.5,
+                borderTop: rowIdx === 0 ? 'none' : `1px dashed ${c.border.subtle}`,
+              }}>
+              <Typography sx={{ fontSize: '1.15rem', fontWeight: 700, color: row.isToday ? accent : c.text.primary, lineHeight: 1, letterSpacing: '-0.01em' }}>
+                {row.date.getDate()}
               </Typography>
-              <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.2 }}>{WEEKDAY_FULL[date.getDay()]}</Typography>
+              <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: row.isToday ? accent : c.text.secondary, lineHeight: 1 }}>
+                {WEEKDAY_FULL[row.date.getDay()]}
+              </Typography>
+              <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1 }}>
+                {row.date.toLocaleString('en', { month: 'short' })}
+              </Typography>
+            </Box>
+          );
+        }
+        if (row.kind === 'empty') {
+          return (
+            <Box key={row.id} data-wl-id={row.id} sx={{ px: 2, pb: 1 }}>
+              <Typography sx={{ fontSize: '0.85rem', color: c.text.ghost }}>No events today</Typography>
+            </Box>
+          );
+        }
+        const e = row.ev;
+        return (
+          <Box
+            key={row.id}
+            data-wl-id={row.id}
+            onClick={() => onSelectWorkflow?.(e.workflow.id)}
+            onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ x: ev.clientX, y: ev.clientY, workflow: e.workflow }); }}
+            sx={{
+              display: 'flex', alignItems: 'center', gap: 1.25,
+              px: 2, py: 0.4,
+              color: c.text.secondary, cursor: 'pointer',
+              '&:hover .ev-title': { color: accent },
+            }}>
+            <Box sx={{ width: 3, alignSelf: 'stretch', minHeight: 22, bgcolor: accent, borderRadius: c.radius.sm, flexShrink: 0 }} />
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography className="ev-title" sx={{ fontSize: '0.9rem', fontWeight: 500, color: c.text.primary, lineHeight: 1.3 }}>{e.workflow.title}</Typography>
+              <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.3 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</Typography>
             </Box>
           </Box>
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', py: 1, pr: 2 }}>
-            {events.length === 0 && (
-              <Typography sx={{ fontSize: '0.85rem', color: c.text.ghost }}>No events today</Typography>
-            )}
-            {events.map((e, idx) => (
-              <Tooltip key={`${e.workflow.id}-${idx}`} title={<EventTooltipBody event={e} />} placement="right" arrow>
-                <Box
-                  onClick={() => onSelectWorkflow?.(e.workflow.id)}
-                  onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ x: ev.clientX, y: ev.clientY, workflow: e.workflow }); }}
-                  sx={{
-                    display: 'flex', alignItems: 'center', gap: 1.25,
-                    py: 0.4,
-                    fontSize: '0.88rem', color: c.text.secondary, cursor: 'pointer',
-                    '&:hover .ev-title': { color: accent },
-                  }}>
-                  <Box sx={{ width: 3, alignSelf: 'stretch', minHeight: 22, bgcolor: accent, borderRadius: c.radius.sm, flexShrink: 0 }} />
-                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography className="ev-title" sx={{ fontSize: '0.9rem', fontWeight: 500, color: c.text.primary, lineHeight: 1.3 }}>{e.workflow.title}</Typography>
-                    <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.3 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</Typography>
-                  </Box>
-                </Box>
-              </Tooltip>
-            ))}
-          </Box>
-        </Box>
-      ))}
+        );
+      })}
+      {windowing.bottomSpacer > 0 && (
+        <Box aria-hidden sx={{ height: windowing.bottomSpacer, flexShrink: 0, overflowAnchor: 'none' }} />
+      )}
       {ctxMenuEl}
     </Box>
   );

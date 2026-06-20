@@ -17,16 +17,22 @@ import {
   clearPendingFocusBrowserId,
   clearPendingFocusWorkflowId,
   clearPendingFocusWorkflowsHub,
+  clearPendingFocusMissedRuns,
   type ViewCardPosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import { fetchOutputs, type Output } from '@/shared/state/outputsSlice';
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
 import { fetchWorkflows } from '@/shared/state/workflowsSlice';
+import { fetchMissedRuns } from '@/shared/state/missedRunsSlice';
 import { dashboardWs } from '@/shared/ws/WebSocketManager';
 import { initBrowserCommandHandler } from '@/shared/browserCommandHandler';
 import { clearPendingBrowserUrl, clearPendingFocusAgentId } from '@/shared/state/tempStateSlice';
 import { API_BASE } from '@/shared/config';
 import type { CanvasActions } from '../interaction/useCanvasControls';
+
+// Module-level so the missed-runs review pops exactly once per app launch,
+// not again on every dashboard switch.
+let missedRunsCheckedThisSession = false;
 
 interface UseDashboardLifecycleArgs {
   isActive: boolean;
@@ -64,7 +70,17 @@ export function useDashboardLifecycle({
   const pendingFocusAgentId = useAppSelector((state) => state.tempState.pendingFocusAgentId);
   const pendingFocusBrowserId = useAppSelector((state) => state.dashboardLayout.pendingFocusBrowserId);
   const pendingFocusWorkflowId = useAppSelector((state) => state.dashboardLayout.pendingFocusWorkflowId);
+  const pendingFocusMissedRuns = useAppSelector((state) => state.dashboardLayout.pendingFocusMissedRuns);
   const pendingFocusWorkflowsHub = useAppSelector((state) => state.dashboardLayout.pendingFocusWorkflowsHub);
+
+  // Once per app launch: if scheduled fires elapsed while we were closed, fetch
+  // them. The slice flips its toast flag on fulfilled, so a bottom-left nudge
+  // shows instead of a card popping unrequested; the user opens the card from it.
+  useEffect(() => {
+    if (!isActive || missedRunsCheckedThisSession) return;
+    missedRunsCheckedThisSession = true;
+    dispatch(fetchMissedRuns());
+  }, [isActive, dispatch]);
 
   // Track dashboard engagement time
   useEffect(() => {
@@ -247,6 +263,24 @@ export function useDashboardLifecycle({
       }
     }, 200);
   }, [isActive, pendingFocusWorkflowId, layoutInitialized, dispatch, canvasActions, handleHighlightCard]);
+
+  // Same pan/highlight choreography when the missed-runs card opens from its toast.
+  useEffect(() => {
+    if (!isActive) return;
+    if (!pendingFocusMissedRuns || !layoutInitialized) return;
+    dispatch(clearPendingFocusMissedRuns());
+    setTimeout(() => {
+      const card = store.getState().dashboardLayout.missedRunsCard;
+      if (card) {
+        canvasActions.fitToCards(
+          [{ x: card.x, y: card.y, width: card.width, height: card.height }],
+          1.15,
+          true,
+        );
+        handleHighlightCard('missed-runs');
+      }
+    }, 200);
+  }, [isActive, pendingFocusMissedRuns, layoutInitialized, dispatch, canvasActions, handleHighlightCard]);
 
   // Pan/zoom to Workflows Hub on Expand; chained rAFs ensure fit runs after the hub div lands at its new coords.
   useEffect(() => {

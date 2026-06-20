@@ -98,6 +98,8 @@ export function appendSelectedElements(trimmed: string, selectedEls: SelectedEle
         'tool-group': 'Tool Group',
         'view-card': 'App Card',
         'browser-card': 'Browser Card',
+        'workflow-card': 'Workflow Card',
+        'workflows-hub-card': 'Workflows Hub',
         'dom-element': 'Element',
       }[el.semanticType] || el.semanticType;
       lines.push(`${i + 1}. [${typeLabel}] ${el.semanticLabel || ''}`);

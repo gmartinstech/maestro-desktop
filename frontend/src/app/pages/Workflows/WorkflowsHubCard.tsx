@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import InputBase from '@mui/material/InputBase';
+import Fade from '@mui/material/Fade';
 import CloseIcon from '@mui/icons-material/Close';
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -19,7 +20,7 @@ import {
   setWorkflowsHubPosition,
   setWorkflowsHubSize,
 } from '@/shared/state/dashboardLayoutSlice';
-import { openWorkflowCard, createWorkflow, fetchPausedState, fetchWorkflows, setPausedAll, updateWorkflow, deleteWorkflow, runWorkflowNow } from '@/shared/state/workflowsSlice';
+import { openWorkflowCard, createWorkflow, fetchWorkflows, fetchPausedState, setPausedAll, updateWorkflow, deleteWorkflow, runWorkflowNow } from '@/shared/state/workflowsSlice';
 import type { Workflow } from '@/shared/state/workflowsSlice';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
@@ -56,7 +57,7 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
 ];
 
 interface Props {
-  dashboardId?: string;
+  dashboardId: string;
   cardX: number;
   cardY: number;
   cardWidth: number;
@@ -77,54 +78,6 @@ interface Props {
 
 type CalendarView = 'Week' | 'Month' | 'List';
 
-// Small badge in the hub header that adds up successful scheduled runs
-// across all workflows and renders an approximate "time saved" figure.
-// Heuristic: 3 minutes saved per scheduled run that the user would have
-// otherwise done by hand. Not precise — meant as a quiet "you got back
-// X hours" affirmation, not an audit number.
-function TimeSavedBadge() {
-  const c = useClaudeTokens();
-  const runsByWorkflow = useAppSelector((s) => s.workflows.runs);
-  const items = useAppSelector((s) => s.workflows.items);
-  let count = 0;
-  for (const arr of Object.values(runsByWorkflow)) {
-    for (const r of arr) {
-      if (r.triggered_by === 'schedule' && (r.status === 'success' || r.status === 'ran_late')) count += 1;
-    }
-  }
-  // Fallback: if no runs are loaded yet (cards never opened), use
-  // last_run_status as a coarse proxy so brand-new users don't see 0.
-  if (count === 0) {
-    for (const w of Object.values(items)) {
-      if (w.last_run_status === 'success' || w.last_run_status === 'ran_late') count += 1;
-    }
-  }
-  if (count === 0) return null;
-  const totalMin = count * 3;
-  const hours = totalMin / 60;
-  // Show "X done · ~Y hrs" so the user gets both the run count and a
-  // sense of time. Dot-separator reads quieter than the old green pill.
-  const timeLabel = hours >= 1 ? `~${hours.toFixed(1)} hrs` : `~${totalMin} min`;
-  return (
-    <Tooltip title={`${count} workflow runs completed for you. Rough estimate of ~3 min saved per run vs. doing it by hand.`}>
-      <Box sx={{
-        display: 'inline-flex', alignItems: 'center', gap: 0.5,
-        ml: 1, px: 0.85, py: 0.2,
-        fontSize: '0.74rem', fontWeight: 600,
-        color: c.text.secondary,
-        bgcolor: 'transparent',
-        border: `1px solid ${c.border.subtle}`,
-        borderRadius: 999,
-      }}>
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14, borderRadius: '50%', bgcolor: (c.status.success || c.accent.primary) + '22', color: c.status.success || c.accent.primary, fontSize: 9, fontWeight: 800 }}>✓</Box>
-        <span style={{ color: c.text.primary }}>{count}</span>
-        <span style={{ color: c.text.muted }}>·</span>
-        <span style={{ color: c.text.secondary }}>{timeLabel} back</span>
-      </Box>
-    </Tooltip>
-  );
-}
-
 const WorkflowsHubCard: React.FC<Props> = ({
   dashboardId,
   cardX, cardY, cardWidth, cardHeight, cardZOrder = 0,
@@ -138,10 +91,12 @@ const WorkflowsHubCard: React.FC<Props> = ({
   const paused = useAppSelector((s) => s.workflows.paused);
   const defaultModel = useAppSelector((s) => s.settings.data.default_model);
 
-  useEffect(() => {
-    dispatch(fetchPausedState());
-    dispatch(fetchWorkflows(dashboardId));
-  }, [dispatch, dashboardId]);
+  useEffect(() => { dispatch(fetchPausedState()); }, [dispatch]);
+  // The hub is the signal "user is looking at workflows now", so load them
+  // eagerly here instead of waiting on the dashboard's deferred idle fetch
+  // (which left the calendar blank for ~2s). The thunk's !loading condition
+  // dedups against that idle dispatch.
+  useEffect(() => { dispatch(fetchWorkflows(dashboardId)); }, [dashboardId, dispatch]);
 
   const togglePaused = useCallback(() => {
     dispatch(setPausedAll(!paused));
@@ -356,7 +311,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
       ? c.shadow.lg
       : isSelected
         ? `0 0 0 1px #3b82f6, ${c.shadow.md}`
-        : c.shadow.md;
+        : c.shadow.sm;
   const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
 
   return (
@@ -385,7 +340,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
         height: dh,
         bgcolor: c.bg.surface,
         border,
-        borderRadius: `${c.radius.lg}px`,
+        borderRadius: 3,
         boxShadow: shadow,
         overflow: 'hidden',
         display: 'flex',
@@ -415,15 +370,15 @@ const WorkflowsHubCard: React.FC<Props> = ({
               points right, matching the Workflows brand mark. */}
           <CallSplitRoundedIcon sx={{ fontSize: 16, transform: 'rotate(90deg)' }} />
         </Box>
-        <Typography sx={{ flex: 1, fontWeight: 700, fontSize: '0.88rem', color: c.text.primary }}>Workflows</Typography>
+        <Typography sx={{ flex: 1, fontWeight: 600, fontSize: '0.95rem', color: c.text.primary }}>Workflows</Typography>
         <IconButton
           size="small"
           data-no-drag
           onClick={(e) => { e.stopPropagation(); dispatch(closeWorkflowsHub()); }}
           onPointerDown={(e) => e.stopPropagation()}
-          sx={{ p: 0.35, color: c.text.ghost, '&:hover': { color: c.status.error, bgcolor: c.status.errorBg } }}
+          sx={{ p: 0.5, color: c.text.ghost, '&:hover': { color: c.status.error, bgcolor: c.status.errorBg } }}
         >
-          <CloseIcon sx={{ fontSize: 15 }} />
+          <CloseIcon sx={{ fontSize: 16 }} />
         </IconButton>
       </Box>
 
@@ -455,11 +410,11 @@ const WorkflowsHubCard: React.FC<Props> = ({
             data-no-drag
             sx={{
               display: 'inline-flex', alignItems: 'center', gap: 0.4, ml: 0.5,
-              fontSize: '0.8rem', fontWeight: 600,
-              color: paused ? c.status.warning || c.accent.primary : c.text.secondary,
-              bgcolor: paused ? (c.status.warningBg || c.bg.elevated) : 'transparent',
-              border: `1px solid ${paused ? (c.status.warning || c.accent.primary) + '60' : c.border.subtle}`,
-              px: 0.85, py: 0.3, borderRadius: `${c.radius.md}px`, cursor: 'pointer',
+              fontSize: '0.82rem', fontWeight: 600,
+              color: c.text.secondary,
+              bgcolor: paused ? c.bg.elevated : 'transparent',
+              border: `1px solid ${paused ? c.border.medium : c.border.subtle}`,
+              px: 1, py: 0.35, borderRadius: `${c.radius.md}px`, cursor: 'pointer',
               '&:hover': { color: c.text.primary, borderColor: c.border.medium },
             }}>
             <Switch size="small" checked={paused} sx={{ pointerEvents: 'none', mr: -0.5, ml: -0.5 }} />
@@ -475,13 +430,12 @@ const WorkflowsHubCard: React.FC<Props> = ({
             sx={{
               fontSize: '0.82rem', fontWeight: 500, color: c.text.secondary,
               border: `1px solid ${c.border.subtle}`,
-              px: 1.1, py: 0.35, borderRadius: `${c.radius.md}px`, cursor: 'pointer',
+              px: 1, py: 0.35, borderRadius: `${c.radius.md}px`, cursor: 'pointer',
               '&:hover': { color: c.text.primary, borderColor: c.border.medium },
             }}>Today</Box>
           <IconButton size="small" data-no-drag onClick={() => setRefDate(addDays(refDate, view === 'Month' ? -28 : -7))} sx={{ p: 0.3 }}><ChevronLeftIcon sx={{ fontSize: 18 }} /></IconButton>
           <IconButton size="small" data-no-drag onClick={() => setRefDate(addDays(refDate, view === 'Month' ? 28 : 7))} sx={{ p: 0.3 }}><ChevronRightIcon sx={{ fontSize: 18 }} /></IconButton>
           <Typography sx={{ fontSize: '0.92rem', fontWeight: 600, color: c.text.primary }}>{monthLabel}</Typography>
-          <TimeSavedBadge />
         </Box>
 
         <Box sx={{ position: 'relative' }}>
@@ -499,7 +453,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
             {view}
             <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
           </Box>
-          {viewOpen && (
+          <Fade in={viewOpen} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
             <Box sx={{ position: 'absolute', top: '100%', right: 0, mt: 0.5, bgcolor: c.bg.surface, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, boxShadow: c.shadow.md, zIndex: 5, minWidth: 110 }}>
               {(['List', 'Week', 'Month'] as const).map((v) => (
                 <Box
@@ -511,7 +465,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
                 </Box>
               ))}
             </Box>
-          )}
+          </Fade>
         </Box>
       </Box>
 
@@ -690,7 +644,7 @@ function SidebarSection({ title, items, onPick, scheduled, onContext, onSchedule
               <Box
                 onClick={(e) => toggleEnabled(w, e)}
                 sx={{
-                  width: 14, height: 14, borderRadius: '3px', flexShrink: 0,
+                  width: 14, height: 14, borderRadius: c.radius.sm, flexShrink: 0,
                   border: `1.5px solid ${w.schedule.enabled ? c.accent.primary : c.border.medium}`,
                   bgcolor: w.schedule.enabled ? c.accent.primary : 'transparent',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -706,7 +660,7 @@ function SidebarSection({ title, items, onPick, scheduled, onContext, onSchedule
               <Box
                 onClick={(e) => { e.stopPropagation(); onSchedule?.(w, e.currentTarget); }}
                 sx={{
-                  width: 16, height: 16, borderRadius: '4px', flexShrink: 0,
+                  width: 16, height: 16, borderRadius: c.radius.sm, flexShrink: 0,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   color: c.text.muted, cursor: 'pointer',
                   '&:hover': { color: c.accent.primary, bgcolor: c.bg.elevated },
@@ -724,7 +678,7 @@ function SidebarSection({ title, items, onPick, scheduled, onContext, onSchedule
             )}
           </Typewriter>
           {scheduled && (!w.schedule.enabled || allPaused) && (
-            <Box sx={{ flexShrink: 0, px: 0.6, py: 0.1, borderRadius: '3px', bgcolor: c.bg.elevated, color: c.text.muted, fontSize: '0.62rem', fontWeight: 600, lineHeight: 1.5, letterSpacing: '0.02em' }}>Paused</Box>
+            <Box sx={{ flexShrink: 0, px: 0.6, py: 0.1, borderRadius: c.radius.sm, bgcolor: c.bg.elevated, color: c.text.muted, fontSize: '0.62rem', fontWeight: 600, lineHeight: 1.5, letterSpacing: '0.02em' }}>Paused</Box>
           )}
         </Box>
       ))}
