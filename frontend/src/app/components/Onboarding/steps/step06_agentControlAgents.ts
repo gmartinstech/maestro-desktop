@@ -44,25 +44,22 @@ export const step06: OnboardingStep = {
       condition: { kind: 'event_bus', event: 'agent:attached_to_browser' },
       timeoutMs: 90000,
     },
+    // Guide, don't commandeer: let the user tell the boss chat what to do with
+    // the helper, in their own words, instead of auto-typing + sending for them.
     { kind: 'move_to', target: S.chatInput },
     {
-      kind: 'type_into',
-      target: S.chatInput,
-      // Source-agnostic; works for either step 3 prompt.
-      text: 'Turn what it dug up into a PDF report and save it to my downloads.',
-      speedMs: 12,
+      kind: 'popup',
+      text: 'Tell the boss chat what to have its helper do, your words, then send.',
     },
-    { kind: 'move_to', target: S.chatSendButton },
-    { kind: 'click', target: S.chatSendButton, simulate: true },
-    // Confirm message went out; don't wait for the orchestrator to finish (legitimately runs minutes).
+    // Confirm a message went out; don't wait for the orchestrator to finish (legitimately runs minutes).
     {
       kind: 'wait_user',
       condition: { kind: 'event_bus', event: 'chat:message_sent' },
-      timeoutMs: 30000,
+      timeoutMs: 180000,
     },
     {
       kind: 'popup',
-      text: "On it! Your PDF will pop into Downloads when everyone's done. Go poke around in the meantime.",
+      text: "On it! The helper gets to work and reports back to the boss. Go poke around in the meantime.",
     },
     { kind: 'delay', ms: 4000 },
     { kind: 'outro' },
