@@ -239,7 +239,7 @@ const PublishModal: React.FC<Props> = ({ outputId, outputName, open, onClose }) 
     return (
       <>
         <Button onClick={onClose} sx={{ color: c.text.muted, textTransform: 'none' }}>Cancel</Button>
-        <Button onClick={runScan} sx={{ color: c.accent.primary, textTransform: 'none' }}>Fix</Button>
+        <Button onClick={runScan} sx={{ color: c.accent.primary, textTransform: 'none' }}>Scan again</Button>
         <Button variant="contained" onClick={() => doPublish(true)} sx={{ bgcolor: c.status.warning, textTransform: 'none', '&:hover': { bgcolor: c.status.warning } }}>
           Publish anyway
         </Button>
