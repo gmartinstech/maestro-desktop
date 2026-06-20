@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
@@ -24,6 +24,9 @@ interface Props {
 // the user explicitly wants midnight visible at the top, not "9am" as the
 // starting hour. The scroll container caps the visible window.
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
+
+// List view pages in this many occurrences at a time as you scroll.
+const LIST_PAGE = 60;
 
 interface CalendarEvent {
   workflow_id: string;
@@ -159,6 +162,24 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     }
     return { map, start: rangeStart, end: rangeEndExclusive, key: calendarFetchKey };
   }, [calendarEvents, calendarFetchKey, calendarRequestKey, workflows, rangeStart, rangeEndExclusive]);
+
+  // List view can fan out to ~1300 rows for a dense schedule (every 15 min over
+  // 14 days), so render a page at a time and grow as a bottom sentinel scrolls
+  // into view. root:null intersects against the viewport through whichever
+  // ancestor actually scrolls, so this works in both the popover and the hub.
+  const [listVisible, setListVisible] = useState(LIST_PAGE);
+  const listSentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { setListVisible(LIST_PAGE); }, [dayKey, view, eventsByDay.key]);
+  useEffect(() => {
+    if (view !== 'List') return;
+    const el = listSentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setListVisible((n) => n + LIST_PAGE);
+    }, { rootMargin: '300px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [view, listVisible, eventsByDay.key, dayKey]);
 
   const SLOT_H = compact ? 32 : 44;
   const ROW_LABEL = compact ? '0.7rem' : '0.74rem';
@@ -338,12 +359,23 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     if (arr.length || isToday) upcoming.push({ date: day, events: arr, isToday });
   }
   const accent = c.accent.primary;
+  // Spend the page budget across day groups in order, truncating the group it
+  // runs out on; the leftover events appear when the sentinel grows the budget.
+  const totalEvents = upcoming.reduce((n, u) => n + u.events.length, 0);
+  let budget = listVisible;
+  const windowedDays: typeof upcoming = [];
+  for (const day of upcoming) {
+    windowedDays.push({ ...day, events: day.events.slice(0, Math.max(0, budget)) });
+    budget -= day.events.length;
+    if (budget <= 0) break;
+  }
+  const hasMore = listVisible < totalEvents;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.lg}px`, overflow: 'hidden', bgcolor: c.bg.surface }}>
       {upcoming.length === 0 && (
         <Typography sx={{ fontSize: '0.85rem', color: c.text.muted, textAlign: 'center', py: 3 }}>No scheduled</Typography>
       )}
-      {upcoming.map(({ date, events, isToday }, rowIdx) => (
+      {windowedDays.map(({ date, events, isToday }, rowIdx) => (
         <Box
           key={date.toISOString()}
           sx={{
@@ -388,6 +420,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
           </Box>
         </Box>
       ))}
+      {hasMore && <Box ref={listSentinelRef} sx={{ height: 1 }} />}
       {ctxMenuEl}
     </Box>
   );
