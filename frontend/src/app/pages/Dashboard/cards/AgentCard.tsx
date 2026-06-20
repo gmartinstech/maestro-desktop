@@ -506,7 +506,7 @@ const AgentCard: React.FC<Props> = ({
       suggestionPulseRef.current = key;
     }
     setSuggestGlowCycle((n) => n + 1);
-    dispatch(fadeGlowingAgentCard(session.id, 3200));
+    dispatch(fadeGlowingAgentCard(session.id));
   }, [workflowSuggestion, canConvertToWorkflow, dispatch, session.id]);
 
   // When the agent schedules a workflow from this chat, pop its card open
