@@ -5,6 +5,7 @@ import CanvasControls from '../controls/CanvasControls';
 import CardSearchPalette from '../controls/CardSearchPalette';
 import DirectionHints from '../controls/DirectionHints';
 import WorkflowRunningToast from '@/app/pages/Workflows/WorkflowRunningToast';
+import MissedRunsToast from '@/app/pages/Workflows/MissedRunsToast';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import type {
   CardPosition,
@@ -148,6 +149,9 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
 
       {/* Scheduled-run nudge: "your {workflow} is running now" + jump-to-canvas */}
       <WorkflowRunningToast />
+
+      {/* Launch nudge when scheduled runs elapsed while the app was closed */}
+      <MissedRunsToast />
     </>
   );
 };

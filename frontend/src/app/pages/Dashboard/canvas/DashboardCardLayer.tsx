@@ -6,6 +6,7 @@ import BrowserCard from '../cards/BrowserCard';
 import NoteCard from '../cards/NoteCard';
 import WorkflowCard from '@/app/pages/Workflows/WorkflowCard';
 import WorkflowsHubCard from '@/app/pages/Workflows/WorkflowsHubCard';
+import MissedRunsCard from '@/app/pages/Workflows/MissedRunsCard';
 import ConfigurePanelCard from '@/app/pages/Workflows/ConfigurePanelCard';
 import {
   EXPANDED_CARD_MIN_H,
@@ -19,6 +20,7 @@ import {
   type WorkflowsHubPosition,
   type ConfigurePanelPosition,
 } from '@/shared/state/dashboardLayoutSlice';
+import { useAppSelector } from '@/shared/hooks';
 import type { Output } from '@/shared/state/outputsSlice';
 import type { CardType, useDashboardSelection } from '../hooks/state/useDashboardSelection';
 
@@ -98,6 +100,9 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
   onBranch,
   onMeasuredHeight,
 }) => {
+  // Ephemeral singleton, not part of the saved layout, so read it straight
+  // from the store rather than threading it through the selector chain.
+  const missedRunsCard = useAppSelector((s) => s.dashboardLayout.missedRunsCard);
   return (
     <>
       <AnimatePresence>
@@ -276,6 +281,26 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
           isSelected={selection.isSelected('workflows-hub')}
           isHighlighted={highlightedCardId === 'workflows-hub'}
           multiDragDelta={selection.isSelected('workflows-hub') ? multiDragDelta : null}
+          onCardSelect={onCardSelect}
+          onDragStart={onDragStart}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onBringToFront={onBringToFront}
+        />
+      )}
+      {missedRunsCard && (
+        <MissedRunsCard
+          cardX={missedRunsCard.x}
+          cardY={missedRunsCard.y}
+          cardWidth={missedRunsCard.width}
+          cardHeight={missedRunsCard.height}
+          cardZOrder={missedRunsCard.zOrder ?? 0}
+          zoom={zoom}
+          panX={panX}
+          panY={panY}
+          isSelected={selection.isSelected('missed-runs')}
+          isHighlighted={highlightedCardId === 'missed-runs'}
+          multiDragDelta={selection.isSelected('missed-runs') ? multiDragDelta : null}
           onCardSelect={onCardSelect}
           onDragStart={onDragStart}
           onDragMove={onDragMove}

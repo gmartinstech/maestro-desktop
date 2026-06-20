@@ -22,12 +22,14 @@ export const DEFAULT_WORKFLOW_CARD_W = 480;
 export const DEFAULT_WORKFLOW_CARD_H = 520;
 export const DEFAULT_WORKFLOWS_HUB_W = 1200;
 export const DEFAULT_WORKFLOWS_HUB_H = 640;
+export const DEFAULT_MISSED_RUNS_W = 460;
+export const DEFAULT_MISSED_RUNS_H = 420;
 export const EXPANDED_CARD_MIN_H = 620;
 export const GRID_GAP = 24;
 const GRID_ORIGIN = { x: 40, y: 100 };
 const GRID_COLS_FALLBACK = 4;
 
-export type CardType = 'agent' | 'view' | 'browser' | 'note' | 'workflow' | 'workflows-hub';
+export type CardType = 'agent' | 'view' | 'browser' | 'note' | 'workflow' | 'workflows-hub' | 'missed_runs';
 
 export interface CardPosition {
   session_id: string;
@@ -89,6 +91,17 @@ export interface WorkflowsHubPosition {
   zOrder: number;
 }
 
+// Ephemeral launch-time card listing scheduled fires missed while the app was
+// closed. Singleton like workflowsHub, but deliberately NOT persisted to the
+// saved layout: the launch hook decides each session whether to show it.
+export interface MissedRunsCardPosition {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zOrder: number;
+}
+
 export type NoteColor = 'yellow' | 'pink' | 'blue' | 'green' | 'purple' | 'gray';
 
 export interface NotePosition {
@@ -120,6 +133,7 @@ export interface DashboardLayoutState {
   workflowCards: Record<string, WorkflowCardPosition>;
   configurePanels: Record<string, ConfigurePanelPosition>;
   workflowsHub: WorkflowsHubPosition | null;
+  missedRunsCard: MissedRunsCardPosition | null;
   notes: Record<string, NotePosition>;
   closedCardPositions: Record<string, CardPosition>;
   glowingBrowserCards: Record<string, { sourceId: string; fading: boolean; label?: string }>;
@@ -138,6 +152,8 @@ export interface DashboardLayoutState {
   /** Transient: id of the view card the user has clicked into; preload stops forwarding canvas gestures while set. */
   activeViewCardId: string | null;
   pendingFocusWorkflowId: string | null;
+  /** Transient: signals Dashboard to pan/zoom to the missed-runs card on open. */
+  pendingFocusMissedRuns: boolean;
   /** Transient: signals Dashboard to pan/zoom to the singleton Workflows Hub on open. */
   pendingFocusWorkflowsHub: boolean;
 }
@@ -149,6 +165,7 @@ const initialState: DashboardLayoutState = {
   workflowCards: {},
   configurePanels: {},
   workflowsHub: null,
+  missedRunsCard: null,
   notes: {},
   closedCardPositions: {},
   glowingBrowserCards: {},
@@ -163,6 +180,7 @@ const initialState: DashboardLayoutState = {
   endingBrowserCards: {},
   activeViewCardId: null,
   pendingFocusWorkflowId: null,
+  pendingFocusMissedRuns: false,
   pendingFocusWorkflowsHub: false,
 };
 
@@ -277,6 +295,9 @@ function collectOccupiedRects(
   }
   if (state.workflowsHub) {
     rects.push({ x: state.workflowsHub.x, y: state.workflowsHub.y, w: state.workflowsHub.width, h: state.workflowsHub.height });
+  }
+  if (state.missedRunsCard) {
+    rects.push({ x: state.missedRunsCard.x, y: state.missedRunsCard.y, w: state.missedRunsCard.width, h: state.missedRunsCard.height });
   }
   for (const n of Object.values(state.notes)) {
     rects.push({ x: n.x, y: n.y, w: n.width, h: n.height });
@@ -454,7 +475,7 @@ const dashboardLayoutSlice = createSlice({
 
     bringToFront(
       state,
-      action: PayloadAction<{ id: string; type: 'agent' | 'view' | 'browser' | 'note' | 'workflow' | 'workflows-hub' }>,
+      action: PayloadAction<{ id: string; type: CardType }>,
     ) {
       const { id, type } = action.payload;
       // Compute the current top zOrder across ALL card types so we can
@@ -473,11 +494,13 @@ const dashboardLayoutSlice = createSlice({
       for (const c of Object.values(state.workflowCards)) tally(c.zOrder);
       for (const n of Object.values(state.notes)) tally(n.zOrder);
       if (state.workflowsHub) tally(state.workflowsHub.zOrder);
+      if (state.missedRunsCard) tally(state.missedRunsCard.zOrder);
       if (type === 'agent') currentZ = state.cards[id]?.zOrder ?? 0;
       else if (type === 'view') currentZ = state.viewCards[id]?.zOrder ?? 0;
       else if (type === 'note') currentZ = state.notes[id]?.zOrder ?? 0;
       else if (type === 'workflow') currentZ = state.workflowCards[id]?.zOrder ?? 0;
       else if (type === 'workflows-hub') currentZ = state.workflowsHub?.zOrder ?? 0;
+      else if (type === 'missed_runs') currentZ = state.missedRunsCard?.zOrder ?? 0;
       else currentZ = state.browserCards[id]?.zOrder ?? 0;
       if (currentZ >= maxZ) return;  // Already on top: no-op.
 
@@ -496,6 +519,8 @@ const dashboardLayoutSlice = createSlice({
         if (card) card.zOrder = z;
       } else if (type === 'workflows-hub') {
         if (state.workflowsHub) state.workflowsHub.zOrder = z;
+      } else if (type === 'missed_runs') {
+        if (state.missedRunsCard) state.missedRunsCard.zOrder = z;
       } else {
         const card = state.browserCards[id];
         if (card) card.zOrder = z;
@@ -915,6 +940,37 @@ const dashboardLayoutSlice = createSlice({
       state.pendingFocusWorkflowsHub = false;
     },
 
+    openMissedRunsCard(state, action: PayloadAction<{ expandedSessionIds?: string[] } | undefined>) {
+      state.pendingFocusMissedRuns = true;
+      if (state.missedRunsCard) {
+        state.missedRunsCard.zOrder = state.nextZOrder++;
+        return;
+      }
+      const rects = collectOccupiedRects(state, action.payload?.expandedSessionIds);
+      const pos = findOpenGridCell(rects, DEFAULT_MISSED_RUNS_W, DEFAULT_MISSED_RUNS_H);
+      state.missedRunsCard = {
+        x: pos.x,
+        y: pos.y,
+        width: DEFAULT_MISSED_RUNS_W,
+        height: DEFAULT_MISSED_RUNS_H,
+        zOrder: state.nextZOrder++,
+      };
+    },
+
+    clearPendingFocusMissedRuns(state) {
+      state.pendingFocusMissedRuns = false;
+    },
+
+    closeMissedRunsCard(state) {
+      state.missedRunsCard = null;
+    },
+
+    setMissedRunsCardPosition(state, action: PayloadAction<{ x: number; y: number }>) {
+      if (!state.missedRunsCard) return;
+      state.missedRunsCard.x = action.payload.x;
+      state.missedRunsCard.y = action.payload.y;
+    },
+
     closeWorkflowsHub(state) {
       state.workflowsHub = null;
     },
@@ -1116,6 +1172,11 @@ const dashboardLayoutSlice = createSlice({
             state.workflowsHub.x += dx;
             state.workflowsHub.y += dy;
           }
+        } else if (item.type === 'missed_runs') {
+          if (state.missedRunsCard) {
+            state.missedRunsCard.x += dx;
+            state.missedRunsCard.y += dy;
+          }
         } else {
           const card = state.browserCards[item.id];
           if (card) {
@@ -1246,6 +1307,7 @@ const dashboardLayoutSlice = createSlice({
       state.workflowCards = {};
       state.configurePanels = {};
       state.workflowsHub = null;
+      state.missedRunsCard = null;
       state.notes = {};
       state.closedCardPositions = {};
       state.glowingBrowserCards = {};
@@ -1257,6 +1319,7 @@ const dashboardLayoutSlice = createSlice({
       state.suspendedBrowserCards = {};
       state.endingBrowserCards = {};
       state.pendingFocusWorkflowId = null;
+      state.pendingFocusMissedRuns = false;
     },
 
   },
@@ -1417,6 +1480,10 @@ export const {
   setWorkflowsHubPosition,
   setWorkflowsHubSize,
   clearPendingFocusWorkflowsHub,
+  openMissedRunsCard,
+  clearPendingFocusMissedRuns,
+  closeMissedRunsCard,
+  setMissedRunsCardPosition,
   addNote,
   setNotePosition,
   setNoteSize,
