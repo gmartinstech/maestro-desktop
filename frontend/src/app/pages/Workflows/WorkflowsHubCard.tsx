@@ -349,7 +349,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
     ? `2px solid ${c.accent.primary}`
     : isSelected
       ? '2px solid #3b82f6'
-      : `1px solid ${c.border.medium}`;
+      : `1px solid ${c.border.strong}`;
   const shadow = isHighlighted
     ? `0 0 0 3px ${c.accent.primary}50, 0 0 20px ${c.accent.primary}35, 0 0 40px ${c.accent.primary}15`
     : (isDragging || isResizing)
@@ -385,7 +385,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
         height: dh,
         bgcolor: c.bg.surface,
         border,
-        borderRadius: `${c.radius.lg}px`,
+        borderRadius: 3,
         boxShadow: shadow,
         overflow: 'hidden',
         display: 'flex',
