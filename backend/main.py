@@ -680,7 +680,7 @@ async def mcp_meta(action: str, request: Request):
         if session.sdk_session_id:
             session.needs_fresh_session = True
         try:
-            from backend.apps.agents.core.WS_MANAGER import WS_MANAGER
+            from backend.apps.agents.core.ws_manager import WS_MANAGER
             await WS_MANAGER.send_to_session(parent_session_id, "agent:status", {
                 "session_id": parent_session_id,
                 "status": session.status,
@@ -748,7 +748,7 @@ async def session_compact(session_id: str):
     only sets the marker; the button is the user opting into the cost).
     """
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.core.WS_MANAGER import WS_MANAGER
+    from backend.apps.agents.core.ws_manager import WS_MANAGER
     session = agent_manager.sessions.get(session_id)
     if not session:
         return JSONResponse({"error": "session not found"}, status_code=404)
@@ -767,7 +767,7 @@ async def session_compact(session_id: str):
 async def session_clear(session_id: str):
     """Wipe the session's UI history AND its SDK convo state (/clear slash cmd, Reset history button)."""
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.core.WS_MANAGER import WS_MANAGER
+    from backend.apps.agents.core.ws_manager import WS_MANAGER
     from backend.apps.agents.core.models import MessageBranch
     session = agent_manager.sessions.get(session_id)
     if not session:

@@ -22,6 +22,7 @@ from checks.classes import run_class_check
 from checks.cycles import run_cycle_check
 from checks.no_underscore_names import run_underscore_check
 from checks.p_private import run_p_private_check
+from checks.pyright import run_pyright
 from watchfiles import watch, DefaultFilter
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -29,7 +30,7 @@ CONFIG_FILE = SCRIPT_DIR / "config" / "config.json"
 
 # Print order for the sections; also the order they run in.
 SECTION_ORDER = [
-    "structural", "vulture", "ruff", "no-underscore-names", "p-private", "eslint",
+    "structural", "vulture", "ruff", "pyright", "no-underscore-names", "p-private", "eslint",
     "knip", "endpoints", "classes", "import-cycles",
 ]
 
@@ -154,6 +155,9 @@ def run_checks(root: Path) -> LintResult:
     run_section("ruff", lambda: run_ruff(
         root, rules.get("ruff-select", "F401,F811,F841,ARG001,ARG002"), exceptions, ignores,
     ) if enabled.get("ruff", True) else [])
+    run_section("pyright", lambda: run_pyright(
+        root, exceptions, ignores,
+    ) if enabled.get("pyright", True) else [])
     run_section("no-underscore-names", lambda: run_underscore_check(
         root, exceptions, excludes, ignores,
     ) if enabled.get("no-underscore-names", True) else [])

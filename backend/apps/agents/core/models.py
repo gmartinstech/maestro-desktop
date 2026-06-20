@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, InstanceOf
 from typing import Optional, Literal, Any
 from datetime import datetime
 from uuid import uuid4
+import asyncio
 
 class AgentConfig(BaseModel):
     name: str = Field(default_factory=lambda: f"Agent-{uuid4().hex[:6]}")
@@ -139,3 +140,5 @@ class AgentSession(BaseModel):
     context_window: int = 200_000
     # Provider-agnostic thinking level (off/low/medium/high/auto), translated per-API in agent_manager; only affects reasoning-flagged models.
     thinking_level: Literal["off", "low", "medium", "high", "auto"] = "auto"
+    # Event to cancel the agent loop. Set before cancelling the task so in-flight browser agent loops see it immediately.
+    cancel_event: Optional[InstanceOf[asyncio.Event]] = None

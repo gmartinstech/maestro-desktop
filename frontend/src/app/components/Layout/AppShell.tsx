@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, startTransition, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
+import { report } from '@/shared/serviceClient';
 import Box from '@mui/material/Box';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
@@ -326,6 +327,19 @@ const AppShell: React.FC = () => {
   const activeDashboardId = location.pathname.startsWith('/dashboard/')
     ? location.pathname.split('/dashboard/')[1]
     : null;
+
+  // Emit dashboard open/close as the active dashboard changes. The backend
+  // bridges these (POST /service/submit) into the analytics SDK; there's no
+  // backend route for viewing a dashboard, so the route transition is the
+  // only accurate open/close signal. close-then-open on switches.
+  const prevDashboardIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevDashboardIdRef.current;
+    if (prev === activeDashboardId) return;
+    if (prev) report('dashboard', 'close', { dashboard_id: prev });
+    if (activeDashboardId) report('dashboard', 'open', { dashboard_id: activeDashboardId });
+    prevDashboardIdRef.current = activeDashboardId;
+  }, [activeDashboardId]);
 
   const [lastDashboardId, setLastDashboardId] = useLastDashboardId();
   const activeAppId = location.pathname.startsWith('/apps/')

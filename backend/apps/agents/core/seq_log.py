@@ -47,7 +47,7 @@ class SeqLogStore:
         if log is not None:
             return log
         async with self.p_dict_lock:
-            log = self._per_session.get(session_id)
+            log = self.p_per_session.get(session_id)
             if log is None:
                 log = P_SessionSeqLog()
                 self.p_per_session[session_id] = log

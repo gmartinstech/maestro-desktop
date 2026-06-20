@@ -6,6 +6,7 @@
     "no-nested-imports": false,
     "vulture": true,
     "ruff": true,
+    "pyright": true,
     "no-underscore-names": true,
     "p-private": true,
     "eslint": false,
@@ -18,6 +19,7 @@
     "eslint-knip": "Node tooling deferred to a later pass.",
     "classes": "Placeholder check, not wired up. endpoints: orphaned-endpoint triage deferred.",
     "ruff-vulture-split": "ruff owns per-file/per-scope checks (F401 unused imports, F811 redefinitions, F841 unused locals, ARG001/ARG002 unused args), which it does AST-accurately and which vulture either gets wrong (global name-set hides per-file dead imports) or rates as noisy 60% findings. vulture is narrowed in checks/vulture.py to whole-program reachability only (dead functions/methods/classes/attributes), the one thing ruff structurally cannot do since it never builds a cross-module symbol graph. F401 honors __all__ and the redundant-alias form (import x as x) for intentional re-exports; add one of those if F401 flags a deliberate re-export.",
+    "pyright": "Catches references to methods/attributes/names that DON'T EXIST (e.g. self._per_session when the attribute is p_per_session after a missed rename). ruff/vulture/naming checks structurally can't: none resolve types/inheritance/imports, and the naming checks only inspect definition sites, not reads. Runs pyright (config/pyright_check.json) in the lowest-noise mode: typeCheckingMode 'off' silences the strict firehose, then re-enables only reportAttributeAccessIssue, reportUndefinedVariable, and reportMissingImports as errors. Needs node on PATH (pip pyright wrapper downloads the pinned binary). Add legitimate dynamic-access false positives to the 'pyright' exceptions list or a .lintignore-pyright sentinel.",
     "no-underscore-names": "Bans leading-underscore names in backend/ Python (functions, methods, args, classes, variables, instance/class attribute writes, import aliases). The prefix is a blind spot: Pylance reportUnusedVariable, ruff dummy-variable-rgx (F841/ARG0xx), and vulture all treat it as intentionally-private/unused and stop reporting, so dead _name code hides. Exempt: dunders (__x__, required by Python) and the bare _ throwaway. Name-mangled __x IS flagged. Intentionally strict with no exceptions seeded -- offenders are renamed by hand.",
     "p-private": "Enforces the p_ private convention (case-insensitive leading p, so P_ UPPER_SNAKE constants count too) with Java-private semantics over backend/ Python. Module-level p_ symbols (top-level def/class/assignment) are file-private; class members (def p_m, self.p_x=, class-body fields p_x: T) are class-private. A reference is legal only inside the owning file (module-level) or lexically inside the owning class / a class nested in it (members). Strict: cross-file subclass access to a base's p_ member is flagged (private, not protected). Nested classes may reach the enclosing class's members (whole enclosing-class stack is checked). Detection is access-form based (no type inference): attribute access governs class members, bare-name/import governs module-level. No exemptions -- tests and __init__.py re-exports are enforced. Greenfield today (zero p_ in tree), so it ships green and only fires once the convention is used.",
     "max-file-lines-exceptions": "Grandfather list of pre-existing >300-line files (existing debt, not new). Paths updated after the folder-tree restructure moved several of them.",
@@ -68,6 +70,13 @@
     "import-cycles": [],
     "vulture": [],
     "ruff": [],
+    "pyright": [
+      "backend/apps/subscription/free_trial.py",
+      "backend/apps/agents/browser_agent_mcp_server.py",
+      "backend/apps/health/health.py",
+      "backend/apps/web/web.py",
+      "backend/config/Apps.py"
+    ],
     "no-underscore-names": [
       "backend/apps/agents/agent_manager.py",
       "backend/apps/agents/agents.py",

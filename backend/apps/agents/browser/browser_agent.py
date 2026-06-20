@@ -381,7 +381,7 @@ async def run_browser_agent(
         system_prompt=SYSTEM_PROMPT,
         parent_session_id=parent_session_id,
     )
-    session._cancel_event = cancel_event
+    session.cancel_event = cancel_event
     agent_manager.sessions[session_id] = session
 
     # If parent was already stopped before we registered, bail immediately

@@ -74,3 +74,55 @@ def shutdown_analytics() -> None:
             P_CLIENT.close()
         finally:
             P_CLIENT = None
+
+
+# ---------------------------------------------------------------------------
+# Typed fire-and-forget wrappers. Each one resolves the singleton, no-ops when
+# the client is unavailable, and swallows every error (including the SDK's
+# synchronous pydantic.ValidationError) so a bad/missing analytics call can
+# never break a product code path. Call these from feature code, not the raw
+# client.
+# ---------------------------------------------------------------------------
+
+def track_link_email(email: Optional[str]) -> None:
+    if not email:
+        return
+    c = get_analytics_client()
+    if c is None:
+        return
+    try:
+        c.identify.link_email(email=email)
+    except Exception as e:
+        logger.debug("analytics link_email failed: %s", e)
+
+
+def track_agent_created(*, id: str, name: Optional[str] = None, dashboard_id: Optional[str] = None) -> None:
+    c = get_analytics_client()
+    if c is None:
+        return
+    try:
+        c.events.agent.create(id=id, name=name, dashboard_id=dashboard_id)
+    except Exception as e:
+        logger.debug("analytics agent.create failed: %s", e)
+
+
+def track_dashboard_event(*, dashboard_id: str, action: str) -> None:
+    """action is one of: open, close, create, delete (validated by the SDK)."""
+    c = get_analytics_client()
+    if c is None:
+        return
+    try:
+        c.events.dashboard.event(dashboard_id=dashboard_id, action=action)
+    except Exception as e:
+        logger.debug("analytics dashboard.event failed: %s", e)
+
+
+def track_onboarding_step(*, step_id: str, status: str) -> None:
+    """status is one of: started, completed, abandoned (validated by the SDK)."""
+    c = get_analytics_client()
+    if c is None:
+        return
+    try:
+        c.events.onboarding.step(step_id=step_id, status=status)
+    except Exception as e:
+        logger.debug("analytics onboarding.step failed: %s", e)

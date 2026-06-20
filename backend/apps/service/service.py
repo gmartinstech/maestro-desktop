@@ -418,6 +418,40 @@ async def service_status():
 # Frontend event endpoints
 # ---------------------------------------------------------------------------
 
+def p_bridge_to_analytics(item: dict) -> None:
+    """Re-emit frontend `report()` events through the typed swarm-analytics SDK.
+
+    The frontend is browser-side and can't reach the analytics service
+    directly, so onboarding steps and dashboard open/close arrive here as
+    {s, a, p} envelopes. We translate the ones we care about into product
+    events. Best-effort: never raises (the track_* wrappers swallow errors).
+    Dashboard create/delete are NOT bridged here; those fire authoritatively
+    from the dashboards routes, bridging them too would double-count.
+    """
+    s = item.get("s")
+    a = item.get("a")
+    p = item.get("p") or {}
+    if not isinstance(p, dict):
+        return
+    if s == "onboarding_v2":
+        status = {
+            "step_started": "started",
+            "step_completed": "completed",
+            "step_aborted": "abandoned",
+            "step_selector_timeout": "abandoned",
+            "step_error": "abandoned",
+        }.get(a)
+        step_id = p.get("step_id")
+        if status and step_id:
+            from backend.apps.service.analytics import track_onboarding_step
+            track_onboarding_step(step_id=str(step_id), status=status)
+    elif s == "dashboard" and a in ("open", "close"):
+        dashboard_id = p.get("dashboard_id")
+        if dashboard_id:
+            from backend.apps.service.analytics import track_dashboard_event
+            track_dashboard_event(dashboard_id=str(dashboard_id), action=a)
+
+
 @service.router.post("/submit")
 async def post_submit(body=Body(...)):
     """Accepts three body shapes for backward compatibility:
@@ -447,6 +481,7 @@ async def post_submit(body=Body(...)):
             if isinstance(item, dict):
                 if any(k in item for k in ("s", "a", "p")):
                     sync(item)
+                    p_bridge_to_analytics(item)
                     continue
                 kind = item.get("kind") or ""
                 payload = item.get("payload") or {}
@@ -459,6 +494,7 @@ async def post_submit(body=Body(...)):
     # Shape 1: frontend `report()`; flat {s, a, p, ...}
     if any(k in body for k in ("s", "a", "p")):
         sync(body)
+        p_bridge_to_analytics(body)
         return {"ok": True}
     # Shape 2: legacy {kind, payload}
     kind = body.get("kind") or ""

@@ -118,9 +118,14 @@ class P_TokenScrubFilter(logging.Filter):
         try:
             if isinstance(record.msg, str) and TOKEN in record.msg:
                 record.msg = record.msg.replace(TOKEN, self.P_PLACEHOLDER)
-            scrubbed = self._scrub_args(record.args)
+            scrubbed = self.p_scrub_args(record.args)
             if scrubbed is not record.args:
-                record.args = scrubbed
+                if scrubbed is None or isinstance(scrubbed, (tuple, dict)):
+                    record.args = scrubbed
+                else:
+                    # A bare str can't be stored as record.args; fold it into msg and drop args.
+                    record.msg = str(scrubbed)
+                    record.args = None
             try:
                 rendered = record.getMessage()
                 if TOKEN in rendered:

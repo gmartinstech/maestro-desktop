@@ -455,15 +455,15 @@ async def probe_model(body: dict):
         from backend.apps.agents.providers.registry import (
             resolve_model_id_for_sdk,
             get_api_type,
-            _find_builtin_model,
-            _NINEROUTER_MODEL_PREFIXES,
+            find_builtin_model,
+            NINEROUTER_MODEL_PREFIXES,
         )
         from backend.apps.settings.store import load_settings
         from backend.apps.nine_router.process import is_running
         settings = load_settings()
         api_type = get_api_type(short_name)
         resolved = resolve_model_id_for_sdk(short_name, settings)
-        entry = _find_builtin_model(short_name) or {}
+        entry = find_builtin_model(short_name) or {}
         route = entry.get("route")
         connection_mode = getattr(settings, "connection_mode", "own_key")
 
@@ -473,7 +473,7 @@ async def probe_model(body: dict):
         # Routing mirrors agent_manager: prefix takes precedence over Pro.
         resolved_is_9router = (
             isinstance(resolved, str)
-            and resolved.startswith(_NINEROUTER_MODEL_PREFIXES)
+            and resolved.startswith(NINEROUTER_MODEL_PREFIXES)
         )
 
         if resolved_is_9router:
@@ -707,7 +707,7 @@ async def list_models():
             or_models = []
         if or_models:
             by_vendor: dict[str, list[dict]] = {}
-            from backend.apps.agents.providers.registry import (
+            from backend.apps.agents.providers.pricing import (
                 compute_tiers as _ct,
                 compute_billing_kind as _cbk,
             )

@@ -137,8 +137,8 @@ class ConnectionManager:
             # wipes pending_futures, which is correct because
             # reconcile_on_startup also marks waiting_approval sessions as
             # stopped so there's nothing to answer anyway.
-            events = self._filter_stale_approvals(events)
-            events = self._strip_replayed_closes(events)
+            events = self.p_filter_stale_approvals(events)
+            events = self.p_strip_replayed_closes(events)
             for s in events:
                 try:
                     await websocket.send_text(s)

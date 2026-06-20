@@ -251,10 +251,9 @@ class AgentManager:
         # ever re-launched with the same id.
         if config.mode == "view-builder" and not config.target_directory:
             try:
-                from backend.apps.outputs.outputs import (
-                    ensure_webapp_workspace_seeded_and_registered,
-                    _load,
-                )
+                from backend.apps.outputs.outputs import ensure_webapp_workspace_seeded_and_registered
+                from backend.apps.outputs.workspace_io import load
+
                 output_id = ensure_webapp_workspace_seeded_and_registered(
                     workspace_id=session_id,
                     folder=effective_cwd,
@@ -268,7 +267,7 @@ class AgentManager:
                     # second upsert with the real name once the agent has
                     # written meta.json.
                     try:
-                        new_output = _load(output_id)
+                        new_output = load(output_id)
                         await WS_MANAGER.broadcast_global("agent:output_upserted", {
                             "output": new_output.model_dump(mode="json"),
                         })
@@ -319,6 +318,12 @@ class AgentManager:
             "status": "running",
             "session": session.model_dump(mode="json"),
         })
+
+        try:
+            from backend.apps.service.analytics import track_agent_created
+            track_agent_created(id=session.id, name=session.name, dashboard_id=session.dashboard_id)
+        except Exception:
+            pass
 
         return session
 
@@ -3540,8 +3545,8 @@ class AgentManager:
         if session:
             # Set cancel event BEFORE cancelling the task so in-flight
             # browser agent loops see it immediately
-            if hasattr(session, '_cancel_event'):
-                session._cancel_event.set()
+            if session.cancel_event is not None:
+                session.cancel_event.set()
 
             for req in list(session.pending_approvals):
                 WS_MANAGER.resolve_approval(req.id, {"behavior": "deny", "message": "Agent stopped"})
@@ -3993,8 +3998,8 @@ class AgentManager:
             WS_MANAGER.resolve_approval(req.id, {"behavior": "deny", "message": "Session closed"})
         session.pending_approvals = []
 
-        if hasattr(session, '_cancel_event'):
-            session._cancel_event.set()
+        if session.cancel_event is not None:
+            session.cancel_event.set()
 
         self._sync_session_close(session)
 

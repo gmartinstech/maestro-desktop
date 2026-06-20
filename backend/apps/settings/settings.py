@@ -173,6 +173,9 @@ async def update_settings(body: AppSettings):
             id_props["referral_source"] = body.user_referral_source
         if id_props:
             identify(id_props)
+        if body.user_email:
+            from backend.apps.service.analytics import track_link_email
+            track_link_email(body.user_email)
 
     await save_settings_async(body)
 
