@@ -753,19 +753,16 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
                   <Box sx={{ fontSize: '0.7rem', color: c.text.ghost, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}>▾</Box>
                 </Box>
                 {expanded && (
-                  <Box sx={{ ml: 8, mt: 0.25, mb: 0.75, p: 1, bgcolor: c.bg.elevated, borderRadius: 0.75, border: `1px solid ${c.border.subtle}` }}>
+                  <Box sx={{ ml: 8, mt: 0.25, mb: 0.75, px: 1, py: 0.75, bgcolor: c.bg.elevated, borderRadius: 0.75, border: `1px solid ${c.border.subtle}`, display: 'flex', alignItems: 'center' }}>
                     {r.error ? (
                       <Typography sx={{ fontSize: '0.78rem', color: c.status.error, lineHeight: 1.4 }}>{r.error}</Typography>
-                    ) : (
-                      <Typography sx={{ fontSize: '0.78rem', color: c.text.secondary, lineHeight: 1.4 }}>
-                        {r.session_id ? 'Click below to see the full conversation.' : 'No session was recorded for this run. Click below to see the full conversation.'}
-                      </Typography>
-                    )}
-                    <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'flex-end' }}>
-                      <Box onClick={(e) => { e.stopPropagation(); onOpen(r); }} role="button" sx={{ fontSize: '0.74rem', fontWeight: 600, color: c.accent.primary, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-                        See full conversation →
+                    ) : r.session_id ? (
+                      <Box onClick={(e) => { e.stopPropagation(); onOpen(r); }} role="button" sx={{ fontSize: '0.78rem', fontWeight: 600, color: c.accent.primary, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
+                        Click to see the full conversation →
                       </Box>
-                    </Box>
+                    ) : (
+                      <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.4 }}>No session was recorded for this run.</Typography>
+                    )}
                   </Box>
                 )}
               </Box>
