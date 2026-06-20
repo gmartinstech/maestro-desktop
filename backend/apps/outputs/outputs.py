@@ -560,7 +560,6 @@ async def create_output(body: OutputCreate):
         updated_at=now,
     )
     _save(output)
-    pass
     return {"ok": True, "output": output.model_dump()}
 
 
@@ -653,7 +652,6 @@ async def vibe_code(body: VibeCodeRequest):
                 raw = raw[:-3]
 
         result = json.loads(raw)
-        pass
         return {
             "message": result.get("message", "View updated."),
             "frontend_code": result.get("frontend_code", body.current_frontend_code),
