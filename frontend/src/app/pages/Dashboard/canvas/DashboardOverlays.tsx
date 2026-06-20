@@ -1,5 +1,6 @@
 import React, { type RefObject } from 'react';
 import Box from '@mui/material/Box';
+import { useAppSelector } from '@/shared/hooks';
 import DashboardToolbar from '../DashboardToolbar';
 import CanvasControls from '../controls/CanvasControls';
 import CardSearchPalette from '../controls/CardSearchPalette';
@@ -81,6 +82,7 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
   toolbarPrefill,
   toolbarPrefillMode,
 }) => {
+  const missedRunsCard = useAppSelector((s) => s.dashboardLayout.missedRunsCard);
   return (
     <>
       {/* Floating bottom toolbar */}
@@ -131,6 +133,7 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
             browserCards,
             workflowCards,
             workflowsHub,
+            missedRunsCard,
           }}
           onMinimapPan={(px, py) => canvas.actions.setState({ panX: px, panY: py, zoom: canvas.zoom })}
         />

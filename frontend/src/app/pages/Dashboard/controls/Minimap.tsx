@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useMemo } from 'react';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import type { CardPosition, ViewCardPosition, BrowserCardPosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
+import type { CardPosition, ViewCardPosition, BrowserCardPosition, WorkflowCardPosition, WorkflowsHubPosition, MissedRunsCardPosition } from '@/shared/state/dashboardLayoutSlice';
 
 const MINIMAP_W = 200;
 const MINIMAP_H = 140;
@@ -16,6 +16,7 @@ export interface MinimapProps {
   browserCards: Record<string, BrowserCardPosition>;
   workflowCards: Record<string, WorkflowCardPosition>;
   workflowsHub: WorkflowsHubPosition | null;
+  missedRunsCard: MissedRunsCardPosition | null;
   onPan: (panX: number, panY: number) => void;
 }
 
@@ -24,12 +25,12 @@ interface CardRect {
   y: number;
   width: number;
   height: number;
-  type: 'agent' | 'view' | 'browser' | 'workflow' | 'workflows-hub';
+  type: 'agent' | 'view' | 'browser' | 'workflow' | 'workflows-hub' | 'missed-runs';
 }
 
 const Minimap: React.FC<MinimapProps> = ({
   panX, panY, zoom, viewportRef,
-  cards, viewCards, browserCards, workflowCards, workflowsHub,
+  cards, viewCards, browserCards, workflowCards, workflowsHub, missedRunsCard,
   onPan,
 }) => {
   const c = useClaudeTokens();
@@ -59,8 +60,17 @@ const Minimap: React.FC<MinimapProps> = ({
         type: 'workflows-hub',
       });
     }
+    if (missedRunsCard) {
+      result.push({
+        x: missedRunsCard.x,
+        y: missedRunsCard.y,
+        width: missedRunsCard.width,
+        height: missedRunsCard.height,
+        type: 'missed-runs',
+      });
+    }
     return result;
-  }, [cards, viewCards, browserCards, workflowCards, workflowsHub]);
+  }, [cards, viewCards, browserCards, workflowCards, workflowsHub, missedRunsCard]);
 
   const layout = useMemo(() => {
     const vp = viewportRef.current;
@@ -149,6 +159,7 @@ const Minimap: React.FC<MinimapProps> = ({
       case 'browser': return c.status.success;
       case 'workflow': return c.status.warning;
       case 'workflows-hub': return c.status.warning;
+      case 'missed-runs': return c.status.warning;
     }
   };
 

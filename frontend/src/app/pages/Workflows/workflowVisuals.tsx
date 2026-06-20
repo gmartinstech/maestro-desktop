@@ -386,15 +386,14 @@ function relTime(ms: number): string {
 // ---------- Run history sparkline ----------
 
 // 10-dot horizontal strip of last N runs colored by status. Easy "lately
-// healthy?" check without opening the History tab. Tooltip names the
-// pattern out loud so a non-dev knows the dots aren't decorative.
+// healthy?" check without opening the History tab.
 export function RunSparkline({ runs, max = 10 }: { runs: WorkflowRun[]; max?: number }) {
   const c = useClaudeTokens();
   if (!runs || runs.length === 0) return null;
   const slice = runs.slice(0, max).reverse();
   const successes = slice.filter((r) => r.status === 'success').length;
   const failures = slice.filter((r) => r.status === 'failure').length;
-  const tooltip = `Last ${slice.length} run${slice.length === 1 ? '' : 's'}: ${successes} ok, ${failures} failed (oldest left → newest right). Green = success, red = failure, amber = ran late.`;
+  const tooltip = `Last ${slice.length} run${slice.length === 1 ? '' : 's'}: ${successes} successful, ${failures} failed`;
   return (
     <Tooltip title={tooltip}>
       <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.3, ml: 0.5 }}>

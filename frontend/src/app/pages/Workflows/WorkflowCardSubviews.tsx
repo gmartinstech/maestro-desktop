@@ -678,9 +678,9 @@ function groupKey(iso: string): string {
 export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleFor }: { runs: WorkflowRun[]; onOpen: (r: WorkflowRun) => void; showWorkflow?: boolean; workflowTitleFor?: (workflowId: string) => string }) {
   const c = useClaudeTokens();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Filter chips: all / failures / late. Power-users debugging a flaky
-  // workflow shouldn't have to scroll past successes.
-  const [filter, setFilter] = useState<'all' | 'failure' | 'ran_late'>('all');
+  // Filter chips: all / success / failures / skipped. Power-users debugging a
+  // flaky workflow shouldn't have to scroll past the runs they don't care about.
+  const [filter, setFilter] = useState<'all' | 'success' | 'failure' | 'skipped'>('all');
   const filtered = useMemo(() => {
     if (filter === 'all') return runs;
     return (runs || []).filter((r) => r.status === filter);
@@ -707,7 +707,7 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
           </Typography>
         )}
         <Box sx={{ flex: 1 }} />
-        {(['all', 'failure', 'ran_late'] as const).map((k) => (
+        {(['all', 'success', 'failure', 'skipped'] as const).map((k) => (
           <Box key={k} onClick={() => setFilter(k)} role="button" sx={{
             fontSize: '0.72rem', fontWeight: 600,
             color: filter === k ? c.accent.primary : c.text.muted,
@@ -716,7 +716,7 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
             px: 0.75, py: 0.3, borderRadius: c.radius.full, cursor: 'pointer',
             '&:hover': { color: c.accent.primary },
           }}>
-            {k === 'all' ? 'All' : k === 'failure' ? 'Failures only' : 'Ran late only'}
+            {k === 'all' ? 'All' : k === 'success' ? 'Success' : k === 'failure' ? 'Failures' : 'Skipped'}
           </Box>
         ))}
       </Box>
@@ -754,19 +754,17 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
                   <Box sx={{ fontSize: '0.7rem', color: c.text.ghost, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}>▾</Box>
                 </Box>
                 {expanded && (
-                  <Box sx={{ ml: 8, mt: 0.25, mb: 0.75, p: 1, bgcolor: c.bg.elevated, borderRadius: c.radius.sm, border: `1px solid ${c.border.subtle}` }}>
+                  <Box sx={{ ml: 8, mt: 0.25, mb: 0.75, px: 1, py: 0.75, bgcolor: c.bg.elevated, borderRadius: c.radius.sm, border: `1px solid ${c.border.subtle}`, display: 'flex', alignItems: 'center' }}>
+
                     {r.error ? (
                       <Typography sx={{ fontSize: '0.78rem', color: c.status.error, lineHeight: 1.4 }}>{r.error}</Typography>
-                    ) : (
-                      <Typography sx={{ fontSize: '0.78rem', color: c.text.secondary, lineHeight: 1.4 }}>
-                        {r.session_id ? 'Click below to see the full conversation.' : 'No session was recorded for this run. Click below to see the full conversation.'}
-                      </Typography>
-                    )}
-                    <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'flex-end' }}>
-                      <Box onClick={(e) => { e.stopPropagation(); onOpen(r); }} role="button" sx={{ fontSize: '0.74rem', fontWeight: 600, color: c.accent.primary, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-                        See full conversation →
+                    ) : r.session_id ? (
+                      <Box onClick={(e) => { e.stopPropagation(); onOpen(r); }} role="button" sx={{ fontSize: '0.78rem', fontWeight: 600, color: c.accent.primary, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
+                        Click to see the full conversation →
                       </Box>
-                    </Box>
+                    ) : (
+                      <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.4 }}>No session was recorded for this run.</Typography>
+                    )}
                   </Box>
                 )}
               </Box>
