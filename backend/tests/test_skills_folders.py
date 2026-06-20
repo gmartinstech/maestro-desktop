@@ -122,6 +122,31 @@ def test_injection_points_at_folder_for_supporting_files(skills_dir):
     assert "Read" in block  # tells the agent to read supporting files
 
 
+def test_skill_injection_is_provider_agnostic_by_construction(skills_dir):
+    """The provider-agnostic claim, proven structurally (a live GPT/Gemini run
+    needs a key): the injector takes no provider arg so it CAN'T differ by model,
+    it points at supporting files via the universal Read tool, and Read is in the
+    builtin set every provider gets. So a non-Claude agent receives byte-identical
+    skill text and the same file-reading tools."""
+    import inspect
+    from backend.apps.agents.manager.prompt.prompt_context import _resolve_attached_skills
+    from backend.apps.agents.manager.prompt.tool_catalog import FULL_TOOLS
+
+    # 1. No provider/api parameter -> the injected text cannot branch on the model.
+    assert set(inspect.signature(_resolve_attached_skills).parameters) == {"attached_skills"}
+
+    # 2. A folder skill yields the body + a pointer to its folder via Read/Glob/Bash.
+    base = skills_dir / "vid"
+    _write(str(base / "SKILL.md"), "render it")
+    _write(str(base / "helper.py"), "x")
+    block = _resolve_attached_skills([{"id": "vid", "name": "Vid", "content": "render it"}])
+    assert "[Using skill: Vid]" in block
+    assert str(base) in block and "Read" in block
+
+    # 3. Those file tools are universal builtins, not an Anthropic-only set.
+    assert {"Read", "Glob", "Bash"} <= set(FULL_TOOLS)
+
+
 def test_injection_no_folder_note_for_flat_skill(skills_dir):
     _write(str(skills_dir / "plain.md"), "plain content")
     block = _resolve_attached_skills([{"id": "plain", "name": "Plain", "content": "plain content"}])
