@@ -20,7 +20,7 @@ import {
   setWorkflowsHubPosition,
   setWorkflowsHubSize,
 } from '@/shared/state/dashboardLayoutSlice';
-import { openWorkflowCard, createWorkflow, fetchPausedState, setPausedAll, updateWorkflow, deleteWorkflow, runWorkflowNow } from '@/shared/state/workflowsSlice';
+import { openWorkflowCard, createWorkflow, fetchWorkflows, fetchPausedState, setPausedAll, updateWorkflow, deleteWorkflow, runWorkflowNow } from '@/shared/state/workflowsSlice';
 import type { Workflow } from '@/shared/state/workflowsSlice';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
@@ -57,6 +57,7 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
 ];
 
 interface Props {
+  dashboardId: string;
   cardX: number;
   cardY: number;
   cardWidth: number;
@@ -126,6 +127,7 @@ function TimeSavedBadge() {
 }
 
 const WorkflowsHubCard: React.FC<Props> = ({
+  dashboardId,
   cardX, cardY, cardWidth, cardHeight, cardZOrder = 0,
   zoom = 1, panX = 0, panY = 0,
   isSelected = false, isHighlighted = false, multiDragDelta = null,
@@ -138,6 +140,11 @@ const WorkflowsHubCard: React.FC<Props> = ({
   const defaultModel = useAppSelector((s) => s.settings.data.default_model);
 
   useEffect(() => { dispatch(fetchPausedState()); }, [dispatch]);
+  // The hub is the signal "user is looking at workflows now", so load them
+  // eagerly here instead of waiting on the dashboard's deferred idle fetch
+  // (which left the calendar blank for ~2s). The thunk's !loading condition
+  // dedups against that idle dispatch.
+  useEffect(() => { dispatch(fetchWorkflows(dashboardId)); }, [dashboardId, dispatch]);
 
   const togglePaused = useCallback(() => {
     dispatch(setPausedAll(!paused));
