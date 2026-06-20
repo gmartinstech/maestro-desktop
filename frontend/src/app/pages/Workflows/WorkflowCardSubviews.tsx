@@ -677,9 +677,9 @@ function groupKey(iso: string): string {
 export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleFor }: { runs: WorkflowRun[]; onOpen: (r: WorkflowRun) => void; showWorkflow?: boolean; workflowTitleFor?: (workflowId: string) => string }) {
   const c = useClaudeTokens();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Filter chips: all / failures / late. Power-users debugging a flaky
-  // workflow shouldn't have to scroll past successes.
-  const [filter, setFilter] = useState<'all' | 'failure' | 'ran_late'>('all');
+  // Filter chips: all / success / failures / skipped. Power-users debugging a
+  // flaky workflow shouldn't have to scroll past the runs they don't care about.
+  const [filter, setFilter] = useState<'all' | 'success' | 'failure' | 'skipped'>('all');
   const filtered = useMemo(() => {
     if (filter === 'all') return runs;
     return (runs || []).filter((r) => r.status === filter);
@@ -706,7 +706,7 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
           </Typography>
         )}
         <Box sx={{ flex: 1 }} />
-        {(['all', 'failure', 'ran_late'] as const).map((k) => (
+        {(['all', 'success', 'failure', 'skipped'] as const).map((k) => (
           <Box key={k} onClick={() => setFilter(k)} role="button" sx={{
             fontSize: '0.72rem', fontWeight: 600,
             color: filter === k ? c.accent.primary : c.text.muted,
@@ -715,7 +715,7 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
             px: 0.7, py: 0.2, borderRadius: 999, cursor: 'pointer',
             '&:hover': { color: c.accent.primary },
           }}>
-            {k === 'all' ? 'All' : k === 'failure' ? 'Failures only' : 'Ran late only'}
+            {k === 'all' ? 'All' : k === 'success' ? 'Success' : k === 'failure' ? 'Failures' : 'Skipped'}
           </Box>
         ))}
       </Box>
