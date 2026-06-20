@@ -385,7 +385,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
         height: dh,
         bgcolor: c.bg.surface,
         border,
-        borderRadius: 3,
+        borderRadius: `${c.radius.lg}px`,
         boxShadow: shadow,
         overflow: 'hidden',
         display: 'flex',
