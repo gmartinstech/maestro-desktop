@@ -30,14 +30,14 @@ async def test_second_wall_restores_protected_credential_even_if_body_blanks_it(
         # A body that (as if a guard bug let it through) clears the live key.
         body = load_settings()
         body.anthropic_api_key = ""
-        async with settings_write_lock:
+        async with settings_write_lock():
             saved = await apply_settings_update(body, protect_fields={"anthropic_api_key"})
         assert saved.anthropic_api_key == "sk-live-KEEP-ME", "second wall failed to restore"
         assert load_settings().anthropic_api_key == "sk-live-KEEP-ME"
         # And a NON-protected blank still goes through (only the protected one is restored).
         body2 = load_settings()
         body2.openai_api_key = ""
-        async with settings_write_lock:
+        async with settings_write_lock():
             await apply_settings_update(body2, protect_fields={"anthropic_api_key"})
         assert not load_settings().openai_api_key
     finally:

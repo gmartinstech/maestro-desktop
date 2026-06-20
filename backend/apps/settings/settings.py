@@ -146,19 +146,59 @@ SERVER_OWNED_FIELDS = (
 )
 
 
-# One serialization point for EVERY settings write (renderer PUT + agent tool),
-# so a renderer save and an autonomous agent edit can't interleave and clobber
-# each other mid read-modify-write. Callers hold it across read->build->save;
-# apply_settings_update itself does NOT acquire it (would deadlock the agent path
-# that reads under the same lock), so every caller must wrap apply in it.
-settings_write_lock = asyncio.Lock()
+import weakref as _weakref
+
+# One serialization point for EVERY settings write (renderer PUT/PATCH + agent
+# tool), so two writes can't interleave and clobber each other mid read-modify-
+# write. Callers hold it across read->build->save; apply_settings_update itself
+# does NOT acquire it (would deadlock the agent path that reads under it), so
+# every caller wraps apply in it. Created lazily PER event loop: prod has one
+# loop so it's effectively a singleton, but a module-level asyncio.Lock binds to
+# the first loop that uses it and then errors on reuse from another loop (every
+# async test spins a fresh one). WeakKeyDictionary auto-drops a loop's lock once
+# the loop is gone.
+_settings_write_locks: "_weakref.WeakKeyDictionary" = _weakref.WeakKeyDictionary()
+
+
+def settings_write_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _settings_write_locks.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _settings_write_locks[loop] = lock
+    return lock
 
 
 @settings.router.put("")
 async def update_settings(body: AppSettings):
-    async with settings_write_lock:
+    async with settings_write_lock():
         saved = await apply_settings_update(body)
     return {"ok": True, "settings": saved.model_dump()}
+
+
+@settings.router.patch("")
+async def patch_settings(changes: dict):
+    """Save only the fields the user changed, merged onto the CURRENT on-disk
+    state. The renderer sends a diff (not a stale full object), so a save can't
+    clobber a field something else, an agent, an OAuth connect, changed
+    underneath it. Makes the lost-update unrepresentable: you can't overwrite a
+    field you never sent."""
+    async with settings_write_lock():
+        saved = await apply_settings_patch(changes)
+    return {"ok": True, "settings": saved.model_dump()}
+
+
+async def apply_settings_patch(changes: dict) -> AppSettings:
+    """Merge `changes` onto fresh on-disk settings and persist. Caller holds
+    settings_write_lock so the read is current. Reuses apply_settings_update for
+    every side effect: the object it hands over IS current state plus the diff,
+    which is exactly what a non-clobbering save means."""
+    valid = set(AppSettings.model_fields.keys())
+    data = load_settings().model_dump()
+    for k, v in changes.items():
+        if k in valid:
+            data[k] = v
+    return await apply_settings_update(AppSettings(**data))
 
 
 async def apply_settings_update(body: AppSettings, protect_fields: set[str] | None = None) -> AppSettings:

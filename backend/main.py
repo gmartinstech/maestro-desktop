@@ -786,7 +786,7 @@ async def settings_meta(action: str, request: Request):
         # other's fields while BOTH got an "applied" result). The lock makes agent
         # writes serial so the last load always sees the prior write. (Agent vs the
         # renderer's own PUT stays the pre-existing full-object-replace race.)
-        async with settings_write_lock:
+        async with settings_write_lock():
             settings = load_settings()
             session = agent_manager.sessions.get(parent_session_id) if parent_session_id else None
             if session is not None:

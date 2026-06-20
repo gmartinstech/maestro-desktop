@@ -8,7 +8,7 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { store } from '../shared/state/store';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { fetchSettings, updateSettings, markFreeTrialArmSettled } from '@/shared/state/settingsSlice';
+import { fetchSettings, updateSettingsPatch, markFreeTrialArmSettled } from '@/shared/state/settingsSlice';
 import { fetchSubscriptionStatus } from '@/shared/state/subscriptionsSlice';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { API_BASE } from '@/shared/config';
@@ -324,7 +324,7 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
 
     const fromLabel = flat.find((m) => m.value === settings.default_model)?.label ?? settings.default_model;
     pendingRef.current = true;
-    dispatch(updateSettings({ ...settings, default_model: fallback.value }))
+    dispatch(updateSettingsPatch({ default_model: fallback.value }))
       .finally(() => {
         pendingRef.current = false;
       });
