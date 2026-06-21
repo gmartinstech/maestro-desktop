@@ -17,11 +17,17 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import {
   addWorkflowCard,
   closeWorkflowsHub,
+  DEFAULT_CARD_H,
+  DEFAULT_CARD_W,
+  placeCard,
   setWorkflowsHubPosition,
   setWorkflowsHubSize,
 } from '@/shared/state/dashboardLayoutSlice';
-import { openWorkflowCard, createWorkflow, fetchWorkflows, fetchPausedState, setPausedAll, updateWorkflow, deleteWorkflow, runWorkflowNow } from '@/shared/state/workflowsSlice';
-import type { Workflow } from '@/shared/state/workflowsSlice';
+import { openWorkflowCard, createWorkflow, fetchWorkflows, fetchPausedState, fetchRuns, setCardSidecar, setPausedAll, updateWorkflow, deleteWorkflow, runWorkflowNow } from '@/shared/state/workflowsSlice';
+import type { Workflow, WorkflowRun } from '@/shared/state/workflowsSlice';
+import { fetchSession } from '@/shared/state/agentsSlice';
+import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
+import { store } from '@/shared/state/store';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
@@ -55,6 +61,38 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
   { dir: 'sw', sx: { bottom: -EDGE_THICKNESS / 2, left: -EDGE_THICKNESS / 2, width: CORNER_SIZE, height: CORNER_SIZE } },
   { dir: 'se', sx: { bottom: -EDGE_THICKNESS / 2, right: -EDGE_THICKNESS / 2, width: CORNER_SIZE, height: CORNER_SIZE } },
 ];
+
+function findRunForOccurrence(runs: WorkflowRun[], fireAt: Date): WorkflowRun | null {
+  const target = fireAt.getTime();
+  if (!Number.isFinite(target)) return null;
+  let best: WorkflowRun | null = null;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const run of runs) {
+    if (!run.scheduled_for) continue;
+    const scheduledAt = new Date(run.scheduled_for).getTime();
+    if (!Number.isFinite(scheduledAt)) continue;
+    const delta = Math.abs(scheduledAt - target);
+    if (delta < bestDelta) {
+      best = run;
+      bestDelta = delta;
+    }
+  }
+  return best && bestDelta <= 60_000 ? best : null;
+}
+
+function viewForRun(run: WorkflowRun): 'running' | 'completed' | 'failed' | 'history_detail' {
+  if (run.status === 'running') return 'running';
+  if (run.status === 'success' || run.status === 'ran_late') return 'completed';
+  if (run.status === 'failure') return 'failed';
+  return 'history_detail';
+}
+
+function sidecarKindForRun(run: WorkflowRun): 'watching' | 'viewing-completed' | 'viewing-error' | null {
+  if (run.status === 'running') return 'watching';
+  if (run.status === 'success' || run.status === 'ran_late') return 'viewing-completed';
+  if (run.status === 'failure') return 'viewing-error';
+  return null;
+}
 
 interface Props {
   dashboardId: string;
@@ -147,10 +185,48 @@ const WorkflowsHubCard: React.FC<Props> = ({
 
   const monthLabel = refDate.toLocaleString('en', { month: 'long', year: 'numeric' });
 
-  const onSelectWorkflow = useCallback((wid: string) => {
+  const onSelectWorkflow = useCallback(async (wid: string, fireAt?: Date) => {
     dispatch(addWorkflowCard({ workflowId: wid }));
     dispatch(openWorkflowCard({ workflowId: wid, view: 'saved' }));
-  }, [dispatch]);
+
+    if (!fireAt) return;
+    let runs = store.getState().workflows.runs[wid] || [];
+    let clickedRun = findRunForOccurrence(runs, fireAt);
+    if (!clickedRun) {
+      const result = await dispatch(fetchRuns(wid));
+      if (fetchRuns.fulfilled.match(result)) runs = result.payload.runs;
+      clickedRun = findRunForOccurrence(runs, fireAt);
+    }
+    if (!clickedRun) return;
+
+    const runView = viewForRun(clickedRun);
+    dispatch(openWorkflowCard({
+      workflowId: wid,
+      view: runView,
+      runId: clickedRun.id,
+      historyRunId: runView === 'history_detail' ? clickedRun.id : null,
+    }));
+
+    if (!clickedRun.session_id) return;
+    const sid = clickedRun.session_id;
+    if (!store.getState().agents.sessions[sid]) {
+      try { await dispatch(fetchSession(sid)).unwrap(); } catch { /* fall back to the run card */ }
+    }
+    if (!store.getState().agents.sessions[sid]) return;
+    const wfCard = store.getState().dashboardLayout.workflowCards[wid];
+    if (!store.getState().dashboardLayout.cards[sid]) {
+      dispatch(placeCard({
+        sessionId: sid,
+        x: wfCard ? wfCard.x + wfCard.width + 60 : cardX + cardWidth + 60,
+        y: wfCard ? wfCard.y : cardY,
+        width: DEFAULT_CARD_W,
+        height: DEFAULT_CARD_H,
+        expandedSessionIds: store.getState().agents.expandedSessionIds,
+      }));
+    }
+    dispatch(setPendingFocusAgentId(sid));
+    dispatch(setCardSidecar({ workflowId: wid, sessionId: sid, kind: sidecarKindForRun(clickedRun) }));
+  }, [cardWidth, cardX, cardY, dispatch]);
 
   // A from-scratch workflow has no steps to convert, so skip the chat->workflow
   // PreviewView (Schedule prompt / blank bullet) and drop straight into the
@@ -340,7 +416,7 @@ const WorkflowsHubCard: React.FC<Props> = ({
         height: dh,
         bgcolor: c.bg.surface,
         border,
-        borderRadius: 3,
+        borderRadius: `${c.radius.lg}px`,
         boxShadow: shadow,
         overflow: 'hidden',
         display: 'flex',
