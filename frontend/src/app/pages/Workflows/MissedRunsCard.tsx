@@ -92,6 +92,20 @@ const MissedRunsCard: React.FC<Props> = ({
     });
   }, []);
 
+  // A group header's checkbox flips every run under it: if any are checked,
+  // clear the lot; otherwise check the lot.
+  const toggleGroup = useCallback((runs: MissedRunItem[]) => {
+    setConfirming(false);
+    setUnchecked((prev) => {
+      const anyChecked = runs.some((r) => !prev.has(r.id));
+      const next = new Set(prev);
+      for (const r of runs) {
+        if (anyChecked) next.add(r.id); else next.delete(r.id);
+      }
+      return next;
+    });
+  }, []);
+
   const runSelected = useCallback(() => {
     if (selectedIds.length === 0) return;
     if (selectedIds.length > CONFIRM_THRESHOLD && !confirming) {
@@ -260,9 +274,24 @@ const MissedRunsCard: React.FC<Props> = ({
 
       {/* Scrollable list grouped by workflow */}
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1, py: 0.5 }}>
-        {groups.map((g) => (
+        {groups.map((g) => {
+          const checkedCount = g.runs.filter((r) => !unchecked.has(r.id)).length;
+          const allChecked = checkedCount === g.runs.length;
+          return (
           <Box key={g.title + g.runs[0].workflow_id} sx={{ mb: 0.75 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, px: 0.75, py: 0.4 }}>
+            <Box
+              data-no-drag
+              onClick={() => toggleGroup(g.runs)}
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.4, px: 0.75, py: 0.4, borderRadius: `${c.radius.sm}px`, cursor: 'pointer', '&:hover': { bgcolor: c.bg.elevated } }}
+            >
+              <Checkbox
+                size="small"
+                checked={allChecked}
+                indeterminate={checkedCount > 0 && !allChecked}
+                onChange={() => toggleGroup(g.runs)}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ p: 0.25, color: c.text.muted, '&.Mui-checked': { color: c.accent.primary }, '&.MuiCheckbox-indeterminate': { color: c.accent.primary } }}
+              />
               <Typography sx={{ fontSize: '0.82rem', fontWeight: 700, color: c.accent.primary, flexShrink: 0 }}>{g.runs.length}</Typography>
               <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.title}</Typography>
             </Box>
@@ -289,7 +318,8 @@ const MissedRunsCard: React.FC<Props> = ({
               </Box>
             ))}
           </Box>
-        ))}
+          );
+        })}
       </Box>
 
       {/* Footer actions */}
@@ -306,7 +336,7 @@ const MissedRunsCard: React.FC<Props> = ({
           onClick={confirming ? () => setConfirming(false) : closeAndDismissRest}
           sx={{ fontSize: '0.78rem', color: c.text.muted, cursor: 'pointer', px: 1, py: 0.5, '&:hover': { color: c.text.primary } }}
         >
-          {confirming ? 'Cancel' : 'Skip the rest'}
+          {confirming ? 'Cancel' : 'Skip all'}
         </Box>
         <Box
           data-no-drag
