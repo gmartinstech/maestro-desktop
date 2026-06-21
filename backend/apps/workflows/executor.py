@@ -55,9 +55,9 @@ def _resolve_system_prompt(wf: Workflow) -> Optional[str]:
     return wf.system_prompt or None
 
 
-def _resolve_allowed_tools(wf: Workflow) -> list[str]:
+def _resolve_allowed_tools(wf: Workflow) -> Optional[list[str]]:
     if not wf.actions.freeze:
-        return []
+        return None
     return list(wf.actions.configured_sets)
 
 
@@ -221,13 +221,14 @@ async def execute(
         if not steps:
             raise ValueError("Workflow has no steps")
 
+        resolved_allowed_tools = _resolve_allowed_tools(wf)
         config = AgentConfig(
             name=wf.title or "Workflow",
             model=wf.model or "sonnet",
             mode=wf.mode or "agent",
             provider=wf.provider or "anthropic",
             system_prompt=_resolve_system_prompt(wf),
-            allowed_tools=_resolve_allowed_tools(wf) or [
+            allowed_tools=resolved_allowed_tools if resolved_allowed_tools is not None else [
                 "Read", "Edit", "Write", "Bash", "Glob", "Grep", "AskUserQuestion",
             ],
             dashboard_id=wf.dashboard_id,

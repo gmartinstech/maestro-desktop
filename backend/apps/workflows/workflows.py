@@ -128,12 +128,13 @@ def _collect_tool_names_from_content(content, out: set[str]) -> None:
         _collect_tool_names_from_content(nested, out)
 
 
-def p_source_session_memory(session_id: Optional[str]) -> tuple[dict[str, str], list[str]]:
+def p_source_session_memory(session_id: Optional[str]) -> tuple[dict[str, str], list[str], Optional[list[str]]]:
     if not session_id:
-        return {}, []
+        return {}, [], None
     try:
         from backend.apps.agents.agent_manager import agent_manager
         sess = agent_manager.sessions.get(session_id)
+        allowed_tools = list(getattr(sess, "allowed_tools", [])) if sess is not None else None
         decisions = getattr(sess, "approval_decisions", None) if sess is not None else None
         messages = getattr(sess, "messages", None) if sess is not None else None
         tool_latencies = getattr(sess, "tool_latencies", None) if sess is not None else None
@@ -143,8 +144,10 @@ def p_source_session_memory(session_id: Optional[str]) -> tuple[dict[str, str], 
             decisions = data.get("approval_decisions") or []
             messages = data.get("messages") or []
             tool_latencies = data.get("tool_latencies") or {}
+            raw_allowed = data.get("allowed_tools")
+            allowed_tools = list(raw_allowed) if isinstance(raw_allowed, list) else None
     except Exception:
-        return {}, []
+        return {}, [], None
     approvals: dict[str, str] = {}
     tools: set[str] = set()
     for entry in decisions or []:
@@ -172,7 +175,7 @@ def p_source_session_memory(session_id: Optional[str]) -> tuple[dict[str, str], 
             if name:
                 tools.add(name)
         _collect_tool_names_from_content(content, tools)
-    return approvals, sorted(tools)
+    return approvals, sorted(tools), allowed_tools
 
 
 def p_prune_step_tool_usage(wf: Workflow) -> None:
@@ -196,11 +199,26 @@ async def list_workflows(dashboard_id: Optional[str] = None):
     return {"workflows": [_enriched(w) for w in items]}
 
 
-def _normalize_schedule_state(wf: Workflow) -> None:
+def _normalize_schedule_state(wf: Workflow, source_allowed_tools: Optional[list[str]] = None) -> None:
     if wf.schedule.timezone == "local" and wf.schedule.enabled:
         wf.schedule.timezone = scheduler.host_timezone_name()
     if wf.schedule.enabled and not scheduler.is_schedule_configured(wf.schedule):
         wf.schedule.enabled = False
+    if wf.schedule.enabled and wf.schedule.repeat_unit == "month" and wf.schedule.day_of_month is None:
+        tz = scheduler._resolve_tz(wf.schedule.timezone)
+        wf.schedule.day_of_month = datetime.now(timezone.utc).astimezone(tz).day
+    if wf.schedule.enabled and scheduler.is_schedule_configured(wf.schedule) and not wf.actions.freeze:
+        if wf.source_session_id:
+            allowed = source_allowed_tools
+            if allowed is None:
+                _, _, allowed = p_source_session_memory(wf.source_session_id)
+            if allowed is not None:
+                wf.actions = wf.actions.model_copy(update={
+                    "freeze": True,
+                    "configured_sets": list(allowed),
+                })
+        else:
+            wf.actions = wf.actions.model_copy(update={"freeze": True})
     wf.next_run_at = scheduler.compute_next_fire(wf) if wf.schedule.enabled else None
 
 
@@ -226,13 +244,6 @@ async def create_workflow(body: WorkflowCreate):
     if not body.unsaved and not _has_nonempty_steps(body.steps):
         raise HTTPException(status_code=400, detail="Workflow must have at least one step")
     actions = body.actions
-    # Scheduled workflows default to freeze=on for safety. The user can
-    # flip "Full agent access" in the editor with an explicit confirm.
-    # Source-session creates inherit the chat's tool choices so we leave
-    # them alone there (the source session itself already vetted the
-    # blast radius).
-    if body.schedule.enabled and scheduler.is_schedule_configured(body.schedule) and not actions.freeze and not body.source_session_id:
-        actions = actions.model_copy(update={"freeze": True})
     wf = Workflow(
         title=body.title,
         description=body.description,
@@ -252,7 +263,7 @@ async def create_workflow(body: WorkflowCreate):
         auto_named=body.auto_named,
         unsaved=body.unsaved,
     )
-    source_approvals, source_tools = p_source_session_memory(body.source_session_id)
+    source_approvals, source_tools, source_allowed_tools = p_source_session_memory(body.source_session_id)
     wf.remembered_approvals = source_approvals
     wf.source_tools = source_tools
     # Convert-from-chat passes the steps signature so the workflow counts as
@@ -261,7 +272,7 @@ async def create_workflow(body: WorkflowCreate):
     wf.tested_signature = body.tested_signature
     if not wf.icon:
         wf.icon = _derive_icon(wf)
-    _normalize_schedule_state(wf)
+    _normalize_schedule_state(wf, source_allowed_tools=source_allowed_tools)
     # Force-generate title + description + per-step labels from the steps
     # in a single aux call. Previously we only filled missing description,
     # leaving stale session names ("Inbox check") as titles. Step labels
@@ -1061,13 +1072,14 @@ async def test_run_workflow(workflow_id: str, body: dict):
     )
     from backend.apps.workflows import executor
 
+    resolved_allowed_tools = executor._resolve_allowed_tools(wf)
     config = AgentConfig(
         name=f"{wf.title or 'Workflow'} (test)",
         model=wf.model or "sonnet",
         mode=wf.mode or "agent",
         provider=wf.provider or "anthropic",
         system_prompt=executor._resolve_system_prompt(wf),
-        allowed_tools=executor._resolve_allowed_tools(wf) or [
+        allowed_tools=resolved_allowed_tools if resolved_allowed_tools is not None else [
             "Read", "Edit", "Write", "Bash", "Glob", "Grep", "AskUserQuestion",
         ],
         dashboard_id=wf.dashboard_id,
@@ -1192,6 +1204,7 @@ async def schedule_agent_session(workflow_id: str):
         "  - repeat_every: the interval count (1 unless they say e.g. \"every other\"; "
         "for repeat_unit=\"minute\" the minimum is 15, e.g. \"every 15 minutes\")\n"
         "  - on_days: weekday indices when repeat_unit=\"week\" (Sun=0, Mon=1, ... Sat=6)\n"
+        "  - day_of_month: 1-31 when repeat_unit=\"month\" (1 for \"first of the month\")\n"
         f"  - timezone: \"{local_tz}\" unless the user names a different specific zone\n\n"
         "If no AM/PM is given, assume PM for 1-7 and AM for 8-12. If the cadence "
         "is genuinely ambiguous, ask ONE short clarifying question first; otherwise "

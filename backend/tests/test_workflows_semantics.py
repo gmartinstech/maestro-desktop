@@ -26,6 +26,7 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -189,6 +190,110 @@ def test_month_repeat_no_longer_clamps_to_28():
     assert nxt.astimezone(tz).date() == datetime(2025, 4, 30).date()
 
 
+def test_month_repeat_can_pin_first_day():
+    from backend.apps.workflows.scheduler import _next_fire_after
+    from backend.apps.workflows.models import ScheduleConfig
+    tz = ZoneInfo("America/Los_Angeles")
+    sched = ScheduleConfig(
+        enabled=True,
+        repeat_unit="month",
+        repeat_every=1,
+        day_of_month=1,
+        hour=9,
+        minute=0,
+        timezone="America/Los_Angeles",
+    )
+    ref_local = datetime(2025, 6, 20, 10, 0, tzinfo=tz)
+    nxt = _next_fire_after(sched, ref_local.astimezone(timezone.utc))
+    assert nxt.astimezone(tz).date() == datetime(2025, 7, 1).date()
+
+
+def test_month_repeat_every_respects_interval_after_clamped_day():
+    from backend.apps.workflows.scheduler import _next_fire_after
+    from backend.apps.workflows.models import ScheduleConfig
+    sched = ScheduleConfig(
+        enabled=True,
+        repeat_unit="month",
+        repeat_every=2,
+        day_of_month=31,
+        hour=9,
+        minute=0,
+        timezone="UTC",
+    )
+    nxt = _next_fire_after(sched, datetime(2025, 1, 31, 9, 0, tzinfo=timezone.utc))
+    assert nxt == datetime(2025, 3, 31, 9, 0, tzinfo=timezone.utc)
+
+
+def test_monthly_create_pins_missing_day_to_creation_day(monkeypatch):
+    from backend.apps.workflows import workflows as workflows_mod
+    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, WorkflowStep
+    from backend.apps.workflows.scheduler import _next_fire_after
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            base = datetime(2025, 3, 31, 10, 0, tzinfo=timezone.utc)
+            return base.astimezone(tz) if tz is not None else base.replace(tzinfo=None)
+
+    monkeypatch.setattr(workflows_mod, "datetime", FrozenDateTime)
+    body = WorkflowCreate(
+        title="monthly",
+        steps=[WorkflowStep(text="say hi")],
+        schedule=ScheduleConfig(
+            enabled=True,
+            repeat_unit="month",
+            repeat_every=1,
+            hour=9,
+            minute=0,
+            timezone="UTC",
+        ),
+    )
+    result = asyncio.new_event_loop().run_until_complete(workflows_mod.create_workflow(body))
+    assert result["schedule"]["day_of_month"] == 31
+
+    sched = ScheduleConfig(**result["schedule"])
+    nxt = _next_fire_after(sched, datetime(2025, 4, 30, 9, 0, tzinfo=timezone.utc))
+    assert nxt == datetime(2025, 5, 31, 9, 0, tzinfo=timezone.utc)
+
+
+def test_daily_repeat_every_skips_by_interval():
+    from backend.apps.workflows.scheduler import _next_fire_after
+    from backend.apps.workflows.models import ScheduleConfig
+    sched = ScheduleConfig(
+        enabled=True,
+        repeat_unit="day",
+        repeat_every=3,
+        hour=9,
+        minute=0,
+        timezone="UTC",
+    )
+    nxt = _next_fire_after(sched, datetime(2026, 6, 20, 9, 0, tzinfo=timezone.utc))
+    assert nxt == datetime(2026, 6, 23, 9, 0, tzinfo=timezone.utc)
+
+
+def test_weekly_repeat_every_skips_inactive_weeks():
+    from backend.apps.workflows.scheduler import _next_fire_after
+    from backend.apps.workflows.models import ScheduleConfig
+    sched = ScheduleConfig(
+        enabled=True,
+        repeat_unit="week",
+        repeat_every=2,
+        on_days=[1],
+        hour=9,
+        minute=0,
+        timezone="UTC",
+    )
+    nxt = _next_fire_after(sched, datetime(2026, 6, 22, 9, 0, tzinfo=timezone.utc))
+    assert nxt == datetime(2026, 7, 6, 9, 0, tzinfo=timezone.utc)
+
+
+def test_frozen_empty_tool_set_does_not_fall_back_to_defaults():
+    from backend.apps.workflows.executor import _resolve_allowed_tools
+    from backend.apps.workflows.models import ActionsConfig
+    wf = _make_wf(actions=ActionsConfig(freeze=True, configured_sets=[]))
+    assert _resolve_allowed_tools(wf) == []
+
+
 def test_calendar_occurrences_use_schedule_timezone_not_viewer_timezone():
     """A 9am New York schedule returns UTC instants. The frontend can then
     render those instants in the viewer's current timezone."""
@@ -335,9 +440,10 @@ def test_freeze_defaults_on_for_scheduled_create():
     """POST /workflows/create with schedule.enabled=true and no source
     session should flip actions.freeze=True to keep blast radius small."""
     from backend.apps.workflows.workflows import create_workflow
-    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, ActionsConfig
+    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, ActionsConfig, WorkflowStep
     body = WorkflowCreate(
         title="scheduled",
+        steps=[WorkflowStep(text="say hi")],
         schedule=ScheduleConfig(enabled=True, repeat_unit="day", repeat_every=1, hour=9, minute=0),
         actions=ActionsConfig(freeze=False, configured_sets=[]),
     )
@@ -348,10 +454,11 @@ def test_freeze_defaults_on_for_scheduled_create():
 def test_freeze_not_forced_when_source_session_present():
     """Source-session creates inherit the chat's choices; we don't override."""
     from backend.apps.workflows.workflows import create_workflow
-    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, ActionsConfig
+    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, ActionsConfig, WorkflowStep
     body = WorkflowCreate(
         title="from chat",
         source_session_id="sess-1",
+        steps=[WorkflowStep(text="say hi")],
         schedule=ScheduleConfig(enabled=True, repeat_unit="day", repeat_every=1, hour=9, minute=0),
         actions=ActionsConfig(freeze=False, configured_sets=[]),
     )
@@ -359,14 +466,40 @@ def test_freeze_not_forced_when_source_session_present():
     assert result["actions"]["freeze"] is False
 
 
+def test_source_session_create_inherits_allowed_tools():
+    from backend.apps.agents.agent_manager import agent_manager
+    from backend.apps.workflows.workflows import create_workflow
+    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, ActionsConfig, WorkflowStep
+    agent_manager.sessions["sess-allowed"] = SimpleNamespace(
+        allowed_tools=["Read"],
+        approval_decisions=[],
+        messages=[],
+        tool_latencies={},
+    )
+    try:
+        body = WorkflowCreate(
+            title="from restricted chat",
+            source_session_id="sess-allowed",
+            steps=[WorkflowStep(text="say hi")],
+            schedule=ScheduleConfig(enabled=True, repeat_unit="day", repeat_every=1, hour=9, minute=0),
+            actions=ActionsConfig(freeze=False, configured_sets=[]),
+        )
+        result = asyncio.new_event_loop().run_until_complete(create_workflow(body))
+    finally:
+        agent_manager.sessions.pop("sess-allowed", None)
+    assert result["actions"]["freeze"] is True
+    assert result["actions"]["configured_sets"] == ["Read"]
+
+
 def test_create_enabled_schedule_normalizes_local_timezone(monkeypatch):
     from backend.apps.workflows import scheduler
     from backend.apps.workflows.workflows import create_workflow
-    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig
+    from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, WorkflowStep
     monkeypatch.setenv("OPENSWARM_TIMEZONE", "America/Chicago")
     monkeypatch.setattr(scheduler, "_host_tz_cache", None)
     body = WorkflowCreate(
         title="local-tz-create",
+        steps=[WorkflowStep(text="say hi")],
         schedule=ScheduleConfig(
             enabled=True,
             repeat_unit="day",
