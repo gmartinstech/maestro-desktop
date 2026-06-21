@@ -12,6 +12,7 @@ Mounted at `/api/web`.
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Any
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from typeguard import typechecked
 
@@ -522,7 +523,6 @@ async def fetch(body: FetchBody) -> dict:
     try:
         await assert_safe_url(body.url)
     except SSRFBlocked as exc:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=f"Refused: {exc}")
     gemini_key = p_resolve_gemini_api_key()
     openai_key = p_resolve_openai_api_key()

@@ -129,6 +129,7 @@ def track_agent_message(
     role: str,
     content: Any = None,
     parent_id: Optional[str] = None,
+    branch_id: int = 0,
     provider: Optional[str] = None,
     model: Optional[str] = None,
     thinking_level: Optional[str] = None,
@@ -146,6 +147,7 @@ def track_agent_message(
                 role=role,
                 content=content,
                 parent_id=parent_id,
+                branch_id=branch_id,
                 provider=provider,
                 model=model,
                 thinking_level=thinking_level,
@@ -153,6 +155,39 @@ def track_agent_message(
         )
     except Exception as e:
         logger.debug("analytics agent.message failed: %s", e)
+
+
+def p_branch_version(session, message: dict) -> int:
+    """Edit marker for events.agent.message.branch_id.
+
+    Only the message that *created* a forked branch -- i.e. the actual edit -- gets
+    a non-zero version; replies and fresh turns typed on that branch reset to 0.
+    The edit is always the first `user` message on a forked branch (branches are
+    only ever born from agent_manager.edit_message), so a message that isn't that
+    first user message is "new" and scores 0. Repeated edits of the SAME user
+    message (siblings sharing a fork_point) are ranked 1, 2, ... by created_at."""
+    branch_str = message.get("branch_id") or "main"
+    branches = getattr(session, "branches", None) or {}
+    b = branches.get(branch_str)
+    fork_point = getattr(b, "fork_point_message_id", None) if b else None
+    if not fork_point:
+        return 0  # main / never-edited path
+    msg_id = message.get("id")
+    branch_user_msgs = [
+        m for m in (getattr(session, "messages", None) or [])
+        if getattr(m, "branch_id", None) == branch_str and getattr(m, "role", None) == "user"
+    ]
+    if not branch_user_msgs or getattr(branch_user_msgs[0], "id", None) != msg_id:
+        return 0  # a reply or a later new turn on this branch -> not an edit
+    siblings = sorted(
+        (x for x in branches.values()
+         if getattr(x, "fork_point_message_id", None) == fork_point),
+        key=lambda x: x.created_at,
+    )
+    for i, x in enumerate(siblings, start=1):
+        if x.id == branch_str:
+            return i
+    return 0
 
 
 def bridge_agent_message(session_id: str, message: dict) -> None:
@@ -194,6 +229,7 @@ def bridge_agent_message(session_id: str, message: dict) -> None:
         role=str(role),
         content=message.get("content"),
         parent_id=message.get("parent_id"),
+        branch_id=p_branch_version(sess, message),
         provider=getattr(sess, "provider", None),
         model=getattr(sess, "model", None),
         thinking_level=getattr(sess, "thinking_level", None),
