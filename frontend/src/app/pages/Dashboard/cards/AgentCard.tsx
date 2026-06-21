@@ -44,7 +44,7 @@ import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScro
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canvasInteractionState';
 import { openWorkflowCard, updateWorkflowCard, generateWorkflowMetadata, applyGeneratedMetadata, setCardSidecar, type Workflow } from '@/shared/state/workflowsSlice';
-import { addWorkflowCard, setWorkflowCardPosition, setWorkflowCardSize } from '@/shared/state/dashboardLayoutSlice';
+import { addWorkflowCard, setWorkflowCardPosition, setWorkflowCardSize, openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import { getAgentWorkTime, fmtSeconds } from '@/shared/agentWorkTime';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
@@ -509,9 +509,9 @@ const AgentCard: React.FC<Props> = ({
     dispatch(fadeGlowingAgentCard(session.id));
   }, [workflowSuggestion, canConvertToWorkflow, dispatch, session.id]);
 
-  // When the agent schedules a workflow from this chat, pop its card open
-  // next to the chat. Baseline the count once on mount so historical
-  // schedules (e.g. after an app reload) don't re-open on their own.
+  // When the agent schedules a workflow from this chat, open it in the
+  // Workflows app. Baseline the count once on mount so historical schedules
+  // (e.g. after an app reload) don't re-open on their own.
   const scheduleWorkflowCount = useMemo(() => countScheduleWorkflowCalls(session), [session]);
   const baselineScheduleCountRef = useRef<number | null>(null);
   const autoOpenedWorkflowIdsRef = useRef<Set<string>>(new Set());
@@ -525,10 +525,9 @@ const AgentCard: React.FC<Props> = ({
       if (wf.source_session_id !== session.id) continue;
       if (autoOpenedWorkflowIdsRef.current.has(wf.id)) continue;
       autoOpenedWorkflowIdsRef.current.add(wf.id);
-      dispatch(addWorkflowCard({ workflowId: wf.id, sourceSessionId: session.id, expandedSessionIds }));
-      dispatch(openWorkflowCard({ workflowId: wf.id, view: 'saved' }));
+      dispatch(openWorkflowsApp({ workflowId: wf.id }));
     }
-  }, [scheduleWorkflowCount, workflowItems, session.id, dispatch, expandedSessionIds]);
+  }, [scheduleWorkflowCount, workflowItems, session.id, dispatch]);
 
   const cardBoxRef = useRef<HTMLDivElement>(null);
   // Ref so ResizeObserver sees latest value without re-attaching when active flips.
@@ -1096,29 +1095,6 @@ const AgentCard: React.FC<Props> = ({
             onPointerDown={(e) => e.stopPropagation()}
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, ml: 0.5 }}
           >
-            {showSourceWorkflowSchedule && (
-              <Tooltip title="Schedule the workflow made from this chat">
-                <Box
-                  role="button"
-                  onClick={openSourceWorkflowScheduling}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  sx={{
-                    display: 'inline-flex', alignItems: 'center', gap: 0.5,
-                    color: '#fff',
-                    bgcolor: c.accent.primary,
-                    border: `1px solid ${c.accent.primary}`,
-                    fontSize: '0.78rem', fontWeight: 700,
-                    px: 1.1, py: 0.5,
-                    borderRadius: `${c.radius.md}px`,
-                    cursor: 'pointer',
-                    '&:hover': { filter: 'brightness(1.05)' },
-                  }}
-                >
-                  <CalendarMonthRounded sx={{ fontSize: 14 }} />
-                  Schedule Workflow
-                </Box>
-              </Tooltip>
-            )}
             <Tooltip title={isDraft ? 'Remove' : 'Close chat'}>
               <IconButton
                 size="small"
@@ -1160,55 +1136,6 @@ const AgentCard: React.FC<Props> = ({
               </Typography>
             )}
           </Box>
-          {showConvertToWorkflow && (
-            <Tooltip title={canConvertToWorkflow ? 'Turn this chat into a reusable workflow' : 'Wait for the current response to finish before converting'}>
-              <Box
-                key={`convert-workflow-${suggestGlowCycle}-${canConvertToWorkflow ? 'ready' : 'blocked'}`}
-                component={motion.div}
-                role="button"
-                aria-disabled={!canConvertToWorkflow}
-                onClick={handleConvertToWorkflow}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                animate={suggestGlowCycle > 0 ? {
-                  scale: [1, 1.06, 1, 1.045, 1],
-                  filter: ['brightness(1)', 'brightness(1.18)', 'brightness(1)', 'brightness(1.12)', 'brightness(1)'],
-                  boxShadow: [
-                    `0 0 0 0 ${c.accent.primary}00`,
-                    `0 0 0 4px ${c.accent.primary}99, 0 0 20px 6px ${c.accent.primary}66`,
-                    `0 0 0 8px ${c.accent.primary}00`,
-                    `0 0 0 3px ${c.accent.primary}88, 0 0 16px 4px ${c.accent.primary}55`,
-                    canConvertToWorkflow ? c.shadow.sm : 'none',
-                  ],
-                } : undefined}
-                transition={{ duration: 2.4, ease: 'easeInOut' }}
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 0.35,
-                  color: canConvertToWorkflow ? '#fff' : c.text.tertiary,
-                  bgcolor: canConvertToWorkflow ? c.accent.primary : c.bg.secondary,
-                  border: `1px solid ${canConvertToWorkflow ? c.accent.primary : c.border.medium}`,
-                  fontSize: '0.68rem',
-                  lineHeight: 1,
-                  fontWeight: 700,
-                  px: 0.8,
-                  py: 0.35,
-                  minHeight: 22,
-                  borderRadius: `${c.radius.sm}px`,
-                  cursor: canConvertToWorkflow ? (converting ? 'wait' : 'pointer') : 'not-allowed',
-                  opacity: converting ? 0.7 : 1,
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  boxShadow: canConvertToWorkflow ? c.shadow.sm : 'none',
-                  '&:hover': canConvertToWorkflow ? { filter: 'brightness(1.05)' } : { bgcolor: c.bg.secondary },
-                }}
-              >
-                <AutoAwesomeOutlinedIcon sx={{ fontSize: 13 }} />
-                {converting ? 'Converting...' : 'Convert to workflow'}
-              </Box>
-            </Tooltip>
-          )}
         </Box>
       </Box>
 
@@ -1420,80 +1347,6 @@ const AgentCard: React.FC<Props> = ({
           ) : null}
         </>
       )}
-      <Fade in={showWorkflowSuggestionPrompt} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
-        <Box
-          onClick={(e) => {
-            e.stopPropagation();
-            setDismissedWorkflowPromptKey(workflowSuggestionKey);
-          }}
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 30,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            p: 2,
-            bgcolor: 'rgba(0,0,0,0.28)',
-            backdropFilter: 'blur(1.5px)',
-          }}
-        >
-          <Box
-            onClick={(e) => e.stopPropagation()}
-            sx={{
-              width: '100%',
-              maxWidth: 340,
-              bgcolor: c.bg.surface,
-              color: c.text.primary,
-              border: `1px solid ${c.border.medium}`,
-              borderRadius: `${c.radius.lg}px`,
-              boxShadow: c.shadow.lg,
-              p: 2.25,
-            }}
-          >
-            <Typography sx={{ fontSize: '0.98rem', fontWeight: 700, mb: 0.75 }}>
-              Would you like to make this a workflow?
-            </Typography>
-            <Typography sx={{ fontSize: '0.85rem', lineHeight: 1.5, color: c.text.secondary }}>
-              I can open a workflow draft from this chat. You can review the steps and choose the schedule there.
-            </Typography>
-            {workflowSuggestion?.cadence && (
-              <Typography sx={{ mt: 1, fontSize: '0.78rem', color: c.text.tertiary }}>
-                Suggested cadence: {workflowSuggestion.cadence}
-              </Typography>
-            )}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => setDismissedWorkflowPromptKey(workflowSuggestionKey)}
-                sx={{ textTransform: 'none', color: c.text.tertiary, fontWeight: 700 }}
-              >
-                No, keep chatting
-              </Button>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<AutoAwesomeOutlinedIcon sx={{ fontSize: 14 }} />}
-                onClick={() => {
-                  setDismissedWorkflowPromptKey(workflowSuggestionKey);
-                  convertChatToWorkflow();
-                }}
-                sx={{
-                  textTransform: 'none',
-                  bgcolor: c.accent.primary,
-                  color: '#fff',
-                  fontWeight: 700,
-                  boxShadow: c.shadow.sm,
-                  '&:hover': { bgcolor: c.accent.hover },
-                }}
-              >
-                Yes, open workflow
-              </Button>
-            </Box>
-          </Box>
-        </Box>
-      </Fade>
       <Snackbar
         open={!!workflowToast}
         autoHideDuration={3200}

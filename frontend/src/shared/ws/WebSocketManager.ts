@@ -24,7 +24,7 @@ import {
   clearTurnLabel,
 } from '../state/agentsSlice';
 import { streamStart, streamDelta, streamEnd, clearStreamingForSession } from '../state/streamingSlice';
-import { addBrowserCardFromBackend, markBrowserCardEnding, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, addWorkflowCard } from '../state/dashboardLayoutSlice';
+import { addBrowserCardFromBackend, markBrowserCardEnding, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, openWorkflowsApp } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
 import { displaySessionName } from '../state/sessionDisplay';
 import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard, upsertWorkflow, removeWorkflow } from '../state/workflowsSlice';
@@ -964,8 +964,7 @@ import { WS_BASE } from '@/shared/config';
         return;
       }
       if (outcome === 'edit' || outcome === 'open') {
-        store.dispatch(addWorkflowCard({ workflowId }));
-        store.dispatch(openWorkflowCard({ workflowId, view: outcome === 'edit' ? 'edit' : 'saved', editFacet: outcome === 'edit' ? 'Schedule' : undefined }));
+        store.dispatch(openWorkflowsApp({ workflowId }));
         return;
       }
     });

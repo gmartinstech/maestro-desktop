@@ -4,10 +4,6 @@ import AgentCard from '../cards/AgentCard';
 import DashboardViewCard from '../cards/DashboardViewCard';
 import BrowserCard from '../cards/BrowserCard';
 import NoteCard from '../cards/NoteCard';
-import WorkflowCard from '@/app/pages/Workflows/WorkflowCard';
-import WorkflowsHubCard from '@/app/pages/Workflows/WorkflowsHubCard';
-import MissedRunsCard from '@/app/pages/Workflows/MissedRunsCard';
-import ConfigurePanelCard from '@/app/pages/Workflows/ConfigurePanelCard';
 import {
   EXPANDED_CARD_MIN_H,
   DEFAULT_CARD_W,
@@ -270,78 +266,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
           onBringToFront={onBringToFront}
         />
       ))}
-      {workflowsHub && (
-        <WorkflowsHubCard
-          dashboardId={dashboardId}
-          cardX={workflowsHub.x}
-          cardY={workflowsHub.y}
-          cardWidth={workflowsHub.width}
-          cardHeight={workflowsHub.height}
-          cardZOrder={workflowsHub.zOrder ?? 0}
-          zoom={zoom}
-          panX={panX}
-          panY={panY}
-          isSelected={selection.isSelected('workflows-hub')}
-          isHighlighted={highlightedCardId === 'workflows-hub'}
-          multiDragDelta={selection.isSelected('workflows-hub') ? multiDragDelta : null}
-          onCardSelect={onCardSelect}
-          onDragStart={onDragStart}
-          onDragMove={onDragMove}
-          onDragEnd={onDragEnd}
-          onBringToFront={onBringToFront}
-        />
-      )}
-      {missedRunsCard && (
-        <MissedRunsCard
-          cardX={missedRunsCard.x}
-          cardY={missedRunsCard.y}
-          cardWidth={missedRunsCard.width}
-          cardHeight={missedRunsCard.height}
-          cardZOrder={missedRunsCard.zOrder ?? 0}
-          zoom={zoom}
-          panX={panX}
-          panY={panY}
-          isSelected={selection.isSelected('missed-runs')}
-          isHighlighted={highlightedCardId === 'missed-runs'}
-          multiDragDelta={selection.isSelected('missed-runs') ? multiDragDelta : null}
-          onCardSelect={onCardSelect}
-          onDragStart={onDragStart}
-          onDragMove={onDragMove}
-          onDragEnd={onDragEnd}
-          onBringToFront={onBringToFront}
-        />
-      )}
-      {Object.values(workflowCards).map((wc) => (
-        <WorkflowCard
-          key={`workflow-${wc.workflow_id}`}
-          workflowId={wc.workflow_id}
-          cardX={wc.x}
-          cardY={wc.y}
-          cardWidth={wc.width}
-          cardHeight={wc.height}
-          cardZOrder={wc.zOrder ?? 0}
-          zoom={zoom}
-          panX={panX}
-          panY={panY}
-          isSelected={selection.isSelected(wc.workflow_id)}
-          isHighlighted={highlightedCardId === wc.workflow_id}
-          multiDragDelta={multiDragDelta}
-          onCardSelect={onCardSelect}
-          onDragStart={onDragStart}
-          onDragMove={onDragMove}
-          onDragEnd={onDragEnd}
-          onDoubleClick={onDoubleClick}
-          onBringToFront={onBringToFront}
-          onMeasuredHeight={onMeasuredHeight}
-        />
-      ))}
-      {Object.values(configurePanels).map((p) => (
-        <ConfigurePanelCard
-          key={`configure-${p.workflow_id}`}
-          panel={p}
-          zOrder={1}
-        />
-      ))}
+      {/* Workflows now live in the shell-level Workflows app, not on the canvas. */}
       {/* Marquee selection rectangle */}
       {selection.marquee && (
         <div

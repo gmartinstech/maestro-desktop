@@ -1,6 +1,6 @@
 // Bottom-left nudge shown on launch when scheduled runs elapsed while the app
-// was closed. It stays put until the user acts (no auto-hide): Review opens and
-// pans the canvas to the missed-runs card; clicking away or the X dismisses it.
+// was closed. It stays put until the user acts (no auto-hide): Review opens the
+// Workflows app (its Home surfaces the missed runs); the X dismisses it.
 
 import React from 'react';
 import Snackbar from '@mui/material/Snackbar';
@@ -11,7 +11,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { hideMissedRunsToast } from '@/shared/state/missedRunsSlice';
-import { openMissedRunsCard } from '@/shared/state/dashboardLayoutSlice';
+import { openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 
 export default function MissedRunsToast() {
   const c = useClaudeTokens();
@@ -20,7 +20,7 @@ export default function MissedRunsToast() {
   const count = useAppSelector((s) => s.missedRuns.items.length);
 
   const onReview = React.useCallback(() => {
-    dispatch(openMissedRunsCard(undefined));
+    dispatch(openWorkflowsApp());
     dispatch(hideMissedRunsToast());
   }, [dispatch]);
 

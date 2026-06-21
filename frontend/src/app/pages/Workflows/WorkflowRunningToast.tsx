@@ -1,8 +1,7 @@
 // Clickable "your {workflow} is running now" nudge for scheduled runs that
 // fire while the user isn't looking. Detection lives in the upsertRun reducer
 // (it owns the into-running edge); this just renders the redux toast state and,
-// on View, jumps the canvas to the workflow, opening its live conversation if
-// it wasn't already on screen.
+// on View, opens the Workflows app to that workflow's live detail.
 
 import React from 'react';
 import Snackbar from '@mui/material/Snackbar';
@@ -10,39 +9,19 @@ import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { store } from '@/shared/state/store';
-import { dismissRunningToast, openWorkflowCard, type OpenCard } from '@/shared/state/workflowsSlice';
-import { addWorkflowCard } from '@/shared/state/dashboardLayoutSlice';
-import { useOpenSidecar } from './WorkflowCardLiveViews';
+import { dismissRunningToast } from '@/shared/state/workflowsSlice';
+import { openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 
 export default function WorkflowRunningToast() {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const toast = useAppSelector((s) => s.workflows.runningToast);
-  const openSidecar = useOpenSidecar(toast?.workflowId || '');
 
   const onView = React.useCallback(() => {
     if (!toast) return;
-    const { workflowId, runId } = toast;
-    const st = store.getState();
-    const alreadyOpen = Boolean(st.dashboardLayout.workflowCards[workflowId]);
-    // addWorkflowCard pans the canvas to the card whether it already exists or
-    // gets created here (both set pendingFocusWorkflowId for the lifecycle hook).
-    dispatch(addWorkflowCard({ workflowId }));
-    if (!alreadyOpen) {
-      const run = st.workflows.runs[workflowId]?.find((r) => r.id === runId);
-      const status = run?.status;
-      const view: OpenCard['view'] = status === 'failure' ? 'failed'
-        : (status === 'success' || status === 'ran_late') ? 'completed' : 'running';
-      dispatch(openWorkflowCard({ workflowId, view, runId }));
-      if (run?.session_id) {
-        const kind = status === 'failure' ? 'viewing-error'
-          : (status === 'success' || status === 'ran_late') ? 'viewing-completed' : 'watching';
-        void openSidecar(run.session_id, kind);
-      }
-    }
+    dispatch(openWorkflowsApp({ workflowId: toast.workflowId }));
     dispatch(dismissRunningToast());
-  }, [toast, dispatch, openSidecar]);
+  }, [toast, dispatch]);
 
   return (
     <Snackbar

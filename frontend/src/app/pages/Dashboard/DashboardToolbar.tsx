@@ -30,7 +30,7 @@ import ChatInput from '@/app/pages/AgentChat/ChatInput';
 import type { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import SchedulePopover from '@/app/pages/Workflows/SchedulePopover';
 import { openWorkflowCard, fetchAllRuns, upsertRun } from '@/shared/state/workflowsSlice';
-import { addWorkflowCard, openWorkflowsHub, closeWorkflowsHub } from '@/shared/state/dashboardLayoutSlice';
+import { addWorkflowCard, openWorkflowsApp, closeWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -191,7 +191,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
     const allRuns = useAppSelector((s) => s.workflows.allRuns);
     const allRunsLoading = useAppSelector((s) => s.workflows.allRunsLoading);
     const workflowItems = useAppSelector((s) => s.workflows.items);
-    const workflowsHubOpen = useAppSelector((s) => Boolean(s.dashboardLayout.workflowsHub));
+    const workflowsHubOpen = useAppSelector((s) => s.dashboardLayout.workflowsAppOpen);
 
     const outputList = useMemo(() => Object.values(outputs), [outputs]);
     const filteredOutputs = useMemo(() => {
@@ -454,33 +454,6 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
             <AddRounded sx={{ fontSize: 12 }} />
             New Chat
           </Box>
-          <Box
-            onClick={() => {
-              // Schedule is a destination, not a toggle: clicking it always
-              // lands on (and stays on) the calendar. It used to call
-              // handleCloseHistory when already open, which read as "Schedule
-              // does nothing" because it closed the calendar you were viewing.
-              // Close the composer first; inputOpen takes precedence in the
-              // render branch below so the popover would hide behind it.
-              if (inputOpen) onCancel();
-              setPopoverMode('schedule');
-              if (!historyOpen) setHistoryOpen(true);
-            }}
-            role="button"
-            sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 0.3,
-              fontSize: '0.74rem', fontWeight: 600,
-              color: historyOpen ? c.text.primary : c.text.secondary,
-              bgcolor: c.bg.surface,
-              border: `1px solid ${historyOpen ? c.border.medium : c.border.subtle}`,
-              boxShadow: historyOpen ? c.shadow.sm : 'none',
-              px: 0.85, py: 0.3, borderRadius: 999,
-              cursor: 'pointer',
-              '&:hover': { bgcolor: c.bg.elevated },
-            }}>
-            <CalendarMonthRounded sx={{ fontSize: 12 }} />
-            Schedule
-          </Box>
         </Box>
       )}
       <MotionBox
@@ -539,33 +512,18 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               onHistorySelect={handleHistorySelect}
               onNewChat={() => { handleCloseHistory(); onNewAgent(); }}
               onWorkflowSelect={(wid) => {
-                dispatch(addWorkflowCard({ workflowId: wid }));
-                dispatch(openWorkflowCard({
-                  workflowId: wid,
-                  view: 'saved',
-                }));
+                dispatch(openWorkflowsApp({ workflowId: wid }));
                 handleCloseHistory();
               }}
               onExpand={() => {
-                // Singleton per dashboard, second Expand brings the existing card forward.
-                const alreadyOpen = Boolean(store.getState().dashboardLayout.workflowsHub);
-                dispatch(openWorkflowsHub({ expandedSessionIds: [] }));
-                if (alreadyOpen) setExpandToast('Calendar view is already open');
+                dispatch(openWorkflowsApp());
                 handleCloseHistory();
               }}
               allRuns={allRuns}
               allRunsLoading={allRunsLoading}
               workflowTitleFor={(wid) => workflowItems[wid]?.title || 'Workflow'}
               onRunOpen={(run) => {
-                // Splice the clicked run in first so HistoryDetail finds it
-                // before fetchRuns resolves; avoids a "Run not found" flash.
-                dispatch(upsertRun(run));
-                dispatch(addWorkflowCard({ workflowId: run.workflow_id }));
-                dispatch(openWorkflowCard({
-                  workflowId: run.workflow_id,
-                  view: 'history_detail',
-                  historyRunId: run.id,
-                }));
+                dispatch(openWorkflowsApp({ workflowId: run.workflow_id }));
                 handleCloseHistory();
               }}
               historyScrollRef={historyListRef as React.RefObject<HTMLDivElement>}
@@ -824,7 +782,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                 role="button"
                 aria-label="Workflows"
                 tabIndex={0}
-                onClick={() => dispatch(workflowsHubOpen ? closeWorkflowsHub() : openWorkflowsHub({ expandedSessionIds: [] }))}
+                onClick={() => dispatch(workflowsHubOpen ? closeWorkflowsApp() : openWorkflowsApp())}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',

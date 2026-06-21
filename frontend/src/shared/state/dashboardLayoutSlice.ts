@@ -156,6 +156,10 @@ export interface DashboardLayoutState {
   pendingFocusMissedRuns: boolean;
   /** Transient: signals Dashboard to pan/zoom to the singleton Workflows Hub on open. */
   pendingFocusWorkflowsHub: boolean;
+  /** Whether the shell-level Workflows app window is open (screen-space singleton, not a canvas card). */
+  workflowsAppOpen: boolean;
+  /** Transient deep-link target: the app jumps to this workflow's detail on open, then clears it. */
+  workflowsAppTarget: string | null;
 }
 
 const initialState: DashboardLayoutState = {
@@ -182,6 +186,8 @@ const initialState: DashboardLayoutState = {
   pendingFocusWorkflowId: null,
   pendingFocusMissedRuns: false,
   pendingFocusWorkflowsHub: false,
+  workflowsAppOpen: false,
+  workflowsAppTarget: null,
 };
 
 interface LayoutPayload {
@@ -979,6 +985,20 @@ const dashboardLayoutSlice = createSlice({
       state.workflowsHub = null;
     },
 
+    openWorkflowsApp(state, action: PayloadAction<{ workflowId?: string } | undefined>) {
+      state.workflowsAppOpen = true;
+      state.workflowsAppTarget = action.payload?.workflowId ?? null;
+    },
+
+    closeWorkflowsApp(state) {
+      state.workflowsAppOpen = false;
+      state.workflowsAppTarget = null;
+    },
+
+    clearWorkflowsAppTarget(state) {
+      state.workflowsAppTarget = null;
+    },
+
     setWorkflowsHubPosition(state, action: PayloadAction<{ x: number; y: number }>) {
       if (!state.workflowsHub) return;
       state.workflowsHub.x = action.payload.x;
@@ -1481,6 +1501,9 @@ export const {
   clearPendingFocusWorkflowId,
   openWorkflowsHub,
   closeWorkflowsHub,
+  openWorkflowsApp,
+  closeWorkflowsApp,
+  clearWorkflowsAppTarget,
   setWorkflowsHubPosition,
   setWorkflowsHubSize,
   clearPendingFocusWorkflowsHub,
