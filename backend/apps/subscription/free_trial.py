@@ -10,6 +10,7 @@ forced cheap model; this module only mirrors state into settings and 9Router.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -160,6 +161,7 @@ async def arm_free_trial(settings_obj) -> dict:
     if mode not in ("own_key", "free-trial"):
         return {"armed": False, "reason": "other_mode"}
     own = _has_own_model(settings_obj)
+    has_sub = False
     if not own:
         # A subscription lives in 9Router, not settings, and 9Router now starts in
         # the BACKGROUND (non-blocking boot), so at first-launch mint time it isn't
@@ -174,7 +176,19 @@ async def arm_free_trial(settings_obj) -> dict:
             await _ensure_9r()
         except Exception:
             pass
-    if own or await _has_connected_subscription():
+        # 9Router's /api/providers can lag /v1/models (what is_running probes) by a
+        # beat on a cold start, so a real sub can read as absent for a sub-second
+        # window. Re-check a few times before concluding "no sub", so we never arm
+        # over a sub that's merely still loading. CAPPED on purpose: a genuinely
+        # sub-less user exhausts these in ~1.2s and falls through to arm, so this
+        # never waits on a subscription that doesn't exist.
+        for _i in range(5):
+            if await _has_connected_subscription():
+                has_sub = True
+                break
+            if _i < 4:
+                await asyncio.sleep(0.3)
+    if own or has_sub:
         # A real model exists now (key, custom provider, or a 9Router sub). If we
         # were on the free lane, hand the wheel back instead of re-arming.
         if mode == "free-trial":

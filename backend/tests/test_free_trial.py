@@ -92,6 +92,57 @@ async def test_arm_waits_for_9router_before_shadowing_a_background_started_sub(m
 
 
 @pytest.mark.asyncio
+async def test_arm_tolerates_provider_load_lag(monkeypatch):
+    """9Router's /api/providers can lag is_running on a cold start. arm must re-check
+    a few times so a sub that loads a beat late is still caught, not shadowed."""
+    monkeypatch.setattr(ft, "save_settings_async", _noop)
+    monkeypatch.setattr(ft, "_sync_routing", _noop)
+
+    async def fake_ensure_running():
+        return None
+
+    calls = {"n": 0}
+    async def lagging_sub():
+        calls["n"] += 1
+        return calls["n"] >= 3  # empty for the first two probes, then the sub appears
+
+    import backend.apps.nine_router as nr
+    monkeypatch.setattr(nr, "ensure_running", fake_ensure_running)
+    monkeypatch.setattr(ft, "_has_connected_subscription", lagging_sub)
+
+    s = AppSettings()
+    res = await ft.arm_free_trial(s)
+    assert res["reason"] == "has_model", res
+    assert s.default_model != "haiku"
+    assert calls["n"] >= 3, "should have re-checked past the lagging-empty probes"
+
+
+@pytest.mark.asyncio
+async def test_arm_with_no_sub_is_bounded_and_falls_through_to_arm(monkeypatch):
+    """The 'don't poll for something that doesn't exist' guarantee: a genuinely
+    sub-less user must exhaust the re-checks quickly and PROCEED to arm, never hang."""
+    async def fake_ensure_running():
+        return None
+    async def never_sub():
+        return False
+
+    import time
+    import backend.apps.nine_router as nr
+    monkeypatch.setattr(nr, "ensure_running", fake_ensure_running)
+    monkeypatch.setattr(ft, "_has_connected_subscription", never_sub)
+    # Short-circuit before the cloud mint so the test stays offline + deterministic;
+    # reaching this branch proves arm did NOT falsely conclude has_model.
+    monkeypatch.setattr(ft, "_fingerprint", lambda _s: None)
+
+    s = AppSettings()
+    t = time.monotonic()
+    res = await ft.arm_free_trial(s)
+    elapsed = time.monotonic() - t
+    assert res["reason"] == "no_fingerprint", res  # got past the sub guard to the arm path
+    assert elapsed < 3.0, f"re-check budget not bounded: {elapsed:.2f}s"
+
+
+@pytest.mark.asyncio
 async def test_clear_reverts_forced_haiku_so_it_doesnt_outlive_the_trial(monkeypatch):
     monkeypatch.setattr(ft, "save_settings_async", _noop)
     monkeypatch.setattr(ft, "_sync_routing", _noop)
