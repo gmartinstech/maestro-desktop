@@ -1220,7 +1220,15 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (isDev && url.startsWith('http://localhost:3000')) return;
+    // Same-origin navigations are the app's own routing (reload, hash routes),
+    // never an external link to pop into a browser card. The old port-specific
+    // exemptions missed prod (renderer on 127.0.0.1:4173, not localhost:3000 or
+    // file://), so a reload, e.g. Restart tour, got intercepted and re-opened
+    // as a browser card loading the app itself (the recursive nested window).
+    try {
+      const current = mainWindow.webContents.getURL();
+      if (current && new URL(url).origin === new URL(current).origin) return;
+    } catch (_) {}
     if (url.startsWith('file://')) return;
     event.preventDefault();
     mainWindow.webContents.send('webview-new-window', url, mainWindow.webContents.id);

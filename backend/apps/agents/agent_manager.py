@@ -63,6 +63,7 @@ from backend.apps.agents.manager.session.history_compaction import (
 from backend.apps.agents.manager.prompt.prompt_context import (
     _build_browser_context,
     _build_selected_app_context,
+    _build_selected_settings_context,
     _build_connected_tools_context,
     _build_mcp_registry_summary,
     _compose_system_prompt,
@@ -454,7 +455,7 @@ class AgentManager:
     def _resolve_context_paths(self, context_paths: list | None) -> str:
         return _resolve_context_paths(context_paths)
 
-    async def _run_agent_loop(self, session_id: str, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, fork_session: bool = False, selected_browser_ids: list[str] | None = None, selected_app_output_ids: list[str] | None = None):
+    async def _run_agent_loop(self, session_id: str, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, fork_session: bool = False, selected_browser_ids: list[str] | None = None, selected_app_output_ids: list[str] | None = None, selected_setting_ids: list[str] | None = None):
         """Run the Claude Agent SDK query loop for a session."""
         session = self.sessions.get(session_id)
         if not session:
@@ -1105,6 +1106,9 @@ class AgentManager:
                     usage = raw_response.get("usage", {})
                     if isinstance(usage, dict):
                         sub_tokens["input"] = usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+                        # Pill-only lane: NEW (uncached) input, excludes the cached
+                        # static prefix so the bubble shows what this turn added.
+                        sub_tokens["input_fresh"] = usage.get("input_tokens", 0)
                         sub_tokens["output"] = usage.get("output_tokens", 0)
                     if raw_response.get("total_cost_usd"):
                         sub_cost = raw_response["total_cost_usd"]
@@ -1281,6 +1285,12 @@ class AgentManager:
             if app_ctx:
                 composed_prompt = f"{composed_prompt}\n\n{app_ctx}" if composed_prompt else app_ctx
 
+            # The user can point the agent at specific Settings rows. Targeting
+            # aid only; the settings tools are always on regardless.
+            settings_ctx = _build_selected_settings_context(selected_setting_ids)
+            if settings_ctx:
+                composed_prompt = f"{composed_prompt}\n\n{settings_ctx}" if composed_prompt else settings_ctx
+
             # Per-turn estimate of framework overhead (subtracted from displayed
             # input). Conservative on purpose so honest over-shows beat lies.
             # 16K Claude Code preset, 12K base+deferred tools, ~3K/MCP (real
@@ -1373,6 +1383,27 @@ class AgentManager:
                 "env": {
                     "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
                     "OPENSWARM_AUTH_TOKEN": _get_auth_token3(),
+                    "OPENSWARM_PARENT_SESSION_ID": session.id,
+                },
+                "type": "stdio",
+            }
+
+            # Always-on settings-meta server: SettingsRead / SettingsWrite let the
+            # agent read and edit its own OpenSwarm Settings autonomously. The
+            # backend (/api/settings-meta) enforces the only two guardrails: it
+            # can't disconnect the credential powering this run, and reads come
+            # back with secrets redacted. No activation gate, Settings is the
+            # agent's own house, not a third-party MCP.
+            settings_meta_server_path = os.path.join(
+                os.path.dirname(__file__), "settings_meta_server.py"
+            )
+            from backend.auth import get_auth_token as _get_auth_token4
+            mcp_servers["openswarm-settings-meta"] = {
+                "command": sys.executable,
+                "args": [settings_meta_server_path],
+                "env": {
+                    "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
+                    "OPENSWARM_AUTH_TOKEN": _get_auth_token4(),
                     "OPENSWARM_PARENT_SESSION_ID": session.id,
                 },
                 "type": "stdio",
@@ -2366,10 +2397,13 @@ class AgentManager:
                 # baseline to get THIS TURN'S delta. Without subtracting,
                 # the second turn's pill would show turn-1 work added
                 # to turn-2 work, the third would show all three, etc.
+                # Pill uses the FRESH lane (uncached input only). session.tokens
+                # ["input"] stays full for the context-fullness bar + cost; the
+                # bubble shows the NEW tokens this turn, not the cached re-reads.
                 _cum_in = 0
                 _cum_out = 0
                 if isinstance(session.tokens, dict):
-                    _cum_in = int(session.tokens.get("input", 0) or 0)
+                    _cum_in = int(session.tokens.get("input_fresh", 0) or 0)
                     _cum_out = int(session.tokens.get("output", 0) or 0)
                 _cum_children_in = 0
                 _cum_children_out = 0
@@ -2380,7 +2414,7 @@ class AgentManager:
                         _ct = getattr(_child, "tokens", None)
                         if not isinstance(_ct, dict):
                             continue
-                        _cum_children_in += int(_ct.get("input", 0) or 0)
+                        _cum_children_in += int(_ct.get("input_fresh", 0) or 0)
                         _cum_children_out += int(_ct.get("output", 0) or 0)
                 except Exception:
                     pass
@@ -2398,18 +2432,14 @@ class AgentManager:
                     _children_in = _cum_children_in
                     _children_out = _cum_children_out
 
+                # Fresh input + output = the NEW tokens this turn. The old
+                # framework-overhead subtraction is gone on purpose: it was an
+                # estimate to strip the cached static prefix out of the full
+                # input number, and the fresh lane already excludes that prefix
+                # exactly, so subtracting it again would double-discount to ~0.
                 _turn_total_tokens: int | None = (
                     _parent_in + _parent_out + _children_in + _children_out
                 )
-                # Strip framework overhead so bubble shows what the user
-                # actually controls. Floor at output so over-estimates can't
-                # render absurdly small.
-                if _turn_total_tokens and session.framework_overhead_tokens > 0:
-                    _adjusted = _turn_total_tokens - session.framework_overhead_tokens
-                    _floor = _parent_out + _children_out
-                    if _adjusted < _floor:
-                        _adjusted = _floor
-                    _turn_total_tokens = _adjusted
                 if not _turn_total_tokens or _turn_total_tokens <= 0:
                     _turn_total_tokens = None
                 consolidated = Message(
@@ -2486,8 +2516,10 @@ class AgentManager:
                             # Snapshot cumulative tokens at turn start;
                             # subtracted at emit time for per-turn deltas.
                             try:
+                                # Baselines track the SAME fresh lane the pill reads,
+                                # so the per-turn delta is fresh-minus-fresh.
                                 if isinstance(session.tokens, dict):
-                                    _turn_baseline_session_in = int(session.tokens.get("input", 0) or 0)
+                                    _turn_baseline_session_in = int(session.tokens.get("input_fresh", 0) or 0)
                                     _turn_baseline_session_out = int(session.tokens.get("output", 0) or 0)
                                 _ch_in = 0
                                 _ch_out = 0
@@ -2497,7 +2529,7 @@ class AgentManager:
                                     _ct = getattr(_child, "tokens", None)
                                     if not isinstance(_ct, dict):
                                         continue
-                                    _ch_in += int(_ct.get("input", 0) or 0)
+                                    _ch_in += int(_ct.get("input_fresh", 0) or 0)
                                     _ch_out += int(_ct.get("output", 0) or 0)
                                 _turn_baseline_children_in = _ch_in
                                 _turn_baseline_children_out = _ch_out
@@ -2891,6 +2923,9 @@ class AgentManager:
                                 _pre_out = int(_pre_usage.get("output_tokens", 0) or 0)
                                 if _pre_total_in > 0:
                                     session.tokens["input"] = _pre_total_in
+                                # Pill reads the fresh lane: uncached input only,
+                                # so re-read/cached context doesn't inflate it.
+                                session.tokens["input_fresh"] = _pre_in
                                 if _pre_out > 0:
                                     session.tokens["output"] = _pre_out
                         except Exception:
@@ -2958,6 +2993,7 @@ class AgentManager:
                             cache_read = usage.get("cache_read_input_tokens", 0) or 0
                             total_input = inp + cache_create + cache_read
                             session.tokens["input"] = total_input
+                            session.tokens["input_fresh"] = inp
                             session.tokens["output"] = out
 
                         cost = getattr(message, "total_cost_usd", None)
@@ -3598,6 +3634,7 @@ class AgentManager:
         hidden: bool = False,
         selected_browser_ids: list[str] | None = None,
         selected_app_output_ids: list[str] | None = None,
+        selected_setting_ids: list[str] | None = None,
         client_message_id: str | None = None,
     ):
         """Send a follow-up message to an existing session."""
@@ -3725,7 +3762,7 @@ class AgentManager:
         if fast_verdict != "no":
             task = asyncio.create_task(self._run_browser_fast_path(session_id, prompt, selected_browser_ids, fast_brief, fast_verdict))
         else:
-            task = asyncio.create_task(self._run_agent_loop(session_id, prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids, selected_app_output_ids=selected_app_output_ids))
+            task = asyncio.create_task(self._run_agent_loop(session_id, prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids, selected_app_output_ids=selected_app_output_ids, selected_setting_ids=selected_setting_ids))
         self.tasks[session_id] = task
 
     async def _run_browser_fast_path(self, session_id: str, prompt: str, selected_browser_ids: list[str] | None, brief: str = "", verdict: str = "act"):

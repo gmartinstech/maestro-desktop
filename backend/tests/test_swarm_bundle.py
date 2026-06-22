@@ -49,8 +49,8 @@ def test_skill_export_import_round_trip(skill_store):
     # Original is untouched, import lands under a fresh, non-clobbering slug.
     assert root_type == EntityType.skill
     assert root_id != "my-skill"
-    assert (skill_store / "my-skill.md").exists()
-    assert (skill_store / f"{root_id}.md").read_text(encoding="utf-8") == "# hello\nbody text"
+    assert (skill_store / "my-skill.md").exists()  # original flat skill untouched
+    assert (skill_store / root_id / "SKILL.md").read_text(encoding="utf-8") == "# hello\nbody text"
     assert created == {"skill": [root_id]}
 
 
@@ -63,7 +63,7 @@ def test_bare_markdown_import(skill_store):
     finally:
         import shutil
         shutil.rmtree(sandbox, ignore_errors=True)
-    assert (skill_store / f"{root_id}.md").read_text(encoding="utf-8") == "# Just markdown"
+    assert (skill_store / root_id / "SKILL.md").read_text(encoding="utf-8") == "# Just markdown"
 
 
 def test_content_secret_redacted_in_bundle(skill_store):
@@ -503,9 +503,9 @@ def test_skill_rollback_removes_it(skill_store):
     from backend.apps.swarm.entities.skills import SkillExportable
     from backend.apps.swarm.exportable import RemapTable
     sid = SkillExportable.import_({"slug": "rbk", "name": "Rbk", "content": "x"}, {}, RemapTable())
-    assert (skill_store / f"{sid}.md").exists()
+    assert (skill_store / sid / "SKILL.md").exists()
     SkillExportable.rollback(sid)
-    assert not (skill_store / f"{sid}.md").exists()
+    assert not (skill_store / sid).exists()
     assert sid not in store._load_index()
 
 
@@ -528,7 +528,7 @@ def test_commit_rolls_back_created_on_failure(skill_store, tmp_path):
     with pytest.raises(BundleError):
         closure.commit(str(sb), manifest, [])
     assert "rollme" not in store._load_index()
-    assert not (skill_store / "rollme.md").exists()
+    assert not (skill_store / "rollme").exists()  # the imported folder was rolled back
 
 
 def test_manifest_duplicate_ids_rejected():

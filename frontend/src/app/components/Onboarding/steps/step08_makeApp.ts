@@ -33,22 +33,18 @@ export const step08: OnboardingStep = {
       timeoutMs: 60000,
     },
     { kind: 'delay', ms: 350 },
+    // Guide, don't commandeer: point at the chat input and let the user describe
+    // their OWN app. We never type a canned prompt or auto-send, so the tour
+    // doesn't spend a run building something the user didn't choose.
     { kind: 'move_to', target: S.chatInput },
     {
-      kind: 'type_into',
-      target: S.chatInput,
-      text: 'Make me a pdf previewer app',
-      speedMs: 12,
+      kind: 'popup',
+      text: 'Describe any app you want, a tracker, a viewer, a game, type it here and send.',
     },
-    // 120ms pause lets onInput's draft-state commit before clicking; send-button is disabled-while-empty.
-    { kind: 'delay', ms: 120 },
-    { kind: 'move_to', target: S.chatSendButton },
-    { kind: 'click', target: S.chatSendButton, simulate: true },
-    // chat:message_sent only; app:generation_done has too many legitimate completion shapes.
     {
       kind: 'wait_user',
       condition: { kind: 'event_bus', event: 'chat:message_sent' },
-      timeoutMs: 30000,
+      timeoutMs: 180000,
     },
     {
       kind: 'popup',

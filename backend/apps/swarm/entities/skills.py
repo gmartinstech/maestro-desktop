@@ -1,10 +1,13 @@
-"""SkillExportable: skills are leaves (no deps, no requirements). An installed
-skill is just a markdown file plus index metadata, so this also powers the
-generic "import a .md or a zip-of-SKILL.md" path. Nothing here is secret, but
-the body still rides the central scrub in case someone pasted a token into it."""
+"""SkillExportable: skills are leaves (no deps, no requirements). A skill is
+either a single markdown file or a folder (SKILL.md + supporting files like
+scripts/templates), so this powers both the .swarm round-trip AND the generic
+"import a .md or a zip-of-SKILL.md" path. Folder skills ride the entity files()
+channel so their supporting files survive export/import. Nothing here is secret,
+but the body still rides the central scrub in case someone pasted a token in."""
 from __future__ import annotations
 
 import os
+import shutil
 
 from backend.apps.skills import skills as store
 from ..exportable import DepRef, ExportContext, RemapTable
@@ -14,17 +17,18 @@ from ..models import EntityType, Requirement
 class SkillExportable:
     type = EntityType.skill
 
-    def __init__(self, local_id: str, name: str, payload: dict):
+    def __init__(self, local_id: str, name: str, payload: dict, files: dict[str, bytes] | None = None):
         self.local_id = local_id
         self.name = name
         self._payload = payload
+        self._files = files or {}
 
     @classmethod
     def load(cls, local_id: str) -> "SkillExportable | None":
-        fpath = os.path.join(store.SKILLS_DIR, f"{local_id}.md")
-        if not os.path.isfile(fpath):
+        md_path, kind = store._skill_md_path(local_id)
+        if not md_path:
             return None
-        with open(fpath, encoding="utf-8") as f:
+        with open(md_path, encoding="utf-8") as f:
             content = f.read()
         meta = store._load_index().get(local_id, {})
         name = meta.get("name") or local_id.replace("-", " ").replace("_", " ").title()
@@ -36,13 +40,16 @@ class SkillExportable:
             "content": content,
             "builtin": bool(meta.get("built_in", False)),
         }
-        return cls(local_id, name, payload)
+        files: dict[str, bytes] = {}
+        if kind == "folder":
+            files = _read_supporting_files(os.path.join(store.SKILLS_DIR, local_id))
+        return cls(local_id, name, payload, files)
 
     def serialize(self, ctx: ExportContext) -> dict:
         return dict(self._payload)
 
     def files(self) -> dict[str, bytes]:
-        return {}
+        return dict(self._files)
 
     def dependencies(self) -> list[DepRef]:
         return []
@@ -61,35 +68,56 @@ class SkillExportable:
     def import_(cls, payload: dict, files: dict[str, bytes], remap: RemapTable) -> str:
         base = (payload.get("slug") or payload.get("name") or "skill").lower().replace(" ", "-")
         slug = _free_slug(base)
-        os.makedirs(store.SKILLS_DIR, exist_ok=True)
-        fpath = os.path.join(store.SKILLS_DIR, f"{slug}.md")
-        with open(fpath, "w", encoding="utf-8") as f:
-            f.write(payload.get("content", ""))
-        index = store._load_index()
-        # Imported skills are never builtin, even if the source tagged them so.
-        index[slug] = {
+        meta = {
             "name": payload.get("name", slug),
             "description": payload.get("description", ""),
             "command": payload.get("command", slug),
         }
-        store._save_index(index)
-        return slug
-
+        # Every imported skill lands as a folder (SKILL.md + any supporting files),
+        # one path for one-file and multi-file skills alike. write_folder_skill is
+        # path-traversal-safe, so an untrusted bundle can't escape the skill dir.
+        bundle = {"SKILL.md": payload.get("content", "")}
+        for rel, data in files.items():
+            bundle[rel] = data.decode("utf-8", errors="replace")
+        skill = store.write_folder_skill(slug, bundle, meta)
+        return skill.id
 
     @classmethod
     def rollback(cls, local_id: str) -> None:
-        fpath = os.path.join(store.SKILLS_DIR, f"{local_id}.md")
-        if os.path.exists(fpath):
-            os.remove(fpath)
+        skill_dir = os.path.join(store.SKILLS_DIR, local_id)
+        flat = os.path.join(store.SKILLS_DIR, f"{local_id}.md")
+        if os.path.isdir(skill_dir):
+            shutil.rmtree(skill_dir, ignore_errors=True)
+        if os.path.isfile(flat):
+            os.remove(flat)
         index = store._load_index()
         if local_id in index:
             index.pop(local_id, None)
             store._save_index(index)
 
 
+def _read_supporting_files(skill_dir: str) -> dict[str, bytes]:
+    """Every file in a skill folder except SKILL.md, as {relpath: bytes}."""
+    out: dict[str, bytes] = {}
+    for root, _dirs, names in os.walk(skill_dir):
+        for n in names:
+            full = os.path.join(root, n)
+            rel = os.path.relpath(full, skill_dir)
+            if rel == "SKILL.md" or n.startswith("."):
+                continue
+            try:
+                with open(full, "rb") as f:
+                    out[rel] = f.read()
+            except OSError:
+                continue
+    return out
+
+
 def _slug_taken(slug: str) -> bool:
-    return slug in store._load_index() or os.path.isfile(
-        os.path.join(store.SKILLS_DIR, f"{slug}.md")
+    return (
+        slug in store._load_index()
+        or os.path.isfile(os.path.join(store.SKILLS_DIR, f"{slug}.md"))
+        or os.path.isdir(os.path.join(store.SKILLS_DIR, slug))
     )
 
 

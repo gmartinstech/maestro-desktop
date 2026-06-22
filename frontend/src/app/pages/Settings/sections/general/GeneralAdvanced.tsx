@@ -12,6 +12,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import TrustedFilePatterns from '@/app/components/overlays/TrustedFilePatterns';
 import SoftwareUpdateRow from './SoftwareUpdateRow';
 import type { SettingsStyles } from '../settingsStyles';
+import { settingSelectAttrs } from '../settingSelect';
 
 const GeneralAdvanced: React.FC<{
   form: AppSettings;
@@ -38,7 +39,7 @@ const GeneralAdvanced: React.FC<{
     <>
       <Typography sx={{ ...sectionSx, mt: 3 }}>Advanced</Typography>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('dev_mode', 'Developer mode', 'Advanced', 'Show transport details, env vars, and technical metadata throughout the app.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Developer mode</Typography>
           <Typography sx={descSx}>Show transport details, environment variables, raw configs, and other technical metadata throughout the app.</Typography>
@@ -53,7 +54,7 @@ const GeneralAdvanced: React.FC<{
         />
       </Box>
 
-      <Box sx={inlineRowLastSx}>
+      <Box sx={inlineRowLastSx} {...settingSelectAttrs('allow_experimental_updates', 'Experimental updates', 'Advanced', 'Receive pre-release builds with new features earlier.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Experimental updates</Typography>
           <Typography sx={descSx}>Receive pre-release builds with new features earlier. These versions may be less stable than normal releases.</Typography>

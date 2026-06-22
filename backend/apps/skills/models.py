@@ -12,6 +12,11 @@ class Skill(BaseModel):
     command: str = ""
     # Platform-shipped skills (e.g. App Builder): UI hides delete and DELETE returns 409, but content stays editable so users can tune them.
     built_in: bool = False
+    # Multi-file skills live in ~/.claude/skills/<id>/ with a SKILL.md plus supporting files (scripts, templates).
+    # dir_path is set for those; empty for a legacy flat <id>.md skill. has_supporting_files flags extra files
+    # beyond SKILL.md so the prompt layer knows to point the agent at the folder for on-demand reading.
+    dir_path: str = ""
+    has_supporting_files: bool = False
 
 
 class SkillCreate(BaseModel):

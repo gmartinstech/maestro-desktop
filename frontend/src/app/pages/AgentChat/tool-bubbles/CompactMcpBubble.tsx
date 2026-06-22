@@ -15,6 +15,7 @@ import { GoogleServiceIcon } from '../mcp-cards/GoogleServiceIcon';
 import { ElapsedTimer, formatElapsed } from '../parsing/toolBubbleChrome';
 import { useTermColors } from '../parsing/toolColorize';
 import { ParsedResult } from '../parsing/toolResultParsing';
+import { isSettingsWriteTool, settingsWriteSummary } from '../parsing/settingsToolMeta';
 import { McpToolInfo, getMcpShortAction } from '@/shared/mcpToolMeta';
 import { McpResultCard } from '../mcp-cards/McpResultCard';
 
@@ -56,6 +57,9 @@ export const CompactMcpBubble: React.FC<CompactMcpBubbleProps> = ({
   const ServiceIcon = mcpInfo.isMcp && mcpInfo.service
     ? <GoogleServiceIcon service={mcpInfo.service} size={14} />
     : null;
+  // A grouped settings write shows the masked change list (input-derived, so it
+  // reads even while pending) instead of the generic "Applied: theme" result line.
+  const headerSummary = isSettingsWriteTool(toolName) ? settingsWriteSummary(input) : resultSummary;
 
   return (
     <Box {...selectAttrs} sx={{ my: 0 }}>
@@ -83,7 +87,7 @@ export const CompactMcpBubble: React.FC<CompactMcpBubbleProps> = ({
         >
           {serviceLabel}
         </Typography>
-        {resultSummary && !isError && (
+        {headerSummary && !isError && (
           <Typography
             sx={{
               color: c.text.secondary,
@@ -95,10 +99,10 @@ export const CompactMcpBubble: React.FC<CompactMcpBubbleProps> = ({
                 : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
             }}
           >
-            {resultSummary}
+            {headerSummary}
           </Typography>
         )}
-        {!resultSummary && !showTimer && <Box sx={{ flex: 1 }} />}
+        {!headerSummary && !showTimer && <Box sx={{ flex: 1 }} />}
         {showTimer && (
           <>
             <Box sx={{ flex: 1 }} />

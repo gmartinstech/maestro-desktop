@@ -31,7 +31,7 @@ import { useElementSelection } from '@/app/components/editor/ElementSelectionCon
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { searchHistory, clearHistorySearch } from '@/shared/state/agentsSlice';
-import { updateSettings, AppSettings } from '@/shared/state/settingsSlice';
+import { updateSettingsPatch, AppSettings } from '@/shared/state/settingsSlice';
 import { store } from '@/shared/state/store';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import type { Output } from '@/shared/state/outputsSlice';
@@ -158,7 +158,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
       const current = store.getState().settings;
       if (!current.loaded) return;
       if (current.data[key] === value) return;
-      dispatch(updateSettings({ ...current.data, [key]: value }));
+      dispatch(updateSettingsPatch({ [key]: value }));
     }, [dispatch]);
 
     const handleModeChange = useCallback((newMode: string) => {
