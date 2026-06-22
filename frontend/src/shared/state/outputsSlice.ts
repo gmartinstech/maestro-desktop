@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { API_BASE } from '@/shared/config';
 
 const OUTPUTS_API = `${API_BASE}/outputs`;
+const VERSIONS_API = `${API_BASE}/output_versions`;
 
 export const SERVE_BASE = `${API_BASE}/outputs`;
 
@@ -25,6 +26,19 @@ export interface Output {
   published_slug?: string | null;
   published_url?: string | null;
   publish_status?: 'publishing' | 'published' | 'error' | null;
+}
+
+/** One saved point in an app's history. The heavy snapshot lives in a zip on
+ * the backend; this is the lightweight row the History timeline renders. */
+export interface OutputVersion {
+  id: string;
+  created_at: string;
+  label: string;
+  /** auto: saved after a builder change. manual: user saved it. pre_restore: the
+   * automatic backup taken right before a restore, so going back is undoable. */
+  source: 'auto' | 'manual' | 'pre_restore';
+  parent_id?: string | null;
+  thumbnail?: string | null;
 }
 
 export interface PublishStatePatch {
@@ -70,9 +84,13 @@ interface OutputsState {
   items: Record<string, Output>;
   loading: boolean;
   loaded: boolean;
+  // Bumped per app whenever a version is captured (auto after a build, or manual).
+  // Lets an already-open History panel know to refetch without polling or timing
+  // guesses: the editor and the panel are siblings, so this is their only shared signal.
+  captureSignal: Record<string, number>;
 }
 
-const initialState: OutputsState = { items: {}, loading: false, loaded: false };
+const initialState: OutputsState = { items: {}, loading: false, loaded: false, captureSignal: {} };
 
 export const fetchOutputs = createAsyncThunk(
   'outputs/fetch',
@@ -130,6 +148,54 @@ export const executeOutput = createAsyncThunk(
   }
 );
 
+export const fetchOutputVersions = createAsyncThunk(
+  'outputs/versions/fetch',
+  async (outputId: string) => {
+    const res = await fetch(`${VERSIONS_API}/${outputId}`);
+    if (!res.ok) throw new Error(`Versions fetch failed: ${res.status}`);
+    const data = await res.json();
+    return data.versions as OutputVersion[];
+  }
+);
+
+export const captureOutputVersion = createAsyncThunk(
+  'outputs/versions/capture',
+  async ({ id, source, label, thumbnail }: {
+    id: string; source: 'auto' | 'manual'; label?: string; thumbnail?: string | null;
+  }) => {
+    const res = await fetch(`${VERSIONS_API}/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, label: label ?? '', thumbnail: thumbnail ?? null }),
+    });
+    if (!res.ok) throw new Error(`Capture failed: ${res.status}`);
+    return (await res.json()).version as OutputVersion;
+  }
+);
+
+export const restoreOutputVersion = createAsyncThunk(
+  'outputs/versions/restore',
+  async ({ id, versionId }: { id: string; versionId: string }) => {
+    const res = await fetch(`${VERSIONS_API}/${id}/${versionId}/restore`, { method: 'POST' });
+    if (!res.ok) {
+      // Surface the backend's friendly reason (e.g. the 409 "still being edited").
+      let detail = 'Could not restore that version.';
+      try { detail = (await res.json()).detail || detail; } catch { /* keep default */ }
+      throw new Error(detail);
+    }
+    return (await res.json()).output as Output;
+  }
+);
+
+export const branchOutputVersion = createAsyncThunk(
+  'outputs/versions/branch',
+  async ({ id, versionId }: { id: string; versionId: string }) => {
+    const res = await fetch(`${VERSIONS_API}/${id}/${versionId}/branch`, { method: 'POST' });
+    if (!res.ok) throw new Error(`Branch failed: ${res.status}`);
+    return (await res.json()).new_output_id as string;
+  }
+);
+
 const outputsSlice = createSlice({
   name: 'outputs',
   initialState,
@@ -165,6 +231,11 @@ const outputsSlice = createSlice({
       .addCase(fetchOutputs.rejected, (state) => { state.loading = false; state.loaded = true; })
       .addCase(createOutput.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
       .addCase(updateOutput.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
+      .addCase(restoreOutputVersion.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
+      .addCase(captureOutputVersion.fulfilled, (state, action) => {
+        const id = action.meta.arg.id;
+        state.captureSignal[id] = (state.captureSignal[id] ?? 0) + 1;
+      })
       .addCase(deleteOutput.fulfilled, (state, action) => { delete state.items[action.payload]; });
   },
 });
