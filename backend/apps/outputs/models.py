@@ -61,6 +61,20 @@ class Output(BaseModel):
         return self.files.get("backend.py")
 
 
+class OutputVersion(BaseModel):
+    """A saved point in an app's history. The list endpoint returns these; the
+    heavy bits (the serialized app metadata + the workspace byte tree) live in
+    the version's manifest plus content-addressed blobs on disk, not here."""
+    id: str = Field(default_factory=lambda: uuid4().hex)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    label: str = ""
+    # auto: saved after a builder edit run. manual: user clicked Save this version.
+    # pre_restore: the automatic backup taken right before a restore (so restore undoes).
+    source: Literal["auto", "manual", "pre_restore"] = "auto"
+    parent_id: Optional[str] = None
+    thumbnail: Optional[str] = None
+
+
 class OutputCreate(BaseModel):
     name: str
     description: str = ""
