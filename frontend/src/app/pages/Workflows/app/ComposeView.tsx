@@ -74,13 +74,18 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const session = useAppSelector((s) => (sessionId ? s.agents.sessions[sessionId] : undefined));
   const agentBusy = session?.status === 'running' || session?.status === 'waiting_approval';
   const visibleMsgs = (session?.messages || []).filter((m) => !m.hidden).length;
+  // The agent has actually said something back, not just the user's own message
+  // sitting alone in the gap before the turn even starts. Gate the pane + handoff
+  // on THIS: "any message exists" is true the instant you send, so it used to
+  // fling you to the detail page before the agent ever replied.
+  const agentReplied = (session?.messages || []).some((m) => m.role === 'assistant' && !m.hidden);
   // Landing state: the blank page (incl. before the session has loaded, so the
   // right pane starts closed rather than open-then-snap-shut). Gone the moment a
   // message lands or the agent starts working, so its "thinking" never shows here.
   const composeEmpty = !agentBusy && visibleMsgs === 0;
   // Open the pane only once the agent has fully answered (not mid-response, where
   // the chat is reflowing and the slide looks janky). Header toggle overrides it.
-  const autoOpen = !agentBusy && visibleMsgs > 0;
+  const autoOpen = !agentBusy && agentReplied;
   const paneOpen = paneManual ?? autoOpen;
 
   // Once it's revealed (in the sidebar) AND the agent has finished its first
