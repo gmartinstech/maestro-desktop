@@ -65,6 +65,7 @@ from backend.apps.agents.tools.web import should_register_web_mcp
 from backend.apps.agents.manager.session.SessionLifecycleMixin import SessionLifecycleMixin
 from backend.apps.agents.manager.MessagingMixin import MessagingMixin
 from backend.apps.agents.manager.AgentLaunchMixin import AgentLaunchMixin
+from backend.apps.agents.manager.RunSupportMixin import RunSupportMixin
 from backend.apps.agents.manager.permissions import gate_hooks
 from backend.apps.agents.manager.session.workspace_git import _detect_git_identity, _ensure_cwd_git_repo
 from backend.apps.agents.manager.prompt.tool_catalog import (
@@ -82,19 +83,13 @@ from backend.apps.agents.manager.session.history_compaction import (
     _get_branch_messages,
 )
 from backend.apps.agents.manager.prompt.prompt_context import resolve_mode
-from backend.apps.agents.manager.prompt.attachments import (
-    _build_dir_tree,
-    _build_prompt_content,
-    _resolve_attachments,
-    _resolve_context_paths,
-)
 
 logger = logging.getLogger(__name__)
 
 os.environ.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "3600000")
 
 
-class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
+class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunSupportMixin):
     def __init__(self):
         self.sessions: dict[str, AgentSession] = {}
         self.tasks: dict[str, asyncio.Task] = {}
@@ -103,83 +98,8 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
         # multi-second SDK teardown the cancel handler sits behind.
         self._live_partial: Dict[str, LivePartial] = {}
 
-    async def _build_mcp_servers(
-        self,
-        allowed_tools: list[str],
-        active_mcps: list[str] | None = None,
-    ) -> dict:
-        """Build the mcp_servers dict for ClaudeAgentOptions from installed MCP tools.
-
-        Filtering is two-stage:
-          1. allowed_tools (mode/session permission), same as before.
-          2. active_mcps (per-session activation gate), NEW. When this list is
-             provided (non-None), only MCP servers whose sanitized name appears
-             in it are forwarded to the SDK. Empty list means zero MCPs ship.
-             None means legacy / non-gated path (used by sessions created
-             before the gate existed, where active_mcps was implicit-all).
-
-        The activation gate is the dispatch-layer enforcement of the product
-        invariant "all MCP actions only via ToolSearch": the model can only
-        reach an MCP server's tools if the user has approved MCPActivate for
-        that server, which appends to session.active_mcps. The model cannot
-        bypass this by ignoring prompt instructions, the SDK simply receives
-        no MCP definition for unactivated servers.
-
-        Servers whose every sub-tool is denied are skipped entirely.
-        """
-        mcp_servers: dict = {}
-        all_tools = load_all_tools()
-        mcp_tools = [t for t in all_tools if t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")]
-        active_set = set(active_mcps) if active_mcps is not None else None
-        logger.info(
-            f"[MCP-DEBUG] Building MCP servers. {len(mcp_tools)} MCP tools found, "
-            f"allowed_tools has {len(allowed_tools)} entries, "
-            f"active_mcps={'<unset/all>' if active_set is None else sorted(active_set)}"
-        )
-
-        for tool in mcp_tools:
-            tool_ref = f"mcp:{tool.name}"
-            if tool_ref not in allowed_tools and allowed_tools != get_all_tool_names():
-                if not any(tool_ref == at for at in allowed_tools):
-                    logger.info(f"[MCP-DEBUG] SKIPPED {tool.name}: '{tool_ref}' not in allowed_tools")
-                    continue
-
-            server_name = _sanitize_server_name(tool.name)
-            if active_set is not None and server_name not in active_set:
-                logger.info(f"[MCP-DEBUG] GATED {server_name}: not in session.active_mcps, model must call MCPActivate first")
-                continue
-
-            if is_fully_denied(tool):
-                logger.info(f"[MCP-DEBUG] SKIPPED {tool.name}: fully denied")
-                continue
-
-            if tool.auth_type == "oauth2" and tool.auth_status == "connected":
-                if tool.name.lower() in ("discord", "github"):
-                    # Discord uses a shared bot token; GitHub OAuth-app tokens don't
-                    # expire and carry no refresh_token. Nothing to refresh either way.
-                    refreshed = True
-                elif tool.name.lower() == "airtable":
-                    refreshed = await refresh_airtable_token(tool)
-                elif tool.name.lower() == "hubspot":
-                    refreshed = await refresh_hubspot_token(tool)
-                else:
-                    refreshed = await refresh_google_token(tool)
-                logger.info(f"[MCP-DEBUG] {tool.name} token refresh: {'OK' if refreshed else 'FAILED'}")
-
-            config = derive_mcp_config(tool)
-            if config:
-                mcp_servers[server_name] = config
-                env_keys = list(config.get("env", {}).keys())
-                logger.info(f"[MCP-DEBUG] ADDED {server_name}: command={config.get('command')}, args={config.get('args')}, env_keys={env_keys}")
-            else:
-                logger.warning(f"[MCP-DEBUG] {tool.name}: derive_mcp_config returned None")
-
-        logger.info(f"[MCP-DEBUG] Final mcp_servers: {list(mcp_servers.keys())}")
-        return mcp_servers
 
 
-    def _build_dir_tree(self, root: str, max_depth: int = 4, prefix: str = "") -> list[str]:
-        return _build_dir_tree(root, max_depth, prefix)
 
     # ------------------------------------------------------------------
     # Compaction & token guard (Phase 2)
@@ -195,33 +115,10 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
     #     surfaces from the catch-all
     # ------------------------------------------------------------------
 
-    def _maybe_compact(self, session: AgentSession, force: bool = False) -> bool:
-        return context_budget.maybe_compact(session, force)
 
-    async def _emit_context_update(
-        self,
-        session_id: str,
-        session: AgentSession,
-        *,
-        input_tokens: int | None = None,
-        output_tokens: int | None = None,
-        cache_read_tokens: int = 0,
-        cache_read_pct: float = 0.0,
-    ) -> None:
-        return await context_budget.emit_context_update(
-            session_id, session,
-            input_tokens=input_tokens, output_tokens=output_tokens,
-            cache_read_tokens=cache_read_tokens, cache_read_pct=cache_read_pct,
-        )
 
-    def _build_prompt_content(self, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, api_type: str = "anthropic", model: str = ""):
-        return _build_prompt_content(prompt, images, context_paths, forced_tools, attached_skills, api_type, model)
 
-    def _resolve_attachments(self, context_paths: list | None, api_type: str, model: str) -> tuple[str, list[dict], list[str]]:
-        return _resolve_attachments(context_paths, api_type, model)
 
-    def _resolve_context_paths(self, context_paths: list | None) -> str:
-        return _resolve_context_paths(context_paths)
 
     async def _run_agent_loop(self, session_id: str, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, fork_session: bool = False, selected_browser_ids: list[str] | None = None, selected_app_output_ids: list[str] | None = None, selected_setting_ids: list[str] | None = None):
         """Run the Claude Agent SDK query loop for a session."""
@@ -231,7 +128,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
         
         from backend.apps.agents.providers.registry import get_api_type as _get_api_type
         _api = _get_api_type(session.model)
-        prompt_content = self._build_prompt_content(
+        prompt_content = self.p_build_prompt_content(
             prompt, images, context_paths, forced_tools, attached_skills,
             api_type=_api, model=session.model,
         )
@@ -299,7 +196,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
             # Reconcile active_mcps against currently-enabled tools (Phase 3).
             # If the user toggled a server off in the Tools page mid-session,
             # drop it from active_mcps automatically so the model isn't told
-            # "X is active" while _build_mcp_servers silently filters it out.
+            # "X is active" while p_build_mcp_servers silently filters it out.
             # Emit a context_status event so the model and UI both know.
             try:
                 _enabled = {
@@ -348,8 +245,8 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
             # Pass session.active_mcps as the activation filter. Empty list ⇒
             # no MCP tools shipped to the SDK; the model must MCPSearch and
             # MCPActivate first. The product invariant lives here at the
-            # dispatch layer (see _build_mcp_servers docstring).
-            mcp_servers = await self._build_mcp_servers(session.allowed_tools, session.active_mcps)
+            # dispatch layer (see p_build_mcp_servers docstring).
+            mcp_servers = await self.p_build_mcp_servers(session.allowed_tools, session.active_mcps)
 
             _browser_delegation_tools = ["CreateBrowserAgent", "BrowserAgent", "BrowserAgents"]
             _browser_all_denied = all(
@@ -410,7 +307,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
             # Always-on meta-MCP server. Exposes MCPList / MCPSearch /
             # MCPActivate so the model can discover and activate user MCPs at
             # runtime. The activation gate (active_mcps filter in
-            # _build_mcp_servers above) ensures the model cannot reach any
+            # p_build_mcp_servers above) ensures the model cannot reach any
             # other MCP server's tools without going through this layer first.
             mcp_meta_server_path = os.path.join(
                 os.path.dirname(__file__), "mcp_meta_server.py"
@@ -1039,14 +936,14 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
             # programmatic summarization (no aux LLM call) so this adds
             # zero latency on the user's turn.
             try:
-                if self._maybe_compact(session):
+                if self.p_maybe_compact(session):
                     new_input = _estimate_post_compact_input(session)
                     await ws_manager.send_to_session(session_id, "agent:context_status", {
                         "session_id": session_id,
                         "reason": "compacted",
                         "compacted_through_msg_id": session.compacted_through_msg_id,
                     })
-                    await self._emit_context_update(
+                    await self.p_emit_context_update(
                         session_id,
                         session,
                         input_tokens=new_input,
@@ -1374,7 +1271,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
                 session.needs_fresh_session = True
                 # Persist whatever streamed before the cancel (edit / branch
                 # switch paths; the user-stop path already did this in stop_agent).
-                await self._commit_partial_now(session)
+                await self.p_commit_partial_now(session)
             turn.stream_text_msg_id = None
             turn.stream_text_accum = ""
         except Exception as e:
@@ -1663,150 +1560,19 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin):
                 except Exception as e:
                     logger.warning(f"Failed to snapshot session {session_id}: {e}")
 
-    async def _stream_text(self, session_id: str, msg_id: str, text: str, delay: float = 0.03):
-        """Emit stream_start, word-by-word deltas, and stream_end for a text message."""
-        await ws_manager.send_to_session(session_id, "agent:stream_start", {
-            "session_id": session_id,
-            "message_id": msg_id,
-            "role": "assistant",
-        })
-        words = text.split(" ")
-        for i, word in enumerate(words):
-            chunk = word if i == 0 else " " + word
-            await ws_manager.send_to_session(session_id, "agent:stream_delta", {
-                "session_id": session_id,
-                "message_id": msg_id,
-                "delta": chunk,
-            })
-            await asyncio.sleep(delay)
-        await ws_manager.send_to_session(session_id, "agent:stream_end", {
-            "session_id": session_id,
-            "message_id": msg_id,
-        })
-
-    async def _stream_tool_input(self, session_id: str, msg_id: str, tool_name: str, input_json: str, delay: float = 0.02):
-        """Emit stream_start, chunked deltas, and stream_end for a tool_call input."""
-        await ws_manager.send_to_session(session_id, "agent:stream_start", {
-            "session_id": session_id,
-            "message_id": msg_id,
-            "role": "tool_call",
-            "tool_name": tool_name,
-        })
-        chunk_size = 12
-        for i in range(0, len(input_json), chunk_size):
-            await ws_manager.send_to_session(session_id, "agent:stream_delta", {
-                "session_id": session_id,
-                "message_id": msg_id,
-                "delta": input_json[i:i + chunk_size],
-            })
-            await asyncio.sleep(delay)
-        await ws_manager.send_to_session(session_id, "agent:stream_end", {
-            "session_id": session_id,
-            "message_id": msg_id,
-        })
 
 
 
 
-    async def _commit_partial_now(self, session) -> bool:
-        """Persist the in-flight streamed assistant text as a real message and
-        push it to the client, idempotently. Lets a stop show the partial
-        instantly instead of waiting out the SDK teardown the cancel handler
-        sits behind. Returns True if it committed something."""
-        live = self._live_partial.pop(session.id, None)
-        if not live:
-            return False
-        text = live.text or ""
-        msg_id = live.msg_id
-        if not msg_id or not text.strip():
-            return False
-        if any(getattr(m, "id", None) == msg_id for m in session.messages):
-            return False
-        partial = Message(
-            id=msg_id,
-            role="assistant",
-            content=text,
-            branch_id=live.branch_id or session.active_branch_id,
-        )
-        upsert_message(session, partial)
-        try:
-            await ws_manager.send_to_session(session.id, "agent:message", {
-                "session_id": session.id,
-                "message": partial.model_dump(mode="json"),
-            })
-            await ws_manager.send_to_session(session.id, "agent:stream_end", {
-                "session_id": session.id,
-                "message_id": msg_id,
-            })
-        except Exception:
-            pass
-        return True
-
-    async def _drain_task(self, task) -> None:
-        """Await a cancelled task's (possibly slow) teardown off the hot path."""
-        try:
-            await task
-        except (asyncio.CancelledError, Exception):
-            pass
 
 
 
 
-    async def generate_title(self, session_id: str, first_prompt: str) -> str:
-        return await metadata.generate_title(self.sessions.get(session_id), session_id, first_prompt)
 
-    async def generate_turn_label(self, session_id: str, turn_id: str, user_prompt: str) -> None:
-        return await metadata.generate_turn_label(self.sessions.get(session_id), session_id, turn_id, user_prompt)
 
-    async def warm_prompt_cache(self, session_id: str) -> None:
-        """Pre-warm Anthropic's prompt cache for a session by firing a
-        max_tokens=1 dummy request through the same agent path. Anthropic
-        processes the system+tools prefix and writes the cache; the next
-        real user turn lands a cache hit instead of paying cold-start.
 
-        Skips silently if the session doesn't exist, isn't on Anthropic,
-        or has no Anthropic credentials. Skips if a real request is
-        already in flight on this session, Anthropic permits parallel
-        requests but it just wastes the warm.
-        """
-        session = self.sessions.get(session_id)
-        if not session:
-            return
-        # If a real run is in flight, the cache will be warmed by it;
-        # firing again is wasted tokens.
-        existing = self.tasks.get(session_id)
-        if existing and not existing.done():
-            return
 
-        try:
-            from backend.apps.agents.providers.registry import _find_builtin_model
-            entry = _find_builtin_model(session.model)
-            if not entry or entry.get("api") != "anthropic":
-                return  # other providers handle caching automatically
 
-            from backend.apps.settings.credentials import get_anthropic_client
-            global_settings = load_settings()
-            # Free lane rotates pool accounts per call, so a warm ping primes a cache
-            # the next call won't hit, and worse it'd burn a metered run at idle (this
-            # fires on dashboard mount, not a user query). Skip it on the free trial.
-            if getattr(global_settings, "connection_mode", "own_key") == "free-trial":
-                return
-            client = get_anthropic_client(global_settings)
-
-            # Single ping with the same system + minimal user message.
-            # max_tokens=1 keeps it cheap; we don't care about the output.
-            await client.messages.create(
-                model=entry.get("model_id", session.model),
-                max_tokens=1,
-                system="You are a helpful assistant. Reply with one character.",
-                messages=[{"role": "user", "content": "ping"}],
-            )
-            logger.debug(f"Cache pre-warm fired for session {session_id}")
-        except Exception as e:
-            logger.debug(f"Cache pre-warm failed (non-fatal): {e}")
-
-    async def generate_group_meta(self, session_id: str, group_id: str, tool_calls: list[dict], results_summary: list[str] | None = None, is_refinement: bool = False) -> dict:
-        return await metadata.generate_group_meta(self.sessions.get(session_id), session_id, group_id, tool_calls, results_summary, is_refinement)
 
 
 

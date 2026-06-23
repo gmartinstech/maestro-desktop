@@ -203,7 +203,7 @@ class MessagingMixin:
             # teardown, which can take several seconds; doing it here means the
             # streamed text stays put the instant Stop is pressed instead of
             # blinking out and reappearing once teardown finishes.
-            await self._commit_partial_now(session)
+            await self.p_commit_partial_now(session)
             await ws_manager.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": "stopped",
@@ -224,7 +224,7 @@ class MessagingMixin:
         task = self.tasks.pop(session_id, None)
         if task and not task.done():
             task.cancel()
-            asyncio.create_task(self._drain_task(task))
+            asyncio.create_task(self.p_drain_task(task))
 
     @typechecked
     def handle_approval(self, request_id: str, decision: Dict):

@@ -1,6 +1,6 @@
 """Agent run entry points for AgentManager: launch a new top-level run, run the no-SDK mock
 fallback, and the staticmethod invoke_agent helper. Split into a mixin to keep the manager file
-under the size ceiling; self._run_agent_loop / self._stream_text / self.sessions resolve across
+under the size ceiling; self._run_agent_loop / self.p_stream_text / self.sessions resolve across
 the MRO exactly as before."""
 
 import asyncio
@@ -173,7 +173,7 @@ class AgentLaunchMixin:
         import json
         tool_input_content = {"tool": "Bash", "input": {"command": f"echo 'Processing: {prompt}'"}, "approved": decision.get("behavior") == "allow"}
         tool_msg_id = uuid4().hex
-        await self._stream_tool_input(
+        await self.p_stream_tool_input(
             session_id, tool_msg_id, "Bash",
             json.dumps(tool_input_content["input"], indent=2),
         )
@@ -203,7 +203,7 @@ class AgentLaunchMixin:
             f"The agent was configured with:\n- Model: {session.model}\n- Mode: {session.mode}"
         )
         asst_msg_id = uuid4().hex
-        await self._stream_text(session_id, asst_msg_id, asst_text)
+        await self.p_stream_text(session_id, asst_msg_id, asst_text)
 
         asst_msg = Message(id=asst_msg_id, role="assistant", content=asst_text, branch_id=session.active_branch_id)
         session.messages.append(asst_msg)
