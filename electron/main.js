@@ -1225,7 +1225,15 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (isDev && url.startsWith('http://localhost:3000')) return;
+    // Same-origin navigations are the app's own routing (reload, hash routes),
+    // never an external link to pop into a browser card. The old port-specific
+    // exemptions missed prod (renderer on 127.0.0.1:4173, not localhost:3000 or
+    // file://), so a reload, e.g. Restart tour, got intercepted and re-opened
+    // as a browser card loading the app itself (the recursive nested window).
+    try {
+      const current = mainWindow.webContents.getURL();
+      if (current && new URL(url).origin === new URL(current).origin) return;
+    } catch (_) {}
     if (url.startsWith('file://')) return;
     event.preventDefault();
     mainWindow.webContents.send('webview-new-window', url, mainWindow.webContents.id);
@@ -1274,40 +1282,27 @@ function createWindow() {
   // closing windows as part of its pipeline.
   mainWindow.on('close', (e) => {
     console.log(`[diag][main] mainWindow close (quitInitiated=${quitInitiated})`);
-    // macOS close-to-dock: a close that is not part of a real quit (Cmd+Q,
-    // dock Quit, logout, updater — all fire before-quit first, flipping
-    // quitInitiated) gets prevented and the window HIDES instead. This keeps
-    // the renderer, webviews, and running agents fully alive, so both the
-    // user's Cmd+W/red-X and the un-attributed programmatic closer behind
-    // the 1.2.77 self-quits cost nothing: the next dock click shows the
-    // same window back instantly (`activate` below). Real quits must pass
-    // through — preventing a close during app.quit() cancels the quit
-    // (Electron semantics), which is exactly what the flag guards against.
-    // isInstallingUpdate must pass through: native quitAndInstall TERMINATES the app
-    // by closing the window (with quitInitiated still false), so intercepting it here
-    // hides the window and strands the update uninstalled. That was THE bug behind
-    // "Restart & Update does nothing" on Mac. Let that close (and real quits) through.
+    // macOS: the only way to land here with quitInitiated still false is the red
+    // traffic-light button. Cmd+W is swallowed in before-input-event, renderer
+    // window.close() is neutered above, and crash-recovery uses destroy() (which
+    // skips 'close'). So a red-button click means "quit": route it through
+    // app.quit() so before-quit drains the App Builder subprocesses and will-quit
+    // kills the backend, instead of leaving a headless app running. Real quits
+    // (Cmd+Q, dock Quit, logout) flip quitInitiated via before-quit first and pass
+    // straight through. isInstallingUpdate must also pass through: native
+    // quitAndInstall closes the window with quitInitiated still false, and
+    // intercepting it strands the update (THE "Restart & Update does nothing" bug).
     if (process.platform === 'darwin' && !quitInitiated && !isInstallingUpdate) {
       e.preventDefault();
-      // A staged update waiting + a user close = "apply it on the way out". Kick off
-      // the install (arms ShipIt + drives a real quit) instead of just hiding, so the
-      // red button finally updates instead of looping.
+      // A staged update waiting + a user close = "apply it on the way out": the
+      // install arms ShipIt and drives its own quit, so update instead of quitting.
       if (cachedUpdateStatus && cachedUpdateStatus.status === 'downloaded') {
         console.log('[updater] close with a staged update; applying it');
         installDownloadedUpdate();
         return;
       }
-      try {
-        if (thisWindow.isFullScreen()) {
-          // Hiding a fullscreen window strands a black space; leave
-          // fullscreen first, then hide once the transition lands.
-          thisWindow.once('leave-full-screen', () => { try { thisWindow.hide(); } catch (_) {} });
-          thisWindow.setFullScreen(false);
-        } else {
-          thisWindow.hide();
-        }
-        console.log('[diag][main] close intercepted, window hidden (app + agents stay alive)');
-      } catch (_) {}
+      console.log('[diag][main] red-button close, quitting app');
+      app.quit();
     }
   });
   mainWindow.on('closed', () => {
@@ -1770,7 +1765,13 @@ app.whenReady().then(async () => {
       console.log(`[drm-req] ${details.method} ${details.url}`);
       for (const [k, v] of Object.entries(details.requestHeaders || {})) {
         if (/content-type|origin|referer|auth|accept/i.test(k)) {
-          console.log(`[drm-req]   ${k}: ${v}`);
+          // Keep the auth scheme for debugging, never the token itself.
+          let safe = v;
+          if (/authorization/i.test(k)) {
+            const sp = String(v).indexOf(' ');
+            safe = sp > 0 ? `${String(v).slice(0, sp)} <redacted>` : '<redacted>';
+          }
+          console.log(`[drm-req]   ${k}: ${safe}`);
         }
       }
     },
@@ -1929,7 +1930,34 @@ app.whenReady().then(async () => {
   }
 });
 
+// Cmd+W is the default menu's "File > Close Window". Now that the red button
+// routes a close into app.quit(), an unguarded Cmd+W would tear down the whole
+// app + every running agent on a stray tab-close reflex (the exact 1.2.77
+// self-quit class). preventDefault here also blocks the menu accelerator
+// (electron/electron#19279), and because macOS dispatches that accelerator
+// against whichever webContents is focused, we have to guard the main window AND
+// its webview guests, not just one. mac-only; on Windows Ctrl+W is input.control
+// so this no-ops there and leaves that platform's close-on-last-window intact.
+function swallowCloseWindowShortcut(event, input) {
+  if (
+    input.type === 'keyDown' &&
+    process.platform === 'darwin' &&
+    input.meta && !input.control && !input.alt &&
+    (input.key || '').toLowerCase() === 'w'
+  ) {
+    event.preventDefault();
+  }
+}
+
 app.on('web-contents-created', (_event, contents) => {
+  // Block Cmd+W from closing the main window, whether the window chrome or one of
+  // its embedded webviews has focus. OAuth popups (their own 'window' contents,
+  // created while isCreatingMainWindow is false) are left alone so the user can
+  // still Cmd+W them shut.
+  if (isCreatingMainWindow || contents.getType() === 'webview') {
+    contents.on('before-input-event', swallowCloseWindowShortcut);
+  }
+
   // Override the user-agent on popup BrowserWindows (i.e. anything created
   // via window.open from the renderer, which includes the OAuth popup for
   // subscription connect flows). Electron's default UA includes an
@@ -2086,6 +2114,7 @@ app.on('web-contents-created', (_event, contents) => {
       cdpAutoAttachWired.delete(contents.id);
       cdpRoutesByWcId.delete(contents.id);
       webviewConsoleErrors.delete(contents.id);
+      cdpTearingDown.delete(contents.id);
     });
 
     contents.on('render-process-gone', () => {
@@ -2095,6 +2124,7 @@ app.on('web-contents-created', (_event, contents) => {
       cdpAutoAttachWired.delete(contents.id);
       cdpRoutesByWcId.delete(contents.id);
       webviewConsoleErrors.delete(contents.id);
+      cdpTearingDown.delete(contents.id);
     });
 
     // A heavy SPA can HANG the renderer without crashing it (a render-process-gone
@@ -2204,16 +2234,13 @@ app.on('web-contents-created', (_event, contents) => {
 
 app.on('window-all-closed', () => {
   console.log(`[diag][main] window-all-closed (platform=${process.platform}${process.platform === 'darwin' ? ', staying alive' : ', quitting'})`);
-  // macOS: stay alive like a standard Mac app. We never install a custom
-  // application menu, so Electron's DEFAULT menu ships File > Close Window
-  // (Cmd+W) — and with a single window, quitting here turned "close the
-  // window" into "tear down the backend and every running agent". The 1.2.77
-  // prod self-quits all carried this exact signature (window close with no
-  // preceding before-quit). Keeping the process alive de-fangs the whole
-  // class: the dock icon stays, `activate` below reopens against the warm
-  // backend in ~1s, and the [diag][main] close-cause logging identifies the
-  // closer. Explicit quits (Cmd+Q, dock Quit) are untouched — Electron's
-  // quit pipeline runs will-quit -> killBackend regardless of this handler.
+  // macOS: don't quit just because the window list hit zero. The red button now
+  // routes through app.quit() (which drives will-quit -> killBackend itself) and
+  // Cmd+W is swallowed, so the only window-vanish that ISN'T already a real quit
+  // is an unforeseen teardown (a renderer-level destroy that skipped 'close'). For
+  // that stray case we stay alive as a standard Mac app rather than self-quitting
+  // headless, and `activate` below rebuilds the window on the next dock click. The
+  // 1.2.77 self-quits lived exactly here (window close with no before-quit).
   if (process.platform === 'darwin') {
     // An update install closed the window (native quitAndInstall) and now needs the
     // process to actually die so ShipIt can swap + relaunch; finish the quit instead
@@ -2297,9 +2324,10 @@ app.on('will-quit', () => {
 });
 
 app.on('activate', () => {
-  // Dock-click after close-to-dock: the common case is a HIDDEN (not
-  // destroyed) window — just show it again; renderer, webviews, and agents
-  // never stopped, so this is instant and lossless.
+  // Live window still around (minimized, or hidden by some stray path): surface
+  // it instead of building a new one. The red button quits now, so the usual
+  // dock-click-after-close lands in the destroyed-window fallback below; this
+  // branch is the cheap, lossless path for the cases where a window survived.
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
       if (mainWindow.isMinimized()) {
@@ -2563,6 +2591,25 @@ ipcMain.handle('get-install-state', () => {
   }
 });
 
+// Factory reset ("Erase all content and settings"). Stop the backend FIRST so
+// nothing rewrites the dir mid-wipe (on Windows a live process even locks the
+// files), wipe everything under userData/data, then relaunch into a clean first
+// run. install.json lives OUTSIDE /data so the install + affiliate identity
+// survives, exactly like a real reinstall would. Best-effort throughout: a
+// failed kill or wipe still relaunches rather than wedging the user.
+ipcMain.handle('hard-reset', async () => {
+  try { killBackend(); } catch (e) { console.error('[hard-reset] killBackend failed', e); }
+  try {
+    const dataDir = path.join(app.getPath('userData'), 'data');
+    fs.rmSync(dataDir, { recursive: true, force: true });
+    console.log('[hard-reset] wiped data dir');
+  } catch (e) {
+    console.error('[hard-reset] wipe failed', e);
+  }
+  app.relaunch();
+  app.exit(0);
+});
+
 // ---------------------------------------------------------------------------
 // CDP debugger bridge for the browser sub-agent
 // ---------------------------------------------------------------------------
@@ -2583,6 +2630,10 @@ const cdpChildSessions = new Map();   // wcId -> Map<sessionId, {frameId, parent
 const cdpAutoAttachWired = new Set(); // wcIds whose 'message' listener is attached
 const cdpRoutesByWcId = new Map();    // wcId -> Map<routeKey, entry> (tier-2 shadow-API capture)
 const webviewConsoleErrors = new Map(); // wcId -> [{level,message,source,line}] capped warn+error, read via BrowserGetConsole
+// wcIds whose CDP is being cleanly detached on the way to destruction. Blocks a
+// late agent command from RE-attaching (and re-enabling Network/auto-attach) as
+// the webview tears down, which would re-arm the freed-DevToolsSession SIGSEGV.
+const cdpTearingDown = new Set();
 
 function wireChildSessions(wc) {
   const wcId = wc.id;
@@ -2612,11 +2663,14 @@ function wireChildSessions(wc) {
         parentSessionId: sessionId || null,
         url: info.url || '',
       });
-      // Enable perception + network domains and propagate auto-attach into nested OOPIF.
+      // Enable perception domains on the child + propagate auto-attach into nested OOPIF.
+      // Deliberately NO Network.enable here: a child iframe churns constantly, and a
+      // Network notification arriving after the child detaches lands on a freed session
+      // and SIGSEGVs the browser process (the mid-browse crash). Root Network still
+      // captures the page's own routes; we only forgo transient child-iframe routes.
       const sid = params.sessionId;
       wc.debugger.sendCommand('Accessibility.enable', {}, sid).catch(() => {});
       wc.debugger.sendCommand('DOM.enable', {}, sid).catch(() => {});
-      wc.debugger.sendCommand('Network.enable', {}, sid).catch(() => {});
       wc.debugger.sendCommand('Target.setAutoAttach',
         { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sid).catch(() => {});
     } else if (method === 'Target.detachedFromTarget') {
@@ -2634,6 +2688,11 @@ function getWebContentsById(wcId) {
 async function ensureDebuggerAttached(wc) {
   if (!wc || wc.isDestroyed()) {
     throw new Error('webContents is destroyed');
+  }
+  // Once a clean teardown has started, never re-attach: a re-attach here would
+  // re-enable Network + auto-attach right as the session is being freed.
+  if (cdpTearingDown.has(wc.id)) {
+    throw new Error('webContents is tearing down');
   }
   if (wc.debugger.isAttached()) return;
   try {
@@ -2654,6 +2713,25 @@ async function ensureDebuggerAttached(wc) {
   try {
     await raceCdp(wc.debugger.sendCommand('Network.enable', {}), 5000, 'Network.enable');
   } catch (_) {}
+}
+
+// Cleanly tear the DevTools session down BEFORE the webContents is destroyed:
+// turn off the two churn-prone domains (auto-attach, Network) so no child
+// sessions or network observers are live when Chromium frees the session, then
+// detach. Without this, a notification in the mojo pipe lands on a freed
+// DevToolsSession on the browser main thread and SIGSEGVs the whole app.
+// Bounded + fail-open: a wedged pipe must never block the card from closing.
+async function detachCdpCleanly(wc) {
+  if (!wc || wc.isDestroyed()) return;
+  cdpTearingDown.add(wc.id);
+  let attached = false;
+  try { attached = wc.debugger.isAttached(); } catch (_) { return; }
+  if (!attached) return;
+  const drain = (method, params) =>
+    raceCdp(wc.debugger.sendCommand(method, params || {}), 1200, method).catch(() => {});
+  await drain('Target.setAutoAttach', { autoAttach: false, waitForDebuggerOnStart: false, flatten: true });
+  await drain('Network.disable', {});
+  try { wc.debugger.detach(); } catch (_) { /* already detached / gone */ }
 }
 
 // debugger.sendCommand can hang FOREVER when the target's pipe breaks without
@@ -2718,6 +2796,15 @@ ipcMain.handle('send-cdp-command', async (_event, wcId, method, params, sessionI
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
   }
+});
+
+// Called by the renderer right before a browser card unmounts, so its CDP
+// session is drained + detached while the webContents is still alive.
+ipcMain.handle('cdp-detach-clean', async (_event, wcId) => {
+  try {
+    await detachCdpCleanly(getWebContentsById(wcId));
+  } catch (_) { /* fail-open: never block the card's teardown */ }
+  return { ok: true };
 });
 
 // Renderer-side AX index cache helpers — the renderer stores its own copy

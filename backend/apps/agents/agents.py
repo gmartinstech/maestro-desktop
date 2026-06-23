@@ -112,6 +112,7 @@ async def send_message(session_id: str, body: dict):
         hidden=body.get("hidden", False),
         selected_browser_ids=body.get("selected_browser_ids"),
         selected_app_output_ids=body.get("selected_app_output_ids"),
+        selected_setting_ids=body.get("selected_setting_ids"),
         client_message_id=body.get("client_message_id"),
     )
     return {"ok": True}
@@ -128,6 +129,7 @@ async def handle_approval(response: ApprovalResponse):
         "message": response.message,
         "updated_input": response.updated_input,
         "trust_pattern": response.trust_pattern,
+        "set_always_allow": response.set_always_allow,
     })
     return {"ok": True}
 

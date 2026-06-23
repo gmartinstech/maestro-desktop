@@ -12,6 +12,7 @@ from backend.apps.agents.providers.registry import resolve_aux_model
 from backend.apps.settings.credentials import get_anthropic_client_for_model
 from backend.apps.settings.settings import load_settings
 from backend.apps.tools_lib.tools_lib import _load_all as load_all_tools
+from backend.apps.tools_lib.mcp_config import _sanitize_server_name
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,11 @@ CURATED_SHORTLIST: list[CuratedEntry] = [
         "description": "Read and write records, manage bases, tables, and fields in the user's Airtable.",
     },
     {
+        "id": "GitHub",
+        "title": "GitHub",
+        "description": "Repos, issues, pull requests, Actions, code search, gists; when the task involves the user's GitHub.",
+    },
+    {
         "id": "Reddit",
         "title": "Reddit",
         "description": "Browse subreddits, search posts, analyze users; when the task involves public Reddit content.",
@@ -85,8 +91,10 @@ def _is_obviously_local(prompt: str) -> bool:
     return False
 
 
-async def run_preflight(prompt: str, timeout_s: float = 2.0, task_id: str | None = None) -> dict:
-    """Classify the prompt and return {is_vague, suggestions}; never raises."""
+async def run_preflight(prompt: str, timeout_s: float = 8.0, task_id: str | None = None, require_vague: bool = True) -> dict:
+    """Classify the prompt and return {is_vague, suggestions}; never raises. require_vague=False
+    keeps suggestions even on a concrete prompt: used when the agent already proved it needs an
+    integration (it called MCPSearch), so the "don't interrupt concrete tasks" guard no longer applies."""
     default: dict[str, Any] = {"is_vague": False, "suggestions": []}
 
     if not prompt or not prompt.strip():
@@ -112,7 +120,7 @@ async def run_preflight(prompt: str, timeout_s: float = 2.0, task_id: str | None
         result["suggestions"] = [s for s in result["suggestions"] if s is not None]
         result["is_vague"] = bool(result.get("is_vague"))
         # Suppress on concrete prompts; false-positives feel broken (interrupting "refactor foo.ts" to suggest GitHub MCP).
-        if not result["is_vague"]:
+        if require_vague and not result["is_vague"]:
             result["suggestions"] = []
         return result
     except asyncio.TimeoutError:
@@ -136,6 +144,26 @@ def _build_available_shortlist(settings) -> list[CuratedEntry]:
         entry for entry in CURATED_SHORTLIST
         if entry["id"] not in enabled_names and entry["id"] not in dismissed
     ]
+
+
+def offer_for_gated_server(server_name: str, settings) -> CuratedEntry | None:
+    """Mid-run a running agent may reach for a vetted MCP it isn't granted; this maps that
+    server to a one-click connect offer to SHOW the user. Suggest-only by construction: it
+    returns data to display, never an action that grants access, so it cannot widen the MCP
+    surface (activation stays behind MCPActivate + the dispatch gate). Returns None unless the
+    server is vetted AND inactive AND not dismissed, reusing the same filter as the preflight."""
+    if not server_name or not isinstance(server_name, str):
+        return None
+    # The hot-path hands us a sanitized slug ("google-workspace"); curated ids are display names
+    # ("Google Workspace"). Match on the slug of both sides so neither form is a load-bearing string.
+    slug = _sanitize_server_name(server_name)
+    entry = next(
+        (e for e in _build_available_shortlist(settings) if _sanitize_server_name(e["id"]) == slug),
+        None,
+    )
+    if entry is None:
+        return None
+    return {"id": entry["id"], "title": entry["title"], "description": entry["description"], "reason": ""}
 
 
 def _decorate(llm_suggestion: dict, available: list[CuratedEntry]) -> dict | None:

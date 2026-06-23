@@ -137,6 +137,7 @@ SERVER_OWNED_FIELDS = (
     "free_trial_token",
     "free_trial_remaining",
     "free_trial_runs_limit",
+    "free_trial_resets_at",
     "user_id",
     "signin_method",
     "installation_id",
@@ -146,13 +147,85 @@ SERVER_OWNED_FIELDS = (
 )
 
 
+import weakref as _weakref
+
+# One serialization point for EVERY settings write (renderer PUT/PATCH + agent
+# tool), so two writes can't interleave and clobber each other mid read-modify-
+# write. Callers hold it across read->build->save; apply_settings_update itself
+# does NOT acquire it (would deadlock the agent path that reads under it), so
+# every caller wraps apply in it. Created lazily PER event loop: prod has one
+# loop so it's effectively a singleton, but a module-level asyncio.Lock binds to
+# the first loop that uses it and then errors on reuse from another loop (every
+# async test spins a fresh one). WeakKeyDictionary auto-drops a loop's lock once
+# the loop is gone.
+_settings_write_locks: "_weakref.WeakKeyDictionary" = _weakref.WeakKeyDictionary()
+
+
+def settings_write_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _settings_write_locks.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _settings_write_locks[loop] = lock
+    return lock
+
+
 @settings.router.put("")
 async def update_settings(body: AppSettings):
+    async with settings_write_lock():
+        saved = await apply_settings_update(body)
+    return {"ok": True, "settings": saved.model_dump()}
+
+
+@settings.router.patch("")
+async def patch_settings(changes: dict):
+    """Save only the fields the user changed, merged onto the CURRENT on-disk
+    state. The renderer sends a diff (not a stale full object), so a save can't
+    clobber a field something else, an agent, an OAuth connect, changed
+    underneath it. Makes the lost-update unrepresentable: you can't overwrite a
+    field you never sent."""
+    async with settings_write_lock():
+        saved = await apply_settings_patch(changes)
+    return {"ok": True, "settings": saved.model_dump()}
+
+
+async def apply_settings_patch(changes: dict) -> AppSettings:
+    """Merge `changes` onto fresh on-disk settings and persist. Caller holds
+    settings_write_lock so the read is current. Reuses apply_settings_update for
+    every side effect: the object it hands over IS current state plus the diff,
+    which is exactly what a non-clobbering save means."""
+    valid = set(AppSettings.model_fields.keys())
+    data = load_settings().model_dump()
+    for k, v in changes.items():
+        if k in valid:
+            data[k] = v
+    return await apply_settings_update(AppSettings(**data))
+
+
+async def apply_settings_update(body: AppSettings, protect_fields: set[str] | None = None) -> AppSettings:
+    """Persist a full settings object with all the safety side effects: restore
+    server-owned fields, hand the wheel back from the free trial when a real
+    model is connected, reconcile 9router provider connections, and sync
+    analytics/identity. The PUT route and the agent settings tool both call this
+    so the write semantics can't drift between them. Returns the saved body.
+
+    Caller must hold settings_write_lock. `protect_fields` names credential fields
+    that must never be blanked by this write (the agent tool passes the field
+    powering the live run): a SECOND, independent wall behind the endpoint's
+    suicide-guard, so a guard bug still can't disconnect a run."""
     from backend.apps.service.client import sync as _sync
 
     old = load_settings()
     for k in SERVER_OWNED_FIELDS:
         setattr(body, k, getattr(old, k, None))
+
+    # Second wall: if a write tries to clear a credential that's currently set and
+    # flagged as powering this run, restore it (like server-owned fields). The
+    # endpoint guard already strips these; this is the backstop that can't be
+    # bypassed by a logic slip upstream.
+    for f in (protect_fields or ()):
+        if getattr(old, f, None) and not getattr(body, f, None):
+            setattr(body, f, getattr(old, f, None))
 
     # If the user connects their own model while the free trial is armed, hand
     # the wheel back to their provider. Without this, connection_mode (server-
@@ -271,7 +344,7 @@ async def update_settings(body: AppSettings):
             any_keyed_added,
         ))
 
-    return {"ok": True, "settings": body.model_dump()}
+    return body
 
 
 class AppThemeOverridePayload(BaseModel):
@@ -318,6 +391,33 @@ async def reset_system_prompt():
     current.default_system_prompt = DEFAULT_SYSTEM_PROMPT
     await save_settings_async(current)
     return {"ok": True, "settings": current.model_dump()}
+
+
+# A preferences reset (the iOS "Reset All Settings" analogue): everything back to
+# defaults EXCEPT the things a "reset my preferences" click must never silently
+# sever, your connections (server-owned subscription fields AND your pasted
+# provider credentials) and your identity. Hard-erase is the separate flow.
+_RESET_PRESERVE_FIELDS = SERVER_OWNED_FIELDS + (
+    "anthropic_api_key",
+    "openai_api_key",
+    "google_api_key",
+    "openrouter_api_key",
+    "custom_providers",
+    "user_name",
+    "user_email",
+    "analytics_opt_in",
+    "first_opened_at",
+)
+
+
+@settings.router.post("/reset-to-defaults")
+async def reset_to_defaults():
+    old = load_settings()
+    fresh = AppSettings()
+    for k in _RESET_PRESERVE_FIELDS:
+        setattr(fresh, k, getattr(old, k, None))
+    await save_settings_async(fresh)
+    return {"ok": True, "settings": fresh.model_dump()}
 
 
 class BrowseResponse(BaseModel):

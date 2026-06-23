@@ -10,12 +10,14 @@ forced cheap model; this module only mirrors state into settings and 9Router.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
 import platform
 import re
 import subprocess
+import time
 
 import httpx
 
@@ -138,6 +140,13 @@ async def clear_free_trial(settings_obj) -> None:
     (so the UI knows it's spent) and never touches a real paid mode."""
     if getattr(settings_obj, "connection_mode", "own_key") == "free-trial":
         settings_obj.connection_mode = "own_key"
+        # arm() pinned default_model to "haiku" for the free run; once the wheel is
+        # handed back, don't let that forced pick linger (it'd silently default a
+        # real subscription user to Haiku). "sonnet" is the fresh default; the
+        # frontend's DefaultModelGuard reconciles it to a reachable model if the
+        # connected provider isn't Anthropic.
+        if getattr(settings_obj, "default_model", None) == "haiku":
+            settings_obj.default_model = "sonnet"
     settings_obj.free_trial_token = None
     await save_settings_async(settings_obj)
     await _sync_routing(settings_obj)
@@ -151,7 +160,35 @@ async def arm_free_trial(settings_obj) -> dict:
     mode = getattr(settings_obj, "connection_mode", "own_key")
     if mode not in ("own_key", "free-trial"):
         return {"armed": False, "reason": "other_mode"}
-    if _has_own_model(settings_obj) or await _has_connected_subscription():
+    own = _has_own_model(settings_obj)
+    has_sub = False
+    if not own:
+        # A subscription lives in 9Router, not settings, and 9Router now starts in
+        # the BACKGROUND (non-blocking boot), so at first-launch mint time it isn't
+        # up yet. Without this wait _has_connected_subscription() reads False and
+        # we'd arm the free trial OVER a real Claude/ChatGPT/Gemini sub, pinning the
+        # user to Haiku until they manually reload. Bring 9Router up so the sub is
+        # actually visible before we decide. Bounded + idempotent (shares the start
+        # lock with the boot auto-start), and skipped when a settings-level model
+        # already proves there's nothing to shadow.
+        try:
+            from backend.apps.nine_router import ensure_running as _ensure_9r
+            await _ensure_9r()
+        except Exception:
+            pass
+        # 9Router's /api/providers can lag /v1/models (what is_running probes) by a
+        # beat on a cold start, so a real sub can read as absent for a sub-second
+        # window. Re-check a few times before concluding "no sub", so we never arm
+        # over a sub that's merely still loading. CAPPED on purpose: a genuinely
+        # sub-less user exhausts these in ~1.2s and falls through to arm, so this
+        # never waits on a subscription that doesn't exist.
+        for _i in range(5):
+            if await _has_connected_subscription():
+                has_sub = True
+                break
+            if _i < 4:
+                await asyncio.sleep(0.3)
+    if own or has_sub:
         # A real model exists now (key, custom provider, or a 9Router sub). If we
         # were on the free lane, hand the wheel back instead of re-arming.
         if mode == "free-trial":
@@ -227,8 +264,14 @@ async def refresh_free_trial(settings_obj) -> dict:
     data = r.json()
     remaining = int(data.get("runs_remaining") or 0)
     settings_obj.free_trial_remaining = remaining
+    # Stash an absolute refill time so the spent nudge can say "fresh runs in ~3h". Set before
+    # clearing (clear keeps it) so it survives the hand-back to own_key. Relative -> absolute here
+    # because the client reads it much later than we fetched it.
+    resets_in = data.get("resets_in_seconds")
+    if isinstance(resets_in, (int, float)) and resets_in > 0:
+        settings_obj.free_trial_resets_at = time.time() + float(resets_in)
     if remaining <= 0:
         await clear_free_trial(settings_obj)
-        return {"connected": False, "runs_remaining": 0}
+        return {"connected": False, "runs_remaining": 0, "resets_at": getattr(settings_obj, "free_trial_resets_at", None)}
     await save_settings_async(settings_obj)
     return {"connected": True, "runs_remaining": remaining, "runs_limit": getattr(settings_obj, "free_trial_runs_limit", None)}

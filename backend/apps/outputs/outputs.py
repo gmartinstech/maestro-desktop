@@ -12,8 +12,14 @@ from backend.config.Apps import SubApp
 from backend.apps.outputs.models import (
     Output, OutputCreate, OutputUpdate, OutputExecute, OutputExecuteResult,
     VibeCodeRequest, WorkspaceSeedRequest,
+    PublishPreflightRequest, PublishRequest, PublishPreflightResponse,
+    PublishResult, PublishReview,
 )
 from backend.apps.outputs.executor import execute_backend_code, get_code_warnings
+from backend.apps.outputs.publish_common import slugify, PublishError
+from backend.apps.outputs.publish_scan import scan_for_publish, quick_ast_gate
+from backend.apps.outputs.publish_build import build_static, collect_bundle
+from backend.apps.outputs.publish_cloud import upload_to_cloud, unpublish_from_cloud
 from backend.apps.outputs.view_builder_templates import (
     VIEW_TEMPLATE_FILES,
     load_app_builder_skill,
@@ -87,7 +93,7 @@ async def serve_workspace_file(workspace_id: str, filepath: str, _d: str = ""):
     if filepath == "index.html":
         input_json, result_json = _decode_data_param(_d) if _d else ("{}", "null")
         backend_url_json = _backend_url_for_workspace(workspace_id)
-        content = _inject_data_into_html(content, input_json, result_json, backend_url_json)
+        content = _inject_data_into_html(content, input_json, result_json, backend_url_json, with_runtime=True)
         # Iframe sub-resource fetches (<link>, <script src>, <img>) drop the
         # parent's ?token= query string, so rewrite the HTML to put the token
         # back on every relative URL; otherwise sub-resources 401.
@@ -108,7 +114,7 @@ async def serve_output_file(output_id: str, filepath: str, _d: str = ""):
     if filepath == "index.html":
         input_json, result_json = _decode_data_param(_d) if _d else ("{}", "null")
         backend_url_json = _backend_url_for_workspace(output.workspace_id) if output.workspace_id else "null"
-        content = _inject_data_into_html(content, input_json, result_json, backend_url_json)
+        content = _inject_data_into_html(content, input_json, result_json, backend_url_json, with_runtime=True)
         content = _inject_token_into_relative_urls(content, get_auth_token())
 
     mime, _ = mimetypes.guess_type(filepath)
@@ -454,6 +460,33 @@ async def runtime_get_status(workspace_id: str):
     return _runtime_status_payload(workspace_id)
 
 
+@outputs.router.post("/workspace/{workspace_id}/runtime/report-error")
+async def runtime_report_error(workspace_id: str, body: dict):
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    rt = runtime_manager.get(workspace_id)
+    if rt is None:
+        return {"ok": False, "recorded": 0}
+    message = (body.get("message") or "").strip()
+    component_stack = (body.get("componentStack") or "").strip()
+    if not message:
+        return {"ok": False, "recorded": 0}
+    composed = message
+    if component_stack:
+        composed = f"{composed}\n{component_stack}"
+    rt.set_render_error(composed)
+    return {"ok": True, "recorded": 1}
+
+
+@outputs.router.post("/workspace/{workspace_id}/runtime/report-ready")
+async def runtime_report_ready(workspace_id: str):
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    rt = runtime_manager.get(workspace_id)
+    if rt is None:
+        return {"ok": False}
+    rt.set_render_ok()
+    return {"ok": True}
+
+
 @outputs.router.post("/shutdown-all")
 async def runtime_shutdown_all():
     """Reap every workspace subprocess. Electron POSTs this during
@@ -527,7 +560,6 @@ async def create_output(body: OutputCreate):
         updated_at=now,
     )
     _save(output)
-    pass
     return {"ok": True, "output": output.model_dump()}
 
 
@@ -555,6 +587,8 @@ async def delete_output(output_id: str):
     path = os.path.join(DATA_DIR, f"{output_id}.json")
     if os.path.exists(path):
         os.remove(path)
+    from backend.apps.outputs import versions
+    versions.delete_all(output_id)
     return {"ok": True}
 
 
@@ -620,7 +654,6 @@ async def vibe_code(body: VibeCodeRequest):
                 raw = raw[:-3]
 
         result = json.loads(raw)
-        pass
         return {
             "message": result.get("message", "View updated."),
             "frontend_code": result.get("frontend_code", body.current_frontend_code),
@@ -705,5 +738,89 @@ async def execute_output(body: OutputExecute):
         warnings=warnings_out if warnings_out else None,
         code_preview=code_preview,
     ).model_dump()
+
+
+# ---------------------------------------------------------------------------
+# Publishing to {slug}.openswarm.host
+# ---------------------------------------------------------------------------
+
+@outputs.router.post("/publish/preflight")
+async def publish_preflight(body: PublishPreflightRequest):
+    """Scan the app (AST + an aux-LLM pass on the user's own creds) and return a
+    review. No build, no cloud call; this just drives the security modal."""
+    output = _load(body.output_id)
+    review = await scan_for_publish(output, load_settings())
+    return PublishPreflightResponse(review=review).model_dump()
+
+
+@outputs.router.post("/publish")
+async def publish_output(body: PublishRequest):
+    """Build (webapp) + bundle + upload to the cloud host. `force` skips the
+    cheap AST safety net (the user already saw the findings in the review modal)."""
+    output = _load(body.output_id)
+    settings = load_settings()
+    if not body.force:
+        ast = quick_ast_gate(output)
+        if ast:
+            return PublishResult(
+                ok=False,
+                blocked=True,
+                review=PublishReview(verdict="warn", findings=ast),
+            ).model_dump()
+
+    output.publish_status = "publishing"
+    output.publish_error = None
+    _save(output)
+    try:
+        dist = await build_static(output)
+        bundle = collect_bundle(output, dist)
+        slug_hint = slugify(body.slug or output.name)
+        res = await upload_to_cloud(
+            settings,
+            output_id=output.id,
+            name=output.name,
+            slug_hint=slug_hint,
+            bundle=bundle,
+            override=body.force,
+        )
+    except PublishError as e:
+        output.publish_status = "error"
+        output.publish_error = str(e)
+        _save(output)
+        return PublishResult(ok=False, error=str(e)).model_dump()
+    except Exception as e:
+        logger.exception("publish failed for %s", output.id)
+        output.publish_status = "error"
+        output.publish_error = "Something went wrong while publishing."
+        _save(output)
+        return PublishResult(ok=False, error=output.publish_error).model_dump()
+
+    output.published_slug = res.get("slug")
+    output.published_url = res.get("url")
+    output.publish_status = "published"
+    output.publish_error = None
+    _save(output)
+    return PublishResult(
+        ok=True,
+        published_slug=output.published_slug,
+        published_url=output.published_url,
+    ).model_dump()
+
+
+@outputs.router.post("/unpublish")
+async def unpublish_output(body: PublishPreflightRequest):
+    """Take the app offline and clear its publish state."""
+    output = _load(body.output_id)
+    if output.published_slug:
+        try:
+            await unpublish_from_cloud(load_settings(), output.published_slug)
+        except PublishError as e:
+            return {"ok": False, "error": str(e)}
+    output.published_slug = None
+    output.published_url = None
+    output.publish_status = None
+    output.publish_error = None
+    _save(output)
+    return {"ok": True}
 
 

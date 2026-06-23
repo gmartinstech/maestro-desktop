@@ -6,7 +6,7 @@ const SELECT_ATTR = 'data-select-type';
 const SELECT_ID_ATTR = 'data-select-id';
 const SELECT_META_ATTR = 'data-select-meta';
 
-const DRAG_SELECT_TYPES = ['agent-card', 'view-card', 'browser-card', 'workflow-card'] as const;
+const DRAG_SELECT_TYPES = ['agent-card', 'view-card', 'browser-card', 'workflow-card', 'settings-option'] as const;
 const DRAG_SELECTOR = DRAG_SELECT_TYPES.map((t) => `[${SELECT_ATTR}="${t}"]`).join(',');
 
 // The Workflows app window is a full app surface, not a card you attach as
@@ -44,6 +44,7 @@ const SEMANTIC_LABELS: Record<string, string> = {
   'browser-card': 'Browser',
   'workflow-card': 'Workflow',
   'workflows-hub-card': 'Workflows',
+  'settings-option': 'Setting',
 };
 
 function findSelectableAncestor(target: Element, excludeId?: string | null): Element | null {

@@ -40,12 +40,18 @@ fi
 # Fast path: the seeder usually symlinks node_modules to a shared warm
 # cache (~/.openswarm/cache/webapp_template_node_modules/<hash>), so the
 # dependency install has already been done once and we can skip straight
-# to vite. Only run npm install when node_modules is genuinely missing
-# or empty — e.g. a workspace seeded before the warm-cache existed, or
-# the user's cache was cleared.
-if [ -d node_modules ] && [ -n "$(ls -A node_modules 2>/dev/null)" ]; then
-    echo "Dependencies already present — skipping install."
+# to vite. A non-empty node_modules is NOT proof of a finished install
+# (npm links .bin/* last, so a killed install leaves trees but no bin and
+# vite dies with "command not found"); gate on the bin we actually launch.
+if [ -e node_modules/.bin/vite ]; then
+    echo "Dependencies already present - skipping install."
 else
+    # Incomplete tree. If node_modules is a SYMLINK to the shared warm cache,
+    # never install through it: that writes into the cache every other app
+    # shares (corruption) and stampedes when several apps boot at once. Drop
+    # the link and install a private tree so this app heals alone while the
+    # backend's background warmer rebuilds the shared cache for everyone else.
+    [ -L node_modules ] && rm -f node_modules
     echo "Installing dependencies..."
     "$NPM" install --prefer-offline --no-audit --no-fund
 fi
@@ -54,7 +60,7 @@ echo "Building with development mode..."
 # Prefer `npm run dev` (honors package.json script + flags). But the
 # packaged build ships node.exe WITHOUT npm, so on a machine with no
 # system npm we fall back to invoking vite directly through the bundled
-# node — node_modules is already populated (warm-cache symlink or seed),
+# node; node_modules is already populated (warm-cache symlink or seed),
 # so vite's bin is present and this needs no package manager at all.
 if command -v "$NPM" &>/dev/null || [[ "$NPM" != "npm" ]]; then
     "$NPM" run dev

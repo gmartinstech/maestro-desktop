@@ -98,6 +98,35 @@ def _build_connected_tools_context(allowed_tools: list[str], get_all_tool_names:
     )
 
 
+# A run of this many ToolSearch calls with no other tool between them is the
+# "looping on ToolSearch" wedge: the model hunts for a gated MCP server's tools,
+# which ToolSearch can never see, gets empty results, and retries. Two free
+# calls (a power user with many activated MCPs may legitimately ToolSearch to
+# load a deferred tool); redirect on the third.
+TOOLSEARCH_LOOP_THRESHOLD = 3
+
+
+def toolsearch_loop_redirect(consecutive_toolsearch: int, gated_servers: list[str]) -> str | None:
+    """The feedback to hand a model that's stuck calling ToolSearch in a row.
+    None until it crosses the threshold; then a steer toward MCPActivate (the
+    only path to a gated server) plus a reminder its other tools are already
+    loaded. Pure so the loop-break boundary is unit-testable."""
+    if consecutive_toolsearch < TOOLSEARCH_LOOP_THRESHOLD:
+        return None
+    reason = (
+        "ToolSearch can't load anything here, every tool you can use is already "
+        "active and callable by name, so there's nothing to search for. "
+    )
+    if gated_servers:
+        reason += (
+            "If you need an app you don't see yet (email, calendar, drive, etc.), "
+            "it's gated: call MCPActivate(server_name) with one of these and its "
+            f"tools become callable next turn: {', '.join(gated_servers)}. "
+        )
+    reason += "Stop calling ToolSearch."
+    return reason
+
+
 def _build_browser_context(dashboard_id: str | None, selected_browser_ids: list[str] | None = None) -> str | None:
     """Build a context block listing browser cards and delegation instructions.
 
@@ -233,6 +262,28 @@ def _build_selected_app_context(selected_app_output_ids: list[str] | None) -> st
     )
 
 
+def _build_selected_settings_context(selected_setting_ids: list[str] | None) -> str | None:
+    """Context block when the user points the agent at specific Settings rows.
+
+    A targeting aid, NOT a gate: the settings tools (SettingsRead/SettingsWrite)
+    are always available regardless. This just focuses the agent on the exact
+    fields the user clicked. Ids are AppSettings field names (e.g. 'theme',
+    'default_model'), so no label map to drift out of date."""
+    ids = [s for s in (selected_setting_ids or []) if s]
+    if not ids:
+        return None
+    bullets = "\n".join(f"- {fid}" for fid in ids)
+    return (
+        "<selected_settings>\n"
+        "The user pointed you at these specific OpenSwarm Settings fields. Focus "
+        "on them: call SettingsRead to see their current values, then "
+        "SettingsWrite to change what the user asked for. Leave unrelated "
+        "settings alone.\n"
+        f"{bullets}\n"
+        "</selected_settings>"
+    )
+
+
 def _build_mcp_registry_summary(allowed_tools: list[str], active_mcps: list[str], get_all_tool_names: Callable[[], list[str]]) -> str | None:
     """Compact registry of installed MCP servers, one line per server.
 
@@ -303,6 +354,12 @@ def _build_mcp_registry_summary(allowed_tools: list[str], active_mcps: list[str]
         "gate and don't share auth with this app. If the user wants Gmail/"
         "Calendar/Drive, the equivalent OpenSwarm server is listed below; "
         "activate that one via MCPActivate instead."
+    )
+    sections.append(
+        "1b. The native `ToolSearch` tool CANNOT see these servers, they're "
+        "hidden from it until activated, so searching for them returns nothing "
+        "and just burns turns. Never ToolSearch for an app/integration; go "
+        "straight to MCPActivate."
     )
     sections.append(
         "2. After MCPActivate returns, end the turn, a follow-up turn fires "
@@ -402,13 +459,39 @@ def _resolve_forced_tools(forced_tools: list[str] | None) -> str:
 
 
 def _resolve_attached_skills(attached_skills: list | None) -> str:
-    """Build a context block injecting attached skill content into the prompt."""
+    """Build a context block injecting attached skill content into the prompt.
+
+    For a multi-file (folder) skill we inject the SKILL.md body as text AND point
+    the agent at the folder so it can read supporting files (scripts, templates)
+    on demand with the normal Read/Glob/Bash tools. That keeps skills fully
+    provider-agnostic: plain prompt text plus universal file tools, identical on
+    Claude, OpenAI, Gemini, or any custom model routed through 9router. The
+    folder lookup is resolved backend-side from the skill id so the frontend
+    send payload stays a simple {id, name, content}."""
     if not attached_skills:
         return ""
+    folder_by_id: dict[str, str] = {}
+    try:
+        from backend.apps.skills.skills import _sync_skills
+        for s in _sync_skills():
+            if s.dir_path and s.has_supporting_files:
+                folder_by_id[s.id] = s.dir_path
+    except Exception:
+        folder_by_id = {}
+
     sections = []
     for skill in attached_skills:
         name = skill.get("name", "Unknown")
         content = skill.get("content", "")
-        if content:
-            sections.append(f"[Using skill: {name}]\n\n{content}")
+        if not content:
+            continue
+        block = f"[Using skill: {name}]\n\n{content}"
+        folder = folder_by_id.get(skill.get("id", ""))
+        if folder:
+            block += (
+                f"\n\nThis skill bundles supporting files in {folder}. "
+                "Read them with your normal file tools (Read / Glob / Bash) when "
+                "the steps above call for one; don't guess their contents."
+            )
+        sections.append(block)
     return "\n\n".join(sections)

@@ -59,6 +59,7 @@ import ToolCallBubble, { ToolPair } from './tool-bubbles/ToolCallBubble';
 import ToolGroupBubble, { RenderItem, ToolGroup, isToolGroup, isToolPair } from './tool-bubbles/ToolGroupBubble';
 import ApprovalBar, { BatchApprovalBar } from './shell/ApprovalBar';
 import ForceStopAgentBar from './ForceStopAgentBar';
+import { RateLimitPill } from './shell/RateLimitPill';
 import ChatInput, { ChatInputHandle } from './ChatInput';
 import ContextDrawer from './shell/ContextDrawer';
 import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
@@ -240,6 +241,7 @@ interface QueuedMessage {
   selectedBrowserIds?: string[];
   selectedAppIds?: string[];
   attachedRunId?: string;
+  selectedSettingIds?: string[];
 }
 
 interface AgentChatProps {
@@ -267,7 +269,7 @@ interface AgentChatProps {
   onSendRunQuestion?: (prompt: string, runId: string) => Promise<void>;
 }
 
-const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose, embedded, autoFocus, initialContextPaths, onBranch, workflowEditId, readOnly, prefillPrompt, runContext, onClearRunContext, onSendRunQuestion }) => {
+const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose, embedded, autoFocus, isGlowing, onDismissGlow, initialContextPaths, onBranch, workflowEditId, readOnly, prefillPrompt, runContext, onClearRunContext, onSendRunQuestion }) => {
   const c = useClaudeTokens();
   const STATUS_STYLES: Record<string, { color: string; bg: string }> = {
     running: { color: c.status.success, bg: c.status.successBg },
@@ -480,7 +482,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       // the instant you send (looked like "the chat quit when I clicked an option").
       if (session?.dashboard_id) config.dashboard_id = session.dashboard_id;
       dispatch(
-        launchAndSendFirstMessage({ draftId: id, config, prompt: msg.prompt, mode, model, images: msg.images, contextPaths: msg.contextPaths, forcedTools: msg.forcedTools, attachedSkills: msg.attachedSkills, selectedBrowserIds: msg.selectedBrowserIds, selectedAppIds: msg.selectedAppIds })
+        launchAndSendFirstMessage({ draftId: id, config, prompt: msg.prompt, mode, model, images: msg.images, contextPaths: msg.contextPaths, forcedTools: msg.forcedTools, attachedSkills: msg.attachedSkills, selectedBrowserIds: msg.selectedBrowserIds, selectedAppIds: msg.selectedAppIds, selectedSettingIds: msg.selectedSettingIds })
       ).then((action) => {
         if (launchAndSendFirstMessage.fulfilled.match(action)) {
           const realId = action.payload.session.id;
@@ -498,7 +500,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       if (msg.selectedBrowserIds?.length) {
         dispatch(setGlowingBrowserCards({ browserIds: msg.selectedBrowserIds, sessionId: id, label: 'Use Browser' }));
       }
-      dispatch(sendMessageThunk({ sessionId: id, prompt: msg.prompt, mode, model, images: msg.images, contextPaths: msg.contextPaths, forcedTools: msg.forcedTools, attachedSkills: msg.attachedSkills, selectedBrowserIds: msg.selectedBrowserIds, selectedAppIds: msg.selectedAppIds }))
+      dispatch(sendMessageThunk({ sessionId: id, prompt: msg.prompt, mode, model, images: msg.images, contextPaths: msg.contextPaths, forcedTools: msg.forcedTools, attachedSkills: msg.attachedSkills, selectedBrowserIds: msg.selectedBrowserIds, selectedAppIds: msg.selectedAppIds, selectedSettingIds: msg.selectedSettingIds }))
         .then((action) => {
           if (sendMessageThunk.rejected.match(action)) {
             setAwaitingResponse(false);
@@ -927,10 +929,11 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       attachedSkills?: Array<{ id: string; name: string; content: string }>,
       selectedBrowserIds?: string[],
       selectedAppIds?: string[],
+      selectedSettingIds?: string[],
     ) => {
       if (!id) return;
       scrollToBottom();
-      const msg: QueuedMessage = { prompt, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds, selectedAppIds, attachedRunId: runContextRef.current?.runId };
+      const msg: QueuedMessage = { prompt, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds, selectedAppIds, selectedSettingIds, attachedRunId: runContextRef.current?.runId };
       if (agentBusy) {
         messageQueueRef.current.push(msg);
         setQueueLength(messageQueueRef.current.length);
@@ -964,8 +967,8 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (!isDraft) dispatch(updateThinkingLevel({ sessionId: id, level }));
   }, [id, isDraft, dispatch]);
 
-  const handleApprove = (requestId: string, updatedInput?: Record<string, any>, trustPattern?: boolean) => {
-    dispatch(handleApproval({ requestId, behavior: 'allow', updatedInput, trustPattern }));
+  const handleApprove = (requestId: string, updatedInput?: Record<string, any>, trustPattern?: boolean, alwaysAllow?: boolean) => {
+    dispatch(handleApproval({ requestId, behavior: 'allow', updatedInput, trustPattern, setAlwaysAllow: alwaysAllow }));
   };
 
   const handleDeny = (requestId: string, message?: string) => {
@@ -1009,7 +1012,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     setShowResumeBubble(false);
     dispatch(sendMessageThunk({
       sessionId: id,
-      prompt: "Continue where you left off. Start you're response EXACTLY with 'Sorry, let me pick up where I left off",
+      prompt: "Continue your previous response from exactly where it was cut off. Do not repeat anything you already wrote; pick up mid-sentence if you need to and keep going.",
       mode,
       model,
       hidden: true,
@@ -1826,6 +1829,84 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 />
               </Box>
             )}
+            {/* Connect offer sits BELOW the latest reply (where the eye is), not at the top of the
+                transcript where the auto-scroll-to-bottom buries it. Suggest-only; activation is the
+                user's click through the gated MCPActivate endpoint. */}
+            {(session.mcp_suggestions && session.mcp_suggestions.length > 0) && (
+              <Box sx={{ mt: 1, mb: 1, px: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5, overflowAnchor: 'none' }}>
+                {session.mcp_suggestions.map((s) => (
+                  <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="caption" sx={{ color: c.text.secondary, flex: 1, minWidth: 0 }}>
+                      Connect{' '}
+                      <Box component="span" sx={{ color: c.text.primary, fontWeight: 500 }}>{s.title}</Box>
+                      {' '}so the agent can do this
+                    </Typography>
+                    <Typography
+                      component="button"
+                      variant="caption"
+                      disabled={activatingMcp === s.id}
+                      onClick={async () => {
+                        if (activatingMcp) return;
+                        setActivateError(null);
+                        setActivatingMcp(s.id);
+                        try {
+                          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                          const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
+                          if (tok) headers['Authorization'] = `Bearer ${tok}`;
+                          const r = await fetch(`${API_BASE}/mcp-meta/activate`, {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify({
+                              server_name: s.id.toLowerCase().replace(/\s+/g, '-'),
+                              reason: s.reason || 'preflight suggestion',
+                              parent_session_id: session.id,
+                            }),
+                          });
+                          const body = await r.json().catch(() => ({} as any));
+                          if (!r.ok) {
+                            setActivateError(`Activation failed (${r.status})`);
+                          } else if (body?.status === 'unknown_server') {
+                            // Not yet connected; jump to Actions so the user can finish OAuth.
+                            navigate('/actions');
+                          } else if (id) {
+                            dispatch(clearMcpSuggestions({ sessionId: id }));
+                          }
+                        } catch (e: any) {
+                          setActivateError(e?.message || 'Activation failed');
+                        } finally {
+                          setActivatingMcp(null);
+                        }
+                      }}
+                      sx={{
+                        border: 'none',
+                        background: 'none',
+                        p: 0,
+                        color: c.accent.primary,
+                        cursor: activatingMcp === s.id ? 'wait' : 'pointer',
+                        opacity: activatingMcp === s.id ? 0.5 : 1,
+                        '&:hover': { textDecoration: activatingMcp ? 'none' : 'underline' },
+                        flexShrink: 0,
+                      }}
+                    >
+                      {activatingMcp === s.id ? 'Connecting…' : 'Connect'}
+                    </Typography>
+                  </Box>
+                ))}
+                {activateError && (
+                  <Typography variant="caption" sx={{ display: 'block', color: c.status.error }}>
+                    {activateError}
+                  </Typography>
+                )}
+                <Box
+                  role="button"
+                  aria-label="Dismiss"
+                  onClick={() => id && dispatch(clearMcpSuggestions({ sessionId: id }))}
+                  sx={{ alignSelf: 'flex-start', color: c.text.muted, cursor: 'pointer', fontSize: '0.72rem', '&:hover': { color: c.text.secondary } }}
+                >
+                  Dismiss
+                </Box>
+              </Box>
+            )}
             {/* First-run welcome chips: sit UNDER the streamed greeting, appear once it finishes,
                 vanish the moment the user answers. The greeting itself is a real assistant bubble. */}
             {session.is_welcome_draft && isDraft && welcomeGreetingDone && !session.messages.some((m) => m.role === 'user') && (
@@ -1906,7 +1987,37 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
           ))
         )}
 
-        <ClickAwayListener onClickAway={() => { if (queueExpanded) { setQueueExpanded(false); setEditingQueueIdx(null); } }}>
+        <RateLimitPill sessionId={session.id} />
+
+        {isGlowing ? (
+          <Box
+            onClick={(e) => { e.stopPropagation(); onDismissGlow?.(); }}
+            sx={{
+              mx: 1.5,
+              mb: 1.5,
+              py: 1.25,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 2.5,
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              color: c.accent.primary,
+              border: `1.5px solid ${c.accent.primary}`,
+              background: `${c.accent.primary}08`,
+              boxShadow: `0 0 12px ${c.accent.primary}25, inset 0 0 12px ${c.accent.primary}08`,
+              transition: 'background 0.15s, box-shadow 0.15s',
+              '&:hover': {
+                background: `${c.accent.primary}14`,
+                boxShadow: `0 0 24px ${c.accent.primary}50, inset 0 0 20px ${c.accent.primary}18`,
+              },
+            }}
+          >
+            Continue chat
+          </Box>
+        ) : (
+          <ClickAwayListener onClickAway={() => { if (queueExpanded) { setQueueExpanded(false); setEditingQueueIdx(null); } }}>
             <Box>
               {queueLength > 0 && (
                 <Box sx={{ ml: 3, mr: 1.5 }}>
@@ -2309,7 +2420,8 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 </Box>
               )}
             </Box>
-        </ClickAwayListener>
+          </ClickAwayListener>
+        )}
       </Box>
     </Box>
   );

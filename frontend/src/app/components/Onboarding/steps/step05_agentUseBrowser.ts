@@ -39,15 +39,18 @@ export const step05: OnboardingStep = {
       condition: { kind: 'event_bus', event: 'agent:attached_to_browser' },
       timeoutMs: 90000,
     },
+    // Guide, don't commandeer: invite the user to ask for any web task in their
+    // own words instead of typing + sending a canned prompt for them.
     { kind: 'move_to', target: S.chatInput },
     {
-      kind: 'type_into',
-      target: S.chatInput,
-      text: 'Pull up the open swarm website (openswarm.com) and find the docs',
-      speedMs: 12,
+      kind: 'popup',
+      text: 'Now ask it to do something on the web in your own words, then send.',
     },
-    { kind: 'move_to', target: S.chatSendButton },
-    { kind: 'click', target: S.chatSendButton, simulate: true },
+    {
+      kind: 'wait_user',
+      condition: { kind: 'event_bus', event: 'chat:message_sent' },
+      timeoutMs: 180000,
+    },
     // Inline canvas-controls tour (hover + popup, no waits/clicks expected).
     { kind: 'move_to', target: S.canvasFitToView },
     { kind: 'popup', text: 'Heads up! This snaps everything back into view.' },

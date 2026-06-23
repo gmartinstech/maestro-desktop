@@ -105,6 +105,7 @@ export interface AgentSession {
   context_window?: number;
   framework_overhead_tokens?: number;
   context_overflow?: { reason: string; message: string; at: string } | null;
+  rate_limited?: { retry_after_s: number | null; at: string } | null;
   mcp_suggestions?: Array<{ id: string; title: string; description: string; reason?: string }>;
   mcp_suggestions_is_vague?: boolean;
   compacted_through_msg_id?: string | null;
@@ -207,6 +208,7 @@ export interface SendMessagePayload {
   hidden?: boolean;
   selectedBrowserIds?: string[];
   selectedAppIds?: string[];
+  selectedSettingIds?: string[];
 }
 
 function _genOptimisticId(): string {
@@ -215,7 +217,7 @@ function _genOptimisticId(): string {
 
 export const sendMessage = createAsyncThunk(
   'agents/sendMessage',
-  async ({ sessionId, prompt, mode, model, provider, images, contextPaths, forcedTools, attachedSkills, hidden, selectedBrowserIds, selectedAppIds }: SendMessagePayload, { dispatch }) => {
+  async ({ sessionId, prompt, mode, model, provider, images, contextPaths, forcedTools, attachedSkills, hidden, selectedBrowserIds, selectedAppIds, selectedSettingIds }: SendMessagePayload, { dispatch }) => {
     // Mint client id and dispatch optimistic bubble before awaiting the network; id round-trips for echo dedupe.
     const clientMessageId = _genOptimisticId();
     dispatch(addOptimisticMessage({
@@ -232,7 +234,7 @@ export const sendMessage = createAsyncThunk(
       const res = await fetch(`${AGENTS_API}/sessions/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, mode, model, provider, images, context_paths: contextPaths, forced_tools: forcedTools, attached_skills: attachedSkills, hidden, selected_browser_ids: selectedBrowserIds, selected_app_output_ids: selectedAppIds, client_message_id: clientMessageId }),
+        body: JSON.stringify({ prompt, mode, model, provider, images, context_paths: contextPaths, forced_tools: forcedTools, attached_skills: attachedSkills, hidden, selected_browser_ids: selectedBrowserIds, selected_app_output_ids: selectedAppIds, selected_setting_ids: selectedSettingIds, client_message_id: clientMessageId }),
       });
       if (!res.ok) throw new Error(`send failed: ${res.status}`);
     } catch (err) {
@@ -240,6 +242,25 @@ export const sendMessage = createAsyncThunk(
       throw err;
     }
     return { sessionId, prompt, clientMessageId };
+  }
+);
+
+// Carry-the-task: after the free trial runs dry and the user connects their own model, resend the
+// last thing they asked so it picks up on the new model instead of being lost. Explicit (a tap),
+// never auto-fired on a settings change, and it reuses the session's now-current model server-side.
+export const retryLastUserMessage = createAsyncThunk(
+  'agents/retryLastUserMessage',
+  async ({ sessionId }: { sessionId: string }, { getState, dispatch }) => {
+    const s = (getState() as { agents: { sessions: Record<string, AgentSession> } }).agents.sessions[sessionId];
+    if (!s || !s.messages) return;
+    const branch = s.active_branch_id || 'main';
+    const lastUser = [...s.messages]
+      .filter((m) => (m.branch_id || 'main') === branch && m.role === 'user')
+      .pop();
+    if (!lastUser) return;
+    const content = typeof lastUser.content === 'string' ? lastUser.content : JSON.stringify(lastUser.content);
+    if (!content.trim()) return;
+    await dispatch(sendMessage({ sessionId, prompt: content }));
   }
 );
 
@@ -293,6 +314,7 @@ export interface LaunchAndSendPayload {
   expand?: boolean;
   selectedBrowserIds?: string[];
   selectedAppIds?: string[];
+  selectedSettingIds?: string[];
 }
 
 export const fetchSession = createAsyncThunk(
@@ -316,7 +338,7 @@ export const fetchSession = createAsyncThunk(
 
 export const launchAndSendFirstMessage = createAsyncThunk(
   'agents/launchAndSendFirstMessage',
-  async ({ draftId, config, prompt, mode, model, provider, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds, selectedAppIds }: LaunchAndSendPayload) => {
+  async ({ draftId, config, prompt, mode, model, provider, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds, selectedAppIds, selectedSettingIds }: LaunchAndSendPayload) => {
     const launchRes = await fetch(`${AGENTS_API}/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -328,7 +350,7 @@ export const launchAndSendFirstMessage = createAsyncThunk(
     await fetch(`${AGENTS_API}/sessions/${session.id}/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, mode, model, provider, images, context_paths: contextPaths, forced_tools: forcedTools, attached_skills: attachedSkills, selected_browser_ids: selectedBrowserIds, selected_app_output_ids: selectedAppIds }),
+      body: JSON.stringify({ prompt, mode, model, provider, images, context_paths: contextPaths, forced_tools: forcedTools, attached_skills: attachedSkills, selected_browser_ids: selectedBrowserIds, selected_app_output_ids: selectedAppIds, selected_setting_ids: selectedSettingIds }),
     });
 
     const refreshRes = await fetch(`${AGENTS_API}/sessions/${session.id}`);
@@ -424,17 +446,19 @@ export const handleApproval = createAsyncThunk(
     message,
     updatedInput,
     trustPattern,
+    setAlwaysAllow,
   }: {
     requestId: string;
     behavior: 'allow' | 'deny';
     message?: string;
     updatedInput?: Record<string, any>;
     trustPattern?: boolean;
+    setAlwaysAllow?: boolean;
   }) => {
     const res = await fetch(`${AGENTS_API}/approval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_id: requestId, behavior, message, updated_input: updatedInput, trust_pattern: !!trustPattern }),
+      body: JSON.stringify({ request_id: requestId, behavior, message, updated_input: updatedInput, trust_pattern: !!trustPattern, set_always_allow: !!setAlwaysAllow }),
     });
     if (!res.ok) {
       throw new Error(`Approval request failed (${res.status})`);
@@ -922,6 +946,24 @@ const agentsSlice = createSlice({
           at: new Date().toISOString(),
         };
       }
+    },
+
+    setRateLimited(
+      state,
+      action: PayloadAction<{ sessionId: string; retryAfterS: number | null }>
+    ) {
+      const session = state.sessions[action.payload.sessionId];
+      if (session) {
+        session.rate_limited = {
+          retry_after_s: action.payload.retryAfterS,
+          at: new Date().toISOString(),
+        };
+      }
+    },
+
+    clearRateLimited(state, action: PayloadAction<{ sessionId: string }>) {
+      const session = state.sessions[action.payload.sessionId];
+      if (session) session.rate_limited = null;
     },
 
     clearContextOverflow(
@@ -1438,6 +1480,8 @@ export const {
   updateSessionCost,
   updateSessionContext,
   setContextOverflow,
+  setRateLimited,
+  clearRateLimited,
   clearContextOverflow,
   setMcpSuggestions,
   clearMcpSuggestions,

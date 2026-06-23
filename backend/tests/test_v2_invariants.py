@@ -211,6 +211,75 @@ async def test_gate_stress_random_activations():
 
 
 # ===========================================================================
+# Group A2, ToolSearch loop-breaker
+# ===========================================================================
+# Gated MCP servers are withheld from the SDK, so the CLI's native ToolSearch
+# can never see them; small models loop (empty ToolSearch -> retry) until the
+# user pauses. The break must (a) not fire on the first call or two (a power
+# user may legitimately ToolSearch a deferred tool), (b) fire once it's clearly
+# stuck, steering to MCPActivate, and (c) reset when any real tool runs.
+
+
+def test_toolsearch_redirect_holds_below_threshold():
+    from backend.apps.agents.manager.prompt.prompt_context import (
+        toolsearch_loop_redirect,
+        TOOLSEARCH_LOOP_THRESHOLD,
+    )
+    for n in range(1, TOOLSEARCH_LOOP_THRESHOLD):
+        assert toolsearch_loop_redirect(n, ["gmail"]) is None, f"must not redirect at n={n}"
+
+
+def test_toolsearch_redirect_fires_at_threshold_and_names_gated_servers():
+    from backend.apps.agents.manager.prompt.prompt_context import (
+        toolsearch_loop_redirect,
+        TOOLSEARCH_LOOP_THRESHOLD,
+    )
+    reason = toolsearch_loop_redirect(TOOLSEARCH_LOOP_THRESHOLD, ["google-workspace", "slack"])
+    assert reason is not None
+    assert "MCPActivate" in reason
+    assert "google-workspace" in reason and "slack" in reason
+    assert "Stop calling ToolSearch" in reason
+
+
+def test_toolsearch_redirect_works_with_no_gated_servers():
+    # Even with nothing to activate, the steer must still tell the model its
+    # tools are already loaded so it stops searching (no crash on empty list).
+    from backend.apps.agents.manager.prompt.prompt_context import (
+        toolsearch_loop_redirect,
+        TOOLSEARCH_LOOP_THRESHOLD,
+    )
+    reason = toolsearch_loop_redirect(TOOLSEARCH_LOOP_THRESHOLD, [])
+    assert reason is not None
+    assert "MCPActivate" not in reason  # nothing to point at
+    assert "Stop calling ToolSearch" in reason
+
+
+@pytest.mark.asyncio
+async def test_gated_server_names_surface_only_inactive_servers():
+    """The steer list must mirror the gate: connected-but-not-active servers
+    only, never one that's already activated (callable) or denied."""
+    from backend.apps.agents.agent_manager import AgentManager
+    fake_tools = [_fake_tool("Gmail"), _fake_tool("Slack"), _fake_tool("Notion")]
+    with patch("backend.apps.agents.agent_manager.load_all_tools", return_value=fake_tools):
+        mgr = AgentManager()
+        names = mgr._gated_mcp_server_names(
+            allowed_tools=["mcp:Gmail", "mcp:Slack", "mcp:Notion"],
+            active_mcps=["gmail"],  # already activated -> not "gated"
+        )
+        assert "gmail" not in names, "activated server must not appear as gated"
+        assert "slack" in names and "notion" in names
+
+
+@pytest.mark.asyncio
+async def test_gated_server_names_empty_when_all_active():
+    from backend.apps.agents.agent_manager import AgentManager
+    fake_tools = [_fake_tool("Gmail")]
+    with patch("backend.apps.agents.agent_manager.load_all_tools", return_value=fake_tools):
+        mgr = AgentManager()
+        assert mgr._gated_mcp_server_names(["mcp:Gmail"], ["gmail"]) == []
+
+
+# ===========================================================================
 # Group B, needs_fresh_session soft-restart
 # ===========================================================================
 # When MCPActivate fires mid-session, the bundled CLI doesn't re-read
@@ -398,6 +467,10 @@ async def test_resolve_aux_model_anthropic_pro_returns_proxy():
     settings = AppSettings()
     settings.connection_mode = "openswarm-pro"
     settings.openswarm_proxy_url = "https://api.openswarm.test"
+    # A real Pro-connected user carries a bearer token; proxy_auth reads it.
+    # Without it the resolver can't see Pro and falls through to the raise,
+    # which is what made this test depend on live machine state.
+    settings.openswarm_bearer_token = "test-pro-token"
     with patch("backend.apps.nine_router.is_running", return_value=False):
         model_id, base = await registry.resolve_aux_model(settings)
         assert "haiku" in model_id
@@ -521,6 +594,104 @@ def test_resolve_sdk_gemini_prefers_antigravity_over_api_key():
     s2 = AppSettings()
     with patch.object(registry, "_antigravity_connected", return_value=False):
         assert registry.resolve_model_id_for_sdk("gemini-3-flash", s2) == "gc/gemini-3-flash-preview"
+
+
+def test_error_classify_schema_translation_400_is_not_auth():
+    """A 9Router tool-schema translation 400 can carry provider/connection
+    wording that trips the auth regex, so it used to surface a misleading
+    'reconnect your subscription' card for what is really a schema bug. The
+    translation guard must win: schema 400 -> not auth; a real auth failure
+    with no translation signature still reads as auth."""
+    from backend.apps.agents.core.error_classify import p_is_auth_error, p_is_translation_error
+    both = Exception("provider not connected: 400 INVALID_ARGUMENT at "
+                     "tools[0].function_declarations[0].parameters")
+    assert p_is_translation_error(both)
+    assert not p_is_auth_error(both), "schema-400 must not be classified as auth"
+    # Pure auth failures (no translation signature) still classify as auth.
+    assert p_is_auth_error(Exception("provider not connected: gemini"))
+    assert p_is_auth_error(Exception("401 invalid authentication credentials"))
+    assert not p_is_translation_error(Exception("401 invalid authentication credentials"))
+
+
+def test_error_classify_gemini_resource_exhausted_is_transient():
+    """gemini-cli's free-tier 429 surfaces as RESOURCE_EXHAUSTED; it must count
+    as transient so the existing backoff/retry catches it instead of dying as a
+    hard first-message error. A 403 (hard auth/quota) must still NOT retry."""
+    from backend.apps.agents.core.error_classify import p_is_transient_capacity_error
+    assert p_is_transient_capacity_error(Exception("429 RESOURCE_EXHAUSTED: Quota exceeded"))
+    assert p_is_transient_capacity_error(Exception("RESOURCE_EXHAUSTED"))
+    assert not p_is_transient_capacity_error(Exception("403 permission denied"))
+
+
+@pytest.mark.asyncio
+async def test_mcp_gate_only_forwards_activated_servers():
+    """Dispatch-layer security invariant (the non-bypassable enforcement of
+    'MCP tools only via MCPActivate'): for a GATED session (active_mcps is a
+    list), _build_mcp_servers forwards ONLY servers whose sanitized name is in
+    active_mcps; an empty list forwards ZERO; None is the legacy all-allowed
+    path. The model cannot reach an unactivated server no matter what it asks
+    for. Property-checked over random installed sets and random activation
+    subsets, plus the two boundary cases."""
+    import random
+    from types import SimpleNamespace
+    from backend.apps.agents.agent_manager import AgentManager
+    mgr = AgentManager()
+    names = ["gmail", "drive", "slack", "reddit", "notion", "airtable"]
+
+    def installed():
+        return [SimpleNamespace(name=n, mcp_config={"x": 1}, enabled=True,
+                                auth_status="configured", auth_type="apikey") for n in names]
+
+    # allowed_tools == get_all_tool_names() bypasses the (separate) permission
+    # gate so we isolate the ACTIVATION gate. _sanitize_server_name -> identity.
+    with patch("backend.apps.agents.agent_manager.load_all_tools", side_effect=installed), \
+         patch("backend.apps.agents.agent_manager.get_all_tool_names", return_value=["__ALL__"]), \
+         patch("backend.apps.agents.agent_manager._sanitize_server_name", side_effect=lambda n: n), \
+         patch("backend.apps.agents.agent_manager._is_fully_denied", return_value=False), \
+         patch("backend.apps.agents.agent_manager.derive_mcp_config", side_effect=lambda t: {"command": "x"}):
+        allowed = ["__ALL__"]
+        # Boundary 1: empty activation list -> zero servers, always.
+        assert await mgr._build_mcp_servers(allowed, active_mcps=[]) == {}
+        # Boundary 2: None (legacy) -> permission gate only, all forwarded.
+        assert set((await mgr._build_mcp_servers(allowed, active_mcps=None)).keys()) == set(names)
+        # Property: forwarded set is ALWAYS a subset of the activated set, and
+        # equals exactly the activated-and-installed intersection.
+        rng = random.Random(1234)
+        for _ in range(400):
+            active = rng.sample(names, rng.randint(0, len(names)))
+            # throw in a bogus name the gate must never invent a server for
+            if rng.random() < 0.3:
+                active = active + ["ghost-not-installed"]
+            forwarded = set((await mgr._build_mcp_servers(allowed, active_mcps=active)).keys())
+            assert forwarded <= set(active), f"leaked {forwarded - set(active)} for active={active}"
+            assert forwarded == (set(active) & set(names)), f"mismatch for active={active}"
+
+
+def test_dashboard_get_strips_only_orphan_session_cards():
+    """A layout card whose session vanished (gone from memory AND disk) makes the
+    frontend GET /sessions/{id} 404 on every load and flash a dead card. The
+    dashboard GET filters those orphan cards out of the response, but must keep
+    live (in-memory) cards, on-disk cards, and drafts. Non-destructive: only the
+    response is filtered, never the stored layout."""
+    from types import SimpleNamespace
+    from backend.apps.dashboards import dashboards as D
+    data = {"layout": {
+        "cards": {
+            "live": {"session_id": "live"},      # in memory
+            "ondisk": {"session_id": "ondisk"},  # closed but on disk
+            "draft-1": {"session_id": "draft-1"},  # unsent draft, no backend session yet
+            "ghost": {"session_id": "ghost"},    # gone from memory AND disk -> would 404
+        },
+        "expanded_session_ids": ["live", "ghost"],
+    }}
+    fake_mgr = SimpleNamespace(sessions={"live": object()})
+    on_disk = {"ondisk": {"id": "ondisk"}}
+    with patch("backend.apps.agents.agent_manager.agent_manager", fake_mgr), \
+         patch("backend.apps.agents.manager.session.session_store._load_session_data",
+               side_effect=lambda sid: on_disk.get(sid)):
+        D._strip_orphan_session_cards(data)
+    assert set(data["layout"]["cards"].keys()) == {"live", "ondisk", "draft-1"}, "only the ghost should be dropped"
+    assert data["layout"]["expanded_session_ids"] == ["live"], "ghost dropped from expanded too"
 
 
 def test_banned_models_not_offered():
@@ -1038,6 +1209,7 @@ async def test_aux_failover_anthropic_to_codex():
     settings = AppSettings()
     settings.connection_mode = "openswarm-pro"  # provides anthropic fallback
     settings.openswarm_proxy_url = "https://api.openswarm.test"
+    settings.openswarm_bearer_token = "test-pro-token"  # what a real Pro user carries
     with patch("backend.apps.nine_router.is_running", return_value=True), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[])):  # nothing connected

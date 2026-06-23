@@ -2,6 +2,9 @@ import os
 import json
 import logging
 import re
+import tempfile
+import threading
+import time
 from contextlib import asynccontextmanager
 from fastapi import HTTPException
 from backend.config.Apps import SubApp
@@ -16,15 +19,58 @@ from backend.config.paths import SKILLS_WORKSPACE_DIR
 
 
 def _load_index() -> dict[str, dict]:
-    if os.path.exists(INDEX_PATH):
-        with open(INDEX_PATH) as f:
-            return json.load(f)
+    """Read the skill index, never raising on a corrupt file. A truncated/garbled
+    index (e.g. a crash mid-write before atomic writes existed) is moved aside so
+    it's recoverable, and we start empty rather than bricking every skill op,
+    skills still list from their files with frontmatter/filename-derived names."""
+    if not os.path.exists(INDEX_PATH):
+        return {}
+    try:
+        with open(INDEX_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+        logger.warning("skills index was not an object; ignoring")
+    except (OSError, ValueError):
+        logger.warning("skills index unreadable; preserving aside and starting empty", exc_info=True)
+    try:
+        os.replace(INDEX_PATH, INDEX_PATH + ".corrupt")
+    except OSError:
+        pass
     return {}
 
 
+# Guards the index write so an atomic replace is never interleaved by another
+# writer. Today every index write runs on the single backend event-loop thread
+# (no await between a load and its save, so no lost-update race), but this stays
+# correct if a save ever moves to a thread pool the way settings' did.
+_index_write_lock = threading.Lock()
+
+
 def _save_index(index: dict[str, dict]):
-    with open(INDEX_PATH, "w") as f:
-        json.dump(index, f, indent=2)
+    """Atomic index write: tmp file + os.replace so a crash mid-write can't leave
+    a truncated index. Mirrors the settings store's write discipline."""
+    with _index_write_lock:
+        os.makedirs(SKILLS_DIR, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=".skills_index.", suffix=".tmp", dir=SKILLS_DIR)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(index, f, indent=2)
+            # Windows: Defender can briefly lock the destination; one retry covers it.
+            for attempt in range(2):
+                try:
+                    os.replace(tmp, INDEX_PATH)
+                    return
+                except PermissionError:
+                    if attempt == 1:
+                        raise
+                    time.sleep(0.05)
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
 
 # Built-in skills shipped with OpenSwarm itself. Each entry describes a
@@ -122,30 +168,79 @@ async def skills_lifespan():
 skills = SubApp("skills", skills_lifespan)
 
 
+def _skill_md_path(skill_id: str) -> tuple[str | None, str]:
+    """Resolve where a skill's markdown lives: (path, kind).
+
+    A skill is either a folder (~/.claude/skills/<id>/SKILL.md, multi-file) or a
+    legacy flat file (~/.claude/skills/<id>.md). Folder wins if both exist. The
+    one place that knows the layout, so get/update/delete never re-guess it."""
+    folder_md = os.path.join(SKILLS_DIR, skill_id, "SKILL.md")
+    if os.path.isfile(folder_md):
+        return folder_md, "folder"
+    flat_md = os.path.join(SKILLS_DIR, f"{skill_id}.md")
+    if os.path.isfile(flat_md):
+        return flat_md, "flat"
+    return None, "flat"
+
+
+def _has_supporting_files(skill_dir: str) -> bool:
+    """True if a skill folder ships anything beyond its SKILL.md (scripts, templates)."""
+    try:
+        return any(e != "SKILL.md" and not e.startswith(".") for e in os.listdir(skill_dir))
+    except OSError:
+        return False
+
+
+def _build_skill(skill_id: str, content: str, md_path: str, kind: str, index: dict) -> Skill:
+    """Assemble a Skill from disk + index, falling back to SKILL.md frontmatter
+    for a folder skill the index hasn't catalogued (e.g. hand-dropped)."""
+    meta = dict(index.get(skill_id, {}))
+    if kind == "folder" and ("name" not in meta or "description" not in meta):
+        fm = _parse_skill_frontmatter(content)
+        meta.setdefault("name", fm.get("name", ""))
+        meta.setdefault("description", fm.get("description", ""))
+    pretty = skill_id.replace("-", " ").replace("_", " ").title()
+    skill_dir = os.path.join(SKILLS_DIR, skill_id)
+    return Skill(
+        id=skill_id,
+        name=meta.get("name") or pretty,
+        description=meta.get("description", ""),
+        content=content,
+        file_path=md_path,
+        command=meta.get("command", skill_id),
+        built_in=bool(meta.get("built_in", False)),
+        dir_path=skill_dir if kind == "folder" else "",
+        has_supporting_files=(kind == "folder" and _has_supporting_files(skill_dir)),
+    )
+
+
 def _sync_skills() -> list[Skill]:
-    """Sync skills from the filesystem, updating the index."""
+    """Sync skills from the filesystem, updating the index. Reads both layouts:
+    legacy flat <id>.md files and multi-file <id>/SKILL.md folders."""
     index = _load_index()
     result = []
+    seen: set[str] = set()
 
-    if os.path.exists(SKILLS_DIR):
-        for fname in os.listdir(SKILLS_DIR):
-            if fname.endswith(".md"):
-                fpath = os.path.join(SKILLS_DIR, fname)
-                with open(fpath) as f:
-                    content = f.read()
+    if not os.path.exists(SKILLS_DIR):
+        return result
 
-                skill_id = fname.replace(".md", "")
-                meta = index.get(skill_id, {})
-                skill = Skill(
-                    id=skill_id,
-                    name=meta.get("name", fname.replace(".md", "").replace("-", " ").replace("_", " ").title()),
-                    description=meta.get("description", ""),
-                    content=content,
-                    file_path=fpath,
-                    command=meta.get("command", fname.replace(".md", "")),
-                    built_in=bool(meta.get("built_in", False)),
-                )
-                result.append(skill)
+    for entry in os.listdir(SKILLS_DIR):
+        full = os.path.join(SKILLS_DIR, entry)
+        if os.path.isdir(full):
+            skill_id = entry
+        elif entry.endswith(".md"):
+            skill_id = entry[: -len(".md")]
+        else:
+            continue
+        if skill_id in seen:
+            continue
+        md_path, kind = _skill_md_path(skill_id)
+        if not md_path:
+            continue
+        with open(md_path, encoding="utf-8") as f:
+            content = f.read()
+        seen.add(skill_id)
+        result.append(_build_skill(skill_id, content, md_path, kind, index))
 
     return result
 
@@ -224,42 +319,95 @@ async def get_skill(skill_id: str):
     raise HTTPException(status_code=404, detail="Skill not found")
 
 
-@skills.router.post("/create")
-async def create_skill(body: SkillCreate):
-    slug = body.name.lower().replace(" ", "-")
-    fpath = os.path.join(SKILLS_DIR, f"{slug}.md")
+def _safe_slug(raw: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", (raw or "").strip().lower()).strip("-")
+    return slug or "skill"
 
-    with open(fpath, "w") as f:
-        f.write(body.content)
+
+def _skill_exists(slug: str) -> bool:
+    return (
+        slug in _load_index()
+        or os.path.isfile(os.path.join(SKILLS_DIR, f"{slug}.md"))
+        or os.path.isdir(os.path.join(SKILLS_DIR, slug))
+    )
+
+
+def unique_skill_slug(base: str) -> str:
+    """A free slug for `base`, suffixing -2, -3, ... on collision. Lets a
+    registry install land beside a same-named skill instead of silently
+    overwriting the user's existing one."""
+    slug = _safe_slug(base)
+    if not _skill_exists(slug):
+        return slug
+    i = 2
+    while _skill_exists(f"{slug}-{i}"):
+        i += 1
+    return f"{slug}-{i}"
+
+
+def write_folder_skill(skill_id: str, files: dict[str, str], meta: dict) -> Skill:
+    """Write a multi-file skill folder (relpath -> content) under SKILLS_DIR and
+    index it. `files` must include a 'SKILL.md'. Shared by registry install and
+    zip/.swarm import. Relpaths that try to escape the skill folder (../, abs
+    paths) are dropped, an untrusted registry archive can't write outside its
+    own dir."""
+    slug = _safe_slug(skill_id)
+    base = os.path.join(SKILLS_DIR, slug)
+    base_abs = os.path.abspath(base)
+    # A folder write supersedes any legacy flat <slug>.md, so we never leave a
+    # phantom flat file shadowed by the folder (folder wins in _skill_md_path).
+    legacy_flat = os.path.join(SKILLS_DIR, f"{slug}.md")
+    if os.path.isfile(legacy_flat):
+        try:
+            os.remove(legacy_flat)
+        except OSError:
+            pass
+    os.makedirs(base, exist_ok=True)
+    for rel, content in files.items():
+        dest = os.path.abspath(os.path.join(base, rel))
+        if os.path.commonpath([base_abs, dest]) != base_abs:
+            logger.warning("skill import: dropped path-escape entry %r", rel)
+            continue
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write(content)
 
     index = _load_index()
     index[slug] = {
-        "name": body.name,
-        "description": body.description,
-        "command": body.command or slug,
+        "name": meta.get("name") or slug,
+        "description": meta.get("description", ""),
+        "command": meta.get("command", slug),
     }
     _save_index(index)
 
-    skill = Skill(
-        id=slug,
-        name=body.name,
-        description=body.description,
-        content=body.content,
-        file_path=fpath,
-        command=body.command or slug,
-    )
-    pass
+    md_path, kind = _skill_md_path(slug)
+    if not md_path:
+        raise HTTPException(status_code=400, detail="skill had no SKILL.md")
+    with open(md_path, encoding="utf-8") as f:
+        content = f.read()
+    return _build_skill(slug, content, md_path, kind, index)
+
+
+@skills.router.post("/create")
+async def create_skill(body: SkillCreate):
+    # All user skills are folders now (<id>/SKILL.md); flat files stay readable
+    # but are no longer written, so a skill's on-disk shape no longer depends on
+    # how it was created vs imported.
+    meta = {"name": body.name, "description": body.description}
+    if body.command:
+        meta["command"] = body.command
+    skill = write_folder_skill(body.name, {"SKILL.md": body.content}, meta)
     return {"ok": True, "skill": skill.model_dump()}
 
 
 @skills.router.put("/{skill_id}")
 async def update_skill(skill_id: str, body: SkillUpdate):
-    fpath = os.path.join(SKILLS_DIR, f"{skill_id}.md")
-    if not os.path.exists(fpath):
+    md_path, kind = _skill_md_path(skill_id)
+    if not md_path:
         raise HTTPException(status_code=404, detail="Skill not found")
 
     if body.content is not None:
-        with open(fpath, "w") as f:
+        with open(md_path, "w", encoding="utf-8") as f:
             f.write(body.content)
 
     index = _load_index()
@@ -273,17 +421,10 @@ async def update_skill(skill_id: str, body: SkillUpdate):
     index[skill_id] = meta
     _save_index(index)
 
-    with open(fpath) as f:
+    with open(md_path, encoding="utf-8") as f:
         content = f.read()
 
-    skill = Skill(
-        id=skill_id,
-        name=meta.get("name", skill_id),
-        description=meta.get("description", ""),
-        content=content,
-        file_path=fpath,
-        command=meta.get("command", skill_id),
-    )
+    skill = _build_skill(skill_id, content, md_path, kind, index)
     return {"ok": True, "skill": skill.model_dump()}
 
 
@@ -299,9 +440,14 @@ async def delete_skill(skill_id: str):
                 "the next agent turn)."
             ),
         )
-    fpath = os.path.join(SKILLS_DIR, f"{skill_id}.md")
-    if os.path.exists(fpath):
-        os.remove(fpath)
+    # Remove whichever layout exists: the whole folder, or the flat file.
+    import shutil
+    skill_dir = os.path.join(SKILLS_DIR, skill_id)
+    flat = os.path.join(SKILLS_DIR, f"{skill_id}.md")
+    if os.path.isdir(skill_dir):
+        shutil.rmtree(skill_dir, ignore_errors=True)
+    if os.path.isfile(flat):
+        os.remove(flat)
     index.pop(skill_id, None)
     _save_index(index)
     return {"ok": True}

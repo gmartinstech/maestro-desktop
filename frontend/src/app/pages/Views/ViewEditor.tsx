@@ -31,7 +31,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { store } from '@/shared/state/store';
 import { createDraftSession, removeDraftSession, fetchSession } from '@/shared/state/agentsSlice';
-import { createOutput, updateOutput, upsertOutput, fetchOutputs, Output, SERVE_BASE } from '@/shared/state/outputsSlice';
+import { createOutput, updateOutput, upsertOutput, fetchOutputs, captureOutputVersion, Output, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { truncateForTitle } from '@/shared/state/sessionDisplay';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ShareButton from '@/app/components/share/ShareButton';
@@ -39,6 +39,7 @@ import AgentChat from '../AgentChat/AgentChat';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ViewPreview, { ViewPreviewHandle } from './ViewPreview';
 import TerminalPanel, { TerminalLine } from './TerminalPanel';
+import HistoryPanel from './HistoryPanel';
 import { getDefault } from '@/shared/inputSchemaDefaults';
 import CodeEditor from './CodeEditor';
 import { ElementSelectionProvider } from '@/app/components/editor/ElementSelectionContext';
@@ -316,6 +317,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   const TAB_PREVIEW = 0;
   const TAB_CODE = 1;
   const TAB_TERMINAL = 2;
+  const TAB_HISTORY = 3;
 
   const [activeTab, setActiveTab] = useState(TAB_PREVIEW);
   const [activeFile, setActiveFile] = useState('index.html');
@@ -572,6 +574,18 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   const isLaunched = !!effectiveSessionId && effectiveSessionId !== initialDraftId;
   const isAgentActive = agentStatus === 'running' || agentStatus === 'waiting_approval';
 
+  // The user's last request labels the version we auto-save when a run finishes.
+  const lastUserPrompt = useAppSelector((state) => {
+    const msgs = effectiveSessionId ? state.agents.sessions[effectiveSessionId]?.messages : null;
+    if (!msgs) return '';
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user' && typeof msgs[i].content === 'string') return msgs[i].content as string;
+    }
+    return '';
+  });
+  const lastUserPromptRef = useRef('');
+  lastUserPromptRef.current = lastUserPrompt;
+
   const workspaceId = workspacePath ? stableWorkspaceId : null;
   const workspaceIdRef = useRef<string | null>(null);
   workspaceIdRef.current = workspaceId;
@@ -703,11 +717,28 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
 
   const prevAgentActive = useRef(false);
   useEffect(() => {
-    if (prevAgentActive.current && !isAgentActive && workspaceId) {
-      setTimeout(pollWorkspace, 500);
+    if (prevAgentActive.current && !isAgentActive) {
+      if (workspaceId) setTimeout(pollWorkspace, 500);
+      // A change just finished: quietly save a version so the user can go back to
+      // it. Delayed so files + a fresh preview settle first. Fire-and-forget and
+      // error-swallowed; saving history must never disrupt the editor, and the
+      // backend dedupes so a run that changed nothing won't pile up a junk version.
+      const eid = output?.id ?? createdIdRef.current;
+      if (eid) {
+        const label = lastUserPromptRef.current.slice(0, 140);
+        window.setTimeout(async () => {
+          // A new run started inside the settle window: skip, or we'd snapshot a
+          // half-written workspace under the previous run's label. Its own
+          // completion will capture the settled state.
+          if (isAgentActiveRef.current) return;
+          let thumbnail: string | null = null;
+          try { thumbnail = (await previewRef.current?.capture()) ?? null; } catch { /* preview not mounted */ }
+          dispatch(captureOutputVersion({ id: eid, source: 'auto', label, thumbnail })).unwrap().catch(() => {});
+        }, 1500);
+      }
     }
     prevAgentActive.current = isAgentActive;
-  }, [isAgentActive, workspaceId, pollWorkspace]);
+  }, [isAgentActive, workspaceId, pollWorkspace, output?.id, dispatch]);
 
   // Ref so the unmount cleanup reads the live status, not a stale closure value.
   const sessionStatusRef = useRef<string | null>(null);
@@ -1290,6 +1321,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
             <Tab disableRipple label="Preview" value={TAB_PREVIEW} />
             <Tab disableRipple label="Code" value={TAB_CODE} />
             <Tab disableRipple label="Terminal" value={TAB_TERMINAL} />
+            <Tab disableRipple label="History" value={TAB_HISTORY} />
           </Tabs>
           {activeTab === TAB_PREVIEW && (
             <Tooltip title="Reload preview; right-click for Hard Reload">
@@ -1494,6 +1526,20 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
           )}
           {activeTab === TAB_TERMINAL && (
             <TerminalPanel lines={terminalLines} />
+          )}
+          {activeTab === TAB_HISTORY && (
+            effectiveId ? (
+              <HistoryPanel
+                outputId={effectiveId}
+                isAgentActive={isAgentActive}
+                saveLabel={lastUserPrompt}
+                onRestored={() => { lastPollRef.current = ''; pollWorkspace(); previewRef.current?.reload(); }}
+              />
+            ) : (
+              <Box sx={{ p: 3, textAlign: 'center', color: c.text.muted, fontSize: '0.85rem' }}>
+                Make a change first, then your versions will show up here.
+              </Box>
+            )
           )}
         </Box>
       </Box>

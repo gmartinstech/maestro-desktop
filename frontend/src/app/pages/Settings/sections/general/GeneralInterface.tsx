@@ -13,6 +13,7 @@ import LanguageIcon from '@mui/icons-material/Language';
 import { AppSettings } from '@/shared/state/settingsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { SettingsStyles } from '../settingsStyles';
+import { settingSelectAttrs } from '../settingSelect';
 
 const GeneralInterface: React.FC<{
   form: AppSettings;
@@ -27,7 +28,7 @@ const GeneralInterface: React.FC<{
     <>
       <Typography sx={{ ...sectionSx, mt: 3 }}>Interface</Typography>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('theme', 'Theme', 'Interface', 'Application color scheme.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Theme</Typography>
           <Typography sx={descSx}>Application color scheme.</Typography>
@@ -64,7 +65,7 @@ const GeneralInterface: React.FC<{
         </ToggleButtonGroup>
       </Box>
 
-      <Box sx={rowSx}>
+      <Box sx={rowSx} {...settingSelectAttrs('zoom_sensitivity', 'Zoom sensitivity', 'Interface', 'Scroll-to-zoom responsiveness.')}>
         <Typography sx={labelSx}>Zoom sensitivity</Typography>
         <Typography sx={{ ...descSx, mb: 1 }}>
           Scroll-to-zoom responsiveness. Lower for trackpads, higher for mouse wheels.
@@ -91,7 +92,7 @@ const GeneralInterface: React.FC<{
         </Box>
       </Box>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('new_agent_shortcut', 'New agent shortcut', 'Interface', 'Keyboard shortcut to create an agent.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>New agent shortcut</Typography>
           <Typography sx={descSx}>Keyboard shortcut to create an agent.</Typography>
@@ -149,7 +150,7 @@ const GeneralInterface: React.FC<{
         </Box>
       </Box>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('auto_select_mode_on_new_agent', 'Auto-enable element selection', 'Interface', 'Enter element selection mode when creating a new agent.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Auto-enable element selection</Typography>
           <Typography sx={descSx}>Automatically enter element selection mode when creating a new agent.</Typography>
@@ -164,7 +165,7 @@ const GeneralInterface: React.FC<{
         />
       </Box>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('expand_new_chats_in_dashboard', 'Default agent spawn state in dashboard', 'Interface', 'New agents spawn expanded instead of collapsed.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Default agent spawn state in dashboard</Typography>
           <Typography sx={descSx}>When enabled, new agents spawn expanded instead of collapsed.</Typography>
@@ -179,7 +180,7 @@ const GeneralInterface: React.FC<{
         />
       </Box>
 
-      <Box sx={inlineRowLastSx}>
+      <Box sx={inlineRowLastSx} {...settingSelectAttrs('auto_reveal_sub_agents', 'Auto-reveal sub-agents on dashboard', 'Interface', 'Show sub-agent cards tethered to their parent on the dashboard.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Auto-reveal sub-agents on dashboard</Typography>
           <Typography sx={descSx}>Automatically show sub-agent cards (from CreateAgent / InvokeAgent) tethered to their parent on the dashboard.</Typography>
@@ -196,7 +197,7 @@ const GeneralInterface: React.FC<{
 
       <Typography sx={{ ...sectionSx, mt: 3 }}>Browser</Typography>
 
-      <Box sx={rowLastSx}>
+      <Box sx={rowLastSx} {...settingSelectAttrs('browser_homepage', 'Default homepage', 'Browser', 'URL loaded when opening a new browser card.')}>
         <Typography sx={labelSx}>Default homepage</Typography>
         <Typography sx={{ ...descSx, mb: 1.5 }}>
           URL loaded when opening a new browser card on the dashboard.

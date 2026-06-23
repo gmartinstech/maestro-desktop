@@ -64,6 +64,8 @@ export interface AppSettings {
   free_trial_token?: string | null;
   free_trial_remaining?: number | null;
   free_trial_runs_limit?: number | null;
+  /** Epoch seconds when the rolling window refills; powers the "fresh runs in ~Xh" nudge. */
+  free_trial_resets_at?: number | null;
   openswarm_subscription_plan?: string | null;
   openswarm_subscription_expires?: string | null;
   openswarm_usage_cached?: SubscriptionUsage | null;
@@ -146,13 +148,16 @@ export const fetchSettings = createAsyncThunk('settings/fetch', async () => {
   return (await res.json()) as AppSettings;
 });
 
-export const updateSettings = createAsyncThunk(
-  'settings/update',
-  async (settings: AppSettings) => {
+// Save ONLY the fields the user changed, merged server-side onto fresh state.
+// Every renderer save uses this so a stale full object can never clobber a field
+// the user didn't touch (e.g. one an agent just changed).
+export const updateSettingsPatch = createAsyncThunk(
+  'settings/patch',
+  async (changes: Partial<AppSettings>) => {
     const res = await fetch(SETTINGS_API, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
+      body: JSON.stringify(changes),
     });
     const data = await res.json();
     return data.settings as AppSettings;
@@ -298,11 +303,11 @@ const settingsSlice = createSlice({
         state.loading = false;
         state.loaded = true;
       })
-      .addCase(updateSettings.fulfilled, (state, action) => {
-        // A user save is authoritative; claim newest so an in-flight GET can't overwrite it.
+      .addCase(updateSettingsPatch.fulfilled, (state, action) => {
+        // A user save is authoritative; claim newest so an in-flight GET can't
+        // overwrite it, and consume the draft so reopening shows the saved state.
         state.latestWriteId = action.meta.requestId;
         state.data = action.payload;
-        // Save consumes the draft so reopening doesn't restore stale edits.
         state.draft = null;
         state.draftTab = null;
       })

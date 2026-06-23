@@ -295,6 +295,8 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     workflowCards,
     workflowItems,
     workflowOpenCards,
+    viewCards,
+    outputs,
     expandedSessionIds,
     liveDragInfo,
     measuredHeightsRef,

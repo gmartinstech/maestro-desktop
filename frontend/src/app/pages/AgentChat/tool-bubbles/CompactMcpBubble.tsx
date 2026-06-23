@@ -15,6 +15,7 @@ import { GoogleServiceIcon } from '../mcp-cards/GoogleServiceIcon';
 import { ElapsedTimer, formatElapsed } from '../parsing/toolBubbleChrome';
 import { useTermColors } from '../parsing/toolColorize';
 import { ParsedResult } from '../parsing/toolResultParsing';
+import { isSettingsWriteTool, settingsWriteSummary } from '../parsing/settingsToolMeta';
 import { McpToolInfo, getMcpShortAction, getMcpInputSummary, getWorkflowToolLabel } from '@/shared/mcpToolMeta';
 import { McpResultCard } from '../mcp-cards/McpResultCard';
 
@@ -56,7 +57,11 @@ export const CompactMcpBubble: React.FC<CompactMcpBubbleProps> = ({
   })();
   const serviceLabel = mcpInfo.isMcp ? mcpVerbLabel : shortAction;
   const inputSummary = mcpInfo.isMcp ? getMcpInputSummary(input, mcpInfo.action, mcpInfo.serverSlug) : '';
-  const visibleSummary = resultSummary || inputSummary;
+  // A grouped settings write shows the masked change list (input-derived, so it
+  // reads even while pending) instead of the generic "Applied: theme" result line.
+  const visibleSummary = isSettingsWriteTool(toolName)
+    ? settingsWriteSummary(input)
+    : (resultSummary || inputSummary);
   const canToggleDetails = !!visibleSummary;
   const hideVerbLabel = !!workflowLabel && !!visibleSummary;
   const ServiceIcon = mcpInfo.isMcp && mcpInfo.service

@@ -13,6 +13,7 @@ import { useAppDispatch } from '@/shared/hooks';
 import { resetSystemPrompt, AppSettings, DEFAULT_SYSTEM_PROMPT } from '@/shared/state/settingsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { SettingsStyles } from '../settingsStyles';
+import { settingSelectAttrs } from '../settingSelect';
 
 type ModelOption = { value: string; label: string };
 
@@ -34,7 +35,7 @@ const GeneralAgentDefaults: React.FC<{
     <>
       <Typography sx={sectionSx}>Agent Defaults</Typography>
 
-      <Box sx={rowSx}>
+      <Box sx={rowSx} {...settingSelectAttrs('default_system_prompt', 'System prompt', 'Agent Defaults', 'Prepended to every agent session before mode-specific instructions.')}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
           <Typography sx={labelSx}>System prompt</Typography>
           {form.default_system_prompt !== DEFAULT_SYSTEM_PROMPT && (
@@ -79,7 +80,7 @@ const GeneralAgentDefaults: React.FC<{
         />
       </Box>
 
-      <Box sx={rowSx}>
+      <Box sx={rowSx} {...settingSelectAttrs('default_folder', 'Working directory', 'Agent Defaults', 'Default folder agents start in.')}>
         <Typography sx={labelSx}>Working directory</Typography>
         <Typography sx={{ ...descSx, mb: 1.5 }}>
           Default folder agents start in. Modes can override per-mode.
@@ -118,7 +119,7 @@ const GeneralAgentDefaults: React.FC<{
         </Box>
       </Box>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('default_model', 'Model', 'Agent Defaults', 'Default model for new sessions.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Model</Typography>
           <Typography sx={descSx}>Default model for new sessions.</Typography>
@@ -199,7 +200,7 @@ const GeneralAgentDefaults: React.FC<{
         </FormControl>
       </Box>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('default_mode', 'Mode', 'Agent Defaults', 'Default interaction mode for new sessions.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Mode</Typography>
           <Typography sx={descSx}>Default interaction mode for new sessions.</Typography>
@@ -218,7 +219,7 @@ const GeneralAgentDefaults: React.FC<{
         </FormControl>
       </Box>
 
-      <Box sx={inlineRowSx}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('default_thinking_level', 'Thinking', 'Agent Defaults', 'Default thinking level for reasoning-capable models.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Thinking</Typography>
           <Typography sx={descSx}>Default thinking level for reasoning-capable models.</Typography>
@@ -239,7 +240,7 @@ const GeneralAgentDefaults: React.FC<{
         </FormControl>
       </Box>
 
-      <Box sx={inlineRowLastSx}>
+      <Box sx={inlineRowLastSx} {...settingSelectAttrs('default_max_turns', 'Max turns', 'Agent Defaults', 'Auto-stop after this many turns. Empty = unlimited.')}>
         <Box sx={{ mr: 3 }}>
           <Typography sx={labelSx}>Max turns</Typography>
           <Typography sx={descSx}>Auto-stop after this many turns. Empty = unlimited.</Typography>

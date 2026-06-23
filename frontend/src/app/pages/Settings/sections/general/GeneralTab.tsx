@@ -6,6 +6,7 @@ import AccountCard from '../subscription/AccountCard';
 import GeneralAgentDefaults from './GeneralAgentDefaults';
 import GeneralInterface from './GeneralInterface';
 import GeneralAdvanced from './GeneralAdvanced';
+import DataPrivacySection from './DataPrivacySection';
 import type { SettingsStyles } from '../settingsStyles';
 
 type ModelOption = { value: string; label: string };
@@ -41,6 +42,8 @@ const GeneralTab: React.FC<{
       <GeneralInterface form={form} setForm={setForm} styles={styles} />
 
       <GeneralAdvanced form={form} setForm={setForm} styles={styles} />
+
+      <DataPrivacySection styles={styles} />
 
     </Box>
   );

@@ -38,6 +38,7 @@ from backend.apps.settings.settings import settings
 from backend.apps.mcp_registry.mcp_registry import mcp_registry
 from backend.apps.skill_registry.skill_registry import skill_registry
 from backend.apps.outputs.outputs import outputs
+from backend.apps.outputs.versions_routes import output_versions
 from backend.apps.dashboards.dashboards import dashboards
 from backend.apps.swarm.swarm import swarm
 from backend.apps.service.service import service
@@ -50,7 +51,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 
-main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, dashboards, swarm, service, subscription, auth, web, anthropic_proxy, workflows])
+main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, output_versions, dashboards, swarm, service, subscription, auth, web, anthropic_proxy, workflows])
 app = main_app.app
 
 # Generate per-install auth token BEFORE we bind the HTTP port. By the
@@ -739,6 +740,117 @@ async def mcp_meta(action: str, request: Request):
         )
 
         return JSONResponse({"status": "activated", "server_name": server_name, "auto_continue": True})
+
+    return JSONResponse({"error": f"unknown action: {action}"}, status_code=400)
+
+
+@app.post("/api/settings-meta/{action}")
+async def settings_meta(action: str, request: Request):
+    """Back the openswarm-settings-meta stdio MCP server (agent-editable Settings).
+
+    Actions:
+      - read: the full settings object with every secret redacted to
+        configured/not (never the value), so an always-on read is never an
+        exfiltration path.
+      - write: apply a field -> value map. Three things can't be written, in
+        priority order: an unknown field (reported, not invented), a server-owned
+        subscription/connection field (managed by its dedicated flow), and the
+        credential powering THIS run (the no-suicide rule, enforced structurally
+        via resolve_powering_credential). Everything else is applied through the
+        same path PUT /api/settings uses, so 9router reconciliation and the
+        server-owned restore behave identically.
+    """
+    from backend.apps.settings.store import load_settings
+    from backend.apps.settings.models import AppSettings
+    from backend.apps.settings.redaction import redact_settings
+    from backend.apps.settings.settings import SERVER_OWNED_FIELDS, apply_settings_update, settings_write_lock
+    from backend.apps.agents.session_credential import (
+        ALL_API_KEY_FIELDS, PoweringCredential, resolve_powering_credential, write_would_suicide,
+    )
+    from backend.apps.agents.agent_manager import agent_manager
+    from pydantic import ValidationError
+
+    body = await request.json()
+    parent_session_id = body.get("parent_session_id", "")
+
+    if action == "read":
+        return JSONResponse({"settings": redact_settings(load_settings().model_dump())})
+
+    if action == "write":
+        changes = body.get("changes")
+        if not isinstance(changes, dict) or not changes:
+            return JSONResponse({"error": "changes must be a non-empty object of field -> value"}, status_code=400)
+
+        valid_fields = set(AppSettings.model_fields.keys())
+        outcomes: dict[str, dict] = {}
+        # Serialize the read-modify-write: SettingsWrite goes through apply_settings_update,
+        # which awaits (so two autonomous agents would interleave and clobber each
+        # other's fields while BOTH got an "applied" result). The lock makes agent
+        # writes serial so the last load always sees the prior write. (Agent vs the
+        # renderer's own PUT stays the pre-existing full-object-replace race.)
+        async with settings_write_lock():
+            settings = load_settings()
+            session = agent_manager.sessions.get(parent_session_id) if parent_session_id else None
+            if session is not None:
+                powering = resolve_powering_credential(session.model, settings)
+            else:
+                # No live session to anchor the guard: fail safe, protect every credential.
+                powering = PoweringCredential(kind="unknown", provider="unknown", label="this run")
+
+            # The credential field(s) the second-wall restore in apply_settings_update
+            # must never let a write blank (independent of the per-field guard below).
+            if powering.kind == "unknown":
+                protect_fields = set(ALL_API_KEY_FIELDS)
+            elif powering.kind == "api_key" and powering.protected_field:
+                protect_fields = {powering.protected_field}
+            else:
+                protect_fields = set()
+
+            staged: dict = {}
+            for field, value in changes.items():
+                if field not in valid_fields:
+                    outcomes[field] = {"status": "unknown", "reason": "not a settings field"}
+                elif field in SERVER_OWNED_FIELDS:
+                    outcomes[field] = {"status": "refused", "reason": "managed by your subscription/connection; change it in the Subscription section"}
+                elif write_would_suicide(field, value, powering):
+                    outcomes[field] = {"status": "refused", "reason": f"would disconnect {powering.label}, which is powering this run"}
+                else:
+                    staged[field] = value
+
+            if staged:
+                merged = settings.model_dump()
+                merged.update(staged)
+                try:
+                    new_body = AppSettings(**merged)
+                except ValidationError as e:
+                    bad = {str(err["loc"][0]) for err in e.errors() if err.get("loc")}
+                    for f in bad & set(staged.keys()):
+                        outcomes[f] = {"status": "refused", "reason": "invalid value for this field"}
+                        staged.pop(f, None)
+                    new_body = None
+                    if staged:
+                        merged = settings.model_dump()
+                        merged.update(staged)
+                        new_body = AppSettings(**merged)
+                if staged and new_body is not None:
+                    try:
+                        await apply_settings_update(new_body, protect_fields=protect_fields)
+                        for f in staged:
+                            outcomes[f] = {"status": "applied"}
+                    except Exception as e:
+                        # Don't hand the agent an opaque 500; tell it which writes failed.
+                        for f in staged:
+                            outcomes[f] = {"status": "error", "reason": f"write failed: {e}"}
+
+        if any(o.get("status") == "applied" for o in outcomes.values()):
+            # An agent wrote settings (not the user via the modal), so nudge every
+            # open window to refetch instead of waiting for the next window-focus.
+            # Pure signal: the renderer refetches the authoritative state, so nothing
+            # (least of all a secret) needs to ride the broadcast.
+            from backend.apps.agents.core.ws_manager import ws_manager as _wsm
+            await _wsm.broadcast_global("settings:changed", {})
+
+        return JSONResponse({"outcomes": outcomes})
 
     return JSONResponse({"error": f"unknown action: {action}"}, status_code=400)
 

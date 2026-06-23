@@ -49,8 +49,8 @@ def test_skill_export_import_round_trip(skill_store):
     # Original is untouched, import lands under a fresh, non-clobbering slug.
     assert root_type == EntityType.skill
     assert root_id != "my-skill"
-    assert (skill_store / "my-skill.md").exists()
-    assert (skill_store / f"{root_id}.md").read_text(encoding="utf-8") == "# hello\nbody text"
+    assert (skill_store / "my-skill.md").exists()  # original flat skill untouched
+    assert (skill_store / root_id / "SKILL.md").read_text(encoding="utf-8") == "# hello\nbody text"
     assert created == {"skill": [root_id]}
 
 
@@ -63,7 +63,7 @@ def test_bare_markdown_import(skill_store):
     finally:
         import shutil
         shutil.rmtree(sandbox, ignore_errors=True)
-    assert (skill_store / f"{root_id}.md").read_text(encoding="utf-8") == "# Just markdown"
+    assert (skill_store / root_id / "SKILL.md").read_text(encoding="utf-8") == "# Just markdown"
 
 
 def test_content_secret_redacted_in_bundle(skill_store):
@@ -97,6 +97,19 @@ def test_pack_refuses_denied_key():
     # Defense in depth: even if redaction were skipped, pack must not ship a secret.
     with pytest.raises(BundleError):
         pack({"format_version": 1}, {"bid1": {"api_key": "leak"}}, {})
+
+
+def test_pack_refuses_secret_in_workspace_file():
+    # A key hardcoded in app source (not .env) must not ride along; pack scans
+    # file bytes, not just payload keys.
+    leak = b"const KEY = 'sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAA';\n"
+    with pytest.raises(BundleError):
+        pack({"format_version": 1}, {"bid1": {"name": "ok"}}, {"entities/bid1/files/config.js": leak})
+
+
+def test_pack_allows_clean_workspace_file():
+    raw = pack({"format_version": 1}, {"bid1": {"name": "ok"}}, {"entities/bid1/files/app.js": b"export default 1"})
+    assert zipfile.is_zipfile(io.BytesIO(raw))
 
 
 def test_app_export_drops_machine_env(tmp_path, monkeypatch):
@@ -155,21 +168,192 @@ def test_workflow_unavailable_on_this_branch():
         WorkflowExportable.import_({"title": "x"}, {}, RemapTable())
 
 
-def test_session_export_strips_transcript_and_secrets():
+def test_session_export_carries_transcript_drops_runtime_and_secrets():
     from backend.apps.swarm.entities.sessions import SessionExportable
+    from backend.apps.swarm.redact import scrub_payload
     data = {
         "name": "A", "provider": "anthropic", "model": "sonnet", "mode": "agent",
         "system_prompt": "hi", "allowed_tools": ["Read"],
-        "messages": [{"role": "user", "content": "private chat"}],
+        "messages": [
+            {"id": "m1", "role": "user", "content": "private chat", "branch_id": "main"},
+            {"id": "m2", "role": "assistant", "content": "token is sk-ant-abcdefghij0123456789"},
+        ],
+        "branches": {"main": {"id": "main", "parent_branch_id": None, "fork_point_message_id": None}},
+        "active_branch_id": "main",
+        "tool_group_meta": {"g1": {"label": "x"}},
         "active_mcps": ["Gmail"], "cwd": "/Users/me/repo", "cost_usd": 9.9, "sdk_session_id": "x",
     }
     ex = SessionExportable("s1", "A", data)
     out = ex.serialize(None)
-    for gone in ("messages", "cwd", "active_mcps", "cost_usd", "sdk_session_id"):
+    # The transcript now rides along, that's the point of sharing an agent.
+    assert out["messages"][0]["content"] == "private chat"
+    assert out["active_branch_id"] == "main" and "main" in out["branches"]
+    assert out["tool_group_meta"] == {"g1": {"label": "x"}}
+    # Runtime, identity, and gate state still never leave.
+    for gone in ("cwd", "active_mcps", "cost_usd", "sdk_session_id"):
         assert gone not in out
-    assert out["model"] == "sonnet" and out["mode"] == "agent"
+    # The closure runs scrub_payload on every payload, so a secret-shaped
+    # string sitting in the transcript is redacted before it ships.
+    assert "sk-ant-" not in json.dumps(scrub_payload(out))
     reqs = ex.requirements()
     assert any(r.kind.value == "mcp_action" and r.key == "Gmail" for r in reqs)
+
+
+def test_session_import_restores_transcript_without_granting_mcp(monkeypatch):
+    from backend.apps.swarm.entities.sessions import SessionExportable
+    from backend.apps.swarm.exportable import RemapTable
+    from backend.apps.agents.manager.session import session_store
+    saved: dict = {}
+    monkeypatch.setattr(session_store, "_save_session", lambda sid, doc: saved.update({sid: doc}))
+    payload = {
+        "name": "A", "model": "sonnet", "mode": "agent",
+        "messages": [{"id": "m1", "role": "user", "content": "hi", "branch_id": "main"}],
+        "branches": {"main": {"id": "main", "parent_branch_id": None, "fork_point_message_id": None}},
+        "active_branch_id": "main",
+        "tool_group_meta": {"g1": {"label": "x"}},
+    }
+    sid = SessionExportable.import_(payload, {}, RemapTable())
+    doc = saved[sid]
+    assert doc["messages"][0]["content"] == "hi"
+    assert doc["active_branch_id"] == "main"
+    assert doc["tool_group_meta"] == {"g1": {"label": "x"}}
+    # The gate stays shut: a shared agent never arrives with MCP access.
+    assert doc["active_mcps"] == []
+    # The dashboard import re-points this; it must never be the sharer's id.
+    assert doc["dashboard_id"] is None
+
+
+def test_session_import_old_bundle_without_transcript(monkeypatch):
+    # A bundle made before transcripts were carried has no messages; it must
+    # still import as a valid empty-history agent (single main branch), not crash.
+    from backend.apps.swarm.entities.sessions import SessionExportable
+    from backend.apps.swarm.exportable import RemapTable
+    from backend.apps.agents.manager.session import session_store
+    saved: dict = {}
+    monkeypatch.setattr(session_store, "_save_session", lambda sid, doc: saved.update({sid: doc}))
+    sid = SessionExportable.import_({"name": "Old", "model": "sonnet"}, {}, RemapTable())
+    doc = saved[sid]
+    assert doc["messages"] == []
+    assert doc["active_branch_id"] == "main" and "main" in doc["branches"]
+
+
+def test_session_load_prefers_live_memory_over_stale_disk(tmp_path, monkeypatch):
+    # The freshest transcript lives in memory; a disk-only load would ship a
+    # stale one. load() must read the live session first, disk only as fallback.
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.swarm.entities.sessions import SessionExportable
+    sdir = tmp_path / "sessions"
+    sdir.mkdir()
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(sdir))
+    (sdir / "s1.json").write_text(json.dumps(
+        {"name": "Stale", "messages": [{"id": "old", "role": "user", "content": "old"}]}))
+
+    class FakeSess:
+        def model_dump(self, mode="json"):
+            return {"name": "Live", "messages": [
+                {"id": "old", "role": "user", "content": "old"},
+                {"id": "new", "role": "assistant", "content": "fresh turn"},
+            ]}
+
+    monkeypatch.setattr(am.agent_manager, "sessions", {"s1": FakeSess()})
+    out = SessionExportable.load("s1").serialize(None)
+    assert out["name"] == "Live"          # not the stale disk copy
+    assert len(out["messages"]) == 2      # the unflushed turn is included
+
+
+def test_dashboard_export_import_carries_agent_cards_and_transcript(tmp_path, monkeypatch):
+    # The path the single-session tests missed: a whole dashboard with agent
+    # cards + a browser card. Both agents (with their transcripts) and the
+    # browser must survive export -> import. An empty-history import is the bug
+    # the user hit ("the chats didn't even show up, let alone the history").
+    import shutil
+    from backend.apps.agents import agent_manager as am
+    import backend.config.paths as paths
+    sdir = tmp_path / "sessions"
+    ddir = tmp_path / "dashboards"
+    sdir.mkdir()
+    ddir.mkdir()
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(sdir))
+    monkeypatch.setattr(paths, "DASHBOARDS_DIR", str(ddir))
+    monkeypatch.setattr(am.agent_manager, "sessions", {})  # nothing live -> disk path
+
+    did, sid1, sid2, bkey = "d1", "sA", "sB", "browser-1"
+
+    def sess(sid, name, text):
+        return {
+            "id": sid, "name": name, "status": "completed", "provider": "anthropic",
+            "model": "sonnet", "mode": "agent", "allowed_tools": [],
+            "messages": [{"id": "m1", "role": "user", "content": text, "branch_id": "main"}],
+            "branches": {"main": {"id": "main", "parent_branch_id": None, "fork_point_message_id": None, "created_at": "2026-01-01"}},
+            "active_branch_id": "main", "tool_group_meta": {}, "active_mcps": [], "dashboard_id": did,
+        }
+
+    (sdir / f"{sid1}.json").write_text(json.dumps(sess(sid1, "Agent One", "from one")))
+    (sdir / f"{sid2}.json").write_text(json.dumps(sess(sid2, "Agent Two", "from two")))
+    (ddir / f"{did}.json").write_text(json.dumps({"id": did, "name": "Board", "layout": {
+        "cards": {sid1: {"session_id": sid1}, sid2: {"session_id": sid2}},
+        "view_cards": {},
+        "browser_cards": {bkey: {"browser_id": bkey, "url": "u", "spawned_by": None}},
+        "notes": {}, "expanded_session_ids": [sid1],
+    }}))
+
+    raw, _ = closure.build_bundle(EntityType.dashboard, did)
+    sandbox, manifest, _w = closure.stage_upload(raw, "board.swarm")
+    try:
+        _rt, root_id, _created, _u = closure.commit(sandbox, manifest, [])
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
+
+    L = json.loads((ddir / f"{root_id}.json").read_text())["layout"]
+    assert len(L["cards"]) == 2, "both agent cards must survive import"
+    assert len(L["browser_cards"]) == 1, "the browser card must survive too"
+    total_msgs = 0
+    for sid in L["cards"]:
+        doc = json.loads((sdir / f"{sid}.json").read_text())
+        total_msgs += len(doc.get("messages") or [])
+        assert doc["active_mcps"] == [], "import must not grant MCP access"
+    assert total_msgs == 2, "each agent's transcript must carry through"
+
+    # The bug behind "the chats didn't even show up": after import the sessions
+    # are on disk but not in memory, and the dashboard-open fetch
+    # (get_all_sessions) was memory-only, so the cards rendered blank. The fetch
+    # must now see the freshly-imported sessions straight off disk.
+    found = am.agent_manager.get_all_sessions(dashboard_id=root_id)
+    assert len(found) == 2, f"dashboard-open fetch must see imported agent sessions, got {len(found)}"
+    assert sum(len(s.messages) for s in found) == 2, "and with their transcripts"
+
+
+def test_get_all_sessions_does_not_resurrect_deleted_cards(tmp_path, monkeypatch):
+    # Deleting a card removes it from the layout but the session keeps its
+    # dashboard_id on disk. get_all_sessions must surface only sessions the
+    # layout still has a card for, or deleted chats come back on every reopen.
+    from backend.apps.agents import agent_manager as am
+    import backend.config.paths as paths
+    sdir = tmp_path / "sessions"
+    ddir = tmp_path / "dashboards"
+    sdir.mkdir()
+    ddir.mkdir()
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(sdir))
+    monkeypatch.setattr(paths, "DASHBOARDS_DIR", str(ddir))
+    monkeypatch.setattr(am.agent_manager, "sessions", {})
+
+    did = "d1"
+
+    def sess(sid):
+        return {
+            "id": sid, "name": sid, "status": "completed", "model": "sonnet",
+            "mode": "agent", "messages": [], "branches": {}, "active_branch_id": "main",
+            "dashboard_id": did,
+        }
+
+    (sdir / "kept.json").write_text(json.dumps(sess("kept")))
+    (sdir / "deleted.json").write_text(json.dumps(sess("deleted")))  # still tagged, card gone
+    # The layout has a card only for "kept" (the user deleted "deleted"'s card).
+    (ddir / f"{did}.json").write_text(json.dumps({"id": did, "layout": {"cards": {"kept": {"session_id": "kept"}}}}))
+
+    ids = {s.id for s in am.agent_manager.get_all_sessions(dashboard_id=did)}
+    assert "kept" in ids, "a session the layout still has a card for must surface"
+    assert "deleted" not in ids, "a session whose card was deleted must NOT resurrect"
 
 
 def test_dashboard_serialize_rewrites_refs_to_bundle_ids():
@@ -182,13 +366,15 @@ def test_dashboard_serialize_rewrites_refs_to_bundle_ids():
 
     data = {"name": "D", "layout": {
         "cards": {"S": {"session_id": "S", "x": 1}},
-        "view_cards": {"A": {"output_id": "A", "x": 2}},
+        "view_cards": {"A": {"output_id": "A", "x": 2, "parent_session_id": "S"}},
         "browser_cards": {"b1": {"browser_id": "b1", "url": "u", "spawned_by": "S"}},
         "expanded_session_ids": ["S"],
     }}
     L = DashboardExportable("d1", "D", data).serialize(Ctx())["layout"]
     assert L["cards"]["SBID"]["session_id"] == "SBID"
     assert L["view_cards"]["ABID"]["output_id"] == "ABID"
+    # the app card's tether to its builder agent is a session id, so it remaps too
+    assert L["view_cards"]["ABID"]["parent_session_id"] == "SBID"
     assert L["browser_cards"]["b1"]["spawned_by"] == "SBID"
     assert L["expanded_session_ids"] == ["SBID"]
 
@@ -205,16 +391,94 @@ def test_dashboard_import_remaps_to_fresh_local_ids(monkeypatch):
     remap.assign("ABID", "newapp")
     payload = {"name": "D", "layout": {
         "cards": {"SBID": {"session_id": "SBID"}},
-        "view_cards": {"ABID": {"output_id": "ABID"}},
+        "view_cards": {
+            "ABID": {"output_id": "ABID", "parent_session_id": "SBID"},
+            "ABID2": {"output_id": "ABID2", "parent_session_id": "GONE"},
+        },
         "browser_cards": {"b1": {"browser_id": "b1", "spawned_by": "SBID"}},
         "expanded_session_ids": ["SBID", "ORPHAN"],
     }}
+    remap.assign("ABID2", "newapp2")
     did = dmod.DashboardExportable.import_(payload, {}, remap)
     L = written[did]["layout"]
     assert L["cards"]["newsess"]["session_id"] == "newsess"
-    assert "newapp" in L["view_cards"]
+    assert L["view_cards"]["newapp"]["parent_session_id"] == "newsess"
+    assert L["view_cards"]["newapp2"]["parent_session_id"] is None  # parent not in bundle
     assert list(L["browser_cards"].values())[0]["spawned_by"] == "newsess"
     assert L["expanded_session_ids"] == ["newsess"]  # the dangling ref is dropped
+
+
+def test_dashboard_remap_invariant_generative(monkeypatch):
+    # The hand-written remap tests only check the id-bearing fields I remembered.
+    # Generate random dashboards and assert the real invariant on a serialize ->
+    # import round-trip: no source-local id and no bundle id survives into the
+    # imported layout, and every card id is a freshly-minted local id. This is
+    # what catches "someone adds a new layout field holding a session id and
+    # forgets to remap it."
+    import random
+
+    from backend.apps.swarm.entities import dashboards as dmod
+    from backend.apps.swarm.exportable import RemapTable
+    from backend.apps.swarm.models import EntityType
+
+    written: dict = {}
+    monkeypatch.setattr(dmod, "_write", lambda did, doc: written.update({did: doc}))
+    monkeypatch.setattr(dmod, "_retag_sessions", lambda ids, did: None)
+
+    rng = random.Random(1234)
+    for _ in range(60):
+        sess = [f"S{i}" for i in range(rng.randint(0, 5))]
+        apps = [f"A{i}" for i in range(rng.randint(0, 4))]
+        s_bid = {s: f"sbid{i}" for i, s in enumerate(sess)}
+        a_bid = {a: f"abid{i}" for i, a in enumerate(apps)}
+
+        class Ctx:
+            def bundle_id_for(self, t, lid):
+                if t == EntityType.session:
+                    return s_bid.get(lid)
+                if t == EntityType.app:
+                    return a_bid.get(lid)
+                return None
+
+        layout = {
+            "cards": {s: {"session_id": s, "x": rng.randint(0, 9)} for s in sess},
+            "view_cards": {
+                a: {"output_id": a,
+                    "parent_session_id": (rng.choice(sess + ["ORPHAN"]) if sess and rng.random() < 0.7 else None)}
+                for a in apps
+            },
+            "browser_cards": {
+                f"b{i}": {"browser_id": f"b{i}", "url": "u",
+                          "spawned_by": (rng.choice(sess) if sess and rng.random() < 0.7 else None)}
+                for i in range(rng.randint(0, 3))
+            },
+            "expanded_session_ids": (sess + ["ORPHAN"]) if rng.random() < 0.5 else list(sess),
+        }
+        payload = dmod.DashboardExportable("d-src", "D", {"name": "D", "layout": layout}).serialize(Ctx())
+
+        remap = RemapTable()
+        fresh_sess = {s: f"new-{s_bid[s]}" for s in sess}
+        fresh_apps = {a: f"new-{a_bid[a]}" for a in apps}
+        for s in sess:
+            remap.assign(s_bid[s], fresh_sess[s])
+        for a in apps:
+            remap.assign(a_bid[a], fresh_apps[a])
+
+        did = dmod.DashboardExportable.import_(payload, {}, remap)
+        L = written[did]["layout"]
+
+        forbidden = set(sess) | set(apps) | set(s_bid.values()) | set(a_bid.values())
+        assert set(L["cards"]) == set(fresh_sess.values())
+        assert set(L["view_cards"]) == set(fresh_apps.values())
+        for cid, card in L["cards"].items():
+            assert cid not in forbidden and card["session_id"] == cid
+        for oid, card in L["view_cards"].items():
+            assert oid not in forbidden and card["output_id"] == oid
+            p = card["parent_session_id"]
+            assert p is None or (p in set(fresh_sess.values()) and p not in forbidden)
+        assert set(L["expanded_session_ids"]) <= set(fresh_sess.values())
+        for card in L["browser_cards"].values():
+            assert card["spawned_by"] is None or card["spawned_by"] in set(fresh_sess.values())
 
 
 def test_checksum_rejects_tampering(skill_store):
@@ -239,9 +503,9 @@ def test_skill_rollback_removes_it(skill_store):
     from backend.apps.swarm.entities.skills import SkillExportable
     from backend.apps.swarm.exportable import RemapTable
     sid = SkillExportable.import_({"slug": "rbk", "name": "Rbk", "content": "x"}, {}, RemapTable())
-    assert (skill_store / f"{sid}.md").exists()
+    assert (skill_store / sid / "SKILL.md").exists()
     SkillExportable.rollback(sid)
-    assert not (skill_store / f"{sid}.md").exists()
+    assert not (skill_store / sid).exists()
     assert sid not in store._load_index()
 
 
@@ -264,7 +528,41 @@ def test_commit_rolls_back_created_on_failure(skill_store, tmp_path):
     with pytest.raises(BundleError):
         closure.commit(str(sb), manifest, [])
     assert "rollme" not in store._load_index()
-    assert not (skill_store / "rollme.md").exists()
+    assert not (skill_store / "rollme").exists()  # the imported folder was rolled back
+
+
+def test_manifest_duplicate_ids_rejected():
+    # Two entities sharing a bundle_id silently collapse in the topo/summary
+    # dicts, dropping one; reject up front. (The manifest is outside the checksum.)
+    from backend.apps.swarm.closure import validate_manifest
+    from backend.apps.swarm.models import BundlePreview, EntityRef, Manifest
+    ref = EntityRef(type=EntityType.skill, bundle_id="dup", name="A", path="entities/dup")
+    m = Manifest(bundle_id="b", root=ref, entities=[ref, ref],
+                 preview=BundlePreview(root_type=EntityType.skill, root_name="A"))
+    with pytest.raises(BundleError):
+        validate_manifest(m)
+
+
+def test_manifest_root_not_in_entities_rejected():
+    from backend.apps.swarm.closure import validate_manifest
+    from backend.apps.swarm.models import BundlePreview, EntityRef, Manifest
+    root = EntityRef(type=EntityType.skill, bundle_id="root", name="A", path="entities/root")
+    other = EntityRef(type=EntityType.skill, bundle_id="other", name="B", path="entities/other")
+    m = Manifest(bundle_id="b", root=root, entities=[other],
+                 preview=BundlePreview(root_type=EntityType.skill, root_name="A"))
+    with pytest.raises(BundleError):
+        validate_manifest(m)
+
+
+def test_manifest_edge_to_unknown_entity_rejected():
+    from backend.apps.swarm.closure import validate_manifest
+    from backend.apps.swarm.models import BundlePreview, DependencyEdge, EntityRef, Manifest
+    ref = EntityRef(type=EntityType.dashboard, bundle_id="d", name="D", path="entities/d")
+    m = Manifest(bundle_id="b", root=ref, entities=[ref],
+                 edges=[DependencyEdge(**{"from": "d", "to": "ghost"})],
+                 preview=BundlePreview(root_type=EntityType.dashboard, root_name="D"))
+    with pytest.raises(BundleError):
+        validate_manifest(m)
 
 
 def _zip_with(name, data=b"x"):
@@ -282,6 +580,18 @@ def test_zip_slip_rejected():
 def test_absolute_path_rejected():
     with pytest.raises(BundleError):
         unpack(_zip_with("/etc/evil"))
+
+
+def test_symlink_entry_rejected():
+    # A symlink entry could point outside the sandbox once followed; unpack must
+    # refuse it before writing anything.
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zi = zipfile.ZipInfo("link")
+        zi.external_attr = 0o120777 << 16
+        zf.writestr(zi, "/etc/passwd")
+    with pytest.raises(BundleError):
+        unpack(buf.getvalue())
 
 
 def test_too_many_entries_rejected():

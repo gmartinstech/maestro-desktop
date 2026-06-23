@@ -5,7 +5,7 @@ import Alert from '@mui/material/Alert';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { updateSettings, closeSettingsModal, AppSettings } from '@/shared/state/settingsSlice';
+import { updateSettingsPatch, closeSettingsModal, AppSettings } from '@/shared/state/settingsSlice';
 import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { fetchModes } from '@/shared/state/modesSlice';
@@ -153,17 +153,18 @@ const Settings: React.FC = () => {
 
   // Only the fields the user touched ride on top of the LATEST settings; submitting the
   // whole stale form would clobber background updates and ping-pong with server-owned fields.
-  const buildSubmit = useCallback((): { submit: AppSettings; touched: string[] } | null => {
+  const buildSubmit = useCallback((): { touched: string[]; patch: Partial<AppSettings> } | null => {
     const base = baselineRef.current as unknown as Record<string, unknown>;
     const f = form as unknown as Record<string, unknown>;
     const touched = Array.from(new Set([...Object.keys(base), ...Object.keys(f)]))
       .filter((k) => JSON.stringify(f[k]) !== JSON.stringify(base[k]));
     if (touched.length === 0) return null;
-    const submit = { ...settings } as unknown as Record<string, unknown>;
-    for (const k of touched) submit[k] = f[k];
-    if (JSON.stringify(submit) === JSON.stringify(settings)) return null;
-    return { submit: submit as unknown as AppSettings, touched };
-  }, [form, settings]);
+    // Send ONLY what the user changed; the server merges it onto fresh state, so
+    // we never re-send (and clobber) a field something else updated underneath us.
+    const patch: Record<string, unknown> = {};
+    for (const k of touched) patch[k] = f[k];
+    return { touched, patch: patch as Partial<AppSettings> };
+  }, [form]);
 
   // Theme is local UI state; apply it the moment the toggle flips, the debounced save persists it.
   useEffect(() => {
@@ -183,7 +184,7 @@ const Settings: React.FC = () => {
       if (!payload) return;
       inFlight.current = true;
       try {
-        await dispatch(updateSettings(payload.submit)).unwrap();
+        await dispatch(updateSettingsPatch(payload.patch)).unwrap();
         // Absorb the saved edits so they stop counting as touched (prevents re-save loops).
         const nextBase = { ...baselineRef.current } as Record<string, unknown>;
         for (const k of payload.touched) nextBase[k] = (form as unknown as Record<string, unknown>)[k];
@@ -205,7 +206,7 @@ const Settings: React.FC = () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const payload = loaded ? buildSubmit() : null;
     if (payload) {
-      dispatch(updateSettings(payload.submit));
+      dispatch(updateSettingsPatch(payload.patch));
       dispatch(fetchModels());
       baselineRef.current = form;
     }

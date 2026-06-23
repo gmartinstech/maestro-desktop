@@ -325,6 +325,45 @@ export const JOBS_LIST = '/api/jobs/list';
 
 ---
 
+## Publishable AI + compute — `window.OUTPUT_LLM` / `window.OUTPUT_COMPUTE`
+
+The FastAPI backend above runs in preview but is **not hosted when an app is
+published** to the web. For features that should keep working on a published
+`{slug}.openswarm.host` link, use these two runtime calls instead of a backend.
+They run on the published site (same-origin, no credentials). In the App Builder
+**preview** they throw a clear "available once published" error, preview can't run
+them without embedding a credential into your app, so test these by publishing.
+
+**AI (Claude):** call `window.OUTPUT_LLM` with an Anthropic-style messages body.
+The model is chosen for you (a cheap default), so don't pass one.
+
+```ts
+const res = await window.OUTPUT_LLM({
+  messages: [{ role: 'user', content: prompt }],
+  max_tokens: 512,
+});
+const data = await res.json();
+const text = data.content[0].text;
+```
+
+**Data-shaping compute:** put pure Python (json/math/csv/datetime only — no
+network, no files) in a top-level `backend.py` that reads `input_data` and assigns
+`result`, then call `window.OUTPUT_COMPUTE(input)`:
+
+```python
+# backend.py
+result = {"total": sum(input_data["nums"])}
+```
+```ts
+const out = await window.OUTPUT_COMPUTE({ nums: [1, 2, 3] }); // -> { total: 6 }
+```
+
+Rule of thumb: if the app should be publishable, reach for `OUTPUT_LLM` /
+`OUTPUT_COMPUTE` first; only use the FastAPI backend for preview-only tools or
+things those two can't do (it won't be there once published).
+
+---
+
 ## Debugging — use `swarm_debug`, not `print()`
 
 The backend has `swarm_debug` pre-installed. It's a colored frame-aware

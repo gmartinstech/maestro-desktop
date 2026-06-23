@@ -13,10 +13,12 @@ import Alert from '@mui/material/Alert';
 import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
 import LinkIcon from '@mui/icons-material/Link';
+import PublicIcon from '@mui/icons-material/Public';
 
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
 import IncludesList from './IncludesList';
+import PublishModal from './PublishModal';
 import { downloadSwarm, exportPreflight } from './shareApi';
 import { ExportPreflight, ShareTarget } from './shareTypes';
 
@@ -33,6 +35,7 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [toast, setToast] = useState('');
+  const [publishOpen, setPublishOpen] = useState(false);
 
   const load = useCallback(() => {
     setPreflight(null);
@@ -74,8 +77,10 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
     subtitle: string,
     disabled?: boolean,
     chip?: string,
+    onClick?: () => void,
   ) => (
     <Box
+      onClick={!disabled && onClick ? onClick : undefined}
       sx={{
         display: 'flex',
         alignItems: 'center',
@@ -86,7 +91,9 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
         border: `1px solid ${selected ? c.accent.primary : c.border.subtle}`,
         bgcolor: selected ? `${c.accent.primary}0d` : 'transparent',
         opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'default' : 'default',
+        cursor: !disabled && onClick ? 'pointer' : 'default',
+        transition: 'background-color 0.12s, border-color 0.12s',
+        '&:hover': !disabled && onClick ? { bgcolor: c.bg.secondary, borderColor: c.border.medium } : undefined,
       }}
     >
       <Box sx={{ color: selected ? c.accent.primary : c.text.tertiary, display: 'flex' }}>{icon}</Box>
@@ -151,14 +158,24 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
           </Box>
 
           {optionRow(true, <DownloadIcon sx={{ fontSize: 20 }} />, 'Download .swarm file', 'Save a file you can send to anyone.')}
-          {optionRow(
-            false,
-            <LinkIcon sx={{ fontSize: 20 }} />,
-            'Create share link',
-            'A link that opens straight in OpenSwarm.',
-            true,
-            'Coming soon',
-          )}
+          {target.kind === 'app'
+            ? optionRow(
+                false,
+                <PublicIcon sx={{ fontSize: 20 }} />,
+                'Publish to web',
+                'A public link anyone can open, hosted at openswarm.host.',
+                false,
+                undefined,
+                () => setPublishOpen(true),
+              )
+            : optionRow(
+                false,
+                <LinkIcon sx={{ fontSize: 20 }} />,
+                'Create share link',
+                'A link that opens straight in OpenSwarm.',
+                true,
+                'Coming soon',
+              )}
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
             <Button
@@ -206,6 +223,15 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
           {toast}
         </Alert>
       </Snackbar>
+
+      {target.kind === 'app' && (
+        <PublishModal
+          outputId={target.id}
+          outputName={target.name}
+          open={publishOpen}
+          onClose={() => setPublishOpen(false)}
+        />
+      )}
     </>
   );
 };

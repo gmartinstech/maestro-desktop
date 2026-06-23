@@ -35,7 +35,7 @@ import { useElementSelection } from '@/app/components/editor/ElementSelectionCon
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { searchHistory, clearHistorySearch } from '@/shared/state/agentsSlice';
-import { updateSettings, AppSettings } from '@/shared/state/settingsSlice';
+import { updateSettingsPatch, AppSettings } from '@/shared/state/settingsSlice';
 import { store } from '@/shared/state/store';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import type { Output } from '@/shared/state/outputsSlice';
@@ -162,7 +162,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
       const current = store.getState().settings;
       if (!current.loaded) return;
       if (current.data[key] === value) return;
-      dispatch(updateSettings({ ...current.data, [key]: value }));
+      dispatch(updateSettingsPatch({ [key]: value }));
     }, [dispatch]);
 
     const handleModeChange = useCallback((newMode: string) => {
@@ -299,14 +299,17 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
     const autoSelectOnNew = useAppSelector((s) => s.settings.data.auto_select_mode_on_new_agent);
     const prevInputOpenRef = useRef(inputOpen);
     useEffect(() => {
+      // Collapsing the composer drops the selecting cursor but KEEPS the selected
+      // elements, so they persist across collapse/reopen like the draft text does.
+      // The selection is cleared on send via ChatInput's clearOwnerElements(ownerId).
       if (prevInputOpenRef.current && !inputOpen && elementSelection) {
-        elementSelection.clearOwnerElements(TOOLBAR_OWNER_ID);
         if (elementSelection.selectMode && elementSelection.activeOwnerId === TOOLBAR_OWNER_ID) {
           elementSelection.setSelectMode(false);
         }
       }
+      // Re-arm select mode on reopen without wiping any in-progress selection
+      // (mirrors the selector button, which only clears when switching owners).
       if (!prevInputOpenRef.current && inputOpen && autoSelectOnNew && elementSelection) {
-        elementSelection.clearOwnerElements(TOOLBAR_OWNER_ID);
         elementSelection.setActiveOwnerId(TOOLBAR_OWNER_ID);
         elementSelection.setExcludeSelectId(null);
         elementSelection.setSelectMode(true);

@@ -25,6 +25,12 @@ class Output(BaseModel):
     workspace_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    # App publishing to {slug}.openswarm.host. Server-managed: set by the publish
+    # endpoint, never accepted from OutputUpdate (so a client can't spoof a live URL).
+    published_slug: Optional[str] = None
+    published_url: Optional[str] = None
+    publish_status: Optional[Literal["publishing", "published", "error"]] = None
+    publish_error: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -53,6 +59,20 @@ class Output(BaseModel):
     @property
     def backend_code(self) -> str | None:
         return self.files.get("backend.py")
+
+
+class OutputVersion(BaseModel):
+    """A saved point in an app's history. The list endpoint returns these; the
+    heavy bits (the serialized app metadata + the workspace byte tree) live in
+    the version's manifest plus content-addressed blobs on disk, not here."""
+    id: str = Field(default_factory=lambda: uuid4().hex)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    label: str = ""
+    # auto: saved after a builder edit run. manual: user clicked Save this version.
+    # pre_restore: the automatic backup taken right before a restore (so restore undoes).
+    source: Literal["auto", "manual", "pre_restore"] = "auto"
+    parent_id: Optional[str] = None
+    thumbnail: Optional[str] = None
 
 
 class OutputCreate(BaseModel):
@@ -197,3 +217,35 @@ class VibeCodeRequest(BaseModel):
     current_schema: str = ""
     name: str = ""
     description: str = ""
+
+
+class PublishReview(BaseModel):
+    # Same JSON shape the frontend shareTypes.ReviewSummary expects.
+    verdict: Literal["clean", "warn", "block"] = "clean"
+    findings: list[str] = Field(default_factory=list)
+    scanned_files: list[str] = Field(default_factory=list)
+
+
+class PublishPreflightRequest(BaseModel):
+    output_id: str
+
+
+class PublishRequest(BaseModel):
+    output_id: str
+    slug: Optional[str] = None
+    force: bool = False
+
+
+class PublishPreflightResponse(BaseModel):
+    review: PublishReview
+
+
+class PublishResult(BaseModel):
+    ok: bool = True
+    published_slug: Optional[str] = None
+    published_url: Optional[str] = None
+    # When the AST safety net blocks a non-force publish, carry the findings so
+    # the UI shows the review modal instead of a generic error toast.
+    blocked: bool = False
+    review: Optional[PublishReview] = None
+    error: Optional[str] = None

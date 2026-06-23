@@ -16,6 +16,7 @@ from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.settings import load_settings
 from backend.apps.tools_lib.tools_lib import (
     _load_all as load_all_tools,
+    _save as save_tool,
     _sanitize_server_name,
     derive_mcp_config,
     load_builtin_permissions,
@@ -23,6 +24,8 @@ from backend.apps.tools_lib.tools_lib import (
     refresh_airtable_token,
     refresh_google_token,
     refresh_hubspot_token,
+    resolve_policy_slot,
+    save_builtin_permissions,
     save_trusted_sensitive_paths,
 )
 from backend.config.paths import SESSIONS_DIR
@@ -36,6 +39,8 @@ from backend.apps.agents.core.error_classify import (
     p_is_transient_capacity_error,
     p_is_unknown_model_error,
     p_extract_reset_hint,
+    parse_retry_after,
+    redact_for_telemetry,
 )
 from backend.apps.agents.manager.session.session_store import (
     _delete_session_file,
@@ -62,12 +67,15 @@ from backend.apps.agents.manager.session.history_compaction import (
 from backend.apps.agents.manager.prompt.prompt_context import (
     _build_browser_context,
     _build_selected_app_context,
+    _build_selected_settings_context,
     _build_connected_tools_context,
     _build_mcp_registry_summary,
     _compose_system_prompt,
     _resolve_attached_skills,
     _resolve_forced_tools,
     _resolve_mode,
+    TOOLSEARCH_LOOP_THRESHOLD,
+    toolsearch_loop_redirect,
 )
 from backend.apps.agents.manager.prompt.attachments import (
     _build_dir_tree,
@@ -134,6 +142,11 @@ def get_workflow_step_usage(session_id: str) -> dict[str, dict[str, bool]]:
     return mem.step_usage if mem is not None else {}
 
 
+p_VIEW_BUILDER_RENDER_MAX_RETRIES = 2
+p_view_builder_render_retry_counts: dict[str, int] = {}
+p_view_builder_dirty_sessions: set[str] = set()
+
+
 def _apply_context_window(session, settings=None) -> None:
     """Set session.context_window from the registry for its (provider, model).
 
@@ -187,7 +200,11 @@ class AgentManager:
     def __init__(self):
         self.sessions: dict[str, AgentSession] = {}
         self.tasks: dict[str, asyncio.Task] = {}
-    
+        # Live mirror of the in-flight streamed assistant text per session, so a
+        # stop can persist the partial reply instantly instead of waiting out the
+        # multi-second SDK teardown the cancel handler sits behind.
+        self._live_partial: dict[str, dict] = {}
+
     def _resolve_mode(self, mode_id: str) -> tuple[list[str], str | None, str | None]:
         return _resolve_mode(mode_id, get_all_tool_names)
 
@@ -242,8 +259,9 @@ class AgentManager:
                 continue
 
             if tool.auth_type == "oauth2" and tool.auth_status == "connected":
-                if tool.name.lower() == "discord":
-                    # Discord uses a shared bot token from .env, not user OAuth tokens.
+                if tool.name.lower() in ("discord", "github"):
+                    # Discord uses a shared bot token; GitHub OAuth-app tokens don't
+                    # expire and carry no refresh_token. Nothing to refresh either way.
                     refreshed = True
                 elif tool.name.lower() == "airtable":
                     refreshed = await refresh_airtable_token(tool)
@@ -263,6 +281,29 @@ class AgentManager:
 
         logger.info(f"[MCP-DEBUG] Final mcp_servers: {list(mcp_servers.keys())}")
         return mcp_servers
+
+    def _gated_mcp_server_names(self, allowed_tools: list[str], active_mcps: list[str] | None) -> list[str]:
+        """Names of installed MCP servers withheld from the SDK because they're
+        not activated yet, exactly the servers the model sees in the
+        <mcp_servers> block but can't reach via ToolSearch. The only way in is
+        MCPActivate; used to steer a model looping on ToolSearch to the gate."""
+        active_set = set(active_mcps or [])
+        names: list[str] = []
+        try:
+            for tool in load_all_tools():
+                if not (tool.mcp_config and tool.enabled and tool.auth_status in ("configured", "connected")):
+                    continue
+                tool_ref = f"mcp:{tool.name}"
+                if tool_ref not in allowed_tools and allowed_tools != get_all_tool_names():
+                    continue
+                if _is_fully_denied(tool):
+                    continue
+                server_name = _sanitize_server_name(tool.name)
+                if server_name not in active_set:
+                    names.append(server_name)
+        except Exception:
+            logger.exception("gated MCP server enumeration failed")
+        return names
 
     def _build_connected_tools_context(self, allowed_tools: list[str]) -> str | None:
         return _build_connected_tools_context(allowed_tools, get_all_tool_names)
@@ -471,7 +512,7 @@ class AgentManager:
     def _resolve_context_paths(self, context_paths: list | None) -> str:
         return _resolve_context_paths(context_paths)
 
-    async def _run_agent_loop(self, session_id: str, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, fork_session: bool = False, selected_browser_ids: list[str] | None = None, selected_app_output_ids: list[str] | None = None):
+    async def _run_agent_loop(self, session_id: str, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, fork_session: bool = False, selected_browser_ids: list[str] | None = None, selected_app_output_ids: list[str] | None = None, selected_setting_ids: list[str] | None = None):
         """Run the Claude Agent SDK query loop for a session."""
         session = self.sessions.get(session_id)
         if not session:
@@ -758,29 +799,38 @@ class AgentManager:
             return policy, None
 
         def _get_effective_policy(tool_name: str) -> str:
-            """Return 'always_allow', 'deny', or 'ask' for any tool."""
-            if tool_name in _builtin_perms:
-                return _builtin_perms[tool_name]
-
-            import re as _re
-
-            bm = _re.match(r"mcp__openswarm-browser-agent__(.+)", tool_name)
-            if bm:
-                return _builtin_perms.get(bm.group(1), _default_for(bm.group(1)))
-
-            im = _re.match(r"mcp__openswarm-invoke-agent__(.+)", tool_name)
-            if im:
-                return _builtin_perms.get(im.group(1), _default_for(im.group(1)))
-
-            m = _re.match(r"mcp__([^_]+(?:-[^_]+)*)__(.+)", tool_name)
-            if m:
-                server_slug, mcp_tool_name = m.group(1), m.group(2)
-                for t in load_all_tools():
-                    if not t.mcp_config or not t.enabled:
-                        continue
-                    if _sanitize_server_name(t.name) == server_slug:
-                        return t.tool_permissions.get(mcp_tool_name, "ask")
+            """Return 'always_allow', 'deny', or 'ask' for any tool. Keyed through
+            the shared resolver so the read slot matches the write slot exactly."""
+            tools = load_all_tools()
+            slot = resolve_policy_slot(tool_name, tools)
+            if slot.store == "builtin":
+                return _builtin_perms.get(slot.key, _default_for(slot.key))
+            if slot.key is not None:
+                for t in tools:
+                    if t.id == slot.key:
+                        return t.tool_permissions.get(slot.action, "ask")
             return _default_for(tool_name)
+
+        def _set_tool_policy(tool_name: str, policy: str) -> None:
+            """Inverse of _get_effective_policy: persist `policy` into the SAME slot
+            the gate reads, AND update the live in-memory snapshot, so an 'Always
+            approve' takes effect for this running agent, not only after a restart.
+            (The old code wrote the raw tool name to the file and never touched the
+            captured _builtin_perms, so it behaved like a one-time accept.)"""
+            tools = load_all_tools()
+            slot = resolve_policy_slot(tool_name, tools)
+            if slot.store == "builtin":
+                _builtin_perms[slot.key] = policy
+                perms = load_builtin_permissions()
+                perms[slot.key] = policy
+                save_builtin_permissions(perms)
+                return
+            if slot.key is not None:
+                for t in tools:
+                    if t.id == slot.key:
+                        t.tool_permissions[slot.action] = policy
+                        save_tool(t)
+                        return
 
         async def _request_user_approval(
             tool_name: str,
@@ -838,6 +888,15 @@ class AgentManager:
                         save_trusted_sensitive_paths(existing)
                 except Exception:
                     logger.exception("Failed to persist trusted sensitive path")
+
+            # "Always approve" button: persist the tool's policy so it stops
+            # prompting. The guards above (sensitive/catastrophic) re-fire even
+            # on always_allow, so this can't disarm an rm -rf or a key-path write.
+            if decision.get("behavior") == "allow" and decision.get("set_always_allow"):
+                try:
+                    _set_tool_policy(tool_name, "always_allow")
+                except Exception:
+                    logger.exception("Failed to persist always-allow for %s", tool_name)
 
             approval_latency_ms = int((datetime.now() - approval_req.created_at).total_seconds() * 1000)
             try:
@@ -945,10 +1004,83 @@ class AgentManager:
             )
 
         tool_start_times: dict[str, float] = {}
+        # Counts ToolSearch calls in a row (no other tool between them). A run
+        # of these with empty results is the "looping on ToolSearch" wedge.
+        _ts_loop = {"n": 0}
+        # One mid-run connect offer per session: a stuck agent fires the loop-breaker repeatedly,
+        # but the user should see the "connect this MCP" card once, not on every retry.
+        _mcp_offer_sent = {"done": False}
 
         async def pre_tool_hook(input_data, tool_use_id, context):
             tool_name = input_data.get("tool_name", "")
             hook_event = input_data.get("hook_event_name", "PreToolUse")
+
+            # ToolSearch loop-breaker. Gated MCP servers are withheld from the
+            # SDK until MCPActivate, so the CLI's native ToolSearch can never
+            # find them; small models thrash (empty ToolSearch, retry) for
+            # minutes until the user pauses. Let the first couple through, then
+            # redirect to the gate. Any non-ToolSearch call is real progress, so
+            # the counter resets. Gated-server lookup is deferred behind the
+            # threshold so the common (non-looping) path stays free.
+            if tool_name == "ToolSearch":
+                _ts_loop["n"] += 1
+                if _ts_loop["n"] >= TOOLSEARCH_LOOP_THRESHOLD:
+                    _gated = self._gated_mcp_server_names(session.allowed_tools, session.active_mcps)
+                    _reason = toolsearch_loop_redirect(_ts_loop["n"], _gated)
+                    if _reason:
+                        logger.info(f"[MCP-DEBUG] ToolSearch loop-breaker fired for {session_id} (n={_ts_loop['n']})")
+                        # 2B-MCP: also surface a one-click connect offer to the USER for the vetted
+                        # gated servers the agent keeps reaching for. Suggest-only: this just shows a
+                        # card on the same channel the preflight uses; activation still requires
+                        # MCPActivate + the dispatch gate, so it opens no side channel. Once per run,
+                        # fail-open (an offer hiccup must never block the agent).
+                        if not _mcp_offer_sent["done"]:
+                            try:
+                                from backend.apps.agents.core.mcp_preflight import offer_for_gated_server
+                                _s = load_settings()
+                                _offers = [o for o in (offer_for_gated_server(n, _s) for n in _gated) if o]
+                                if _offers:
+                                    _mcp_offer_sent["done"] = True
+                                    await ws_manager.send_to_session(session_id, "agent:mcp_suggestions", {
+                                        "session_id": session_id,
+                                        "suggestions": _offers,
+                                        "is_vague": False,
+                                    })
+                            except Exception:
+                                logger.debug("mid-run MCP connect offer skipped", exc_info=True)
+                        return {
+                            "hookSpecificOutput": {
+                                "hookEventName": hook_event,
+                                "permissionDecision": "deny",
+                                "permissionDecisionReason": _reason,
+                            }
+                        }
+            else:
+                _ts_loop["n"] = 0
+
+            # MCPSearch is the agent saying "I need an integration I don't have" (e.g. "no email
+            # connected"). Don't make the user read a wall of options: fire the same curated connect
+            # card the launch preflight uses, keyed to their original request. Non-blocking (the search
+            # proceeds) and once per run; covers the common path the ToolSearch-loop branch misses
+            # because a capable model does one MCPSearch instead of thrashing. Suggest-only as ever.
+            if (tool_name.endswith("MCPSearch") or tool_name.endswith("MCPList")) and not _mcp_offer_sent["done"]:
+                _mcp_offer_sent["done"] = True
+
+                async def _offer_from_prompt():
+                    try:
+                        from backend.apps.agents.core.mcp_preflight import run_preflight
+                        result = await run_preflight(prompt, task_id=session_id, require_vague=False)
+                        offers = result.get("suggestions", [])
+                        if offers:
+                            await ws_manager.send_to_session(session_id, "agent:mcp_suggestions", {
+                                "session_id": session_id,
+                                "suggestions": offers,
+                                "is_vague": False,
+                            })
+                    except Exception:
+                        logger.debug("MCPSearch-triggered connect offer skipped", exc_info=True)
+
+                asyncio.create_task(_offer_from_prompt())
 
             if tool_name and tool_name != "AskUserQuestion":
                 tool_input = input_data.get("tool_input", {})
@@ -1072,26 +1204,38 @@ class AgentManager:
                 except Exception:
                     content = str(raw_response)
 
-            # When the agent writes/edits a file inside a live App
-            # Builder workspace, surface any build-server errors
-            # (vite/babel/tsc/uvicorn) that landed in the runtime's
-            # stderr in the moments after the write. Without this the
-            # agent walks away from broken JSX, the iframe shows a red
-            # overlay, and the user has to copy-paste the error back.
-            # ~400ms gives vite's file watcher + babel parse enough
-            # time to react; the post_tool_hook runs once per tool so
-            # the added latency is acceptable for the win.
             hook_tool_name_for_errors = input_data.get("tool_name", "")
-            if hook_tool_name_for_errors in ("Write", "Edit", "MultiEdit"):
-                tool_in = input_data.get("tool_input") or {}
-                file_path = tool_in.get("file_path") or tool_in.get("path") or ""
+            wrote_files = hook_tool_name_for_errors in ("Write", "Edit", "MultiEdit")
+            tool_in = input_data.get("tool_input") or {}
+            file_path = tool_in.get("file_path") or tool_in.get("path") or ""
+            wrote_frontend_file = wrote_files and "/frontend/" in file_path
+            installed_pkg = False
+            if hook_tool_name_for_errors == "Bash":
+                bash_in = input_data.get("tool_input") or {}
+                cmd = (bash_in.get("command") or "").lower()
+                installed_pkg = any(s in cmd for s in (
+                    "npm install", "npm i ", "npm uninstall", "npm ci",
+                    "pnpm add", "pnpm install", "pnpm remove",
+                    "yarn add", "yarn install", "yarn remove",
+                ))
+
+            if session.mode == "view-builder" and (wrote_frontend_file or installed_pkg):
+                p_view_builder_dirty_sessions.add(session.id)
+                try:
+                    from backend.apps.outputs.runtime import (
+                        manager as outputs_runtime_manager,
+                    )
+                    outputs_runtime_manager.reset_render_state_for_workspace(session.id)
+                except Exception:
+                    pass
+            elif wrote_files:
                 if file_path:
                     try:
                         await asyncio.sleep(0.4)
                         from backend.apps.outputs.runtime import (
-                            manager as _outputs_runtime_manager,
+                            manager as outputs_runtime_manager,
                         )
-                        errs = _outputs_runtime_manager.drain_errors_for_path(file_path)
+                        errs = outputs_runtime_manager.drain_errors_for_path(file_path)
                     except Exception:
                         errs = []
                     if errs:
@@ -1131,6 +1275,9 @@ class AgentManager:
                     usage = raw_response.get("usage", {})
                     if isinstance(usage, dict):
                         sub_tokens["input"] = usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+                        # Pill-only lane: NEW (uncached) input, excludes the cached
+                        # static prefix so the bubble shows what this turn added.
+                        sub_tokens["input_fresh"] = usage.get("input_tokens", 0)
                         sub_tokens["output"] = usage.get("output_tokens", 0)
                     if raw_response.get("total_cost_usd"):
                         sub_cost = raw_response["total_cost_usd"]
@@ -1333,6 +1480,12 @@ class AgentManager:
             if app_ctx:
                 composed_prompt = f"{composed_prompt}\n\n{app_ctx}" if composed_prompt else app_ctx
 
+            # The user can point the agent at specific Settings rows. Targeting
+            # aid only; the settings tools are always on regardless.
+            settings_ctx = _build_selected_settings_context(selected_setting_ids)
+            if settings_ctx:
+                composed_prompt = f"{composed_prompt}\n\n{settings_ctx}" if composed_prompt else settings_ctx
+
             # Per-turn estimate of framework overhead (subtracted from displayed
             # input). Conservative on purpose so honest over-shows beat lies.
             # 16K Claude Code preset, 12K base+deferred tools, ~3K/MCP (real
@@ -1446,6 +1599,27 @@ class AgentManager:
                 "env": {
                     "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
                     "OPENSWARM_AUTH_TOKEN": _get_auth_token3(),
+                    "OPENSWARM_PARENT_SESSION_ID": session.id,
+                },
+                "type": "stdio",
+            }
+
+            # Always-on settings-meta server: SettingsRead / SettingsWrite let the
+            # agent read and edit its own OpenSwarm Settings autonomously. The
+            # backend (/api/settings-meta) enforces the only two guardrails: it
+            # can't disconnect the credential powering this run, and reads come
+            # back with secrets redacted. No activation gate, Settings is the
+            # agent's own house, not a third-party MCP.
+            settings_meta_server_path = os.path.join(
+                os.path.dirname(__file__), "settings_meta_server.py"
+            )
+            from backend.auth import get_auth_token as _get_auth_token4
+            mcp_servers["openswarm-settings-meta"] = {
+                "command": sys.executable,
+                "args": [settings_meta_server_path],
+                "env": {
+                    "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
+                    "OPENSWARM_AUTH_TOKEN": _get_auth_token4(),
                     "OPENSWARM_PARENT_SESSION_ID": session.id,
                 },
                 "type": "stdio",
@@ -1695,6 +1869,59 @@ class AgentManager:
                 if len(_stderr_buffer) > 500:
                     del _stderr_buffer[:250]
 
+            async def stop_hook(input_data, tool_use_id, context):
+                """End-of-turn render gate for App Builder sessions. Reads the
+                browser-reported render-state of the preview; if the app fails
+                to render, blocks with the error so the agent fixes it, up to
+                MAX_RETRIES then lets the stop through."""
+                if session.mode != "view-builder":
+                    return {}
+                if session.id not in p_view_builder_dirty_sessions:
+                    return {}
+                from backend.apps.outputs.runtime import (
+                    manager as outputs_runtime_manager,
+                )
+                if outputs_runtime_manager.get(session.id) is None:
+                    return {}
+                state, error_text = outputs_runtime_manager.get_render_state_for_workspace(session.id)
+                waited = 0.0
+                while state is None and waited < 5.0:
+                    await asyncio.sleep(0.25)
+                    waited += 0.25
+                    state, error_text = outputs_runtime_manager.get_render_state_for_workspace(session.id)
+
+                if state != "error":
+                    p_view_builder_render_retry_counts.pop(session.id, None)
+                    p_view_builder_dirty_sessions.discard(session.id)
+                    return {}
+
+                attempts = p_view_builder_render_retry_counts.get(session.id, 0)
+                if attempts >= p_VIEW_BUILDER_RENDER_MAX_RETRIES:
+                    logger.warning(
+                        "view-builder preview still failing after %s attempts for session %s; allowing stop",
+                        attempts, session.id,
+                    )
+                    p_view_builder_render_retry_counts.pop(session.id, None)
+                    p_view_builder_dirty_sessions.discard(session.id)
+                    return {}
+
+                p_view_builder_render_retry_counts[session.id] = attempts + 1
+                logger.info(
+                    "view-builder render block (attempt %s/%s) for session %s",
+                    attempts + 1, p_VIEW_BUILDER_RENDER_MAX_RETRIES, session.id,
+                )
+                trimmed = error_text[-3000:] if len(error_text) > 3000 else error_text
+                return {
+                    "decision": "block",
+                    "reason": (
+                        f"The preview failed to render (attempt {attempts + 1}/"
+                        f"{p_VIEW_BUILDER_RENDER_MAX_RETRIES}):\n\n"
+                        f"{trimmed}\n\n"
+                        "Fix this so the app renders before finishing; the user "
+                        "currently sees an error instead of the app."
+                    ),
+                }
+
             options_kwargs = {
                 "model": resolved_model,
                 # 64 MB ceiling on the SDK <-> CLI JSON-RPC channel. The
@@ -1710,6 +1937,7 @@ class AgentManager:
                 "hooks": {
                     "PreToolUse": [HookMatcher(matcher=None, hooks=[pre_tool_hook])],
                     "PostToolUse": [HookMatcher(matcher=None, hooks=[post_tool_hook])],
+                    "Stop": [HookMatcher(matcher=None, hooks=[stop_hook])],
                 },
                 "allowed_tools": effective_allowed,
                 "disallowed_tools": effective_disallowed,
@@ -2041,6 +2269,15 @@ class AgentManager:
                             options_kwargs["thinking"] = {"type": "disabled"}
                     elif level in ("low", "medium", "high"):
                         options_kwargs["effort"] = level
+                elif api_type in ("openai", "codex"):
+                    # GPT-5 family + Codex take reasoning_effort; 9Router carries
+                    # the Anthropic-shaped `effort` across to it, so the slider
+                    # works for OpenAI too, not just Claude. Every OpenAI/Codex
+                    # model we expose is reasoning-capable (registry has no
+                    # non-reasoning ones), so no per-model gate. No "disabled"
+                    # form on these, so "off" just omits the param.
+                    if level in ("low", "medium", "high"):
+                        options_kwargs["effort"] = level
             except Exception as e:
                 logger.debug(f"thinking_level param injection skipped: {e}")
 
@@ -2171,6 +2408,11 @@ class AgentManager:
             stream_text_msg_id = None
             stream_tool_msg_ids_ordered = []
             stream_block_index_map = {}
+            # Mirror of the streamed assistant text. The SDK envelope that
+            # normally commits a reply never lands when a turn is stopped
+            # mid-stream, so without this the text the user just watched
+            # appear would evaporate. Cleared the instant a block commits.
+            _stream_text_accum = ""
             # Per-turn aggregate trackers for the consolidated thinking
             # message. We accumulate across every AssistantMessage in the
             # turn (think → tool → think → tool → answer) and stream
@@ -2381,10 +2623,13 @@ class AgentManager:
                 # baseline to get THIS TURN'S delta. Without subtracting,
                 # the second turn's pill would show turn-1 work added
                 # to turn-2 work, the third would show all three, etc.
+                # Pill uses the FRESH lane (uncached input only). session.tokens
+                # ["input"] stays full for the context-fullness bar + cost; the
+                # bubble shows the NEW tokens this turn, not the cached re-reads.
                 _cum_in = 0
                 _cum_out = 0
                 if isinstance(session.tokens, dict):
-                    _cum_in = int(session.tokens.get("input", 0) or 0)
+                    _cum_in = int(session.tokens.get("input_fresh", 0) or 0)
                     _cum_out = int(session.tokens.get("output", 0) or 0)
                 _cum_children_in = 0
                 _cum_children_out = 0
@@ -2395,7 +2640,7 @@ class AgentManager:
                         _ct = getattr(_child, "tokens", None)
                         if not isinstance(_ct, dict):
                             continue
-                        _cum_children_in += int(_ct.get("input", 0) or 0)
+                        _cum_children_in += int(_ct.get("input_fresh", 0) or 0)
                         _cum_children_out += int(_ct.get("output", 0) or 0)
                 except Exception:
                     pass
@@ -2413,18 +2658,14 @@ class AgentManager:
                     _children_in = _cum_children_in
                     _children_out = _cum_children_out
 
+                # Fresh input + output = the NEW tokens this turn. The old
+                # framework-overhead subtraction is gone on purpose: it was an
+                # estimate to strip the cached static prefix out of the full
+                # input number, and the fresh lane already excludes that prefix
+                # exactly, so subtracting it again would double-discount to ~0.
                 _turn_total_tokens: int | None = (
                     _parent_in + _parent_out + _children_in + _children_out
                 )
-                # Strip framework overhead so bubble shows what the user
-                # actually controls. Floor at output so over-estimates can't
-                # render absurdly small.
-                if _turn_total_tokens and session.framework_overhead_tokens > 0:
-                    _adjusted = _turn_total_tokens - session.framework_overhead_tokens
-                    _floor = _parent_out + _children_out
-                    if _adjusted < _floor:
-                        _adjusted = _floor
-                    _turn_total_tokens = _adjusted
                 if not _turn_total_tokens or _turn_total_tokens <= 0:
                     _turn_total_tokens = None
                 consolidated = Message(
@@ -2469,6 +2710,7 @@ class AgentManager:
 
             async def _run_streaming_turn():
                 nonlocal stream_text_msg_id, stream_tool_msg_ids_ordered, stream_block_index_map
+                nonlocal _stream_text_accum
                 nonlocal _turn_number, _first_event, _current_turn_emitted
                 # Per-turn thinking aggregation trackers (added for the
                 # "Thought for Ns · M tokens" persisted label). Without
@@ -2500,8 +2742,10 @@ class AgentManager:
                             # Snapshot cumulative tokens at turn start;
                             # subtracted at emit time for per-turn deltas.
                             try:
+                                # Baselines track the SAME fresh lane the pill reads,
+                                # so the per-turn delta is fresh-minus-fresh.
                                 if isinstance(session.tokens, dict):
-                                    _turn_baseline_session_in = int(session.tokens.get("input", 0) or 0)
+                                    _turn_baseline_session_in = int(session.tokens.get("input_fresh", 0) or 0)
                                     _turn_baseline_session_out = int(session.tokens.get("output", 0) or 0)
                                 _ch_in = 0
                                 _ch_out = 0
@@ -2511,7 +2755,7 @@ class AgentManager:
                                     _ct = getattr(_child, "tokens", None)
                                     if not isinstance(_ct, dict):
                                         continue
-                                    _ch_in += int(_ct.get("input", 0) or 0)
+                                    _ch_in += int(_ct.get("input_fresh", 0) or 0)
                                     _ch_out += int(_ct.get("output", 0) or 0)
                                 _turn_baseline_children_in = _ch_in
                                 _turn_baseline_children_out = _ch_out
@@ -2635,6 +2879,12 @@ class AgentManager:
                             if msg_id and delta_type == "text_delta":
                                 _text_chunk = delta.get("text", "")
                                 _turn_assistant_text_chars += len(_text_chunk)
+                                _stream_text_accum += _text_chunk
+                                self._live_partial[session_id] = {
+                                    "msg_id": stream_text_msg_id,
+                                    "text": _stream_text_accum,
+                                    "branch_id": session.active_branch_id,
+                                }
                                 await ws_manager.send_to_session(session_id, "agent:stream_delta", {
                                     "session_id": session_id,
                                     "message_id": msg_id,
@@ -2840,7 +3090,9 @@ class AgentManager:
                                     content=_asst_text,
                                     branch_id=session.active_branch_id,
                                 )
-                                session.messages.append(asst_msg)
+                                self._upsert_message(session, asst_msg)
+                                _stream_text_accum = ""
+                                self._live_partial.pop(session_id, None)
                                 await ws_manager.send_to_session(session_id, "agent:message", {
                                     "session_id": session_id,
                                     "message": asst_msg.model_dump(mode="json"),
@@ -2849,7 +3101,7 @@ class AgentManager:
                         for i, tu in enumerate(tool_uses):
                             msg_id = stream_tool_msg_ids_ordered[i] if i < len(stream_tool_msg_ids_ordered) else uuid4().hex
                             tool_msg = Message(id=msg_id, role="tool_call", content=tu, branch_id=session.active_branch_id)
-                            session.messages.append(tool_msg)
+                            self._upsert_message(session, tool_msg)
                             await ws_manager.send_to_session(session_id, "agent:message", {
                                 "session_id": session_id,
                                 "message": tool_msg.model_dump(mode="json"),
@@ -2903,6 +3155,9 @@ class AgentManager:
                                 _pre_out = int(_pre_usage.get("output_tokens", 0) or 0)
                                 if _pre_total_in > 0:
                                     session.tokens["input"] = _pre_total_in
+                                # Pill reads the fresh lane: uncached input only,
+                                # so re-read/cached context doesn't inflate it.
+                                session.tokens["input_fresh"] = _pre_in
                                 if _pre_out > 0:
                                     session.tokens["output"] = _pre_out
                         except Exception:
@@ -2970,6 +3225,7 @@ class AgentManager:
                             cache_read = usage.get("cache_read_input_tokens", 0) or 0
                             total_input = inp + cache_create + cache_read
                             session.tokens["input"] = total_input
+                            session.tokens["input_fresh"] = inp
                             session.tokens["output"] = out
 
                         cost = getattr(message, "total_cost_usd", None)
@@ -3113,6 +3369,8 @@ class AgentManager:
                                 "message_id": stream_text_msg_id,
                             })
                             stream_text_msg_id = None
+                        _stream_text_accum = ""
+                        self._live_partial.pop(session_id, None)
                         for _tool_msg_id in stream_tool_msg_ids_ordered:
                             await ws_manager.send_to_session(session_id, "agent:stream_end", {
                                 "session_id": session_id,
@@ -3155,7 +3413,24 @@ class AgentManager:
             except Exception:
                 logger.exception("auto-continuation dispatch failed")
         except asyncio.CancelledError:
-            session.status = "stopped"
+            # Only act if we're still the session's live task. A user stop pops
+            # this task (stop_agent already finalized status + partial), and a
+            # follow-up message may have started a newer turn; either way this
+            # dying task must NOT clobber the live status or pop the new turn's
+            # in-flight partial mirror.
+            if self.tasks.get(session_id) is asyncio.current_task():
+                session.status = "stopped"
+                # A cancelled turn desyncs the CLI's resume transcript from
+                # session.messages (the SDK never recorded the interrupted
+                # turn), so force the next turn to rebuild history from
+                # session.messages, else resume/follow-ups replay a transcript
+                # with no trace of the stopped reply ("nothing to continue").
+                session.needs_fresh_session = True
+                # Persist whatever streamed before the cancel (edit / branch
+                # switch paths; the user-stop path already did this in stop_agent).
+                await self._commit_partial_now(session)
+            stream_text_msg_id = None
+            _stream_text_accum = ""
         except Exception as e:
             logger.exception(f"Agent {session_id} error: {e}")
             session.status = "error"
@@ -3232,10 +3507,29 @@ class AgentManager:
                         "framework_overhead_tokens": session.framework_overhead_tokens,
                         "active_mcps_count": len(session.active_mcps),
                         "messages_count": len(session.messages),
-                        "error_preview": (str(e) or "")[:500],
+                        "error_preview": redact_for_telemetry(str(e), limit=500),
                     })
                 except Exception:
                     logger.debug("submit_diagnostic for context_overflow failed", exc_info=True)
+            elif p_is_transient_capacity_error(e, extra_text=_stderr_tail):
+                # A genuine throttle (429/overload/capacity) that already burned
+                # the whole silent-backoff budget (the only way one reaches here).
+                # It's a limit, not a failure, so don't append a system-message
+                # card; emit a transient signal for the muted pill and mark the
+                # turn completed so it doesn't read as an error.
+                session.status = "completed"
+                if stream_text_msg_id:
+                    try:
+                        await ws_manager.send_to_session(session_id, "agent:stream_end", {
+                            "session_id": session_id,
+                            "message_id": stream_text_msg_id,
+                        })
+                    except Exception:
+                        pass
+                await ws_manager.send_to_session(session_id, "agent:rate_limited", {
+                    "session_id": session_id,
+                    "retry_after_s": parse_retry_after(e, _stderr_tail),
+                })
             elif p_is_free_trial_exhausted(e, extra_text=_stderr_tail):
                 # Free runs spent. Flip back to own_key and show a friendly
                 # "connect a model" upsell instead of a raw 402.
@@ -3362,7 +3656,8 @@ class AgentManager:
                         "model": session.model,
                         "provider": session.provider,
                         "connection_mode": getattr(load_settings(), "connection_mode", "own_key"),
-                        "error_preview": (str(e) or "")[:400],
+                        "error_preview": redact_for_telemetry(str(e), limit=400),
+                        "stderr_tail": redact_for_telemetry(_stderr_tail),
                     })
                 except Exception:
                     logger.debug("submit_diagnostic model_error failed", exc_info=True)
@@ -3407,7 +3702,8 @@ class AgentManager:
                         "model": session.model,
                         "provider": session.provider,
                         "connection_mode": getattr(load_settings(), "connection_mode", "own_key"),
-                        "error_preview": (str(e) or "")[:400],
+                        "error_preview": redact_for_telemetry(str(e), limit=400),
+                        "stderr_tail": redact_for_telemetry(_stderr_tail),
                     })
                 except Exception:
                     logger.debug("submit_diagnostic model_error failed", exc_info=True)
@@ -3430,7 +3726,15 @@ class AgentManager:
                 "message": error_msg.model_dump(mode="json"),
             })
         finally:
-            if session_id in self.sessions:
+            # Only the session's live task finalizes. A stopped task (popped by
+            # stop_agent, which already finalized status + saved) or one
+            # superseded by a newer turn must not pop the new turn's partial
+            # mirror, broadcast a stale terminal status, or overwrite the
+            # snapshot the live turn is writing.
+            _is_live_task = self.tasks.get(session_id) is asyncio.current_task()
+            if _is_live_task:
+                self._live_partial.pop(session_id, None)
+            if session_id in self.sessions and _is_live_task:
                 # For canvas-launched App Builder sessions, the workspace
                 # folder IS the session_id (see launch_agent), so meta.json
                 # lives at outputs_workspace/<session_id>/meta.json. Read it
@@ -3616,6 +3920,7 @@ class AgentManager:
         hidden: bool = False,
         selected_browser_ids: list[str] | None = None,
         selected_app_output_ids: list[str] | None = None,
+        selected_setting_ids: list[str] | None = None,
         client_message_id: str | None = None,
         prepend_context: str | None = None,
     ):
@@ -3752,7 +4057,7 @@ class AgentManager:
         if fast_verdict != "no":
             task = asyncio.create_task(self._run_browser_fast_path(session_id, model_prompt, selected_browser_ids, fast_brief, fast_verdict))
         else:
-            task = asyncio.create_task(self._run_agent_loop(session_id, model_prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids, selected_app_output_ids=selected_app_output_ids))
+            task = asyncio.create_task(self._run_agent_loop(session_id, model_prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids, selected_app_output_ids=selected_app_output_ids, selected_setting_ids=selected_setting_ids))
         self.tasks[session_id] = task
 
     async def _run_browser_fast_path(self, session_id: str, prompt: str, selected_browser_ids: list[str] | None, brief: str = "", verdict: str = "act"):
@@ -3909,21 +4214,88 @@ class AgentManager:
             session.pending_approvals = []
 
             session.status = "stopped"
+            session.needs_fresh_session = True
             if not session.closed_at:
                 session.closed_at = datetime.now()
+            # Persist the partial reply NOW, before tearing down the SDK. The
+            # cancel handler also does this, but it sits behind the generator's
+            # teardown, which can take several seconds; doing it here means the
+            # streamed text stays put the instant Stop is pressed instead of
+            # blinking out and reappearing once teardown finishes.
+            await self._commit_partial_now(session)
             await ws_manager.send_to_session(session_id, "agent:status", {
                 "session_id": session_id,
                 "status": "stopped",
                 "session": session.model_dump(mode="json"),
             })
+            # Snapshot now: the cancelled task's finally skips the save (it's no
+            # longer the live task once we pop it below), so persist the partial
+            # here or it'd live only in memory until the next turn / shutdown.
+            try:
+                _save_session(session_id, session.model_dump(mode="json"))
+            except Exception:
+                pass
 
-        task = self.tasks.get(session_id)
+        # Drop the task from the registry immediately so a follow-up message
+        # isn't rejected as "still running" while the cancelled task slowly
+        # tears down (that window was eating user messages). Drain it in the
+        # background; we've already captured the partial above.
+        task = self.tasks.pop(session_id, None)
         if task and not task.done():
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+            asyncio.create_task(self._drain_task(task))
+
+    async def _commit_partial_now(self, session) -> bool:
+        """Persist the in-flight streamed assistant text as a real message and
+        push it to the client, idempotently. Lets a stop show the partial
+        instantly instead of waiting out the SDK teardown the cancel handler
+        sits behind. Returns True if it committed something."""
+        live = self._live_partial.pop(session.id, None)
+        if not live:
+            return False
+        text = live.get("text") or ""
+        msg_id = live.get("msg_id")
+        if not msg_id or not text.strip():
+            return False
+        if any(getattr(m, "id", None) == msg_id for m in session.messages):
+            return False
+        partial = Message(
+            id=msg_id,
+            role="assistant",
+            content=text,
+            branch_id=live.get("branch_id") or session.active_branch_id,
+        )
+        self._upsert_message(session, partial)
+        try:
+            await ws_manager.send_to_session(session.id, "agent:message", {
+                "session_id": session.id,
+                "message": partial.model_dump(mode="json"),
+            })
+            await ws_manager.send_to_session(session.id, "agent:stream_end", {
+                "session_id": session.id,
+                "message_id": msg_id,
+            })
+        except Exception:
+            pass
+        return True
+
+    async def _drain_task(self, task) -> None:
+        """Await a cancelled task's (possibly slow) teardown off the hot path."""
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    def _upsert_message(self, session, msg) -> None:
+        """Append msg, or replace it in place if its id is already present.
+        Makes a duplicate-id row unrepresentable when a stream commit races a
+        stop's early partial commit (both carry the same stream message id).
+        Same pattern the consolidated-thinking pill already uses inline."""
+        for i, existing in enumerate(session.messages):
+            if getattr(existing, "id", None) == msg.id:
+                session.messages[i] = msg
+                return
+        session.messages.append(msg)
 
     def handle_approval(self, request_id: str, decision: dict):
         """Resolve a pending HITL approval."""
@@ -4412,9 +4784,19 @@ class AgentManager:
             "dashboard_id": session.dashboard_id,
         })
 
+        self._purge_session_memory(session_id)
+        logger.info(f"Session {session_id} closed and persisted")
+
+    def _purge_session_memory(self, session_id: str) -> None:
+        """Drop a session from EVERY in-memory structure keyed by its id, so a
+        close or delete can't strand stale per-session state that lives until
+        the process dies. One chokepoint on purpose: a new per-session cache
+        wires its eviction in HERE and both removal paths get it for free."""
         self.sessions.pop(session_id, None)
         self.tasks.pop(session_id, None)
-        logger.info(f"Session {session_id} closed and persisted")
+        self._live_partial.pop(session_id, None)
+        p_view_builder_render_retry_counts.pop(session_id, None)
+        p_view_builder_dirty_sessions.discard(session_id)
 
     async def delete_session(self, session_id: str) -> None:
         """Permanently delete a session: remove from memory and JSON file.
@@ -4434,8 +4816,7 @@ class AgentManager:
             except asyncio.CancelledError:
                 pass
 
-        self.sessions.pop(session_id, None)
-        self.tasks.pop(session_id, None)
+        self._purge_session_memory(session_id)
 
         _delete_session_file(session_id)
         logger.info(f"Session {session_id} permanently deleted")
@@ -4774,9 +5155,44 @@ class AgentManager:
         }
 
     def get_all_sessions(self, dashboard_id: str | None = None) -> list[AgentSession]:
-        if dashboard_id:
-            return [s for s in self.sessions.values() if s.dashboard_id == dashboard_id]
-        return list(self.sessions.values())
+        if not dashboard_id:
+            return list(self.sessions.values())
+        # Memory first, then promote on-disk sessions for this dashboard, but
+        # ONLY ones the dashboard's layout still has a card for. A session keeps
+        # its dashboard_id when its card is deleted, so promoting by tag alone
+        # resurrected deleted chats on every reopen; the layout's cards are the
+        # real source of truth for what's on the board. Imported sessions ARE in
+        # the layout, so they still surface, and this bounds the disk read to
+        # once per session per run, like resume_session.
+        result = [s for s in self.sessions.values() if s.dashboard_id == dashboard_id]
+        seen = {s.id for s in result}
+        card_ids = self._dashboard_card_ids(dashboard_id)
+        for sid, data in _load_all_session_data():
+            if sid in seen or sid not in card_ids:
+                continue
+            if data.get("dashboard_id") != dashboard_id:
+                continue
+            try:
+                sess = AgentSession(**data)
+            except Exception:
+                logger.warning(f"get_all_sessions: skipping unloadable session {sid}", exc_info=True)
+                continue
+            _apply_context_window(sess)
+            self.sessions[sid] = sess
+            result.append(sess)
+        return result
+
+    def _dashboard_card_ids(self, dashboard_id: str) -> set[str]:
+        """Session ids the dashboard's layout currently has agent cards for.
+        Read straight off disk (no dashboards-module import, avoids a cycle)."""
+        try:
+            import os
+            import backend.config.paths as _paths
+            from backend.config.json_store import read_json_or_none
+            d = read_json_or_none(os.path.join(_paths.DASHBOARDS_DIR, f"{dashboard_id}.json")) or {}
+            return set((d.get("layout", {}).get("cards") or {}).keys())
+        except Exception:
+            return set()
 
     def get_session(self, session_id: str) -> Optional[AgentSession]:
         return self.sessions.get(session_id)

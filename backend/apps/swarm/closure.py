@@ -170,6 +170,26 @@ def swarm_filename(name: str) -> str:
 
 # ---------- import: staging ----------
 
+def validate_manifest(manifest: Manifest) -> None:
+    """Structural integrity of the untrusted part of a .swarm. The checksum
+    covers entity payloads + files but NOT the manifest itself, so an attacker
+    can rewrite root/edges/paths freely; catch the breakages that would import
+    silently wrong (a root pointing nowhere, a duplicate id that drops an
+    entity, an edge or path that doesn't resolve inside the bundle)."""
+    seen: set[str] = set()
+    for e in manifest.entities:
+        if e.bundle_id in seen:
+            raise BundleError("bundle manifest has duplicate entity ids")
+        seen.add(e.bundle_id)
+        if not e.path.startswith("entities/") or ".." in e.path.split("/"):
+            raise BundleError("bundle manifest has an out-of-tree entity path")
+    if manifest.root.bundle_id not in seen:
+        raise BundleError("bundle manifest root is not one of its entities")
+    for edge in manifest.edges:
+        if edge.from_ not in seen or edge.to not in seen:
+            raise BundleError("bundle manifest has an edge to an unknown entity")
+
+
 def stage_upload(raw: bytes, filename: str) -> tuple[str, Manifest, list[str]]:
     warnings: list[str] = []
     if is_zip(raw):
@@ -179,6 +199,7 @@ def stage_upload(raw: bytes, filename: str) -> tuple[str, Manifest, list[str]]:
                 raw_manifest = read_manifest(sandbox)
                 verify_checksum(sandbox, raw_manifest)
                 manifest = Manifest(**raw_manifest)
+                validate_manifest(manifest)
             except BundleError:
                 shutil.rmtree(sandbox, ignore_errors=True)
                 raise
@@ -215,13 +236,27 @@ def _stage_skill_from_zip(raw: bytes, filename: str, warnings: list[str]):
         if target is None:
             raise BundleError("zip has no SKILL.md")
         content = zf.read(target).decode("utf-8", errors="replace")
-        others = [n for n in zf.namelist() if not n.endswith("/") and n != target]
-        if others:
-            warnings.append("supporting files were not imported (a skill is a single markdown file)")
-    return _synth_single_skill(content, _name_from_filename(filename), warnings)
+        # Carry supporting files (scripts, templates) through as a folder skill,
+        # keyed relative to the SKILL.md's directory so a nested layout flattens
+        # onto the skill folder. Cap count + per-file size so a hostile zip can't
+        # balloon the install.
+        base_dir = target.rsplit("/", 1)[0] + "/" if "/" in target else ""
+        extra_files: dict[str, bytes] = {}
+        for n in zf.namelist():
+            if n.endswith("/") or n == target:
+                continue
+            rel = n[len(base_dir):] if base_dir and n.startswith(base_dir) else os.path.basename(n)
+            if not rel or rel.startswith("."):
+                continue
+            info = zf.getinfo(n)
+            if info.file_size > 2_000_000 or len(extra_files) >= 50:
+                warnings.append("some oversized/extra supporting files were skipped")
+                continue
+            extra_files[rel] = zf.read(n)
+    return _synth_single_skill(content, _name_from_filename(filename), warnings, extra_files)
 
 
-def _synth_single_skill(content: str, name: str, warnings: list[str]):
+def _synth_single_skill(content: str, name: str, warnings: list[str], extra_files: dict[str, bytes] | None = None):
     bid = uuid4().hex
     sandbox = tempfile.mkdtemp(prefix="swarm-import-")
     edir = os.path.join(sandbox, "entities", bid)
@@ -230,6 +265,14 @@ def _synth_single_skill(content: str, name: str, warnings: list[str]):
     payload = {"slug": slug, "name": name, "description": "", "command": slug, "content": content, "builtin": False}
     with open(os.path.join(edir, "payload.json"), "w", encoding="utf-8") as f:
         json.dump(payload, f)
+    # Supporting files ride the same entities/<bid>/files/<rel> channel the
+    # commit reader (_read_files) feeds into import_, so a zip-of-SKILL.md
+    # round-trips as a folder skill instead of getting flattened.
+    for rel, data in (extra_files or {}).items():
+        dest = _safe_join(edir, os.path.join("files", rel))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "wb") as f:
+            f.write(data)
     ref = EntityRef(type=EntityType.skill, bundle_id=bid, name=name, path=f"entities/{bid}")
     manifest = Manifest(
         bundle_id=uuid4().hex,

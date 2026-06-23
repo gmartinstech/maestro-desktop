@@ -42,6 +42,10 @@ class ApprovalResponse(BaseModel):
     # (from ApprovalRequest.sensitive_pattern) to disk so future writes
     # against the same pattern skip the modal.
     trust_pattern: bool = False
+    # "Always approve" button: persist this tool's policy to always_allow so
+    # the same tool stops prompting (the catastrophic/sensitive guards still
+    # fire, so this can't blanket-approve an rm -rf or a sensitive-path write).
+    set_always_allow: bool = False
 
 class Message(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex)

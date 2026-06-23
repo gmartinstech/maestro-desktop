@@ -99,6 +99,8 @@ class AppRuntime:
         # vite/babel/uvicorn errors in its next turn and can self-fix
         # instead of leaving the user with a red iframe overlay.
         self.recent_errors: deque[str] = deque(maxlen=_RECENT_ERRORS_MAX)
+        self.render_state: Optional[str] = None
+        self.render_error_text: str = ""
         self._stdout_task: Optional[asyncio.Task] = None
         self._stderr_task: Optional[asyncio.Task] = None
         self._wait_task: Optional[asyncio.Task] = None
@@ -112,6 +114,18 @@ class AppRuntime:
         out = list(self.recent_errors)
         self.recent_errors.clear()
         return out
+
+    def set_render_ok(self) -> None:
+        self.render_state = "ok"
+        self.render_error_text = ""
+
+    def set_render_error(self, text: str) -> None:
+        self.render_state = "error"
+        self.render_error_text = (text or "").strip()
+
+    def reset_render_state(self) -> None:
+        self.render_state = None
+        self.render_error_text = ""
 
     @property
     def running(self) -> bool:
@@ -250,12 +264,13 @@ class AppRuntime:
         env["OPENSWARM_DEBUGGER_PATH"] = _DEBUGGER_PATH
         env["OPENSWARM_TEMPLATE_BACKEND_PATH"] = _TEMPLATE_BACKEND_PATH
 
+        cmd, spawn_cwd, launch_desc = self._resolve_launch(env)
         try:
             self.process = await asyncio.create_subprocess_exec(
-                _resolve_bash(), "run.sh",
+                *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.workspace_path,
+                cwd=spawn_cwd,
                 env=env,
                 **_background_priority_kwargs(),
             )
@@ -267,7 +282,7 @@ class AppRuntime:
             self.process = None
             return False
         backend_note = f" + backend on {self.port}" if self.port else ""
-        self._broadcast(LogLine("runtime", f"[runtime] bash run.sh started; frontend on {self.frontend_port}{backend_note} (pid {self.process.pid})"))
+        self._broadcast(LogLine("runtime", f"[runtime] {launch_desc} started; frontend on {self.frontend_port}{backend_note} (pid {self.process.pid})"))
         self._stdout_task = asyncio.create_task(self._pipe_stream(self.process.stdout, "stdout"))
         self._stderr_task = asyncio.create_task(self._pipe_stream(self.process.stderr, "stderr"))
         self._wait_task = asyncio.create_task(self._await_exit())
@@ -276,6 +291,33 @@ class AppRuntime:
         self._frontend_ready = False
         self._frontend_ready_task = asyncio.create_task(self._await_frontend_bind())
         return True
+
+    def _resolve_launch(self, env: dict) -> tuple[list[str], str, str]:
+        """Pick the new-mode launch command.
+
+        Default is `bash run.sh` at the workspace root, which handles both
+        frontend-only and backend-enabled apps. On Windows we take a fast path
+        for frontend-only apps (the common case): run vite directly through the
+        bundled node, with no system `bash` at all. The packaged Windows build
+        ships node but not bash, so a user without Git for Windows hit
+        [WinError 2] on `bash run.sh` and the preview never started. We only
+        take this path when vite is actually present (node_modules linked);
+        otherwise fall back to bash so behavior is unchanged everywhere else.
+        vite.config.ts reads FRONTEND_PORT / BACKEND_PORT from the environment."""
+        if os.name == "nt" and self.port is None:
+            node = env.get("OPENSWARM_NODE_PATH") or shutil.which("node")
+            vite_bin = os.path.join(
+                self.workspace_path, "frontend", "node_modules", "vite", "bin", "vite.js"
+            )
+            if node and os.path.exists(node) and os.path.exists(vite_bin):
+                env["FRONTEND_PORT"] = str(self.frontend_port)
+                env["BACKEND_PORT"] = "NONE"
+                return (
+                    [node, "node_modules/vite/bin/vite.js"],
+                    os.path.join(self.workspace_path, "frontend"),
+                    "vite (bundled node, no bash)",
+                )
+        return [_resolve_bash(), "run.sh"], self.workspace_path, "bash run.sh"
 
     async def _await_frontend_bind(self) -> None:
         """Poll `frontend_port` every _FRONTEND_BIND_POLL_INTERVAL until
@@ -460,12 +502,15 @@ class AppRuntime:
                 pass
 
     def _maybe_capture_error(self, text: str) -> None:
-        """If a stderr/stdout line matches a known build-error pattern,
-        record it for the next agent-tool drain. Tests every line , 
-        cheap (single regex search) and only the matching ones land in
-        the buffer."""
         if _ERROR_PATTERNS.search(text):
             self.recent_errors.append(text.rstrip())
+
+    def p_maybe_capture_render_beacon(self, text: str) -> None:
+        if "[openswarm:app-ready]" in text:
+            self.set_render_ok()
+        elif "[openswarm:app-error]" in text:
+            idx = text.index("[openswarm:app-error]") + len("[openswarm:app-error]")
+            self.set_render_error(text[idx:].strip())
 
     async def _pipe_stream(self, stream: Optional[asyncio.StreamReader], name: str) -> None:
         if stream is None:
@@ -480,6 +525,7 @@ class AppRuntime:
                     self._broadcast(LogLine(name, text))
                     if name == "stderr" or name == "stdout":
                         self._maybe_capture_error(text)
+                        self.p_maybe_capture_render_beacon(text)
         except Exception:
             logger.exception("log pipe error (%s) for %s", name, self.workspace_id)
 
@@ -637,6 +683,17 @@ class AppRuntimeManager:
             if abs_path == ws_root or abs_path.startswith(ws_root + os.sep):
                 return rt.drain_errors()
         return []
+
+    def get_render_state_for_workspace(self, workspace_id: str) -> tuple[Optional[str], str]:
+        rt = self.runtimes.get(workspace_id) or self._idle_lru.get(workspace_id)
+        if rt is None:
+            return None, ""
+        return rt.render_state, rt.render_error_text
+
+    def reset_render_state_for_workspace(self, workspace_id: str) -> None:
+        rt = self.runtimes.get(workspace_id) or self._idle_lru.get(workspace_id)
+        if rt is not None:
+            rt.reset_render_state()
 
     async def restart(self, workspace_id: str, workspace_path: Optional[str] = None) -> Optional[AppRuntime]:
         rt = self.runtimes.get(workspace_id) or self._idle_lru.get(workspace_id)

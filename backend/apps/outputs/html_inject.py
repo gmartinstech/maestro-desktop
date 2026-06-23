@@ -54,20 +54,36 @@ def _validate_against_schema(data: dict, schema: dict) -> str | None:
         return f"Schema validation failed at {path}: {exc.message}"
 
 
-def _build_data_injection(input_json: str, result_json: str, backend_url_json: str = "null") -> str:
+def _runtime_helpers_js() -> str:
+    """OUTPUT_COMPUTE / OUTPUT_LLM only run for real on the published edge, where they
+    are same-origin and carry NO credentials. In the App Builder preview we
+    deliberately do NOT wire them to the authenticated backend: doing so would embed
+    this install's token into the app's own JS (the exact exposure SECURITY.md item A
+    is about). Preview defines readable stubs instead, the app degrades with a clear
+    message rather than crashing or leaking a credential."""
+    return (
+        "  window.OUTPUT_COMPUTE = async function () { throw new Error('OUTPUT_COMPUTE runs once this app is published.'); };\n"
+        "  window.OUTPUT_LLM = async function () { throw new Error('OUTPUT_LLM runs once this app is published.'); };\n"
+    )
+
+
+def _build_data_injection(input_json: str, result_json: str, backend_url_json: str = "null", with_runtime: bool = False) -> str:
     """Build a <script> tag that sets OUTPUT_INPUT / OUTPUT_BACKEND_RESULT /
-    OUTPUT_BACKEND_URL and listens for postMessage updates.
+    OUTPUT_BACKEND_URL, optionally wires OUTPUT_COMPUTE / OUTPUT_LLM, and listens
+    for postMessage updates.
 
     OUTPUT_BACKEND_URL is `null` when the app has no live `backend.py`
     process; otherwise it's `http://localhost:<port>` and app code can
     `fetch(window.OUTPUT_BACKEND_URL + '/route')` to hit the persistent
     backend's endpoints."""
+    helpers = _runtime_helpers_js() if with_runtime else ""
     return (
         "<script>\n"
         "(function() {\n"
         "  window.OUTPUT_INPUT = " + input_json + ";\n"
         "  window.OUTPUT_BACKEND_RESULT = " + result_json + ";\n"
         "  window.OUTPUT_BACKEND_URL = " + backend_url_json + ";\n"
+        + helpers +
         "  window.addEventListener('message', function(e) {\n"
         "    if (e.data && e.data.type === 'OUTPUT_DATA') {\n"
         "      window.OUTPUT_INPUT = e.data.input || {};\n"
@@ -81,8 +97,8 @@ def _build_data_injection(input_json: str, result_json: str, backend_url_json: s
     )
 
 
-def _inject_data_into_html(html: str, input_json: str = "{}", result_json: str = "null", backend_url_json: str = "null") -> str:
-    injection = _build_data_injection(input_json, result_json, backend_url_json)
+def _inject_data_into_html(html: str, input_json: str = "{}", result_json: str = "null", backend_url_json: str = "null", with_runtime: bool = False) -> str:
+    injection = _build_data_injection(input_json, result_json, backend_url_json, with_runtime)
     if "</head>" in html:
         return html.replace("</head>", f"{injection}\n</head>", 1)
     if "<body" in html:

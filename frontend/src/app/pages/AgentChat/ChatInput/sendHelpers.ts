@@ -100,6 +100,7 @@ export function appendSelectedElements(trimmed: string, selectedEls: SelectedEle
         'browser-card': 'Browser Card',
         'workflow-card': 'Workflow Card',
         'workflows-hub-card': 'Workflows Hub',
+        'settings-option': 'Setting',
         'dom-element': 'Element',
       }[el.semanticType] || el.semanticType;
       lines.push(`${i + 1}. [${typeLabel}] ${el.semanticLabel || ''}`);

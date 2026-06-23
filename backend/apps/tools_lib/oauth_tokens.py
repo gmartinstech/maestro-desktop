@@ -27,6 +27,7 @@ _TOOL_NAME_TO_PROVIDER = {
     "hubspot": "hubspot",
     "discord": "discord",
     "notion": "notion",
+    "github": "github",
     # Built-in Google tool's name is "Google Workspace"; accept the bare
     # "google" alias too for forward compatibility.
     "google workspace": "google",
@@ -61,6 +62,12 @@ def _persist_cloud_tokens(tool: ToolDefinition, tokens: dict) -> None:
     elif name == "notion":
         tool.oauth_tokens = {"access_token": tokens.get("access_token", "")}
         tool.connected_account_email = tokens.get("workspace_name", "Notion workspace")
+    elif name == "github":
+        # GitHub OAuth-App tokens don't expire and carry no refresh_token, so
+        # store the bare token; the cloud callback enriches `login` for the label.
+        tool.oauth_tokens = {"access_token": tokens.get("access_token", "")}
+        login = tokens.get("login")
+        tool.connected_account_email = f"@{login}" if login else ""
     else:
         tool.oauth_tokens = {
             "access_token": tokens.get("access_token", ""),

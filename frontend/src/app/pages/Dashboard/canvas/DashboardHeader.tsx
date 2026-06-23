@@ -6,10 +6,12 @@ import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import LanguageIcon from '@mui/icons-material/Language';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { useAppDispatch } from '@/shared/hooks';
 import DashboardGlyph from './DashboardGlyph';
 import ShareButton from '@/app/components/share/ShareButton';
 import type { AgentSession } from '@/shared/state/agentsSlice';
-import type { CardPosition, ViewCardPosition, BrowserCardPosition } from '@/shared/state/dashboardLayoutSlice';
+import { saveLayout } from '@/shared/state/dashboardLayoutSlice';
+import type { CardPosition, ViewCardPosition, BrowserCardPosition, NotePosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
 import type { CanvasActions } from '../hooks/interaction/useCanvasControls';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
@@ -20,6 +22,10 @@ interface DashboardHeaderProps {
   cards: Record<string, CardPosition>;
   viewCards: Record<string, ViewCardPosition>;
   browserCards: Record<string, BrowserCardPosition>;
+  workflowCards: Record<string, WorkflowCardPosition>;
+  workflowsHub: WorkflowsHubPosition | null;
+  notes: Record<string, NotePosition>;
+  expandedSessionIds: string[];
   outputs: Record<string, Output>;
   dashboardId: string | undefined;
   canvasActions: CanvasActions;
@@ -41,12 +47,17 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   cards,
   viewCards,
   browserCards,
+  workflowCards,
+  workflowsHub,
+  notes,
+  expandedSessionIds,
   outputs,
   dashboardId,
   canvasActions,
   onHighlightCard,
 }) => {
   const c = useClaudeTokens();
+  const dispatch = useAppDispatch();
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +169,13 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <ShareButton
               target={{ kind: 'dashboard', id: dashboardId, name: dashboardName || 'Dashboard' }}
               iconFontSize={15}
+              onOpen={() => {
+                // Layout saves are debounced, so a just-added app/agent card may
+                // not be on disk yet. The export reads disk, flush the live
+                // layout now so Share captures the current board, not a stale one.
+                if (!dashboardId) return;
+                dispatch(saveLayout({ dashboardId, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, expandedSessionIds }));
+              }}
             />
           </Box>
         )}

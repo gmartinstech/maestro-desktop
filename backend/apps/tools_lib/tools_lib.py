@@ -2,10 +2,11 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import urlencode
 
 import httpx
@@ -51,11 +52,16 @@ async def tools_lib_lifespan():
 tools_lib = SubApp("tools", tools_lib_lifespan)
 
 
-# Bash defaults to "ask" because it can execute untrusted text from MCP tool
-# outputs (Gmail, WebFetch); every other built-in is sandboxed by domain.
-# Must match agent_manager._DEFAULTS so the Settings UI and the agent agree
-# on what "no policy set" means.
-_DEFAULT_BUILTIN_POLICIES = {"Bash": "ask"}
+# Every built-in seeds to always_allow for a frictionless run. The agent's
+# runtime guards in agent_manager (catastrophic-command match, OS-scheduling,
+# sensitive-path gate) STILL force a prompt for the dangerous shapes even on
+# always_allow, so the poisoned-MCP-output -> destructive-command case is
+# still caught. Must match agent_manager._DEFAULTS (empty -> always_allow) so
+# the Settings UI and the agent agree on what "no policy set" means.
+_DEFAULT_BUILTIN_POLICIES: dict[str, str] = {}
+
+# One-time marker: older installs seeded Bash="ask"; we lift them once.
+_BASH_AUTOALLOW_MARKER = os.path.join(DATA_DIR, ".bash_autoallow_migrated")
 
 
 def _ensure_default_permissions() -> None:
@@ -72,6 +78,17 @@ def _ensure_default_permissions() -> None:
         for t in BUILTIN_TOOLS
     }
     merged = {**desired, **existing}
+    # One-time lift: installs seeded under the old default carry Bash="ask";
+    # raise them to always_allow once so shell commands stop prompting. The
+    # marker means a deliberate "ask" set afterward sticks (never re-flipped).
+    if not os.path.exists(_BASH_AUTOALLOW_MARKER):
+        if merged.get("Bash") == "ask":
+            merged["Bash"] = "always_allow"
+        try:
+            with open(_BASH_AUTOALLOW_MARKER, "w") as f:
+                f.write("1")
+        except OSError:
+            pass
     if merged != existing:
         save_builtin_permissions(merged)
 
@@ -186,6 +203,40 @@ def _load(tool_id: str) -> ToolDefinition:
 @tools_lib.router.get("/builtin")
 async def list_builtin_tools():
     return {"tools": [t.model_dump() for t in BUILTIN_TOOLS]}
+
+
+class PolicySlot(NamedTuple):
+    """Where a tool's permission policy is stored.
+
+    store == "builtin": policy lives in builtin_permissions under `key`.
+    store == "mcp":      policy lives on the owning tool's tool_permissions[action];
+                         `key` is that tool's id, or None when no such tool exists.
+    """
+    store: str
+    key: str | None
+    action: str | None
+
+
+def resolve_policy_slot(tool_name: str, tools: list[ToolDefinition]) -> PolicySlot:
+    """Single source of truth for WHERE a tool's permission policy is stored, so the
+    dispatch gate (read) and the 'Always approve' writer (write) can never key it
+    differently. That divergence was the bug behind 'Always approve' acting like a
+    one-time accept: writes landed under the raw mcp__server__action name while the
+    gate read the parsed inner action, so the next call never saw the policy."""
+    bm = re.match(r"mcp__openswarm-browser-agent__(.+)", tool_name)
+    if bm:
+        return PolicySlot("builtin", bm.group(1), None)
+    im = re.match(r"mcp__openswarm-invoke-agent__(.+)", tool_name)
+    if im:
+        return PolicySlot("builtin", im.group(1), None)
+    m = re.match(r"mcp__([^_]+(?:-[^_]+)*)__(.+)", tool_name)
+    if m:
+        server_slug, action = m.group(1), m.group(2)
+        for t in tools:
+            if t.mcp_config and t.enabled and _sanitize_server_name(t.name) == server_slug:
+                return PolicySlot("mcp", t.id, action)
+        return PolicySlot("mcp", None, action)
+    return PolicySlot("builtin", tool_name, None)
 
 
 def load_builtin_permissions() -> dict[str, str]:
@@ -383,7 +434,12 @@ async def discover_tools(tool_id: str):
 
     tool_names = [t["name"] for t in raw_tools]
     services, service_groups, all_read, all_write = _classify_services(tool_names, tool.name)
-    permissions: dict[str, Any] = {n: tool.tool_permissions.get(n, "ask") for n in tool_names}
+    # Read-only actions auto-allow by default (no prompt for safe, scoped reads);
+    # writes still default to "ask". Any choice the user already made is kept.
+    permissions: dict[str, Any] = {
+        n: tool.tool_permissions.get(n, "always_allow" if n in all_read else "ask")
+        for n in tool_names
+    }
     permissions["_categories"] = {"read": all_read, "write": all_write}
     permissions["_services"] = services
     permissions["_service_groups"] = service_groups

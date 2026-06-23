@@ -12,6 +12,7 @@ import {
   updateSessionCost,
   updateSessionContext,
   setContextOverflow,
+  setRateLimited,
   setMcpSuggestions,
   addBranch,
   setActiveBranch,
@@ -24,8 +25,9 @@ import {
   clearTurnLabel,
 } from '../state/agentsSlice';
 import { streamStart, streamDelta, streamEnd, clearStreamingForSession } from '../state/streamingSlice';
-import { addBrowserCardFromBackend, markBrowserCardEnding, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, openWorkflowsApp } from '../state/dashboardLayoutSlice';
+import { addBrowserCardFromBackend, markBrowserCardEnding, keepBrowserCardOpen, placeInParentColumn, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, openWorkflowsApp } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
+import { fetchSettings } from '../state/settingsSlice';
 import { displaySessionName } from '../state/sessionDisplay';
 import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard, upsertWorkflow, removeWorkflow } from '../state/workflowsSlice';
 import { stepsSignature } from '@/app/pages/Workflows/scheduleUtils';
@@ -504,6 +506,30 @@ class WebSocketManager {
           // before its own aux call lands.
           if (session_id && (data.status === 'completed' || data.status === 'error' || data.status === 'stopped')) {
             store.dispatch(clearTurnLabel(session_id));
+            // Mid-stream stop: the backend keeps the partial reply, but
+            // cancelling the SDK can lag several seconds, so its authoritative
+            // agent:message lands late. Promote the in-flight assistant text to
+            // a real message NOW so it doesn't blink out the instant we clear
+            // the overlay; the late agent:message (same id) just refreshes it.
+            if (data.status === 'stopped') {
+              const entry = store.getState().streaming.bySession[session_id];
+              if (entry && entry.role === 'assistant' && entry.content) {
+                const sess = store.getState().agents.sessions[session_id];
+                if (!sess?.messages?.some((m) => m.id === entry.id)) {
+                  store.dispatch(addMessage({
+                    sessionId: session_id,
+                    message: {
+                      id: entry.id,
+                      role: 'assistant',
+                      content: entry.content,
+                      timestamp: new Date().toISOString(),
+                      branch_id: sess?.active_branch_id ?? 'main',
+                      parent_id: null,
+                    },
+                  }));
+                }
+              }
+            }
             store.dispatch(clearStreamingForSession(session_id));
           }
         }
@@ -520,7 +546,7 @@ class WebSocketManager {
         ) {
           const browserCards = store.getState().dashboardLayout.browserCards;
           for (const card of Object.values(browserCards)) {
-            if (card.spawned_by === session_id) {
+            if (card.spawned_by === session_id && !card.keep_open) {
               store.dispatch(markBrowserCardEnding({
                 browserId: card.browser_id, status: data.status,
               }));
@@ -637,6 +663,17 @@ class WebSocketManager {
             sessionId: session_id,
             reason: data.reason ?? 'long_context_required',
             message: data.message ?? 'Context full.',
+          }));
+        }
+        break;
+
+      case 'agent:rate_limited':
+        // Provider throttle that outlasted the silent backoff. Transient muted
+        // pill, not a card; auto-clears frontend-side.
+        if (session_id) {
+          store.dispatch(setRateLimited({
+            sessionId: session_id,
+            retryAfterS: typeof data.retry_after_s === 'number' ? data.retry_after_s : null,
           }));
         }
         break;
@@ -766,7 +803,7 @@ class WebSocketManager {
           if (closedStatus === 'completed' || closedStatus === 'error') {
             const browserCards = store.getState().dashboardLayout.browserCards;
             for (const card of Object.values(browserCards)) {
-              if (card.spawned_by === session_id) {
+              if (card.spawned_by === session_id && !card.keep_open) {
                 store.dispatch(markBrowserCardEnding({
                   browserId: card.browser_id, status: closedStatus,
                 }));
@@ -847,6 +884,12 @@ class WebSocketManager {
         } catch { /* native notif optional */ }
         break;
 
+      case 'dashboard:browser_card_keep':
+        if (data.browser_id) {
+          store.dispatch(keepBrowserCardOpen(data.browser_id));
+        }
+        break;
+
       case 'dashboard:browser_card_added':
         if (data.browser_card) {
           // Tag with origin dashboard so the card renders only on the dashboard
@@ -860,21 +903,20 @@ class WebSocketManager {
           const parentId = data.parent_session_id;
           if (parentId) {
             const layoutState = store.getState().dashboardLayout;
-            const parentCard = layoutState.cards[parentId];
-            if (parentCard) {
-              const targetX = parentCard.x + parentCard.width + GRID_GAP * 12;
-              let targetY = parentCard.y;
-              const columnCards = Object.values(layoutState.browserCards).filter(
-                (c) => Math.abs(c.x - targetX) < 50 && c.browser_id !== data.browser_card.browser_id,
+            const browserCard = layoutState.browserCards[data.browser_card.browser_id];
+            if (layoutState.cards[parentId] && browserCard) {
+              const pos = placeInParentColumn(
+                layoutState,
+                parentId,
+                browserCard.width,
+                browserCard.height,
+                undefined,
+                { type: 'browser', id: browserCard.browser_id },
               );
-              if (columnCards.length > 0) {
-                const lowestBottom = Math.max(...columnCards.map((c) => c.y + c.height));
-                targetY = lowestBottom + GRID_GAP;
-              }
               store.dispatch(setBrowserCardPosition({
                 browserId: data.browser_card.browser_id,
-                x: targetX,
-                y: targetY,
+                x: pos.x,
+                y: pos.y,
               }));
               store.dispatch(setGlowingBrowserCards({
                 browserIds: [data.browser_card.browser_id],
@@ -884,6 +926,13 @@ class WebSocketManager {
             }
           }
         }
+        break;
+
+      case 'settings:changed':
+        // An agent wrote settings under us (not the user via the modal), so refetch
+        // now instead of waiting for the next window-focus. The slice's latestWriteId
+        // guard drops this if a newer user save is already in flight.
+        store.dispatch(fetchSettings());
         break;
     }
 
