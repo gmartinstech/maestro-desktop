@@ -1116,11 +1116,23 @@ async def commit_draft(workflow_id: str, body: Optional[DraftCommitBody] = None)
     before = wf.model_dump(mode="json")
     if not _has_nonempty_steps(wf.draft_steps):
         raise HTTPException(status_code=400, detail="Workflow must have at least one step")
-    # Clicking Save is the user committing to this workflow, so reveal it in
-    # the hub (clears the "+ New" build-in-progress flag).
+    # Opening a workflow snapshots its own steps into the draft, and the card
+    # silently commits that draft. When it matches the live steps that's a no-op:
+    # clear it WITHOUT bumping updated_at, so merely viewing a workflow never
+    # reorders the "last edited" sidebar. Real edits fall through and bump.
+    no_change = [s.model_dump(mode="json") for s in wf.draft_steps] == (before.get("steps") or [])
     wf.unsaved = False
     wf.steps = wf.draft_steps
     wf.draft_steps = None
+    if no_change:
+        p_prune_step_tool_usage(wf)
+        p_sync_model_on_save(wf, body.model if body else None)
+        if not (body and body.keep_session):
+            await p_end_edit_session(wf)
+        storage.save_workflow(wf)
+        return _enriched(wf)
+    # Clicking Save is the user committing to this workflow, so reveal it in
+    # the hub (clears the "+ New" build-in-progress flag).
     await p_relabel_changed_steps(wf, before.get("steps") or [])
     p_prune_step_tool_usage(wf)
     wf.updated_at = datetime.now()
