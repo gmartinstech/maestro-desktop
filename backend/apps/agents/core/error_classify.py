@@ -31,7 +31,7 @@ def redact_for_telemetry(text: str, *, limit: int = 2000) -> str:
 # Patterns that indicate an upstream transient problem (overload / rate limit /
 # infra blip), safe to silently retry with backoff. Checked against the
 # stringified exception from claude_agent_sdk / Claude CLI.
-_TRANSIENT_CAPACITY_PATTERNS = re.compile(
+TRANSIENT_CAPACITY_PATTERNS = re.compile(
     r"(?:\b(?:429|500|502|503|504|529)\b"
     r"|overloaded"
     r"|service\s+(?:temporarily\s+)?unavailable"
@@ -70,7 +70,7 @@ _TRANSLATION_ERROR_PATTERNS = re.compile(
 # Anthropic returns when an OAuth Pro/Max account ships a request whose input
 # exceeds the 200K standard tier and would need the "extra usage" tier; the
 # user can't recover by waiting, so we surface it instead of looping.
-_NON_TRANSIENT_PATTERNS = re.compile(
+NON_TRANSIENT_PATTERNS = re.compile(
     r"(?:usage\s+cap\s+exceeded"
     r"|reached\s+your\s+OpenSwarm.*plan\s+limit"
     r"|no\s+active\s+subscription"
@@ -85,7 +85,8 @@ _NON_TRANSIENT_PATTERNS = re.compile(
 )
 
 
-def _is_long_context_error(exc: BaseException, extra_text: str = "") -> bool:
+@typechecked
+def is_long_context_error(exc: BaseException, extra_text: str = "") -> bool:
     """True when the upstream error is the 'long context tier required' 429.
 
     Used by the catch-all error path to emit a friendly context-overflow
@@ -102,7 +103,8 @@ def _is_long_context_error(exc: BaseException, extra_text: str = "") -> bool:
     ))
 
 
-def _is_free_trial_exhausted(exc: BaseException, extra_text: str = "") -> bool:
+@typechecked
+def is_free_trial_exhausted(exc: BaseException, extra_text: str = "") -> bool:
     """True when the cloud says the machine's free runs are spent (a 402 with
     type free_trial_exhausted). The catch-all path uses this to flip back to
     own_key and show a friendly connect-a-model upsell instead of a raw error.
@@ -117,7 +119,8 @@ def _is_free_trial_exhausted(exc: BaseException, extra_text: str = "") -> bool:
     ))
 
 
-def _is_translation_error(exc: BaseException, extra_text: str = "") -> bool:
+@typechecked
+def is_translation_error(exc: BaseException, extra_text: str = "") -> bool:
     """True when the upstream 400 is a tool-schema / protocol translation
     failure (9Router rewriting Anthropic tools into Gemini function_declarations
     or OpenAI params), not auth or capacity. Kept distinct so the catch-all
@@ -128,7 +131,8 @@ def _is_translation_error(exc: BaseException, extra_text: str = "") -> bool:
     return bool(_TRANSLATION_ERROR_PATTERNS.search(combined))
 
 
-def _is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
+@typechecked
+def is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     """True when the upstream error is a 401/403 auth failure.
 
     Used by the catch-all error path to surface a friendly "subscription
@@ -141,7 +145,7 @@ def _is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
         return False
     # A tool-schema translation 400 can carry provider/connection wording that
     # trips the auth regex below; it isn't auth, so don't claim it is.
-    if _is_translation_error(exc, extra_text):
+    if is_translation_error(exc, extra_text):
         return False
     return bool(re.search(
         r"\b(401|403)\b"
@@ -156,7 +160,8 @@ def _is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     ))
 
 
-def _is_unknown_model_error(exc: BaseException, extra_text: str = "") -> bool:
+@typechecked
+def is_unknown_model_error(exc: BaseException, extra_text: str = "") -> bool:
     """True when the upstream rejects the model code itself (e.g. a ChatGPT/Codex
     subscription whose plan doesn't expose the GPT model id we send: code 1211
     'Unknown Model, please check the model code'). The fix isn't retry, it's a
@@ -194,7 +199,8 @@ def parse_retry_after(exc: BaseException, extra_text: str = "") -> int | None:
     return None
 
 
-def _is_transient_capacity_error(exc: BaseException, extra_text: str = "") -> bool:
+@typechecked
+def is_transient_capacity_error(exc: BaseException, extra_text: str = "") -> bool:
     # The Claude CLI's underlying ProcessError stringifies to a generic
     # "Command failed with exit code 1 / Check stderr output for details";
     # the real cause (rate_limit_error / No pool capacity available / 429
@@ -205,9 +211,9 @@ def _is_transient_capacity_error(exc: BaseException, extra_text: str = "") -> bo
     combined = f"{exc!s}\n{extra_text}".strip()
     if not combined:
         return False
-    if _NON_TRANSIENT_PATTERNS.search(combined):
+    if NON_TRANSIENT_PATTERNS.search(combined):
         return False
-    if _TRANSIENT_CAPACITY_PATTERNS.search(combined):
+    if TRANSIENT_CAPACITY_PATTERNS.search(combined):
         return True
     # Pool-exhaustion copy from the OpenSwarm proxy ("No pool capacity
     # available. Try again shortly."), matches the capacity family too.
@@ -226,6 +232,6 @@ def capacity_retry_wait(exc: BaseException, attempt: int, extra_text: str = "") 
     """Seconds to wait before retrying a transient upstream capacity error (429 / overload /
     5xx / network blip), or None when the error isn't transient or the backoff budget for
     this turn is already spent. Keeps the retry DECISION testable; the loop owns the wait."""
-    if _is_transient_capacity_error(exc, extra_text=extra_text) and 0 <= attempt < len(CAPACITY_BACKOFFS):
+    if is_transient_capacity_error(exc, extra_text=extra_text) and 0 <= attempt < len(CAPACITY_BACKOFFS):
         return CAPACITY_BACKOFFS[attempt]
     return None

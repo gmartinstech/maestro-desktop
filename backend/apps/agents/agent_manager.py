@@ -20,11 +20,11 @@ from backend.apps.tools_lib.tools_lib import (
 from backend.apps.agents.core.error_classify import (
     CAPACITY_BACKOFFS,
     capacity_retry_wait,
-    _is_auth_error as is_auth_error,
-    _is_free_trial_exhausted as is_free_trial_exhausted,
-    _is_long_context_error as is_long_context_error,
-    _is_transient_capacity_error as is_transient_capacity_error,
-    _is_unknown_model_error as is_unknown_model_error,
+    is_auth_error,
+    is_free_trial_exhausted,
+    is_long_context_error,
+    is_transient_capacity_error,
+    is_unknown_model_error,
     parse_retry_after,
     redact_for_telemetry,
 )

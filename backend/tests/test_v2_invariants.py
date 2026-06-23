@@ -600,25 +600,25 @@ def test_error_classify_schema_translation_400_is_not_auth():
     'reconnect your subscription' card for what is really a schema bug. The
     translation guard must win: schema 400 -> not auth; a real auth failure
     with no translation signature still reads as auth."""
-    from backend.apps.agents.core.error_classify import _is_auth_error, _is_translation_error
+    from backend.apps.agents.core.error_classify import is_auth_error, is_translation_error
     both = Exception("provider not connected: 400 INVALID_ARGUMENT at "
                      "tools[0].function_declarations[0].parameters")
-    assert _is_translation_error(both)
-    assert not _is_auth_error(both), "schema-400 must not be classified as auth"
+    assert is_translation_error(both)
+    assert not is_auth_error(both), "schema-400 must not be classified as auth"
     # Pure auth failures (no translation signature) still classify as auth.
-    assert _is_auth_error(Exception("provider not connected: gemini"))
-    assert _is_auth_error(Exception("401 invalid authentication credentials"))
-    assert not _is_translation_error(Exception("401 invalid authentication credentials"))
+    assert is_auth_error(Exception("provider not connected: gemini"))
+    assert is_auth_error(Exception("401 invalid authentication credentials"))
+    assert not is_translation_error(Exception("401 invalid authentication credentials"))
 
 
 def test_error_classify_gemini_resource_exhausted_is_transient():
     """gemini-cli's free-tier 429 surfaces as RESOURCE_EXHAUSTED; it must count
     as transient so the existing backoff/retry catches it instead of dying as a
     hard first-message error. A 403 (hard auth/quota) must still NOT retry."""
-    from backend.apps.agents.core.error_classify import _is_transient_capacity_error
-    assert _is_transient_capacity_error(Exception("429 RESOURCE_EXHAUSTED: Quota exceeded"))
-    assert _is_transient_capacity_error(Exception("RESOURCE_EXHAUSTED"))
-    assert not _is_transient_capacity_error(Exception("403 permission denied"))
+    from backend.apps.agents.core.error_classify import is_transient_capacity_error
+    assert is_transient_capacity_error(Exception("429 RESOURCE_EXHAUSTED: Quota exceeded"))
+    assert is_transient_capacity_error(Exception("RESOURCE_EXHAUSTED"))
+    assert not is_transient_capacity_error(Exception("403 permission denied"))
 
 
 @pytest.mark.asyncio
@@ -761,8 +761,8 @@ def test_router_auth_pattern_does_not_falsely_match_normal_text():
 
 
 def test_is_auth_error_classifier():
-    """The classifier at agent_manager.py:_is_auth_error covers many shapes."""
-    from backend.apps.agents.core.error_classify import _is_auth_error
+    """The classifier at agent_manager.py:is_auth_error covers many shapes."""
+    from backend.apps.agents.core.error_classify import is_auth_error
 
     # Real shapes that must be caught
     matches = [
@@ -775,7 +775,7 @@ def test_is_auth_error_classifier():
         Exception("Provider not configured: gemini"),
     ]
     for e in matches:
-        assert _is_auth_error(e), f"should match: {e}"
+        assert is_auth_error(e), f"should match: {e}"
 
     # Non-auth errors must not match
     non_matches = [
@@ -785,15 +785,15 @@ def test_is_auth_error_classifier():
         Exception("File not found"),
     ]
     for e in non_matches:
-        assert not _is_auth_error(e), f"should NOT match: {e}"
+        assert not is_auth_error(e), f"should NOT match: {e}"
 
 
 def test_is_auth_error_with_stderr_tail():
     """The classifier also reads stderr buffer text."""
-    from backend.apps.agents.core.error_classify import _is_auth_error
+    from backend.apps.agents.core.error_classify import is_auth_error
     e = Exception("Command failed with exit code 1")
     stderr = "...\n[codex/gpt-5.5] [401]: Provided authentication token is expired"
-    assert _is_auth_error(e, extra_text=stderr)
+    assert is_auth_error(e, extra_text=stderr)
 
 
 # ===========================================================================
@@ -892,19 +892,19 @@ def test_active_mcps_persistence_on_session():
 
 def test_long_context_pattern_caught():
     """The 'extra usage required' 429 must NOT silently retry."""
-    from backend.apps.agents.core.error_classify import _NON_TRANSIENT_PATTERNS
+    from backend.apps.agents.core.error_classify import NON_TRANSIENT_PATTERNS
     cases = [
         "Extra usage is required for long context requests",
         "extra usage is required for long context",
         "EXTRA USAGE IS REQUIRED FOR LONG CONTEXT",
     ]
     for case in cases:
-        assert _NON_TRANSIENT_PATTERNS.search(case), f"missed: {case!r}"
+        assert NON_TRANSIENT_PATTERNS.search(case), f"missed: {case!r}"
 
 
 def test_transient_capacity_patterns():
     """Real transient errors that SHOULD retry."""
-    from backend.apps.agents.core.error_classify import _TRANSIENT_CAPACITY_PATTERNS, _NON_TRANSIENT_PATTERNS
+    from backend.apps.agents.core.error_classify import TRANSIENT_CAPACITY_PATTERNS, NON_TRANSIENT_PATTERNS
     transients = [
         "Error 429: rate_limit_error",
         "503 Service Unavailable",
@@ -916,18 +916,18 @@ def test_transient_capacity_patterns():
         "overloaded",
     ]
     for t in transients:
-        assert _TRANSIENT_CAPACITY_PATTERNS.search(t), f"transient missed: {t!r}"
+        assert TRANSIENT_CAPACITY_PATTERNS.search(t), f"transient missed: {t!r}"
         # Importantly: must NOT also match non-transient (no double-classification)
         # except for the fuzzy edge cases. Spot-check a couple:
         if "429" in t and "rate_limit" in t.lower():
             # rate_limit_error is transient; non-transient should not match this exact text
-            assert not _NON_TRANSIENT_PATTERNS.search(t)
+            assert not NON_TRANSIENT_PATTERNS.search(t)
 
 
 def test_long_context_does_not_match_normal_429():
     """Generic 429 is transient, only the long-context variant is non-transient."""
-    from backend.apps.agents.core.error_classify import _NON_TRANSIENT_PATTERNS
-    assert not _NON_TRANSIENT_PATTERNS.search("Error 429: rate_limit_error")
+    from backend.apps.agents.core.error_classify import NON_TRANSIENT_PATTERNS
+    assert not NON_TRANSIENT_PATTERNS.search("Error 429: rate_limit_error")
 
 
 # ===========================================================================

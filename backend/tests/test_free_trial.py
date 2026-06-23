@@ -7,8 +7,8 @@ import pytest
 from backend.apps.settings.models import AppSettings
 from backend.apps.settings.credentials import proxy_auth
 from backend.apps.agents.core.error_classify import (
-    _is_free_trial_exhausted,
-    _is_transient_capacity_error,
+    is_free_trial_exhausted,
+    is_transient_capacity_error,
 )
 from backend.apps.agents.providers.registry import resolve_model_id_for_sdk
 from backend.apps.subscription import free_trial as ft
@@ -44,11 +44,11 @@ def test_free_trial_resolves_to_a_bare_anthropic_id():
 
 
 def test_exhaustion_is_classified_and_not_retried():
-    assert _is_free_trial_exhausted(Exception("error type free_trial_exhausted"))
-    assert _is_free_trial_exhausted(Exception("You've used your free OpenSwarm runs"))
-    assert not _is_free_trial_exhausted(Exception("overloaded, try again"))
+    assert is_free_trial_exhausted(Exception("error type free_trial_exhausted"))
+    assert is_free_trial_exhausted(Exception("You've used your free OpenSwarm runs"))
+    assert not is_free_trial_exhausted(Exception("overloaded, try again"))
     # Must NOT look transient, or the agent loop would retry a spent trial forever.
-    assert not _is_transient_capacity_error(Exception("free_trial_exhausted"))
+    assert not is_transient_capacity_error(Exception("free_trial_exhausted"))
 
 
 def test_has_own_model_never_shadows_a_real_provider():
