@@ -21,6 +21,7 @@ def _ctx() -> HookContext:
         prompt="hi",
         builtin_perms={},
         policy_defaults={},
+        sessions={},
     )
 
 
