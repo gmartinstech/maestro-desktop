@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { runMissedRuns, dismissMissedRuns } from '@/shared/state/missedRunsSlice';
 import { openWorkflowMonitor } from '@/shared/state/dashboardLayoutSlice';
-import { fireTimesWithin } from '@/app/pages/Workflows/scheduleUtils';
+import { useCalendarOccurrences } from './useCalendarOccurrences';
 import { colorForWorkflow, useWC, statusChip, statusDot } from './uiKit';
 import { clockOf, whenText } from './model';
 import type { AppNav } from './types';
@@ -10,10 +10,6 @@ import type { AppNav } from './types';
 interface ComingRun { wfId: string; title: string; time: string; sortKey: number; steps: number; color: string; }
 interface ComingGroup { key: string; dayNum: number; dow: string; runs: ComingRun[]; countLabel: string; }
 const COMING_CAP = 3;
-// Enough fires to cover the whole 7-day window even at the 15-min floor
-// (7 * 24 * 4 = 672), so each day's "N runs" count is the real total, not
-// wherever a small global cap happened to run out.
-const COMING_FIRE_CAP = 700;
 
 const HomeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const WC = useWC();
@@ -45,19 +41,27 @@ const HomeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
     };
   }), [active, items, allRuns]);
 
+  // Fetch the 7-day window from the backend's recurrence engine (single source
+  // of truth) instead of recomputing fire times in JS.
+  const dayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+  const { fromIso, toIso } = useMemo(() => {
+    const from = new Date(now); from.setHours(0, 0, 0, 0);
+    return { fromIso: from.toISOString(), toIso: new Date(from.getTime() + 7 * 86400000).toISOString() };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
+  const { events } = useCalendarOccurrences(fromIso, toIso);
   const comingGroups = useMemo<ComingGroup[]>(() => {
     const from = new Date(now); from.setHours(0, 0, 0, 0);
-    const to = new Date(from.getTime() + 7 * 86400000);
     const byDay = new Map<string, ComingRun[]>();
-    for (const wf of Object.values(items)) {
-      if (wf.unsaved) continue;
-      const fires = fireTimesWithin(wf, now, to, COMING_FIRE_CAP);
-      for (const f of fires) {
-        const key = `${f.getFullYear()}-${f.getMonth()}-${f.getDate()}`;
-        const arr = byDay.get(key) || [];
-        arr.push({ wfId: wf.id, title: wf.title || 'Untitled', time: clockOf(f), sortKey: f.getTime(), steps: wf.steps.length, color: colorForWorkflow(wf) });
-        byDay.set(key, arr);
-      }
+    for (const e of events) {
+      if (e.at.getTime() < now.getTime()) continue;  // upcoming only
+      const wf = items[e.workflowId];
+      if (!wf || wf.unsaved) continue;
+      const f = e.at;
+      const key = `${f.getFullYear()}-${f.getMonth()}-${f.getDate()}`;
+      const arr = byDay.get(key) || [];
+      arr.push({ wfId: wf.id, title: wf.title || 'Untitled', time: clockOf(f), sortKey: f.getTime(), steps: wf.steps.length, color: colorForWorkflow(wf) });
+      byDay.set(key, arr);
     }
     const groups: ComingGroup[] = [];
     for (let i = 0; i < 7; i += 1) {
@@ -68,7 +72,7 @@ const HomeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
     }
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [events, items]);
 
   const recents = useMemo(() => allRuns.slice(0, 8).map((r) => ({
     id: r.id,

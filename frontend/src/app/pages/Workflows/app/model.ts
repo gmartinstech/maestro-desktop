@@ -1,6 +1,6 @@
 import type { Workflow, WorkflowRun, ScheduleConfig, ActiveRun } from '@/shared/state/workflowsSlice';
 import type { WorkflowsRunContext } from '@/shared/state/dashboardLayoutSlice';
-import { isScheduleActive, fireTimesWithin } from '@/app/pages/Workflows/scheduleUtils';
+import { isScheduleActive } from '@/app/pages/Workflows/scheduleUtils';
 
 // The design speaks in four cadence buckets; the backend speaks in repeat_unit.
 // These two functions are the only place the two vocabularies meet.
@@ -53,21 +53,13 @@ export function isRunning(wf: Workflow, active: ActiveRun[]): boolean {
   return wf.last_run_status === 'running' || active.some((a) => a.workflow_id === wf.id);
 }
 
-export function previewNextRun(wf: Workflow): Date | null {
-  if (!isScheduleActive(wf.schedule)) return null;
-  const now = new Date();
-  const horizon = new Date(now.getTime() + 366 * 86400000);
-  const fires = fireTimesWithin(wf, now, horizon, 1);
-  return fires[0] ?? null;
-}
-
 const TIME_OPTS: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
 
 export function clockOf(date: Date): string {
   return date.toLocaleTimeString([], TIME_OPTS).toLowerCase().replace(' ', '');
 }
 
-// "today", "tomorrow", or "Mon Jun 23" — for next-run and coming-up labels.
+// "today", "tomorrow", or "Mon Jun 23" for next-run and coming-up labels.
 export function relativeDayLabel(date: Date, now = new Date()): string {
   const a = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -78,10 +70,10 @@ export function relativeDayLabel(date: Date, now = new Date()): string {
   return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-export function nextRunText(wf: Workflow): string {
-  if (!isScheduleActive(wf.schedule)) return '— paused';
-  const next = previewNextRun(wf);
-  if (!next) return '—';
+// `next` is the backend-computed next_run_at (authoritative), not a JS reimpl.
+export function nextRunText(wf: Workflow, next: Date | null): string {
+  if (!isScheduleActive(wf.schedule)) return 'Paused';
+  if (!next) return 'None scheduled';
   return `${relativeDayLabel(next)} at ${clockOf(next)}`;
 }
 

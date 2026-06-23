@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { Workflow, ScheduleConfig } from '@/shared/state/workflowsSlice';
-import { describeSchedule } from '@/app/pages/Workflows/scheduleUtils';
+import { describeSchedule, needsScheduleTestWarning } from '@/app/pages/Workflows/scheduleUtils';
 import { useWC, FONT_SERIF, track, knob } from './uiKit';
 import {
   freqOf, patchForFreq, intervalMinutes, timeInputValue, parseTimeInput, ordinal, nextRunText, type Freq,
@@ -88,6 +88,13 @@ const ScheduleCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
           <div style={track(enabled, WC)}><div style={knob(enabled)} /></div>
         </div>
       </div>
+
+      {enabled && needsScheduleTestWarning(workflow) && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12, padding: '9px 11px', background: `${WC.warn}14`, border: `1px solid ${WC.warn}40`, borderRadius: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={WC.warn} strokeWidth="1.9" style={{ flex: 'none', marginTop: 1 }}><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+          <span style={{ fontSize: 12, color: WC.ink3, lineHeight: 1.45 }}>Not test-run yet. A scheduled run can&apos;t pause for permission prompts, so if this needs tool access it may fail silently. Hit <b>Run</b> once to grant access.</span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', background: WC.inset, border: `1px solid ${WC.line}`, borderRadius: 9, padding: 3, gap: 2, marginBottom: 12 }}>
         {FREQS.map(([k, label]) => (
@@ -189,7 +196,7 @@ const ScheduleCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
       </div>
       <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ width: 14, display: 'flex', justifyContent: 'center', flex: 'none' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: WC.accent }} /></div>
-        <span style={{ fontSize: 12.5, color: WC.ink4 }}>Next run {nextRunText(workflow)}</span>
+        <span style={{ fontSize: 12.5, color: WC.ink4 }}>Next run {nextRunText(workflow, workflow.next_run_at ? new Date(workflow.next_run_at) : null)}</span>
       </div>
       {maxRuns != null && (
         <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', gap: 8 }}>

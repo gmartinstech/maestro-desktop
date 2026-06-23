@@ -2,7 +2,8 @@ import React, { useMemo, useRef, useEffect, useLayoutEffect, useState } from 're
 import { createPortal } from 'react-dom';
 import type { CSSProperties } from 'react';
 import { useAppSelector } from '@/shared/hooks';
-import { fireTimesWithin, startOfWeek, startOfMonthGrid, addDays, sameDay } from '@/app/pages/Workflows/scheduleUtils';
+import { startOfWeek, startOfMonthGrid, addDays, sameDay } from '@/app/pages/Workflows/scheduleUtils';
+import { useCalendarOccurrences } from './useCalendarOccurrences';
 import { colorForWorkflow, useWC, type WCPalette } from './uiKit';
 import type { AppNav } from './types';
 
@@ -36,24 +37,34 @@ const tabBtn = (active: boolean, WC: WCPalette): CSSProperties => ({
 const CalendarView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const WC = useWC();
   const items = useAppSelector((s) => s.workflows.items);
-  const now = new Date();
+  // Tick the clock so the now-line and "today" highlight stay live instead of
+  // freezing at first render.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
   const ref = nav.refDate;
+  const refKey = `${ref.getFullYear()}-${ref.getMonth()}-${ref.getDate()}`;
 
   // Window of occurrences spanning the visible month grid (covers week too).
-  const occ = useMemo<Occ[]>(() => {
+  // Fired times come from the backend's recurrence engine, not a JS reimpl, so
+  // the grid matches what actually runs (timezone + last-day-of-month aware).
+  const { fromIso, toIso } = useMemo(() => {
     const from = startOfMonthGrid(ref);
-    const to = addDays(from, 42);
+    return { fromIso: from.toISOString(), toIso: addDays(from, 42).toISOString() };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refKey]);
+  const { events } = useCalendarOccurrences(fromIso, toIso);
+  const occ = useMemo<Occ[]>(() => {
     const out: Occ[] = [];
-    for (const wf of Object.values(items)) {
-      if (wf.unsaved) continue;
-      const color = colorForWorkflow(wf);
-      for (const at of fireTimesWithin(wf, from, to, 200)) {
-        out.push({ wfId: wf.id, title: wf.title || 'Untitled', at, color });
-      }
+    for (const e of events) {
+      const wf = items[e.workflowId];
+      if (!wf || wf.unsaved) continue;
+      out.push({ wfId: wf.id, title: wf.title || 'Untitled', at: e.at, color: colorForWorkflow(wf) });
     }
     return out.sort((a, b) => a.at.getTime() - b.at.getTime());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, ref]);
+  }, [events, items]);
 
   const occByDay = useMemo(() => {
     const map = new Map<string, Occ[]>();
