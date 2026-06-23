@@ -933,7 +933,7 @@ const dashboardLayoutSlice = createSlice({
       // Keep the existing card position when just switching the run shown.
       if (!state.workflowsMonitorCard) {
         state.workflowsMonitorCard = {
-          x: hub ? hub.x + hub.width + 96 : 220,
+          x: hub ? hub.x + hub.width + 140 : 220,
           y: hub ? hub.y : 160,
           width: 520,
           height: hub ? hub.height : 560,
