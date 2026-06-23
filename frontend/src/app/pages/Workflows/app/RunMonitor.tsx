@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import IconButton from '@mui/material/IconButton';
+import CloseIcon from '@mui/icons-material/Close';
 import AgentChat from '@/app/pages/AgentChat/AgentChat';
 import { fetchRuns, controlWorkflowRun } from '@/shared/state/workflowsSlice';
 import type { Workflow, WorkflowRun } from '@/shared/state/workflowsSlice';
@@ -183,9 +185,9 @@ const RunMonitor: React.FC<Props> = ({ workflow, cardX, cardY, cardWidth, cardHe
         <span style={{ fontSize: 11, fontWeight: 600, color: headColor, background: headBg, padding: '2px 9px', borderRadius: 999, flex: 'none' }}>{headStatus}</span>
         <div style={{ flex: 1 }} />
         <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11.5, color: c.text.tertiary, flex: 'none' }}>{clock}</span>
-        <button onClick={close} aria-label="Close" style={{ width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: c.text.tertiary, background: 'transparent', border: 'none', flex: 'none' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
-        </button>
+        <IconButton onClick={close} aria-label="Close" size="small" sx={{ flex: 'none', color: c.text.tertiary, '&:hover': { color: c.status.error, bgcolor: `${c.status.error}14` } }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </div>
 
       {/* progress subhead */}

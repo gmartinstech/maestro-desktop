@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch } from '@/shared/hooks';
 import { closeWorkflowsApp, setWorkflowsHubPosition, setWorkflowsHubSize } from '@/shared/state/dashboardLayoutSlice';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import IconButton from '@mui/material/IconButton';
+import CloseIcon from '@mui/icons-material/Close';
+import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useWC, FONT_SERIF } from './uiKit';
 import WorkflowsAppContent from './WorkflowsAppContent';
 
@@ -55,6 +58,7 @@ const WorkflowsAppCard: React.FC<Props> = ({
   onCardSelect, onDragStart, onDragMove, onDragEnd, onBringToFront,
 }) => {
   const WC = useWC();
+  const c = useClaudeTokens();
   const dispatch = useAppDispatch();
 
   const panRef = useRef({ panX, panY });
@@ -224,16 +228,16 @@ const WorkflowsAppCard: React.FC<Props> = ({
           <span style={{ fontFamily: FONT_SERIF, fontSize: 14.5, fontWeight: 500, color: WC.ink, letterSpacing: '-0.01em', lineHeight: 1, transform: 'translateY(2.5px)' }}>Workflows</span>
         </div>
         <div style={{ flex: 1 }} />
-        <div
-          role="button"
+        <IconButton
           aria-label="Close"
           data-no-drag
+          size="small"
           onClick={(e) => { e.stopPropagation(); dispatch(closeWorkflowsApp()); }}
           onPointerDown={(e) => e.stopPropagation()}
-          style={{ width: 24, height: 24, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.muted }}
+          sx={{ color: c.text.tertiary, '&:hover': { color: c.status.error, bgcolor: `${c.status.error}14` } }}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
-        </div>
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </div>
 
       <WorkflowsAppContent />
