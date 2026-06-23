@@ -113,26 +113,38 @@ def is_schedule_configured(sched: ScheduleConfig) -> bool:
     return True
 
 
-def _next_fire_after(sched: ScheduleConfig, ref_utc: datetime) -> Optional[datetime]:
+def _first_after(anchor: datetime, ref: datetime, step: timedelta) -> datetime:
+    """First instant on the grid {anchor + k*step} strictly after ref."""
+    if anchor > ref:
+        return anchor
+    n = (ref - anchor) // step
+    return anchor + (n + 1) * step
+
+
+def _next_fire_after(
+    sched: ScheduleConfig,
+    ref_utc: datetime,
+    anchor_utc: Optional[datetime] = None,
+) -> Optional[datetime]:
     if not sched.enabled or not is_schedule_configured(sched):
         return None
     tz = _resolve_tz(sched.timezone)
     ref_local = ref_utc.astimezone(tz)
     base = ref_local.replace(second=0, microsecond=0)
+    # Anchor recurring phases to a fixed origin (the workflow's creation), so a
+    # recompute (tick, kick, startup reconcile) lands on the same grid instead
+    # of re-phasing to "now" and sliding the cadence. Falls back to ref.
+    anchor_local = (anchor_utc or ref_utc).astimezone(tz)
 
     if sched.repeat_unit == "minute":
         step = max(15, sched.repeat_every)
-        c = base
-        while c <= ref_local:
-            c = c + timedelta(minutes=step)
-        return c.astimezone(timezone.utc)
+        grid = anchor_local.replace(second=0, microsecond=0)
+        return _first_after(grid, ref_local, timedelta(minutes=step)).astimezone(timezone.utc)
 
     if sched.repeat_unit == "hour":
         step = max(1, sched.repeat_every)
-        c = base.replace(minute=sched.minute)
-        while c <= ref_local:
-            c = c + timedelta(hours=step)
-        return c.astimezone(timezone.utc)
+        grid = anchor_local.replace(minute=sched.minute, second=0, microsecond=0)
+        return _first_after(grid, ref_local, timedelta(hours=step)).astimezone(timezone.utc)
 
     candidate = base.replace(hour=sched.hour, minute=sched.minute)
 
@@ -164,7 +176,7 @@ def _next_fire_after(sched: ScheduleConfig, ref_utc: datetime) -> Optional[datet
     if sched.repeat_unit == "week":
         allowed = sched.on_days
         step = max(1, sched.repeat_every)
-        anchor_week = _week_start(ref_local)
+        anchor_week = _week_start(anchor_local)
         for _ in range(0, 7 * step + 7):
             week_delta = (_week_start(candidate).date() - anchor_week.date()).days // 7
             if (
@@ -181,7 +193,7 @@ def _next_fire_after(sched: ScheduleConfig, ref_utc: datetime) -> Optional[datet
 
 def compute_next_fire(wf: Workflow, ref: Optional[datetime] = None) -> Optional[datetime]:
     ref_utc = _as_utc(ref) if ref is not None else datetime.now(timezone.utc)
-    return _next_fire_after(wf.schedule, ref_utc)
+    return _next_fire_after(wf.schedule, ref_utc, _as_utc(getattr(wf, "created_at", None)))
 
 
 def fires_in_window(wf: Workflow, days: int = 30) -> int:
@@ -204,9 +216,10 @@ def fires_in_window(wf: Workflow, days: int = 30) -> int:
     remaining_budget = (
         sched.max_runs - sched.runs_count if sched.max_runs is not None else 5000
     )
+    anchor_utc = _as_utc(getattr(wf, "created_at", None))
     count = 0
     while count < min(5000, remaining_budget):
-        nxt = _next_fire_after(sched, cursor_utc)
+        nxt = _next_fire_after(sched, cursor_utc, anchor_utc)
         if nxt is None or nxt > end_utc:
             break
         count += 1
@@ -252,7 +265,7 @@ def occurrences_between(
     limit = max(0, min(cap, remaining))
     out: list[datetime] = []
     while len(out) < limit:
-        nxt = _next_fire_after(sched, cursor_utc)
+        nxt = _next_fire_after(sched, cursor_utc, created_at)
         if nxt is None or nxt >= end_utc:
             break
         if nxt >= start_utc:
@@ -301,7 +314,7 @@ async def _tick() -> None:
 
     for wf in due:
         scheduled_for = _as_utc(wf.next_run_at)
-        nxt = _next_fire_after(wf.schedule, now_utc)
+        nxt = _next_fire_after(wf.schedule, now_utc, _as_utc(getattr(wf, "created_at", None)))
         wf.next_run_at = nxt
         storage.save_workflow(wf)
         asyncio.create_task(_fire(wf, scheduled_for=scheduled_for))
@@ -452,7 +465,7 @@ def reconcile_on_startup() -> None:
         if anchor is not None and anchor <= now_utc:
             _capture_missed(wf, occurrences_between(wf, anchor, now_utc, cap=MISSED_ENUM_CAP))
 
-        wf.next_run_at = _next_fire_after(wf.schedule, now_utc)
+        wf.next_run_at = _next_fire_after(wf.schedule, now_utc, _as_utc(getattr(wf, "created_at", None)))
         storage.save_workflow(wf)
 
 

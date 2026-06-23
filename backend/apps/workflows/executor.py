@@ -25,6 +25,15 @@ _running: dict[str, str] = {}
 _running_lock = asyncio.Lock()
 
 
+def _ran_late(started_at: datetime, scheduled_for: datetime) -> bool:
+    """Late means the run STARTED well after its slot (app was closed, event
+    loop backed up), not that it ran long. Measured from started_at so a
+    punctual run that simply takes a while isn't mislabeled. Both sides
+    normalized to UTC; a naive started_at is host-local."""
+    delta = started_at.astimezone(timezone.utc) - scheduled_for.astimezone(timezone.utc)
+    return delta.total_seconds() > 300
+
+
 # run_id -> "stop". Set by the stop endpoint so the executor loop, not the
 # HTTP handler, owns the run's terminal write. Without this the still-running
 # executor task could overwrite a "Stopped by user" failure with success.
@@ -372,12 +381,7 @@ async def execute(
             run.status = "failure"
             run.error = step_error
             wf.last_run_status = "failure"
-        elif scheduled_for is not None and (run.finished_at.replace(tzinfo=None) - scheduled_for.replace(tzinfo=None)).total_seconds() > 300:
-            # Started more than 5 minutes after its slot (app was closed,
-            # event loop backed up, etc.). Surface in History as ran_late
-            # so the user can tell apart "fired on time" from "caught up".
-            # Strip tz before the subtraction so a UTC-aware scheduled_for
-            # (new code path) and a naive finished_at don't raise.
+        elif scheduled_for is not None and _ran_late(run.started_at, scheduled_for):
             run.status = "ran_late"
             wf.last_run_status = "ran_late"
         else:

@@ -287,6 +287,49 @@ def test_weekly_repeat_every_skips_inactive_weeks():
     assert nxt == datetime(2026, 7, 6, 9, 0, tzinfo=timezone.utc)
 
 
+def test_weekly_every_n_weeks_phase_is_stable_across_recompute():
+    """The bi-weekly phase must anchor to created_at, not to whenever the
+    recompute happens. Computing from an 'on' week and from the following
+    'off' week must both land on the same created_at-anchored grid; otherwise
+    a tick/kick in an off week slides the whole cadence by weeks."""
+    from backend.apps.workflows.scheduler import compute_next_fire
+    from backend.apps.workflows.models import ScheduleConfig
+    # Created on Mon 2026-06-08. Every 2 weeks on Monday => fires 06-08,
+    # 06-22, 07-06, 07-20 (UTC). 06-15 and 06-29 are 'off' weeks.
+    wf = _make_wf(
+        created_at=datetime(2026, 6, 8, tzinfo=timezone.utc),
+        schedule=ScheduleConfig(
+            enabled=True, repeat_unit="week", repeat_every=2, on_days=[1],
+            hour=9, minute=0, timezone="UTC",
+        ),
+    )
+    # From just after the 06-22 fire (on-week) -> 07-06.
+    assert compute_next_fire(wf, datetime(2026, 6, 23, tzinfo=timezone.utc)) == \
+        datetime(2026, 7, 6, 9, 0, tzinfo=timezone.utc)
+    # From an off-week (06-30) the next fire is STILL 07-06, not 07-13.
+    assert compute_next_fire(wf, datetime(2026, 6, 30, tzinfo=timezone.utc)) == \
+        datetime(2026, 7, 6, 9, 0, tzinfo=timezone.utc)
+    # From the off-week between the first two fires (06-16) -> 06-22, not 06-29.
+    assert compute_next_fire(wf, datetime(2026, 6, 16, tzinfo=timezone.utc)) == \
+        datetime(2026, 6, 22, 9, 0, tzinfo=timezone.utc)
+
+
+def test_ran_late_is_measured_from_start_not_finish():
+    """A run that STARTS on time is 'success' no matter how long it runs; a run
+    that starts >5min after its slot is 'ran_late'."""
+    from backend.apps.workflows.executor import _ran_late
+    slot = datetime(2026, 6, 22, 9, 0, tzinfo=timezone.utc)
+    # Started on time -> not late (even though such a run might finish much later).
+    assert _ran_late(slot, slot) is False
+    assert _ran_late(slot + timedelta(minutes=4), slot) is False
+    # Started well after the slot -> late.
+    assert _ran_late(slot + timedelta(minutes=6), slot) is True
+    # Naive started_at (host-local, as datetime.now() produces) is normalized
+    # to UTC rather than subtracted across the offset.
+    naive_on_time = slot.astimezone().replace(tzinfo=None)
+    assert _ran_late(naive_on_time, slot) is False
+
+
 def test_frozen_empty_tool_set_does_not_fall_back_to_defaults():
     from backend.apps.workflows.executor import _resolve_allowed_tools
     from backend.apps.workflows.models import ActionsConfig
