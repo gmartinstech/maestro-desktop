@@ -14,12 +14,16 @@ import StepsCard from './StepsCard';
 import SaveGuard from './SaveGuard';
 import type { AppNav } from './types';
 
+// Starter prompts sent verbatim, so each reads as a real ask the agent can turn
+// into steps + a schedule. Spread across personas so most people see one that
+// fits: work, money, research, learning, lifestyle, monitoring.
 const NEW_CHIPS = [
-  'Summarize my inbox each morning',
-  'Draft replies to important emails',
-  'Send me a daily news digest',
-  'Weekly report from my calendar',
-  'Watch a webpage for changes',
+  'Summarize my inbox each morning and draft the key replies',
+  'Every Sunday, recap my spending, subscriptions, upcoming bills, and any weird charges',
+  'Weekly digest of new research and trends in my field',
+  'Each morning, teach me something new in five minutes',
+  'Friday afternoon, plan my weekend from the weather and what\'s nearby',
+  'Watch a webpage and alert me when it changes',
 ];
 
 // Short provisional name from the first message so the workflow isn't "Untitled"
@@ -120,7 +124,7 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
 
   if (!workflow) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: WC.paper }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: WC.page }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid rgba(${WC.inkRGB},0.15)`, borderTopColor: WC.accent, animation: 'os-spin 0.7s linear infinite' }} />
           <span style={{ fontFamily: "'Newsreader',serif", fontStyle: 'italic', fontSize: 14, color: WC.ink4 }}>Setting up your workflow…</span>
@@ -153,7 +157,7 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
 
   return (
     <>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: WC.paper, position: 'relative' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: WC.page, position: 'relative' }}>
         <div style={{ flex: 'none', padding: '15px 28px', borderBottom: `1px solid rgba(${WC.inkRGB},0.06)`, display: 'flex', alignItems: 'center', gap: 12 }}>
           <ColorSwatch value={colorForWorkflow(workflow)} onChange={(hex) => patch(workflow, { color: hex })} size={15} />
           <input
