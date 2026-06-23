@@ -65,6 +65,8 @@ from backend.apps.agents.manager.prompt.tool_catalog import (
     _get_all_known_tool_names,
     _get_denied_tool_names,
     _is_fully_denied,
+    gated_mcp_server_names,
+    get_all_tool_names,
 )
 from backend.apps.agents.core.aux_llm import _safe_resp_text, clean_short_label, aux_max_tokens_for
 from backend.apps.agents.manager.session.history_compaction import (
@@ -101,28 +103,6 @@ os.environ.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "3600000")
 p_VIEW_BUILDER_RENDER_MAX_RETRIES = 2
 p_view_builder_render_retry_counts: dict[str, int] = {}
 p_view_builder_dirty_sessions: set[str] = set()
-
-
-def get_all_tool_names() -> list[str]:
-    """FULL_TOOLS + installed MCP tool identifiers (mcp:<tool_name>).
-
-    Builtin tools set to 'deny' and MCP servers whose every sub-tool
-    is denied are excluded.
-    """
-    builtin_perms = load_builtin_permissions()
-    builtin_tools = [
-        t for t in FULL_TOOLS
-        if builtin_perms.get(t, "always_allow") != "deny"
-    ]
-    mcp_names = [
-        f"mcp:{t.name}"
-        for t in load_all_tools()
-        if t.mcp_config
-        and t.enabled
-        and t.auth_status in ("configured", "connected")
-        and not _is_fully_denied(t)
-    ]
-    return builtin_tools + mcp_names
 
 
 class AgentManager:
@@ -210,29 +190,6 @@ class AgentManager:
 
         logger.info(f"[MCP-DEBUG] Final mcp_servers: {list(mcp_servers.keys())}")
         return mcp_servers
-
-    def _gated_mcp_server_names(self, allowed_tools: list[str], active_mcps: list[str] | None) -> list[str]:
-        """Names of installed MCP servers withheld from the SDK because they're
-        not activated yet, exactly the servers the model sees in the
-        <mcp_servers> block but can't reach via ToolSearch. The only way in is
-        MCPActivate; used to steer a model looping on ToolSearch to the gate."""
-        active_set = set(active_mcps or [])
-        names: list[str] = []
-        try:
-            for tool in load_all_tools():
-                if not (tool.mcp_config and tool.enabled and tool.auth_status in ("configured", "connected")):
-                    continue
-                tool_ref = f"mcp:{tool.name}"
-                if tool_ref not in allowed_tools and allowed_tools != get_all_tool_names():
-                    continue
-                if _is_fully_denied(tool):
-                    continue
-                server_name = _sanitize_server_name(tool.name)
-                if server_name not in active_set:
-                    names.append(server_name)
-        except Exception:
-            logger.exception("gated MCP server enumeration failed")
-        return names
 
     def _build_connected_tools_context(self, allowed_tools: list[str]) -> str | None:
         return _build_connected_tools_context(allowed_tools, get_all_tool_names)
@@ -499,7 +456,7 @@ class AgentManager:
             if tool_name == "ToolSearch":
                 _ts_loop["n"] += 1
                 if _ts_loop["n"] >= TOOLSEARCH_LOOP_THRESHOLD:
-                    _gated = self._gated_mcp_server_names(session.allowed_tools, session.active_mcps)
+                    _gated = gated_mcp_server_names(session.allowed_tools, session.active_mcps)
                     _reason = toolsearch_loop_redirect(_ts_loop["n"], _gated)
                     if _reason:
                         logger.info(f"[MCP-DEBUG] ToolSearch loop-breaker fired for {session_id} (n={_ts_loop['n']})")

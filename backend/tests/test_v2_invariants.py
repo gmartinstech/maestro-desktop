@@ -258,11 +258,10 @@ def test_toolsearch_redirect_works_with_no_gated_servers():
 async def test_gated_server_names_surface_only_inactive_servers():
     """The steer list must mirror the gate: connected-but-not-active servers
     only, never one that's already activated (callable) or denied."""
-    from backend.apps.agents.agent_manager import AgentManager
+    from backend.apps.agents.manager.prompt.tool_catalog import gated_mcp_server_names
     fake_tools = [_fake_tool("Gmail"), _fake_tool("Slack"), _fake_tool("Notion")]
-    with patch("backend.apps.agents.agent_manager.load_all_tools", return_value=fake_tools):
-        mgr = AgentManager()
-        names = mgr._gated_mcp_server_names(
+    with patch("backend.apps.agents.manager.prompt.tool_catalog.load_all_tools", return_value=fake_tools):
+        names = gated_mcp_server_names(
             allowed_tools=["mcp:Gmail", "mcp:Slack", "mcp:Notion"],
             active_mcps=["gmail"],  # already activated -> not "gated"
         )
@@ -272,11 +271,10 @@ async def test_gated_server_names_surface_only_inactive_servers():
 
 @pytest.mark.asyncio
 async def test_gated_server_names_empty_when_all_active():
-    from backend.apps.agents.agent_manager import AgentManager
+    from backend.apps.agents.manager.prompt.tool_catalog import gated_mcp_server_names
     fake_tools = [_fake_tool("Gmail")]
-    with patch("backend.apps.agents.agent_manager.load_all_tools", return_value=fake_tools):
-        mgr = AgentManager()
-        assert mgr._gated_mcp_server_names(["mcp:Gmail"], ["gmail"]) == []
+    with patch("backend.apps.agents.manager.prompt.tool_catalog.load_all_tools", return_value=fake_tools):
+        assert gated_mcp_server_names(["mcp:Gmail"], ["gmail"]) == []
 
 
 # ===========================================================================
