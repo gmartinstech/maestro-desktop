@@ -593,6 +593,16 @@ const slice = createSlice({
       })
       .addCase(fetchWorkflows.rejected, (state) => { state.loading = false; state.loaded = true; })
       .addCase(createWorkflow.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
+      // Optimistic: reflect the patch in the store immediately so store-driven
+      // UI (the schedule test-first banner, status, etc.) updates the instant
+      // the user edits, not after the PATCH round-trips (which awaits an aux
+      // relabel LLM call server-side). fulfilled overwrites with server truth;
+      // a 409 stale triggers a refetch in useWorkflowPatch.
+      .addCase(updateWorkflow.pending, (state, action) => {
+        const { id, patch } = action.meta.arg;
+        const cur = state.items[id];
+        if (cur) state.items[id] = { ...cur, ...patch };
+      })
       .addCase(updateWorkflow.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
       .addCase(commitDraft.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
       .addCase(discardDraft.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
