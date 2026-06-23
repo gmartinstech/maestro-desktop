@@ -762,7 +762,7 @@ def test_router_auth_pattern_does_not_falsely_match_normal_text():
 
 def test_is_auth_error_classifier():
     """The classifier at agent_manager.py:_is_auth_error covers many shapes."""
-    from backend.apps.agents.agent_manager import _is_auth_error
+    from backend.apps.agents.core.error_classify import _is_auth_error
 
     # Real shapes that must be caught
     matches = [
@@ -790,7 +790,7 @@ def test_is_auth_error_classifier():
 
 def test_is_auth_error_with_stderr_tail():
     """The classifier also reads stderr buffer text."""
-    from backend.apps.agents.agent_manager import _is_auth_error
+    from backend.apps.agents.core.error_classify import _is_auth_error
     e = Exception("Command failed with exit code 1")
     stderr = "...\n[codex/gpt-5.5] [401]: Provided authentication token is expired"
     assert _is_auth_error(e, extra_text=stderr)
@@ -892,7 +892,7 @@ def test_active_mcps_persistence_on_session():
 
 def test_long_context_pattern_caught():
     """The 'extra usage required' 429 must NOT silently retry."""
-    from backend.apps.agents.agent_manager import _NON_TRANSIENT_PATTERNS
+    from backend.apps.agents.core.error_classify import _NON_TRANSIENT_PATTERNS
     cases = [
         "Extra usage is required for long context requests",
         "extra usage is required for long context",
@@ -904,7 +904,7 @@ def test_long_context_pattern_caught():
 
 def test_transient_capacity_patterns():
     """Real transient errors that SHOULD retry."""
-    from backend.apps.agents.agent_manager import _TRANSIENT_CAPACITY_PATTERNS, _NON_TRANSIENT_PATTERNS
+    from backend.apps.agents.core.error_classify import _TRANSIENT_CAPACITY_PATTERNS, _NON_TRANSIENT_PATTERNS
     transients = [
         "Error 429: rate_limit_error",
         "503 Service Unavailable",
@@ -926,7 +926,7 @@ def test_transient_capacity_patterns():
 
 def test_long_context_does_not_match_normal_429():
     """Generic 429 is transient, only the long-context variant is non-transient."""
-    from backend.apps.agents.agent_manager import _NON_TRANSIENT_PATTERNS
+    from backend.apps.agents.core.error_classify import _NON_TRANSIENT_PATTERNS
     assert not _NON_TRANSIENT_PATTERNS.search("Error 429: rate_limit_error")
 
 

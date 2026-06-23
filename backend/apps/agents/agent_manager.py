@@ -17,7 +17,7 @@ from backend.apps.settings.settings import load_settings
 from backend.apps.tools_lib.tools_lib import (
     _load_all as load_all_tools,
     _save as save_tool,
-    _sanitize_server_name,
+    _sanitize_server_name as sanitize_server_name,
     derive_mcp_config,
     load_builtin_permissions,
     load_trusted_sensitive_paths,
@@ -30,21 +30,21 @@ from backend.apps.tools_lib.tools_lib import (
 )
 from backend.config.paths import SESSIONS_DIR
 from backend.apps.agents.core.error_classify import (
-    _NON_TRANSIENT_PATTERNS,
-    _TRANSIENT_CAPACITY_PATTERNS,
+    _NON_TRANSIENT_PATTERNS as NON_TRANSIENT_PATTERNS,
+    _TRANSIENT_CAPACITY_PATTERNS as TRANSIENT_CAPACITY_PATTERNS,
     CAPACITY_BACKOFFS,
     capacity_retry_wait,
-    _is_auth_error,
-    _is_free_trial_exhausted,
-    _is_long_context_error,
-    _is_transient_capacity_error,
-    _is_unknown_model_error,
+    _is_auth_error as is_auth_error,
+    _is_free_trial_exhausted as is_free_trial_exhausted,
+    _is_long_context_error as is_long_context_error,
+    _is_transient_capacity_error as is_transient_capacity_error,
+    _is_unknown_model_error as is_unknown_model_error,
     parse_retry_after,
     redact_for_telemetry,
 )
 from backend.apps.agents.manager.session.session_store import (
-    _load_session_data,
-    _save_session,
+    _load_session_data as load_session_data,
+    _save_session as save_session,
 )
 from backend.apps.agents.manager import metadata
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
@@ -67,7 +67,7 @@ from backend.apps.agents.manager.MessagingMixin import MessagingMixin
 from backend.apps.agents.manager.AgentLaunchMixin import AgentLaunchMixin
 from backend.apps.agents.manager.RunSupportMixin import RunSupportMixin
 from backend.apps.agents.manager.permissions import gate_hooks
-from backend.apps.agents.manager.session.workspace_git import _detect_git_identity, _ensure_cwd_git_repo
+from backend.apps.agents.manager.session.workspace_git import _detect_git_identity as detect_git_identity, _ensure_cwd_git_repo
 from backend.apps.agents.manager.prompt.tool_catalog import (
     FULL_TOOLS,
     get_all_known_tool_names,
@@ -76,11 +76,11 @@ from backend.apps.agents.manager.prompt.tool_catalog import (
     gated_mcp_server_names,
     get_all_tool_names,
 )
-from backend.apps.agents.core.aux_llm import _safe_resp_text, clean_short_label, aux_max_tokens_for
+from backend.apps.agents.core.aux_llm import _safe_resp_text as safe_resp_text, clean_short_label, aux_max_tokens_for
 from backend.apps.agents.manager.session.history_compaction import (
-    _build_history_prefix,
-    _estimate_post_compact_input,
-    _get_branch_messages,
+    _build_history_prefix as build_history_prefix,
+    _estimate_post_compact_input as estimate_post_compact_input,
+    _get_branch_messages as get_branch_messages,
 )
 from backend.apps.agents.manager.prompt.prompt_context import resolve_mode
 
@@ -200,7 +200,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # Emit a context_status event so the model and UI both know.
             try:
                 p_enabled = {
-                    _sanitize_server_name(t.name)
+                    sanitize_server_name(t.name)
                     for t in load_all_tools()
                     if t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")
                 }
@@ -431,7 +431,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
 
                     tool_def = next(
                         (t for t in all_tools_list
-                         if t.mcp_config and t.enabled and _sanitize_server_name(t.name) == name),
+                         if t.mcp_config and t.enabled and sanitize_server_name(t.name) == name),
                         None,
                     )
                     if tool_def:
@@ -852,7 +852,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 # the git-init block in launch_agent, leaving them
                 # without a valid HEAD. Ensure it here so subagent
                 # worktree-add always works.
-                _ensure_cwd_git_repo(session.cwd)
+                ensure_cwd_git_repo(session.cwd)
                 options_kwargs["cwd"] = session.cwd
 
             try:
@@ -899,7 +899,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # Fresh-restart path: some session changes must not reuse the
             # CLI's resume transcript. MCPActivate needs a new transport so
             # tool schemas are reread; branch edits/switches need the model
-            # to see only _get_branch_messages(session), not facts from the
+            # to see only get_branch_messages(session), not facts from the
             # old branch's SDK transcript. Soft restart: drop resume +
             # sdk_session_id, replay local history via the prompt, let the
             # SDK build a clean session from the current app state.
@@ -920,8 +920,8 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 if session.needs_fork:
                     session.needs_fork = False
             elif len(session.messages) > 1:
-                history = _build_history_prefix(
-                    _get_branch_messages(session),
+                history = build_history_prefix(
+                    get_branch_messages(session),
                     cutoff_msg_id=session.compacted_through_msg_id,
                 )
                 if history:
@@ -937,7 +937,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # zero latency on the user's turn.
             try:
                 if self.p_maybe_compact(session):
-                    new_input = _estimate_post_compact_input(session)
+                    new_input = estimate_post_compact_input(session)
                     await ws_manager.send_to_session(session_id, "agent:context_status", {
                         "session_id": session_id,
                         "reason": "compacted",
@@ -1292,7 +1292,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # subsequent step (title gen, follow-up tool turn, etc.).
             # Don't blast a "context exceeded" card over a completed reply.
             p_streamed_substantive = bool(turn.stream_text_msg_id) and turn.current_turn_emitted
-            if p_streamed_substantive and _is_long_context_error(e, extra_text=p_stderr_tail):
+            if p_streamed_substantive and is_long_context_error(e, extra_text=p_stderr_tail):
                 # Mark the session completed (not error), keep the assistant
                 # reply visible, and skip the overflow card. The next user
                 # turn will properly hit the pre-send guard if the chat is
@@ -1307,7 +1307,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     except Exception:
                         pass
                 return
-            if _is_long_context_error(e, extra_text=p_stderr_tail):
+            if is_long_context_error(e, extra_text=p_stderr_tail):
                 friendly_msg = (
                     "This conversation has grown too large for your account's "
                     "standard context window. Long-context requests require an "
@@ -1351,7 +1351,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     })
                 except Exception:
                     logger.debug("submit_diagnostic for context_overflow failed", exc_info=True)
-            elif _is_transient_capacity_error(e, extra_text=p_stderr_tail):
+            elif is_transient_capacity_error(e, extra_text=p_stderr_tail):
                 # A genuine throttle (429/overload/capacity) that already burned
                 # the whole silent-backoff budget (the only way one reaches here).
                 # It's a limit, not a failure, so don't append a system-message
@@ -1370,7 +1370,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "session_id": session_id,
                     "retry_after_s": parse_retry_after(e, p_stderr_tail),
                 })
-            elif _is_free_trial_exhausted(e, extra_text=p_stderr_tail):
+            elif is_free_trial_exhausted(e, extra_text=p_stderr_tail):
                 # Free runs spent. Flip back to own_key and show a friendly
                 # "connect a model" upsell instead of a raw 402.
                 try:
@@ -1393,7 +1393,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
-            elif _is_auth_error(e, extra_text=p_stderr_tail):
+            elif is_auth_error(e, extra_text=p_stderr_tail):
                 # Three sub-cases the user can hit, with distinct fixes:
                 #   1. "No credentials for provider: claude", user picked a
                 #      -cc route but doesn't have Claude Pro/Max connected
@@ -1459,7 +1459,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
-            elif _is_unknown_model_error(e, extra_text=p_stderr_tail):
+            elif is_unknown_model_error(e, extra_text=p_stderr_tail):
                 # Upstream rejected the model code itself (e.g. Codex 1211 on a
                 # ChatGPT plan that lacks our GPT ids). Track it; the friendly
                 # "add an API key / pick another model" card is rendered frontend-side.
@@ -1556,7 +1556,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "session": session.model_dump(mode="json"),
                 })
                 try:
-                    _save_session(session_id, session.model_dump(mode="json"))
+                    save_session(session_id, session.model_dump(mode="json"))
                 except Exception as e:
                     logger.warning(f"Failed to snapshot session {session_id}: {e}")
 
