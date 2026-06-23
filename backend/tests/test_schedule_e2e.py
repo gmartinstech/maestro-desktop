@@ -369,3 +369,20 @@ async def test_last_day_of_month_fires_on_month_end():
     nxt2 = scheduler.compute_next_fire(wf, ref=nxt)
     local2 = nxt2.astimezone(tz)
     assert local2.month == 3 and local2.day == 31
+
+
+async def test_soft_deleted_excluded_from_list():
+    """Soft-deleted workflows drop out of list_workflows (so the scheduler and
+    every list view skip them) but stay visible to list_deleted_workflows."""
+    from backend.apps.workflows import storage
+    live = _make_wf(title="live")
+    trashed = _make_wf(title="trashed")
+    trashed.deleted_at = datetime.now()
+    storage.save_workflow(live)
+    storage.save_workflow(trashed)
+    active_ids = {w.id for w in storage.list_workflows()}
+    deleted_ids = {w.id for w in storage.list_deleted_workflows()}
+    assert live.id in active_ids and trashed.id not in active_ids
+    assert trashed.id in deleted_ids and live.id not in deleted_ids
+    # get_workflow still resolves a trashed record so restore/purge can fetch it.
+    assert storage.get_workflow(trashed.id) is not None

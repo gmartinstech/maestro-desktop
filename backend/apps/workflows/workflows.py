@@ -704,6 +704,16 @@ async def list_calendar_events(
     return {"events": events}
 
 
+@workflows.router.get("/deleted")
+async def list_deleted_workflows(dashboard_id: Optional[str] = None):
+    """Trashed workflows, most-recently-deleted first. Backs the Trash screen."""
+    items = storage.list_deleted_workflows()
+    if dashboard_id:
+        items = [w for w in items if not w.dashboard_id or w.dashboard_id == dashboard_id]
+    items.sort(key=lambda w: w.deleted_at or w.created_at, reverse=True)
+    return {"workflows": [_enriched(w) for w in items]}
+
+
 @workflows.router.get("/{workflow_id}")
 async def get_workflow(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
@@ -811,10 +821,57 @@ async def update_workflow(
 
 @workflows.router.delete("/{workflow_id}")
 async def delete_workflow(workflow_id: str):
-    existed = storage.delete_workflow(workflow_id)
-    if not existed:
+    """Soft-delete: move to Trash. The record stays on disk with deleted_at
+    set so it's hidden from every list and the scheduler but restorable.
+    /{id}/purge does the irreversible hard delete."""
+    wf = storage.get_workflow(workflow_id)
+    if not wf or wf.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    wf.deleted_at = datetime.now()
+    wf.schedule.enabled = False
+    wf.next_run_at = None
+    storage.save_workflow(wf)
+    # Drop any pending missed fires so a trashed workflow can't haunt the card.
+    stale = [m.id for m in storage.list_missed() if m.workflow_id == workflow_id]
+    if stale:
+        storage.remove_missed(stale)
     scheduler.kick()
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager
+        await ws_manager.broadcast_global("workflow:deleted", {"workflow_id": workflow_id})
+    except Exception:
+        pass
+    return {"ok": True}
+
+
+@workflows.router.post("/{workflow_id}/restore")
+async def restore_workflow(workflow_id: str):
+    """Bring a trashed workflow back. Its schedule stays off (we disabled it
+    on delete); the user re-enables it deliberately."""
+    wf = storage.get_workflow(workflow_id)
+    if not wf or wf.deleted_at is None:
+        raise HTTPException(status_code=404, detail="Workflow not in trash")
+    wf.deleted_at = None
+    storage.save_workflow(wf)
+    enriched = _enriched(wf)
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager
+        await ws_manager.broadcast_global("workflow:updated", {
+            "workflow_id": wf.id,
+            "workflow": enriched,
+        })
+    except Exception:
+        pass
+    return enriched
+
+
+@workflows.router.delete("/{workflow_id}/purge")
+async def purge_workflow(workflow_id: str):
+    """Hard delete, only from Trash. Removes the record and its run history."""
+    wf = storage.get_workflow(workflow_id)
+    if not wf or wf.deleted_at is None:
+        raise HTTPException(status_code=404, detail="Workflow not in trash")
+    storage.delete_workflow(workflow_id)
     try:
         from backend.apps.agents.core.ws_manager import ws_manager
         await ws_manager.broadcast_global("workflow:deleted", {"workflow_id": workflow_id})

@@ -107,6 +107,9 @@ class Workflow(BaseModel):
     icon: str = ""
     # User-chosen swatch (hex). None falls back to the id-hash color in the UI.
     color: Optional[str] = None
+    # Soft-delete tombstone. Set = in Trash (hidden from lists + scheduler);
+    # restore nulls it, purge removes the record entirely.
+    deleted_at: Optional[datetime] = None
     system_prompt: Optional[str] = None
     use_synced_prompt: bool = True
     steps: list[WorkflowStep] = Field(default_factory=list)

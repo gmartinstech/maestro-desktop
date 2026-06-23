@@ -3,17 +3,19 @@ import type { CSSProperties } from 'react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { deleteWorkflow } from '@/shared/state/workflowsSlice';
 import { isScheduleActive, describeSchedule } from '@/app/pages/Workflows/scheduleUtils';
-import { colorForId, WC } from './uiKit';
+import { colorForWorkflow, useWC } from './uiKit';
 import type { AppNav } from './types';
 
 const navBase: CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 10, padding: '7px 9px',
+  display: 'flex', alignItems: 'center', gap: 9, padding: '6px 9px',
   borderRadius: 8, cursor: 'pointer', fontSize: 13.5,
 };
 
 const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
+  const WC = useWC();
   const dispatch = useAppDispatch();
   const items = useAppSelector((s) => s.workflows.items);
+  const trashCount = useAppSelector((s) => s.workflows.deleted.length);
   const [query, setQuery] = useState('');
 
   const workflows = useMemo(() => Object.values(items)
@@ -28,10 +30,8 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
 
   const activeCount = workflows.filter((w) => isScheduleActive(w.schedule)).length;
 
-  const onDelete = (id: string, title: string) => {
-    // Hard delete: the backend has no soft-delete/restore, so confirm here
-    // rather than imply a recoverable trash that doesn't exist.
-    if (!window.confirm(`Delete "${title}"? This can't be undone.`)) return;
+  const onDelete = (id: string) => {
+    // Soft-delete: moves to Trash (recoverable), so no scary confirm.
     dispatch(deleteWorkflow(id));
     if (nav.selectedId === id) nav.goHome();
   };
@@ -45,11 +45,14 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const newStyle: CSSProperties = nav.mode === 'new'
     ? { ...navBase, background: WC.accent, color: '#fff', fontWeight: 600 }
     : { ...navBase, color: WC.accent, fontWeight: 600 };
+  const trashStyle: CSSProperties = nav.mode === 'trash'
+    ? { ...navBase, background: WC.selBg, color: WC.ink, fontWeight: 600 }
+    : { ...navBase, color: WC.ink3 };
 
   return (
     <div style={{ width: 248, flex: 'none', borderRight: `1px solid ${WC.line}`, background: WC.rail, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{ padding: '14px 12px 10px', flex: 'none' }}>
-        <div style={{ height: 30, borderRadius: 8, background: WC.paper, border: '1px solid rgba(33,30,27,0.08)', display: 'flex', alignItems: 'center', gap: 7, padding: '0 9px', color: WC.muted, fontSize: 12.5 }}>
+        <div style={{ height: 30, borderRadius: 8, background: WC.paper, border: `1px solid rgba(${WC.inkRGB},0.08)`, display: 'flex', alignItems: 'center', gap: 7, padding: '0 9px', color: WC.muted, fontSize: 12.5 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
           <input
             value={query}
@@ -57,6 +60,7 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
             placeholder="Search"
             style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 12.5, color: WC.ink }}
           />
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, opacity: 0.6 }}>⌘K</span>
         </div>
       </div>
 
@@ -88,9 +92,9 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
             <div
               key={w.id}
               onClick={() => nav.selectWorkflow(w.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 9px', borderRadius: 9, cursor: 'pointer', background: isSel ? WC.selBg : 'transparent' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 9px', borderRadius: 8, cursor: 'pointer', background: isSel ? WC.selBg : 'transparent' }}
             >
-              <div style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: colorForId(w.id), opacity: active ? 1 : 0.35 }} />
+              <div style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: colorForWorkflow(w), opacity: active ? 1 : 0.35 }} />
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: active ? WC.ink : WC.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.title || 'Untitled workflow'}</div>
                 <div style={{ fontSize: 11, color: WC.muted2, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -98,9 +102,9 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
                 </div>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); onDelete(w.id, w.title || 'this workflow'); }}
+                onClick={(e) => { e.stopPropagation(); onDelete(w.id); }}
                 style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.faint, flex: 'none' }}
-                aria-label="Delete workflow"
+                aria-label="Move to trash"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
               </div>
@@ -110,6 +114,16 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
         {filtered.length === 0 && (
           <div style={{ padding: '18px 10px', fontSize: 12.5, color: WC.muted2 }}>No workflows yet.</div>
         )}
+      </div>
+
+      <div style={{ flex: 'none', borderTop: `1px solid ${WC.line}`, padding: '8px' }}>
+        <div onClick={nav.goTrash} style={trashStyle}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
+          <span>Trash</span>
+          {trashCount > 0 && (
+            <span style={{ marginLeft: 'auto', fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, color: WC.muted2 }}>{trashCount}</span>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -122,7 +122,16 @@ def init() -> None:
 def list_workflows() -> list[Workflow]:
     if not _cache_loaded:
         init()
-    return list(_workflow_cache.values())
+    # Soft-deleted records are filtered here so the scheduler, calendar, and
+    # every list view skip them with no per-caller guard. Trash reads via
+    # list_deleted_workflows; restore/purge fetch by id with get_workflow.
+    return [w for w in _workflow_cache.values() if w.deleted_at is None]
+
+
+def list_deleted_workflows() -> list[Workflow]:
+    if not _cache_loaded:
+        init()
+    return [w for w in _workflow_cache.values() if w.deleted_at is not None]
 
 
 def get_workflow(wid: str) -> Optional[Workflow]:

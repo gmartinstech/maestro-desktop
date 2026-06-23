@@ -65,6 +65,8 @@ export interface Workflow {
   icon: string;
   /** User-chosen swatch (hex). Null/undefined falls back to the id-hash color. */
   color?: string | null;
+  /** Soft-delete tombstone (ISO). Set = in Trash. */
+  deleted_at?: string | null;
   system_prompt: string | null;
   use_synced_prompt: boolean;
   steps: WorkflowStep[];
@@ -197,9 +199,11 @@ interface State {
   allRunsLoading: boolean;
   runningToast: RunningToast | null;
   runControlPending: Record<string, WorkflowRunControlAction>;
+  deleted: Workflow[];
+  deletedLoading: boolean;
 }
 
-const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false, runningToast: null, runControlPending: {} };
+const initialState: State = { items: {}, runs: {}, openCards: {}, loaded: false, loading: false, paused: false, active: [], cloudSmsEnabled: false, allRuns: [], allRunsLoading: false, runningToast: null, runControlPending: {}, deleted: [], deletedLoading: false };
 
 function mergeRunIntoState(state: State, r: WorkflowRun) {
   const arr = state.runs[r.workflow_id] || [];
@@ -395,6 +399,25 @@ export const discardDraft = createAsyncThunk('workflows/discardDraft', async (id
 
 export const deleteWorkflow = createAsyncThunk('workflows/delete', async (id: string) => {
   await fetch(`${API}/${id}`, { method: 'DELETE' });
+  return id;
+});
+
+export const fetchDeletedWorkflows = createAsyncThunk('workflows/fetchDeleted', async (dashboardId?: string) => {
+  const url = dashboardId ? `${API}/deleted?dashboard_id=${encodeURIComponent(dashboardId)}` : `${API}/deleted`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.workflows as Workflow[];
+});
+
+export const restoreWorkflow = createAsyncThunk('workflows/restore', async (id: string) => {
+  const res = await fetch(`${API}/${id}/restore`, { method: 'POST' });
+  if (!res.ok) throw new Error(`restore failed ${res.status}`);
+  return (await res.json()) as Workflow;
+});
+
+export const purgeWorkflow = createAsyncThunk('workflows/purge', async (id: string) => {
+  const res = await fetch(`${API}/${id}/purge`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`purge failed ${res.status}`);
   return id;
 });
 
@@ -609,6 +632,16 @@ const slice = createSlice({
         state.allRuns = action.payload;
       })
       .addCase(fetchAllRuns.rejected, (state) => { state.allRunsLoading = false; })
+      .addCase(fetchDeletedWorkflows.pending, (state) => { state.deletedLoading = true; })
+      .addCase(fetchDeletedWorkflows.fulfilled, (state, action) => { state.deletedLoading = false; state.deleted = action.payload; })
+      .addCase(fetchDeletedWorkflows.rejected, (state) => { state.deletedLoading = false; })
+      .addCase(restoreWorkflow.fulfilled, (state, action) => {
+        state.items[action.payload.id] = action.payload;
+        state.deleted = state.deleted.filter((w) => w.id !== action.payload.id);
+      })
+      .addCase(purgeWorkflow.fulfilled, (state, action) => {
+        state.deleted = state.deleted.filter((w) => w.id !== action.payload);
+      })
       .addCase(fetchPausedState.fulfilled, (state, action) => { state.paused = action.payload; })
       .addCase(setPausedAll.fulfilled, (state, action) => { state.paused = action.payload; })
       .addCase(fetchActiveRuns.fulfilled, (state, action) => { state.active = action.payload; })
