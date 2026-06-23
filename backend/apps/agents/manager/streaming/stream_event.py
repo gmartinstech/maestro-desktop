@@ -127,7 +127,6 @@ async def handle_stream_event(
             # Thinking content streams as thinking_delta
             # with a "thinking" field (not "text")
             think_chunk = delta.get("thinking", "")
-            thinking.total_chars += len(think_chunk)
             await ws_manager.send_to_session(session_id, "agent:stream_delta", {
                 "session_id": session_id,
                 "message_id": msg_id,

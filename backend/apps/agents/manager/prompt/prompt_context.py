@@ -7,7 +7,7 @@ from backend.apps.tools_lib.tools_lib import (
     _load_all as load_all_tools,
     _sanitize_server_name as sanitize_server_name,
 )
-from backend.apps.agents.manager.prompt.tool_catalog import get_denied_tool_names, is_fully_denied
+from backend.apps.agents.manager.prompt.tool_catalog import is_fully_denied
 
 
 @typechecked
@@ -18,88 +18,6 @@ def resolve_mode(mode_id: str, get_all_tool_names: Callable[[], List[str]]) -> T
         tools = mode_def.tools if mode_def.tools is not None else get_all_tool_names()
         return tools, mode_def.system_prompt, mode_def.default_folder
     return get_all_tool_names(), None, None
-
-
-@typechecked
-def build_connected_tools_context(allowed_tools: List[str], get_all_tool_names: Callable[[], List[str]]) -> Optional[str]:
-    """Build a context block describing connected MCP tools and their accounts.
-
-    Tools set to 'deny' and fully-denied servers are excluded.
-    """
-    all_tools = load_all_tools()
-    mcp_tools = [t for t in all_tools if t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")]
-
-    sections = []
-    for tool in mcp_tools:
-        tool_ref = f"mcp:{tool.name}"
-        if tool_ref not in allowed_tools and allowed_tools != get_all_tool_names():
-            continue
-
-        if is_fully_denied(tool):
-            continue
-
-        server_name = sanitize_server_name(tool.name)
-        denied = get_denied_tool_names(tool)
-        tool_descs = {
-            k: v for k, v in tool.tool_permissions.get("_tool_descriptions", {}).items()
-            if k not in denied
-        }
-        if not tool_descs:
-            continue
-
-        lines = [f"MCP Server: {server_name}"]
-        lines.append(f"  Status: {tool.auth_status}")
-
-        if tool.connected_account_email:
-            lines.append(f"  Connected account: {tool.connected_account_email}")
-            lines.append(
-                f"  IMPORTANT: When calling tools from this server that require an email "
-                f"parameter (e.g. user_google_email, user_email), always use "
-                f"\"{tool.connected_account_email}\" automatically, do NOT ask the user."
-            )
-
-        # Discord guild scoping, hard restriction. The bot may technically
-        # be in other servers (across other OpenSwarm users), but this
-        # specific user only authorized these guild IDs.
-        if tool.name.lower() == "discord":
-            guilds = tool.oauth_tokens.get("guilds") or []
-            if guilds:
-                guild_descriptions = ", ".join(
-                    f"{g.get('name', 'Unknown')} ({g.get('id', '')})" for g in guilds
-                )
-                allowed_ids = [g.get("id", "") for g in guilds if g.get("id")]
-                lines.append(
-                    f"  AUTHORIZED DISCORD SERVERS (guild_ids): {guild_descriptions}"
-                )
-                lines.append(
-                    f"  HARD RESTRICTION: You MUST only call Discord tools that operate on "
-                    f"these guild_ids: {allowed_ids}. NEVER call Discord tools on any other "
-                    f"guild_id even if the bot has access to it. NEVER list, search, or "
-                    f"enumerate servers outside this list. If a user asks about a server "
-                    f"not in this list, refuse and tell them to authorize it via the Connect "
-                    f"Discord button. This is a security boundary, not a preference."
-                )
-            else:
-                lines.append(
-                    "  No Discord servers authorized yet. Tell the user to click "
-                    "'Connect Discord' to add a server before attempting any Discord actions."
-                )
-
-        tool_names = list(tool_descs.keys())
-        if tool_names:
-            lines.append(f"  Available tools ({len(tool_names)}): {', '.join(tool_names)}")
-
-        sections.append("\n".join(lines))
-
-    if not sections:
-        return None
-    return (
-        "<connected_mcp_tools>\n"
-        "The following MCP tool servers are connected and available. "
-        "Use them directly when relevant to the user's request.\n\n"
-        + "\n\n".join(sections)
-        + "\n</connected_mcp_tools>"
-    )
 
 
 # A run of this many ToolSearch calls with no other tool between them is the
@@ -421,10 +339,10 @@ AGENT_IDENTITY = (
 
 
 @typechecked
-def compose_system_prompt(default_prompt: Optional[str], mode_prompt: Optional[str], session_prompt: Optional[str], connected_tools_ctx: Optional[str] = None, browser_ctx: Optional[str] = None, mcp_registry_ctx: Optional[str] = None) -> Optional[str]:
+def compose_system_prompt(default_prompt: Optional[str], mode_prompt: Optional[str], session_prompt: Optional[str], browser_ctx: Optional[str] = None, mcp_registry_ctx: Optional[str] = None) -> Optional[str]:
     # Identity always leads so it overrides the preset's Claude Code persona, even
     # when the user has no custom default/mode/session prompt of their own.
-    parts = [AGENT_IDENTITY] + [p for p in (default_prompt, mode_prompt, session_prompt, connected_tools_ctx, mcp_registry_ctx, browser_ctx) if p]
+    parts = [AGENT_IDENTITY] + [p for p in (default_prompt, mode_prompt, session_prompt, mcp_registry_ctx, browser_ctx) if p]
     return "\n\n".join(parts)
 
 

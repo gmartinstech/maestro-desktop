@@ -18,7 +18,6 @@ class ThinkingState(BaseModel):
     # block index -> wall-clock start (s); popped to accumulate total_ms when a block ends.
     block_starts: Dict[int, float] = {}
     total_ms: int = 0
-    total_chars: int = 0
     # Stable id for the turn's single thinking message (frontend dedupe replaces in place).
     msg_id: Optional[str] = None
     text_parts: List[str] = []

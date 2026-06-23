@@ -32,16 +32,14 @@ def compose_turn_system_prompt(
     # MCP servers and their tool inventories are intentionally NOT injected into the system
     # prompt: the CLI's deferred-tool pool already exposes them by name via ToolSearch, and
     # eagerly listing connected MCPs (account emails, full tool enumerations) here would defeat
-    # the deferral and leak every integration into every turn. So connected-tools context stays
-    # None; the model discovers MCPs only when it actively calls ToolSearch.
-    connected_tools_ctx = None
+    # the deferral and leak every integration into every turn. The model discovers MCPs only
+    # when it actively calls ToolSearch; only the gated registry summary goes in.
     browser_ctx = build_browser_context(session.dashboard_id, selected_browser_ids=selected_browser_ids)
     mcp_registry_ctx = build_mcp_registry_summary(session.allowed_tools, session.active_mcps, get_all_tool_names)
     composed_prompt = compose_system_prompt(
         default_system_prompt,
         mode_sys_prompt,
         session.system_prompt,
-        connected_tools_ctx,
         browser_ctx,
         mcp_registry_ctx,
     )

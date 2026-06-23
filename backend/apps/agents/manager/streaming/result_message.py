@@ -132,7 +132,6 @@ async def handle_result_message(
     turn.baseline_children_out = 0
     turn.baseline_captured = False
     thinking.total_ms = 0
-    thinking.total_chars = 0
     thinking.block_starts = {}
 
     session.sdk_session_id = getattr(message, "session_id", None)
