@@ -215,6 +215,19 @@ async def execute(
         "last_run_id": run.id,
     })
 
+    # Announce the run as running the instant it claims execution, not at the
+    # first step. Without this a run that fails fast (e.g. no runnable steps) or
+    # hasn't streamed yet never hits the Home "Ongoing runs" list, so a batch of
+    # missed re-runs only ever surfaced whichever one reached its first step.
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager as _wsm_start
+        await _wsm_start.broadcast_global("workflow:run", {
+            "workflow_id": wf.id,
+            "run": run.model_dump(mode="json"),
+        })
+    except Exception:
+        pass
+
     session = None
     try:
         steps = [s for s in wf.steps if s.enabled and s.text and s.text.strip()]

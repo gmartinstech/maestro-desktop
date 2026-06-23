@@ -362,6 +362,14 @@ def _mark_stuck_runs_failed() -> None:
                     error="OpenSwarm closed before this run finished.",
                     finished_at=now,
                 )
+                # The run row is fixed, but the workflow still summarizes this
+                # dead run as 'running' (that's what the detail header reads), so
+                # heal the summary too when this was the latest run.
+                if wf.last_run_id == r.id and wf.last_run_status == "running":
+                    executor._persist_run_fields(wf, {
+                        "last_run_status": "failure",
+                        "last_run_at": now,
+                    })
 
 
 def record_skipped(wf: Workflow, scheduled_for: datetime, error: str) -> WorkflowRun:

@@ -230,6 +230,17 @@ function mergeRunIntoState(state: State, r: WorkflowRun) {
     wf.last_run_status = r.status === 'skipped' ? wf.last_run_status : (r.status as Workflow['last_run_status']);
     wf.last_run_id = r.id;
   }
+  // Keep the live "Ongoing runs" list in sync off the WS stream: a run that's no
+  // longer running drops out of `active`, a freshly-running one joins. Without
+  // this, `active` only refreshed on the one-shot mount fetch, so finished runs
+  // lingered as "Working…" while the monitor already showed them done.
+  const activeIdx = state.active.findIndex((a) => a.run_id === r.id);
+  if (r.status === 'running') {
+    const entry: ActiveRun = { workflow_id: r.workflow_id, run_id: r.id, title: wf?.title || '', started_at: r.started_at };
+    if (activeIdx >= 0) state.active[activeIdx] = entry; else state.active.unshift(entry);
+  } else if (activeIdx >= 0) {
+    state.active.splice(activeIdx, 1);
+  }
   // Auto-flip the card view on run state transitions so the user sees
   // Running while it streams, Completed on success, Failed on failure.
   // Only nudge from views that the user hasn't actively navigated away
