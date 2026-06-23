@@ -6,8 +6,12 @@ const SELECT_ATTR = 'data-select-type';
 const SELECT_ID_ATTR = 'data-select-id';
 const SELECT_META_ATTR = 'data-select-meta';
 
-const DRAG_SELECT_TYPES = ['agent-card', 'view-card', 'browser-card', 'workflow-card', 'workflows-hub-card'] as const;
+const DRAG_SELECT_TYPES = ['agent-card', 'view-card', 'browser-card', 'workflow-card'] as const;
 const DRAG_SELECTOR = DRAG_SELECT_TYPES.map((t) => `[${SELECT_ATTR}="${t}"]`).join(',');
+
+// The Workflows app window is a full app surface, not a card you attach as
+// context, so the selection tool never targets it (neither drag nor click).
+const NON_SELECTABLE_TYPES = new Set<string>(['workflows-hub-card']);
 
 export interface OverlayState {
   visible: boolean;
@@ -46,6 +50,8 @@ function findSelectableAncestor(target: Element, excludeId?: string | null): Ele
   let current: Element | null = target;
   while (current) {
     if (current.hasAttribute(SELECT_ATTR)) {
+      const type = current.getAttribute(SELECT_ATTR);
+      if (type && NON_SELECTABLE_TYPES.has(type)) return null;
       if (excludeId && current.getAttribute(SELECT_ID_ATTR) === excludeId) return null;
       return current;
     }
@@ -408,10 +414,22 @@ export function useDomElementSelector(): DomSelectorState {
     const prevUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = 'none';
 
+    // Escape just exits the tool: turn select mode off but leave the already
+    // attached elements alone. Capture + stopPropagation so it doesn't also
+    // clear the canvas selection while the tool is the thing in focus.
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      ctx.setSelectMode(false);
+      ctx.setExcludeSelectId(null);
+    };
+
     document.addEventListener('mousemove', handleMouseMove, true);
     document.addEventListener('mousedown', handleMouseDown, true);
     document.addEventListener('mouseup', handleMouseUp, true);
     document.addEventListener('click', handleClick, true);
+    document.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
       document.body.style.userSelect = prevUserSelect;
@@ -419,6 +437,7 @@ export function useDomElementSelector(): DomSelectorState {
       document.removeEventListener('mousedown', handleMouseDown, true);
       document.removeEventListener('mouseup', handleMouseUp, true);
       document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (dragPreviewRafRef.current) cancelAnimationFrame(dragPreviewRafRef.current);
       setOverlay(EMPTY_OVERLAY);
