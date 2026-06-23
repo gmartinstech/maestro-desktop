@@ -6,8 +6,6 @@ import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import Fade from '@mui/material/Fade';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CheckIcon from '@mui/icons-material/Check';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -15,7 +13,6 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import CloseIcon from '@mui/icons-material/Close';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import TerminalIcon from '@mui/icons-material/Terminal';
-import CalendarMonthRounded from '@mui/icons-material/CalendarMonthRounded';
 import { motion } from 'framer-motion';
 import {
   AgentSession,
@@ -43,33 +40,12 @@ import { useDashboardActive } from '@/shared/hooks/useDashboardActive';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canvasInteractionState';
-import { openWorkflowCard, updateWorkflowCard, generateWorkflowMetadata, applyGeneratedMetadata, setCardSidecar, type Workflow } from '@/shared/state/workflowsSlice';
-import { addWorkflowCard, setWorkflowCardPosition, setWorkflowCardSize, openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
-import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import { setCardSidecar } from '@/shared/state/workflowsSlice';
+import { openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 import { getAgentWorkTime, fmtSeconds } from '@/shared/agentWorkTime';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
 
 /** Extract up to 3 substantive user-prompt steps to seed a workflow. */
-function extractStepsFromSession(session: { messages: Array<{ role: string; content: unknown; hidden?: boolean }> }): Array<{ id: string; text: string }> {
-  const out: Array<{ id: string; text: string }> = [];
-  for (const msg of session.messages || []) {
-    if (msg.role !== 'user' || msg.hidden) continue;
-    const text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.map((b: any) => (typeof b === 'string' ? b : b?.text || '')).join(' ') : '');
-    const trimmed = text.trim();
-    if (trimmed.length < 6) continue;
-    out.push({ id: `step-${out.length + 1}-${Date.now().toString(36)}`, text: trimmed.slice(0, 400) });
-    if (out.length === 3) break;
-  }
-  if (out.length === 0 && session.messages?.length) {
-    const fallback = session.messages.find((m) => m.role === 'user');
-    if (fallback) {
-      const text = typeof fallback.content === 'string' ? fallback.content : '';
-      out.push({ id: `step-1-${Date.now().toString(36)}`, text: text.slice(0, 400) || 'Run the original task' });
-    }
-  }
-  return out;
-}
-
 function isWorkflowSuggestionTool(toolName: unknown, mcpServer?: unknown): boolean {
   const normalizedTool = String(toolName || '').toLowerCase();
   const normalizedServer = String(mcpServer || '').toLowerCase();
@@ -342,18 +318,9 @@ const AgentCard: React.FC<Props> = ({
   const hasApiKey = !!useAppSelector((s) => s.settings.data.anthropic_api_key);
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
-  // Convert-to-workflow now persists straight away (no preview interstitial),
-  // so the source chat's model/mode get overridden by the user's configured
-  // default the same way the old PreviewView did it.
-  const defaultModel = useAppSelector((s) => s.settings.data.default_model);
-  const defaultMode = useAppSelector((s) => s.settings.data.default_mode);
-  const [converting, setConverting] = useState(false);
-  const [suggestGlowCycle, setSuggestGlowCycle] = useState(0);
-  const [workflowToast, setWorkflowToast] = useState('');
-  const [dismissedWorkflowPromptKey, setDismissedWorkflowPromptKey] = useState('');
   const workflowSuggestion = useMemo(() => findWorkflowSuggestion(session), [session]);
-  // Hide the "Convert to workflow" button when this chat is already
-  // entangled with a workflow (Image #44 note). Two cases:
+  // Suppress the convert-suggestion glow when this chat is already entangled
+  // with a workflow. Two cases:
   //  (a) The session is one of a workflow's runner sessions, OR
   //  (b) The session is the source the workflow was originally derived
   //      from. Either way a fresh convert would just clone the workflow,
@@ -381,20 +348,6 @@ const AgentCard: React.FC<Props> = ({
     }
     return Boolean(sourceWorkflow);
   }, [workflowRunsMap, sourceWorkflow, session.id, session.workflow_test_state]);
-  const openSourceWorkflowScheduling = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    if (!sourceWorkflow) return;
-    dispatch(addWorkflowCard({ workflowId: sourceWorkflow.id, sourceSessionId: null, expandedSessionIds }));
-    dispatch(setWorkflowCardPosition({ workflowId: sourceWorkflow.id, x: cardX, y: cardY }));
-    dispatch(setWorkflowCardSize({ workflowId: sourceWorkflow.id, width: cardWidth, height: cardHeight }));
-    dispatch(removeCard(session.id));
-    dispatch(openWorkflowCard({ workflowId: sourceWorkflow.id, sourceSessionId: null, view: 'saved', draft: null, showScheduleNudge: true }));
-  }, [cardHeight, cardWidth, cardX, cardY, dispatch, expandedSessionIds, session.id, sourceWorkflow]);
-  const showSourceWorkflowSchedule =
-    !!sourceWorkflow &&
-    !sourceWorkflow.schedule?.enabled &&
-    (session.status === 'completed' || session.status === 'stopped') &&
-    session.messages.length >= 2;
   const hasUserPrompt = useMemo(
     () => (session.messages || []).some((m) => m.role === 'user' && !m.hidden),
     [session.messages],
@@ -405,78 +358,7 @@ const AgentCard: React.FC<Props> = ({
     !isWorkflowRunnerSession &&
     hasUserPrompt &&
     (session.messages.length >= 2 || isConvertBlockedByTurn || !!workflowSuggestion);
-  const canConvertToWorkflow = showConvertToWorkflow && !isConvertBlockedByTurn && !converting;
-  const workflowSuggestionKey = workflowSuggestion
-    ? `${session.id}:${workflowSuggestion.reason}:${workflowSuggestion.cadence}`
-    : '';
-  const showWorkflowSuggestionPrompt = Boolean(
-    workflowSuggestion &&
-    canConvertToWorkflow &&
-    workflowSuggestionKey &&
-    dismissedWorkflowPromptKey !== workflowSuggestionKey,
-  );
-  const convertChatToWorkflow = useCallback(() => {
-    if (converting) return;
-    const steps = extractStepsFromSession(session);
-    if (steps.length === 0) {
-      setWorkflowToast('Add a prompt before converting this chat to a workflow.');
-      return;
-    }
-    setConverting(true);
-    const draftId = `draft-${session.id}-${Date.now()}`;
-    dispatch(addWorkflowCard({ workflowId: draftId, sourceSessionId: session.id, expandedSessionIds }));
-    dispatch(setWorkflowCardPosition({ workflowId: draftId, x: cardX, y: cardY }));
-    dispatch(setWorkflowCardSize({ workflowId: draftId, width: cardWidth, height: cardHeight }));
-    dispatch(removeCard(session.id));
-    dispatch(openWorkflowCard({
-      workflowId: draftId,
-      sourceSessionId: session.id,
-      view: 'preview',
-      metaLoading: true,
-      draft: {
-        // Empty so the header shows its calm "New workflow" placeholder while
-        // naming runs, instead of flashing the stale chat name.
-        title: '',
-        description: '',
-        steps,
-        source_session_id: session.id,
-        use_synced_prompt: true,
-        model: defaultModel || session.model,
-        mode: defaultMode || session.mode,
-        suggested_cadence: workflowSuggestion?.cadence || undefined,
-      } as Partial<Workflow>,
-    }));
-    const genModel = defaultModel || session.model;
-    dispatch(generateWorkflowMetadata({ steps: steps.map((s) => ({ id: s.id, text: s.text })), model: genModel }))
-      .then((r) => {
-        if (generateWorkflowMetadata.fulfilled.match(r)) {
-          dispatch(applyGeneratedMetadata({ workflowId: draftId, meta: r.payload }));
-        } else {
-          dispatch(updateWorkflowCard({ workflowId: draftId, patch: { metaLoading: false } }));
-        }
-      });
-  }, [
-    cardHeight,
-    cardWidth,
-    cardX,
-    cardY,
-    converting,
-    defaultMode,
-    defaultModel,
-    dispatch,
-    expandedSessionIds,
-    isConvertBlockedByTurn,
-    session,
-    workflowSuggestion?.cadence,
-  ]);
-  const handleConvertToWorkflow = useCallback((e: React.MouseEvent<HTMLElement>) => {
-    e.stopPropagation();
-    if (isConvertBlockedByTurn) {
-      setWorkflowToast('Cannot convert to a workflow while the agent is responding.');
-      return;
-    }
-    convertChatToWorkflow();
-  }, [convertChatToWorkflow, isConvertBlockedByTurn]);
+  const canConvertToWorkflow = showConvertToWorkflow && !isConvertBlockedByTurn;
   // Curated picker label with a tidy fallback for unknowns.
   const friendlyModelLabel = useMemo(() => {
     const value = session.model;
@@ -505,7 +387,6 @@ const AgentCard: React.FC<Props> = ({
       if (suggestionPulseRef.current === key) return;
       suggestionPulseRef.current = key;
     }
-    setSuggestGlowCycle((n) => n + 1);
     dispatch(fadeGlowingAgentCard(session.id));
   }, [workflowSuggestion, canConvertToWorkflow, dispatch, session.id]);
 
@@ -1347,21 +1228,6 @@ const AgentCard: React.FC<Props> = ({
           ) : null}
         </>
       )}
-      <Snackbar
-        open={!!workflowToast}
-        autoHideDuration={3200}
-        onClose={() => setWorkflowToast('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          severity="info"
-          variant="filled"
-          onClose={() => setWorkflowToast('')}
-          sx={{ fontSize: '0.78rem' }}
-        >
-          {workflowToast}
-        </Alert>
-      </Snackbar>
     </Box>
     </motion.div>
   );
