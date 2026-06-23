@@ -20,8 +20,10 @@ export const DEFAULT_BROWSER_CARD_W = 1280;
 export const DEFAULT_BROWSER_CARD_H = 800;
 export const DEFAULT_WORKFLOW_CARD_W = 480;
 export const DEFAULT_WORKFLOW_CARD_H = 520;
-export const DEFAULT_WORKFLOWS_HUB_W = 1200;
-export const DEFAULT_WORKFLOWS_HUB_H = 640;
+// Open at the same default footprint as a browser/view card so it lands at a
+// comfortable size automatically.
+export const DEFAULT_WORKFLOWS_HUB_W = DEFAULT_BROWSER_CARD_W;
+export const DEFAULT_WORKFLOWS_HUB_H = DEFAULT_BROWSER_CARD_H;
 export const DEFAULT_MISSED_RUNS_W = 460;
 export const DEFAULT_MISSED_RUNS_H = 420;
 export const EXPANDED_CARD_MIN_H = 620;
