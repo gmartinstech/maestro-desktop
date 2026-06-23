@@ -23,6 +23,18 @@ from backend.apps.workflows import storage, scheduler, executor, audit, escalati
 
 logger = logging.getLogger(__name__)
 
+# Fixed opener for an existing workflow's edit chat. Deterministic on purpose,
+# no aux LLM call, so it never drifts and always lays out what the user can do.
+EDIT_AGENT_INTRO = (
+    "Here's your workflow's edit space. Tell me what you want and I'll handle it:\n\n"
+    "- Add, remove, or reorder steps\n"
+    "- Rewrite what any step does\n"
+    "- Connect tools it needs (email, calendar, browsing, and more)\n"
+    "- Test a run to see it work end to end\n\n"
+    "You can ask me directly here, or edit it yourself in the panel on the right: "
+    "Schedule sets when and how often it runs, and Steps is what it does, in order."
+)
+
 
 def _scan_cron_for_openswarm() -> list[str]:
     """Surface OS-level scheduled-task entries that reference us.
@@ -972,6 +984,29 @@ async def edit_agent_session(workflow_id: str):
         dashboard_id=wf.dashboard_id,
     )
     session = await agent_manager.launch_agent(config)
+    # launch_agent marks the session "running" assuming a turn fires immediately,
+    # but an edit-agent chat sits idle until the user sends something. Settle it
+    # to idle or the chat is stuck "thinking" forever. An existing workflow also
+    # gets a fixed (non-LLM) intro message; a brand-new build stays empty so the
+    # compose page can show its own starter prompts.
+    session.status = "completed"
+    if wf.steps:
+        from backend.apps.agents.core.models import Message
+        session.messages.append(Message(role="assistant", content=EDIT_AGENT_INTRO))
+    try:
+        from backend.apps.agents.manager.session.session_store import _save_session
+        _save_session(session.id, session.model_dump(mode="json"))
+    except Exception:
+        logger.debug("could not persist edit-agent session", exc_info=True)
+    try:
+        from backend.apps.agents.core.ws_manager import ws_manager
+        await ws_manager.send_to_session(session.id, "agent:status", {
+            "session_id": session.id,
+            "status": "completed",
+            "session": session.model_dump(mode="json"),
+        })
+    except Exception:
+        logger.debug("could not broadcast edit-agent idle status", exc_info=True)
     try:
         setattr(wf, "edit_agent_session_id", session.id)
         storage.save_workflow(wf)
@@ -1074,7 +1109,8 @@ async def commit_draft(workflow_id: str, body: Optional[DraftCommitBody] = None)
         # in the hub (clears the "+ New" build-in-progress flag).
         wf.unsaved = False
         p_sync_model_on_save(wf, body.model if body else None)
-        await p_end_edit_session(wf)
+        if not (body and body.keep_session):
+            await p_end_edit_session(wf)
         storage.save_workflow(wf)
         return _enriched(wf)
     before = wf.model_dump(mode="json")
@@ -1092,7 +1128,8 @@ async def commit_draft(workflow_id: str, body: Optional[DraftCommitBody] = None)
         wf.icon = _derive_icon(wf)
     _normalize_schedule_state(wf)
     p_sync_model_on_save(wf, body.model if body else None)
-    await p_end_edit_session(wf)
+    if not (body and body.keep_session):
+        await p_end_edit_session(wf)
     storage.save_workflow(wf)
     audit.log_change(wf.id, "user", before, wf.model_dump(mode="json"))
     scheduler.kick()

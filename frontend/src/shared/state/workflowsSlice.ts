@@ -375,17 +375,22 @@ export const updateWorkflow = createAsyncThunk<
   },
 );
 
-type CommitDraftArg = string | { id: string; model?: string };
+type CommitDraftArg = string | { id: string; model?: string; keep_session?: boolean };
 
 export const commitDraft = createAsyncThunk('workflows/commitDraft', async (arg: CommitDraftArg) => {
   const id = typeof arg === 'string' ? arg : arg.id;
   // Save-gated: the model the user settled on in the Edit Agent picker is applied
   // to the workflow's run model here (Discard never reaches this path).
   const model = typeof arg === 'string' ? undefined : arg.model;
+  // keep_session: the build flow auto-commits steps but must keep the chat open.
+  const keepSession = typeof arg === 'string' ? undefined : arg.keep_session;
+  const body: Record<string, unknown> = {};
+  if (model) body.model = model;
+  if (keepSession) body.keep_session = true;
   const res = await fetch(`${API}/${id}/draft/commit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(model ? { model } : {}),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`commit failed ${res.status}`);
   return (await res.json()) as Workflow;

@@ -250,6 +250,9 @@ class GenerateMetadataResponse(BaseModel):
 class WorkflowUpdate(BaseModel):
     title: Optional[str] = None
     auto_named: Optional[bool] = None
+    # Revealing a compose draft (Save, or auto on first chat message) flips this
+    # to False so the hub stops hiding it. Without it here the PATCH was a no-op.
+    unsaved: Optional[bool] = None
     description: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None
@@ -284,3 +287,7 @@ class DraftCommitBody(BaseModel):
     # The model the user settled on in the Edit Agent picker, applied to the
     # workflow's run model only on Save (save-gated; Discard drops it).
     model: Optional[str] = None
+    # Keep the edit-agent session alive across the commit. The build flow
+    # auto-commits steps as the agent adds them but must NOT close the chat,
+    # the user keeps talking in the same conversation after it becomes saved.
+    keep_session: bool = False
