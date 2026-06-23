@@ -1971,11 +1971,6 @@ class AgentManager:
             # that don't use signatures.
             # session.tokens accumulates SDK running totals across turns,
             # so subtract the turn-start baseline to get this turn's delta.
-            _turn_baseline_session_in: int = 0
-            _turn_baseline_session_out: int = 0
-            _turn_baseline_children_in: int = 0
-            _turn_baseline_children_out: int = 0
-            _turn_baseline_captured: bool = False
             # Background ticker handle. Re-emits the consolidated
             # thinking message every 1s so the elapsed counter keeps
             # ticking through gaps where no SDK events fire (tool
@@ -2148,11 +2143,11 @@ class AgentManager:
 
                 # Fall back to cumulative if the baseline wasn't captured
                 # (degenerate empty turn, better than showing zero).
-                if _turn_baseline_captured:
-                    _parent_in = max(0, _cum_in - _turn_baseline_session_in)
-                    _parent_out = max(0, _cum_out - _turn_baseline_session_out)
-                    _children_in = max(0, _cum_children_in - _turn_baseline_children_in)
-                    _children_out = max(0, _cum_children_out - _turn_baseline_children_out)
+                if turn.baseline_captured:
+                    _parent_in = max(0, _cum_in - turn.baseline_session_in)
+                    _parent_out = max(0, _cum_out - turn.baseline_session_out)
+                    _children_in = max(0, _cum_children_in - turn.baseline_children_in)
+                    _children_out = max(0, _cum_children_out - turn.baseline_children_out)
                 else:
                     _parent_in = _cum_in
                     _parent_out = _cum_out
@@ -2237,8 +2232,8 @@ class AgentManager:
                                 # Baselines track the SAME fresh lane the pill reads,
                                 # so the per-turn delta is fresh-minus-fresh.
                                 if isinstance(session.tokens, dict):
-                                    _turn_baseline_session_in = int(session.tokens.get("input_fresh", 0) or 0)
-                                    _turn_baseline_session_out = int(session.tokens.get("output", 0) or 0)
+                                    turn.baseline_session_in = int(session.tokens.get("input_fresh", 0) or 0)
+                                    turn.baseline_session_out = int(session.tokens.get("output", 0) or 0)
                                 _ch_in = 0
                                 _ch_out = 0
                                 for _child in self.sessions.values():
@@ -2249,9 +2244,9 @@ class AgentManager:
                                         continue
                                     _ch_in += int(_ct.get("input_fresh", 0) or 0)
                                     _ch_out += int(_ct.get("output", 0) or 0)
-                                _turn_baseline_children_in = _ch_in
-                                _turn_baseline_children_out = _ch_out
-                                _turn_baseline_captured = True
+                                turn.baseline_children_in = _ch_in
+                                turn.baseline_children_out = _ch_out
+                                turn.baseline_captured = True
                             except Exception:
                                 pass
                             # Pre-emit thinking pill for routes whose
@@ -2690,11 +2685,11 @@ class AgentManager:
                         turn.assistant_text_chars = 0
                         turn.tool_input_chars = 0
                         thinking.thought_signature = None
-                        _turn_baseline_session_in = 0
-                        _turn_baseline_session_out = 0
-                        _turn_baseline_children_in = 0
-                        _turn_baseline_children_out = 0
-                        _turn_baseline_captured = False
+                        turn.baseline_session_in = 0
+                        turn.baseline_session_out = 0
+                        turn.baseline_children_in = 0
+                        turn.baseline_children_out = 0
+                        turn.baseline_captured = False
                         thinking.total_ms = 0
                         thinking.total_chars = 0
                         thinking.block_starts = {}

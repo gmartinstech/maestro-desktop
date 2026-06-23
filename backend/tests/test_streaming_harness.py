@@ -141,3 +141,35 @@ def test_transient_capacity_error_is_retried_then_succeeds(monkeypatch):
     assert state["n"] == 2  # retried exactly once
     assert any(m.role == "assistant" and "Recovered" in str(m.content) for m in session.messages)
     assert session.status == "completed"
+
+
+def test_thinking_pill_shows_per_turn_delta_not_cumulative(monkeypatch):
+    # The pill's token total must reflect THIS turn's new tokens, not the whole session's
+    # running cumulative (the baseline-delta fix: capture-at-turn-start, subtract-at-emit,
+    # unified through TurnState). Prior turns left 1500 tokens on the session; this turn adds
+    # 100 in + 50 out = 150. Before the fix the baseline writes leaked into a closure-local
+    # and the pill showed the cumulative 1650; now it shows 150.
+    pills = []
+
+    async def fake_send(sid, event, data):
+        msg = data.get("message") if isinstance(data, dict) else None
+        if isinstance(msg, dict) and msg.get("role") == "thinking":
+            pills.append(msg)
+
+    async def q(*a, **k):
+        yield _assistant([ThinkingBlock(thinking="reasoning", signature="s"), TextBlock(text="answer")],
+                         usage={"input_tokens": 100, "output_tokens": 50})
+        yield _result(usage={"input_tokens": 1100, "output_tokens": 550})
+
+    monkeypatch.setattr(ws_mod.ws_manager, "send_to_session", fake_send, raising=True)
+    monkeypatch.setattr(claude_agent_sdk, "query", q, raising=True)
+
+    mgr = AgentManager()
+    from backend.apps.agents.core.models import AgentSession
+    session = AgentSession(name="t", model="sonnet", dashboard_id="d")
+    session.tokens = {"input_fresh": 1000, "output": 500}  # prior-turn accumulation
+    mgr.sessions[session.id] = session
+    asyncio.run(mgr._run_agent_loop(session.id, "hi"))
+
+    assert pills, "expected a consolidated thinking pill"
+    assert pills[-1]["input_tokens"] == 150  # (1100-1000)+(550-500), not the cumulative 1650
