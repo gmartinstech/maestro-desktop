@@ -15,8 +15,8 @@ from backend.apps.outputs.models import Output
 from backend.apps.outputs.workspace_io import WALK_SKIP_DIRS, save, load_output
 from backend.config.paths import OUTPUTS_DIR, OUTPUTS_WORKSPACE_DIR
 
-from ..exportable import DepRef, ExportContext, RemapTable
-from ..models import EntityType, Requirement
+from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
+from backend.apps.swarm.models import EntityType, Requirement
 
 P_MAX_APP_FILE = 25 * 1024 * 1024  # matches ziputil per-entry cap
 

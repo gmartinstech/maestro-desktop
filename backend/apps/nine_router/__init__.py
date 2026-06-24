@@ -18,7 +18,7 @@ the re-exports below.
 
 import httpx  # noqa: F401  patch point: tests stub backend.apps.nine_router.httpx.AsyncClient
 
-from .process import (
+from backend.apps.nine_router.process import (
     NINE_ROUTER_API,
     NINE_ROUTER_NPM_VERSION,
     NINE_ROUTER_PORT,
@@ -33,7 +33,7 @@ from .process import (
     is_running,
     stop,
 )
-from .sync import (
+from backend.apps.nine_router.sync import (
     NINE_ROUTER_CLAUDE_PRO_NAME,
     NINE_ROUTER_KEYED_NAME,
     NINE_ROUTER_OPENAI_KEYED_NAME,
@@ -43,14 +43,14 @@ from .sync import (
     sync_openai_api_key,
     sync_openrouter_api_key,
 )
-from .sync_custom import (
+from backend.apps.nine_router.sync_custom import (
     NINE_ROUTER_CUSTOM_NAME_SUFFIX,
     normalize_openai_compat_base_url,
     sync_custom_providers,
     sync_openswarm_pro_as_claude,
     sync_pro_routing,
 )
-from .oauth import (
+from backend.apps.nine_router.oauth import (
     exchange_oauth,
     get_models,
     poll_oauth,

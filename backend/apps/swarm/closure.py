@@ -13,8 +13,8 @@ import zipfile
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from .exportable import RemapTable
-from .models import (
+from backend.apps.swarm.exportable import RemapTable
+from backend.apps.swarm.models import (
     FORMAT_VERSION,
     BundlePreview,
     BundleSummary,
@@ -26,9 +26,9 @@ from .models import (
     Requirement,
     RequirementView,
 )
-from .redact import scrub_payload
-from .registry import IMPORT_ORDER, get_exportable
-from .ziputil import MANIFEST_NAME, BundleError, has_member, is_zip, pack, read_manifest, unpack, verify_checksum
+from backend.apps.swarm.redact import scrub_payload
+from backend.apps.swarm.registry import IMPORT_ORDER, get_exportable
+from backend.apps.swarm.ziputil import MANIFEST_NAME, BundleError, has_member, is_zip, pack, read_manifest, unpack, verify_checksum
 
 
 def p_now() -> str:
@@ -315,8 +315,8 @@ def p_read_files(sandbox: str, ref: EntityRef) -> dict[str, bytes]:
 def review_bundle(sandbox: str, manifest: Manifest):
     """Safety read of any app code in the staged bundle. Returns None when the
     bundle contains no apps (nothing to review)."""
-    from .models import ReviewSummary
-    from .scan_app_files import scan_app_files
+    from backend.apps.swarm.models import ReviewSummary
+    from backend.apps.swarm.scan_app_files import scan_app_files
 
     findings: list[str] = []
     scanned: list[str] = []

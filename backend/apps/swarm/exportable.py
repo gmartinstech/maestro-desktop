@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, Protocol, runtime_checkable
 
-from .models import EntityType, Requirement
+from backend.apps.swarm.models import EntityType, Requirement
 
 
 @dataclass

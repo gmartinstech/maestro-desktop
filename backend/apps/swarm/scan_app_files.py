@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from backend.apps.outputs.executor import get_code_warnings
 
-from .models import ReviewSummary
+from backend.apps.swarm.models import ReviewSummary
 
 
 def scan_app_files(files: dict[str, bytes]) -> ReviewSummary:

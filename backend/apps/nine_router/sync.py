@@ -7,7 +7,7 @@ as OpenSwarm-managed apikey connections. Talks to the already-running
 
 import logging
 
-from .process import NINE_ROUTER_API, cli_auth_headers
+from backend.apps.nine_router.process import NINE_ROUTER_API, cli_auth_headers
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ async def sync_openai_api_key(api_key: str | None) -> None:
     above) so 9Router's translator dispatches to this provider-node
     instead of the built-in `openai` provider.
     """
-    from .sync_custom import sync_openai_compat_node
+    from backend.apps.nine_router.sync_custom import sync_openai_compat_node
     await sync_openai_compat_node(api_key)
 
 

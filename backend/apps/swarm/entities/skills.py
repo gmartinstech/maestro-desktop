@@ -10,8 +10,8 @@ import os
 import shutil
 
 from backend.apps.skills import skills as store
-from ..exportable import DepRef, ExportContext, RemapTable
-from ..models import EntityType, Requirement
+from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
+from backend.apps.swarm.models import EntityType, Requirement
 
 
 class SkillExportable:

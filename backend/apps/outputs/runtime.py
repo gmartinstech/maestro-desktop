@@ -25,7 +25,7 @@ def p_resolve_bash() -> str:
                 return candidate
     return "bash"
 
-from .runtime_proc import (
+from backend.apps.outputs.runtime_proc import (
     ERROR_PATTERNS,
     FRONTEND_BIND_POLL_INTERVAL,
     FRONTEND_BIND_TIMEOUT_SECONDS,

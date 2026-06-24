@@ -12,8 +12,8 @@ from fastapi import File, HTTPException, Response, UploadFile
 
 from backend.config.Apps import SubApp
 
-from . import closure
-from .models import (
+from backend.apps.swarm import closure
+from backend.apps.swarm.models import (
     ExportPreflightResponse,
     ExportRequest,
     ImportCommitRequest,
@@ -21,7 +21,7 @@ from .models import (
     ImportPreflightResponse,
     RequirementView,
 )
-from .ziputil import MAX_TOTAL_BYTES, BundleError
+from backend.apps.swarm.ziputil import MAX_TOTAL_BYTES, BundleError
 
 logger = logging.getLogger(__name__)
 

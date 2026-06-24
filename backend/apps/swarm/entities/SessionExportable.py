@@ -12,8 +12,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from ..exportable import DepRef, ExportContext, RemapTable
-from ..models import EntityType, Requirement, RequirementKind
+from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
+from backend.apps.swarm.models import EntityType, Requirement, RequirementKind
 
 P_BUILTIN_MODES = {"agent", "ask", "plan", "view-builder", "skill-builder"}
 # Transcript fields ride along so the shared agent keeps its history; ids inside

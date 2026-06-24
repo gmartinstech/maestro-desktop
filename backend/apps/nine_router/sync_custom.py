@@ -10,8 +10,8 @@ spawns the subprocess (that's process.py's job).
 
 import logging
 
-from .process import NINE_ROUTER_API, cli_auth_headers
-from .sync import (
+from backend.apps.nine_router.process import NINE_ROUTER_API, cli_auth_headers
+from backend.apps.nine_router.sync import (
     NINE_ROUTER_CLAUDE_PRO_NAME,
     NINE_ROUTER_OPENAI_KEYED_PREFIX,
     find_keyed_connection,

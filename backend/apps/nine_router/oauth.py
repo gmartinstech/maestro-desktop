@@ -10,7 +10,7 @@ import os
 
 import httpx
 
-from .process import NINE_ROUTER_API, NINE_ROUTER_PORT, NINE_ROUTER_V1, cli_auth_headers
+from backend.apps.nine_router.process import NINE_ROUTER_API, NINE_ROUTER_PORT, NINE_ROUTER_V1, cli_auth_headers
 from backend.apps.oauth_state import pending_oauth, mark_oauth_completed
 
 logger = logging.getLogger(__name__)

@@ -6,8 +6,8 @@ reuses an existing same-slug mode rather than clobbering it (keeps the session's
 `mode` pointer valid without rewriting it)."""
 from __future__ import annotations
 
-from ..exportable import DepRef, ExportContext, RemapTable
-from ..models import EntityType, Requirement
+from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
+from backend.apps.swarm.models import EntityType, Requirement
 
 # Machine-relative or install-owned fields that must not ride along.
 P_DROP = {"is_builtin", "default_folder"}
@@ -49,7 +49,7 @@ class ModeExportable:
         store = p_store()
         model = p_model()
         if store is None or model is None:
-            from ..ziputil import BundleError
+            from backend.apps.swarm.ziputil import BundleError
             raise BundleError("can't import this mode on this build")
         mid = payload.get("id") or (payload.get("name") or "mode").lower().replace(" ", "-")
         # Reuse a same-slug mode (incl. built-ins) instead of overwriting it;

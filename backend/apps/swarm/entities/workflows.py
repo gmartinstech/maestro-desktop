@@ -10,8 +10,8 @@ sharer's phone numbers (text/call escalation) are stripped as PII, and run
 history / session + dashboard linkage are dropped."""
 from __future__ import annotations
 
-from ..exportable import DepRef, ExportContext, RemapTable
-from ..models import EntityType, Requirement, RequirementKind
+from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
+from backend.apps.swarm.models import EntityType, Requirement, RequirementKind
 
 P_BUILTIN_MODES = {"agent", "ask", "plan", "view-builder", "skill-builder"}
 
@@ -95,7 +95,7 @@ class WorkflowExportable:
         store = p_store()
         model = p_model()
         if store is None or model is None:
-            from ..ziputil import BundleError
+            from backend.apps.swarm.ziputil import BundleError
             raise BundleError("this build doesn't support workflows yet; please update OpenSwarm")
         clean = sanitize_workflow(payload)
         clean.pop("id", None)  # fresh id via the model's default_factory

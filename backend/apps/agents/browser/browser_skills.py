@@ -60,7 +60,7 @@ def p_event(kind: str, host: str, sig: str, rev: int = 0, state: str = "", **ext
     prove the skill layer helps vs. silently thrashes. Lazy + best-effort: this
     module never hard-depends on metrics, and a metrics failure never propagates."""
     try:
-        from . import browser_metrics
+        from backend.apps.agents.browser import browser_metrics
         browser_metrics.record_skill_event(kind, host, sig, rev=rev, state=state, extra=extra or None)
     except Exception:
         pass

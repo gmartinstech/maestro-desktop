@@ -2,7 +2,7 @@
 
 The model-resolution gate: always go through here, never hardcode a model id.
 Pricing/tier scoring lives in pricing.py, OpenRouter plumbing in openrouter.py,
-thinking-level translation in thinking.py; all re-exported below so external
+thinking-level translation in thinking_params_for.py; all re-exported below so external
 importers keep their single entry point.
 """
 
@@ -11,19 +11,19 @@ from __future__ import annotations
 import logging
 from typing import Any, TYPE_CHECKING
 
-from .openrouter import (
+from backend.apps.agents.providers.openrouter import (
     OPENROUTER_VALUE_PREFIX,
     fetch_openrouter_models,
     get_direct_pricing,
     get_openrouter_pricing,
     invalidate_openrouter_cache,
 )
-from .pricing import (
+from backend.apps.agents.providers.pricing import (
     compute_billing_kind,
     compute_tiers,
     heuristic_tiers,
 )
-from .thinking_params_for import thinking_params_for
+from backend.apps.agents.providers.thinking_params_for import thinking_params_for
 
 if TYPE_CHECKING:
     from backend.apps.settings.models import AppSettings

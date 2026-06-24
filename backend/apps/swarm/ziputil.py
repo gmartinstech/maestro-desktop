@@ -12,7 +12,7 @@ import shutil
 import tempfile
 import zipfile
 
-from .redact import find_denied_keys, find_secrets_in_files
+from backend.apps.swarm.redact import find_denied_keys, find_secrets_in_files
 
 MANIFEST_NAME = "manifest.json"
 

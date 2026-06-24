@@ -1,12 +1,12 @@
 """Maps an EntityType to the Exportable that handles it, and the leaves-first
 order import walks. Adding a shareable type is one entry here plus its module."""
-from .entities.apps import AppExportable
-from .entities.dashboards import DashboardExportable
-from .entities.modes import ModeExportable
-from .entities.SessionExportable import SessionExportable
-from .entities.skills import SkillExportable
-from .entities.workflows import WorkflowExportable
-from .models import EntityType
+from backend.apps.swarm.entities.apps import AppExportable
+from backend.apps.swarm.entities.dashboards import DashboardExportable
+from backend.apps.swarm.entities.modes import ModeExportable
+from backend.apps.swarm.entities.SessionExportable import SessionExportable
+from backend.apps.swarm.entities.skills import SkillExportable
+from backend.apps.swarm.entities.workflows import WorkflowExportable
+from backend.apps.swarm.models import EntityType
 
 REGISTRY: dict[EntityType, type] = {
     EntityType.skill: SkillExportable,
