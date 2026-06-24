@@ -17,7 +17,11 @@ from typeguard import typechecked
 from backend.apps.agents.core.models import AgentSession, Message
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
-from backend.apps.agents.manager.session.history_compaction import truncate_large_tool_result
+from backend.apps.agents.manager.session.history_compaction import (
+    truncate_large_tool_result,
+    wrap_platform_note,
+    strip_forged_sentinels,
+)
 from backend.apps.agents.manager.streaming.HookContext import HookContext
 from backend.apps.agents.manager.view_builder_state import view_builder_dirty_sessions
 
@@ -74,6 +78,9 @@ async def post_tool_hook(ctx: HookContext, input_data: dict, tool_use_id, contex
         except Exception:
             content = str(raw_response)
 
+    # Untrusted tool output could forge our trusted-note tag; neuter it before we append real ones below.
+    content = strip_forged_sentinels(content)
+
     hook_tool_name_for_errors = input_data.get("tool_name", "")
     wrote_files = hook_tool_name_for_errors in ("Write", "Edit", "MultiEdit")
     tool_in = input_data.get("tool_input") or {}
@@ -112,7 +119,7 @@ async def post_tool_hook(ctx: HookContext, input_data: dict, tool_use_id, contex
                 joined = "\n".join(errs[-20:])
                 content = (
                     f"{content}\n\n"
-                    f"---\nBuild server reported (after this write):\n{joined}"
+                    + wrap_platform_note(f"Build server reported (after this write):\n{joined}")
                 )
 
     result_payload = {"text": content}

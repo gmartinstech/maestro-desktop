@@ -8,7 +8,7 @@ from typeguard import typechecked
 
 from backend.apps.agents.core.models import AgentSession, Message
 from backend.apps.agents.core.ws_manager import ws_manager
-from backend.apps.agents.manager.session.history_compaction import estimate_post_compact_input
+from backend.apps.agents.manager.session.history_compaction import estimate_post_compact_input, wrap_platform_note
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ async def pre_send_context_guard(manager, session: AgentSession, session_id: str
                     p_names = ", ".join(t.replace("mcp:", "") for t in trimmed)
                     p_trim_msg = Message(
                         role="system",
-                        content=(
+                        content=wrap_platform_note(
                             f"Trimmed {len(trimmed)} app{'s' if len(trimmed) != 1 else ''} from this session to fit "
                             f"the model's context: {p_names}. Re-activate via MCPSearch + MCPActivate "
                             "if you still need them."

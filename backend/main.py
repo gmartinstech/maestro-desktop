@@ -674,16 +674,6 @@ async def mcp_meta(action: str, request: Request):
 
         session.active_mcps.append(server_name)
         session.needs_fork = True
-        # When the session has prior turns, fork_session alone won't
-        # make the bundled CLI re-read mcp_servers, the transport
-        # snapshot at launch time is what serves tool schemas. Force a
-        # full fresh-session restart so the next turn rebuilds with the
-        # newly-activated server in its mcp_servers dict from scratch.
-        # First-turn activations don't need this (the SDK session hasn't
-        # locked in yet). One-time ~200-400ms cold start on the auto-
-        # continuation turn that fires right after this anyway.
-        if session.sdk_session_id:
-            session.needs_fresh_session = True
         try:
             from backend.apps.agents.core.ws_manager import ws_manager as p_ws
             await p_ws.send_to_session(parent_session_id, "agent:status", {
