@@ -165,9 +165,9 @@ def m365_server_script() -> str:
     package.json) because cli.js reads __dirname/../package.json for the
     --version flag; see scripts/build-app.sh `build_mcp_bundle_dir`.
     """
-    _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    p_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     bundle = os.path.join(
-        _backend, "mcp-bundles", "softeria-ms-365-mcp-server", "dist", "index.js",
+        p_backend, "mcp-bundles", "softeria-ms-365-mcp-server", "dist", "index.js",
     )
     if os.path.isfile(bundle):
         return bundle
@@ -175,7 +175,7 @@ def m365_server_script() -> str:
     # was left over from before the bundle migration. Will return the legacy
     # path; if that doesn't exist either, the caller raises a clear error.
     return os.path.join(
-        _backend, "npm-servers", "softeria-ms-365-mcp-server",
+        p_backend, "npm-servers", "softeria-ms-365-mcp-server",
         "node_modules", "@softeria", "ms-365-mcp-server", "dist", "index.js",
     )
 

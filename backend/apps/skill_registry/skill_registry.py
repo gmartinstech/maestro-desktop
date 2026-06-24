@@ -326,14 +326,14 @@ def select_skill_paths(tree: list[dict], skill_id: str) -> tuple[str, list[str]]
     if not candidates:
         raise ValueError(f"no SKILL.md for '{skill_id}' in this repo")
 
-    def _rank(p: str) -> tuple:
+    def p_rank(p: str) -> tuple:
         if p == f"{skill_id}/SKILL.md":
             return (0, 0, p)
         if p == f"skills/{skill_id}/SKILL.md":
             return (1, p.count("/"), p)
         return (2, p.count("/"), p)
 
-    skill_md = min(candidates, key=_rank)
+    skill_md = min(candidates, key=p_rank)
     skill_dir = skill_md[: -len("/SKILL.md")] if "/" in skill_md else ""
     prefix = (skill_dir + "/") if skill_dir else ""
     members = [p for p in blobs if (p.startswith(prefix) if prefix else "/" not in p)]
@@ -400,7 +400,7 @@ async def resolve_community_skill(source: str, skill_id: str) -> dict:
         if "SKILL.md" not in files:
             raise ValueError("SKILL.md could not be fetched")
 
-    meta, _body = p_parse_frontmatter(files["SKILL.md"])
+    meta, p_body = p_parse_frontmatter(files["SKILL.md"])
     # Reuse the .swarm importer's content scan: flag files holding secret-shaped
     # literals (the author's leaked key, or a sketchy skill) so the user sees it
     # before installing from an unvetted repo.

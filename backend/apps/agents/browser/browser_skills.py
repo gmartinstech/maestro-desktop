@@ -171,11 +171,11 @@ def template_task(task: str) -> tuple[str, list[str]]:
     """Replace each quoted span with a fixed token; return (templated, [values])."""
     values: list[str] = []
 
-    def _repl(m):
+    def p_repl(m):
         values.append(m.group(1))
         return P_SLOT_TOKEN
 
-    return P_QUOTE_RE.sub(_repl, task or ""), values
+    return P_QUOTE_RE.sub(p_repl, task or ""), values
 
 
 def compute_sig(task: str) -> str:
@@ -238,7 +238,7 @@ def distill_steps(action_log: list[dict]) -> list[dict]:
     steps: list[dict] = []
     productive_count = 0
 
-    def _emit_simple(tool, inp):
+    def p_emit_simple(tool, inp):
         nonlocal productive_count
         if tool in ("BrowserType", "type") and inp.get("selector") is not None:
             steps.append({"tool": "BrowserType", "params": {"selector": inp.get("selector"), "text": inp.get("text", "")}})
@@ -284,7 +284,7 @@ def distill_steps(action_log: list[dict]) -> list[dict]:
                     steps.append({"tool": "BrowserClickByName", "params": {"role": (r or {}).get("clicked_role", ""), "name": name}})
                     productive_count += 1
                     continue
-                if not _emit_simple(st, sp):
+                if not p_emit_simple(st, sp):
                     return []
             continue
         if tool == "BrowserNavigate" and inp.get("url"):
@@ -757,7 +757,7 @@ def render_route_hint(skill: dict, task: str, score: float) -> tuple[str, list[t
     _, values = template_task(task)
     # first_unsafe_step is the batching boundary (it stops at composer typing
     # too); the IRREVERSIBLE flag goes only on genuinely outward-facing clicks
-    unsafe_i, _why = first_unsafe_step(steps)
+    unsafe_i, p_why = first_unsafe_step(steps)
     lines = []
     for i, s in enumerate(steps):
         mark = ""

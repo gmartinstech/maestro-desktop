@@ -209,13 +209,13 @@ def p_maybe_self_audit() -> None:
     if p_task_count % P_AUDIT_EVERY_N != 0:
         return
 
-    def _run():
+    def p_run():
         try:
             from backend.apps.agents.browser import browser_self_audit
             browser_self_audit.run_and_write()
         except Exception:
             pass
     try:
-        threading.Thread(target=_run, name="browser-self-audit", daemon=True).start()
+        threading.Thread(target=p_run, name="browser-self-audit", daemon=True).start()
     except Exception:
         pass

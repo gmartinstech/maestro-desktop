@@ -78,7 +78,7 @@ async def send_message(session_id: str, body: dict):
         from backend.apps.agents.core.mcp_preflight import run_preflight
         from backend.apps.agents.core.ws_manager import ws_manager as _ws
 
-        async def _emit_preflight():
+        async def p_emit_preflight():
             try:
                 result = await run_preflight(prompt, task_id=session_id)
                 if result.get("suggestions") or result.get("is_vague"):
@@ -91,7 +91,7 @@ async def send_message(session_id: str, body: dict):
                 pass
 
         import asyncio as _asyncio
-        _asyncio.create_task(_emit_preflight())
+        _asyncio.create_task(p_emit_preflight())
     except Exception:
         pass
 
@@ -568,17 +568,17 @@ async def list_models():
             conns = await _9r_providers()
             raw_providers = {c.get("provider", "") for c in conns if c.get("isActive") or c.get("testStatus") == "active"}
             # 9Router uses "claude"; our models use api="anthropic". Map across.
-            _9R_TO_API = {
+            p_9R_TO_API = {
                 "claude": "anthropic",
                 "codex": "codex",
                 "gemini-cli": "gemini-cli",
                 "antigravity": "gemini-cli",  # AG = same Gemini models, separate OAuth.
             }
-            connected = raw_providers | {_9R_TO_API.get(p, p) for p in raw_providers}
+            connected = raw_providers | {p_9R_TO_API.get(p, p) for p in raw_providers}
         except Exception as e:
             logger.debug(f"Failed to fetch 9Router providers: {e}")
 
-    def _serialize(models: list[dict]) -> list[dict]:
+    def p_serialize(models: list[dict]) -> list[dict]:
         # Tiers describe the model; billing_kind describes the wallet. Pricing shown only for paid.
         from backend.apps.agents.providers.registry import (
             COST_PER_1M_TOKENS,
@@ -588,8 +588,8 @@ async def list_models():
         out = []
         for m in models:
             input_cost = output_cost = 0.0
-            for (_p, _v), rates in COST_PER_1M_TOKENS.items():
-                if _v == m["value"]:
+            for (p_p, p_v), rates in COST_PER_1M_TOKENS.items():
+                if p_v == m["value"]:
                     input_cost, output_cost = rates
                     break
             api = m.get("api", "")
@@ -634,16 +634,16 @@ async def list_models():
     # Pro mode splits into Pro proxy + Anthropic alternates; own-key collapses to one adaptive group.
     notes: list[dict] = []
     if is_openswarm_pro:
-        result["OpenSwarm Pro"] = _serialize(adaptive)
+        result["OpenSwarm Pro"] = p_serialize(adaptive)
         anth_alternates: list[dict] = []
         if has_claude_sub:
             anth_alternates += cc_variants
         if has_api_key:
             anth_alternates += api_variants
         if anth_alternates:
-            result["Anthropic"] = _serialize(anth_alternates)
+            result["Anthropic"] = p_serialize(anth_alternates)
     elif has_api_key or has_claude_sub:
-        rows = _serialize(adaptive)
+        rows = p_serialize(adaptive)
         # When an Anthropic key is set, these adaptive rows run on it: own-key routing prefers the
         # user's key over any sub (agent_manager + anthropic_proxy._pick_upstream), so it holds even
         # with a Claude sub connected. Label + bucket as API key (not 9router-state dependent).
@@ -657,7 +657,7 @@ async def list_models():
             # on our pinned 9Router) have no adaptive twin to relabel, so add them or they vanish.
             adaptive_ids = {m.get("model_id") for m in adaptive}
             api_only = [m for m in api_variants if m.get("model_id") not in adaptive_ids]
-            rows = _serialize(api_only) + rows
+            rows = p_serialize(api_only) + rows
         elif has_claude_sub:
             # Only a sub: the adaptive rows route through 9router's cc/ lane, so they're covered
             # by the subscription, not pay-per-use.
@@ -666,12 +666,12 @@ async def list_models():
             # Sub-only models with no adaptive twin (Fable 5) won't ride the relabeled rows, so add their cc/ entry.
             adaptive_ids = {m.get("model_id") for m in adaptive}
             cc_only = [m for m in cc_variants if m.get("model_id") not in adaptive_ids]
-            rows = _serialize(cc_only) + rows
+            rows = p_serialize(cc_only) + rows
         # With BOTH a key and a sub the adaptive rows above run on the key, so also surface the
         # subscription (cc) variants; they route via 9router's cc/ lane and stay selectable, the
         # way OpenAI/Gemini show both a subscription row and an API-key row.
         if has_api_key and has_claude_sub:
-            rows += _serialize(cc_variants)
+            rows += p_serialize(cc_variants)
         result["Anthropic"] = rows
 
     has_openai_key = bool(getattr(settings, "openai_api_key", None))
@@ -698,8 +698,8 @@ async def list_models():
                 if not nine_router_up or api not in connected:
                     continue
             in_cost = out_cost = 0.0
-            for (_p, _v), rates in _CPM.items():
-                if _v == m["value"]:
+            for (p_p, p_v), rates in _CPM.items():
+                if p_v == m["value"]:
                     in_cost, out_cost = rates
                     break
             billing_kind = _cbk_native(

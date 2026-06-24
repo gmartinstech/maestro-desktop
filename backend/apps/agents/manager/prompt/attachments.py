@@ -307,6 +307,6 @@ def resolve_attachments(context_paths: Optional[List], api_type: str, model: str
 # blocks emitted, so behavior is the safe text-only old path).
 @typechecked
 def resolve_context_paths(context_paths: Optional[List]) -> str:
-    text, _native, refusals = resolve_attachments(context_paths, api_type="anthropic", model="")
+    text, p_native, refusals = resolve_attachments(context_paths, api_type="anthropic", model="")
     refusal_text = "\n\n".join(refusals)
     return "\n\n".join(p for p in (text, refusal_text) if p)

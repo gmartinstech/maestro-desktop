@@ -23,11 +23,11 @@ def read_app_version() -> str:
     # app_version="unknown" pre-fix. Kept for backward compatibility with
     # dev runs and as a safety net if the env var is ever unset.
     try:
-        _here = os.path.dirname(os.path.abspath(__file__))
-        _repo = os.path.dirname(os.path.dirname(os.path.dirname(_here)))
-        _pkg = os.path.join(_repo, "electron", "package.json")
-        with open(_pkg, encoding="utf-8") as _f:
-            return json.load(_f).get("version", "unknown")
+        p_here = os.path.dirname(os.path.abspath(__file__))
+        p_repo = os.path.dirname(os.path.dirname(os.path.dirname(p_here)))
+        p_pkg = os.path.join(p_repo, "electron", "package.json")
+        with open(p_pkg, encoding="utf-8") as p_f:
+            return json.load(p_f).get("version", "unknown")
     except (OSError, ValueError, KeyError):
         return "unknown"
 

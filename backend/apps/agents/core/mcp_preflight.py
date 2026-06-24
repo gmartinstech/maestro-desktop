@@ -181,7 +181,7 @@ def p_decorate(llm_suggestion: dict, available: list[CuratedEntry]) -> dict | No
 
 async def p_call_classifier(settings, prompt: str, available: list[CuratedEntry], task_id: str | None = None) -> dict:
     """One aux-model call, returns validated JSON {is_vague, suggestions}."""
-    aux_model, _base = await resolve_aux_model(settings, preferred_tier="haiku")
+    aux_model, p_base = await resolve_aux_model(settings, preferred_tier="haiku")
     client = get_anthropic_client_for_model(settings, aux_model)
 
     catalog_lines = "\n".join(

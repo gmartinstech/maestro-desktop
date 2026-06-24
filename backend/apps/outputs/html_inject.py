@@ -147,7 +147,7 @@ def inject_token_into_relative_urls(html: str, token: str) -> str:
     if not token:
         return html
 
-    def _patch(match: re.Match) -> str:
+    def p_patch(match: re.Match) -> str:
         attr, quote, url = match.group(1), match.group(2), match.group(3)
         lowered = url.lower().lstrip()
         if lowered.startswith(P_ABSOLUTE_URL_PREFIXES):
@@ -164,7 +164,7 @@ def inject_token_into_relative_urls(html: str, token: str) -> str:
         sep = "&" if "?" in base else "?"
         return f'{attr}={quote}{base}{sep}token={token}{frag}{quote}'
 
-    return P_HREF_SRC_ATTR_RE.sub(_patch, html)
+    return P_HREF_SRC_ATTR_RE.sub(p_patch, html)
 
 
 def decode_data_param(d: str) -> tuple[str, str]:

@@ -99,7 +99,7 @@ class SkillExportable:
 def p_read_supporting_files(skill_dir: str) -> dict[str, bytes]:
     """Every file in a skill folder except SKILL.md, as {relpath: bytes}."""
     out: dict[str, bytes] = {}
-    for root, _dirs, names in os.walk(skill_dir):
+    for root, p_dirs, names in os.walk(skill_dir):
         for n in names:
             full = os.path.join(root, n)
             rel = os.path.relpath(full, skill_dir)

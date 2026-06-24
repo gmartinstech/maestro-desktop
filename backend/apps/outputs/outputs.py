@@ -78,7 +78,7 @@ outputs = SubApp("outputs", outputs_lifespan)
 # ---------------------------------------------------------------------------
 
 @outputs.router.get("/workspace/{workspace_id}/serve/{filepath:path}")
-async def serve_workspace_file(workspace_id: str, filepath: str, _d: str = ""):
+async def serve_workspace_file(workspace_id: str, filepath: str, p_d: str = ""):
     """Serve a file from a workspace folder. For index.html, inject OUTPUT data."""
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     full_path = os.path.normpath(os.path.join(folder, filepath))
@@ -91,7 +91,7 @@ async def serve_workspace_file(workspace_id: str, filepath: str, _d: str = ""):
         content = f.read()
 
     if filepath == "index.html":
-        input_json, result_json = decode_data_param(_d) if _d else ("{}", "null")
+        input_json, result_json = decode_data_param(p_d) if p_d else ("{}", "null")
         backend_url_json = backend_url_for_workspace(workspace_id)
         content = inject_data_into_html(content, input_json, result_json, backend_url_json, with_runtime=True)
         # Iframe sub-resource fetches (<link>, <script src>, <img>) drop the
@@ -104,7 +104,7 @@ async def serve_workspace_file(workspace_id: str, filepath: str, _d: str = ""):
 
 
 @outputs.router.get("/{output_id}/serve/{filepath:path}")
-async def serve_output_file(output_id: str, filepath: str, _d: str = ""):
+async def serve_output_file(output_id: str, filepath: str, p_d: str = ""):
     """Serve a file from a saved output's files dict. For index.html, inject OUTPUT data."""
     output = load(output_id)
     content = output.files.get(filepath)
@@ -112,7 +112,7 @@ async def serve_output_file(output_id: str, filepath: str, _d: str = ""):
         raise HTTPException(status_code=404, detail="File not found in output")
 
     if filepath == "index.html":
-        input_json, result_json = decode_data_param(_d) if _d else ("{}", "null")
+        input_json, result_json = decode_data_param(p_d) if p_d else ("{}", "null")
         backend_url_json = backend_url_for_workspace(output.workspace_id) if output.workspace_id else "null"
         content = inject_data_into_html(content, input_json, result_json, backend_url_json, with_runtime=True)
         content = inject_token_into_relative_urls(content, get_auth_token())
@@ -623,7 +623,7 @@ async def vibe_code(body: VibeCodeRequest):
 
     from backend.apps.agents.providers.registry import resolve_aux_model
     try:
-        aux_model, _aux_base = await resolve_aux_model(load_settings(), preferred_tier="sonnet")
+        aux_model, p_aux_base = await resolve_aux_model(load_settings(), preferred_tier="sonnet")
     except ValueError as e:
         return {
             "message": f"Error: {str(e)}",

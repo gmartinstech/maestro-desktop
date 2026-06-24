@@ -90,7 +90,7 @@ class DashboardExportable:
                     "parent_session_id": remap.local(parent) if parent else None,
                 }
         browser_cards = {}
-        for _bkey, card in (layout.get("browser_cards") or {}).items():
+        for p_bkey, card in (layout.get("browser_cards") or {}).items():
             nbid = "browser-" + uuid4().hex[:10]
             c = dict(card)
             c["browser_id"] = nbid

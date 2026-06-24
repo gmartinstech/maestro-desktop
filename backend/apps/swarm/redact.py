@@ -57,19 +57,19 @@ def scrub_payload(value: Any) -> Any:
     return value
 
 
-def find_denied_keys(value: Any, _path: str = "") -> list[str]:
+def find_denied_keys(value: Any, p_path: str = "") -> list[str]:
     """Audit used by ziputil.pack as the last line of defense: the paths of any
     denied key still present. Empty list means clean."""
     found: list[str] = []
     if isinstance(value, dict):
         for k, v in value.items():
-            here = f"{_path}.{k}" if _path else str(k)
+            here = f"{p_path}.{k}" if p_path else str(k)
             if isinstance(k, str) and is_denied_key(k):
                 found.append(here)
             found.extend(find_denied_keys(v, here))
     elif isinstance(value, list):
         for i, v in enumerate(value):
-            found.extend(find_denied_keys(v, f"{_path}[{i}]"))
+            found.extend(find_denied_keys(v, f"{p_path}[{i}]"))
     return found
 
 

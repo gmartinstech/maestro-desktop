@@ -566,7 +566,7 @@ def warm_cache_in_background() -> None:
     if node_done and venv_done:
         return
 
-    def _runner() -> None:
+    def p_runner() -> None:
         try:
             ensure_warm_cache()
         except Exception:
@@ -577,7 +577,7 @@ def warm_cache_in_background() -> None:
             logger.exception("background warm python venv crashed")
 
     p_warm_cache_thread = threading.Thread(
-        target=_runner, daemon=True, name="webapp-template-warm-cache"
+        target=p_runner, daemon=True, name="webapp-template-warm-cache"
     )
     p_warm_cache_thread.start()
 

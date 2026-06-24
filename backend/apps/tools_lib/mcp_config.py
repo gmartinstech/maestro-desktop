@@ -20,9 +20,9 @@ def p_extra_bin_dirs() -> list[str]:
     """Well-known user-local bin directories that may not be on PATH in packaged apps."""
     home = os.path.expanduser("~")
     # Bundled uv-bin (ships uvx for non-dev users)
-    _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    p_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     dirs = [
-        os.path.join(_backend, "uv-bin"),
+        os.path.join(p_backend, "uv-bin"),
         os.path.join(home, ".bun", "bin"),
         os.path.join(home, ".cargo", "bin"),
         os.path.join(home, ".local", "bin"),
@@ -59,19 +59,19 @@ def resolve_command(command: str) -> str | None:
         suffixes = [""] + os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").lower().split(os.pathsep)
     else:
         suffixes = [""]
-    def _probe(directory: str) -> str | None:
+    def p_probe(directory: str) -> str | None:
         for suffix in suffixes:
             candidate = os.path.join(directory, command + suffix)
             if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
                 return candidate
         return None
     for d in p_extra_bin_dirs():
-        hit = _probe(d)
+        hit = p_probe(d)
         if hit:
             return hit
     # Check bundled uv-bin directory (ships uv/uvx for non-dev users)
-    _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return _probe(os.path.join(_backend, "uv-bin"))
+    p_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return p_probe(os.path.join(p_backend, "uv-bin"))
 
 
 def augmented_path() -> str:
@@ -130,9 +130,9 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
             # proxy that forwards the refresh to our cloud's pool-aware
             # /api/oauth/google/refresh endpoint; CLIENT_ID/SECRET become
             # unused placeholders (gauth.py only validates non-empty).
-            _port = os.environ.get("OPENSWARM_PORT", "8324")
+            p_port = os.environ.get("OPENSWARM_PORT", "8324")
             env["GOOGLE_WORKSPACE_TOKEN_URI"] = (
-                f"http://127.0.0.1:{_port}/api/tools/google-oauth-token"
+                f"http://127.0.0.1:{p_port}/api/tools/google-oauth-token"
             )
             env.setdefault("GOOGLE_WORKSPACE_CLIENT_ID", "openswarm-proxy")
             env.setdefault("GOOGLE_WORKSPACE_CLIENT_SECRET", "openswarm-proxy")
@@ -167,9 +167,9 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         # The shim runs as a subprocess and needs to import
         # `backend.apps.discord_mcp_shim`; set PYTHONPATH to the project
         # root (parent of the backend/ dir) so that import resolves.
-        _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        p_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = (_project_root + os.pathsep + existing_pp) if existing_pp else _project_root
+        env["PYTHONPATH"] = (p_project_root + os.pathsep + existing_pp) if existing_pp else p_project_root
 
     # Microsoft 365 MCP: use a stable token cache path shared across process spawns
     if tool.name.lower() == "microsoft 365" and config.get("type") == "stdio":
@@ -196,7 +196,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
             if config["command"] in ("npx", "bunx"):
                 pkg_name = next((a for a in (config.get("args") or []) if not a.startswith("-")), None)
                 if pkg_name:
-                    _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                    p_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
                     electron_path = os.environ.get("OPENSWARM_ELECTRON_PATH")
                     # Two bundle layouts in mcp-bundles/, checked in priority order:
                     #
@@ -217,8 +217,8 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
                     # Scoped names get flattened ("@softeria/ms-365-mcp-server"
                     # -> "softeria-ms-365-mcp-server") for filesystem safety.
                     safe_bundle = pkg_name.replace("/", "-").replace("@", "")
-                    bundle_dir_path = os.path.join(_backend, "mcp-bundles", safe_bundle, "dist", "index.js")
-                    bundle_file_path = os.path.join(_backend, "mcp-bundles", f"{safe_bundle}.js")
+                    bundle_dir_path = os.path.join(p_backend, "mcp-bundles", safe_bundle, "dist", "index.js")
+                    bundle_file_path = os.path.join(p_backend, "mcp-bundles", f"{safe_bundle}.js")
                     bundle_path = None
                     if os.path.isfile(bundle_dir_path):
                         bundle_path = bundle_dir_path
@@ -242,7 +242,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
                     else:
                         # Check for pre-installed npm package (works in both dev and packaged modes)
                         safe_dir = pkg_name.replace("/", "-").replace("@", "")
-                        npm_dir = os.path.join(_backend, "npm-servers", safe_dir)
+                        npm_dir = os.path.join(p_backend, "npm-servers", safe_dir)
                         pkg_json_path = os.path.join(npm_dir, "node_modules", pkg_name, "package.json")
                         if os.path.isfile(pkg_json_path):
                             import json as _json
@@ -272,23 +272,23 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         env.setdefault("PYTHONPATH", "")
         # Point uv/uvx at our bundled Python; avoids macOS CLT popup on fresh Macs
         # and avoids downloading Python at runtime
-        _is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
-        _is_windows = sys.platform == "win32"
-        if _is_packaged:
-            _resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            if _is_windows:
-                _bundled_python = os.path.join(_resources, "python-env", "python.exe")
+        p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+        p_is_windows = sys.platform == "win32"
+        if p_is_packaged:
+            p_resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            if p_is_windows:
+                p_bundled_python = os.path.join(p_resources, "python-env", "python.exe")
             else:
-                _bundled_python = os.path.join(_resources, "python-env", "bin", "python3")
-            if os.path.exists(_bundled_python):
-                env.setdefault("UV_PYTHON", _bundled_python)
+                p_bundled_python = os.path.join(p_resources, "python-env", "bin", "python3")
+            if os.path.exists(p_bundled_python):
+                env.setdefault("UV_PYTHON", p_bundled_python)
         else:
-            _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            if _is_windows:
-                _venv_python = os.path.join(_backend, ".venv", "Scripts", "python.exe")
+            p_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            if p_is_windows:
+                p_venv_python = os.path.join(p_backend, ".venv", "Scripts", "python.exe")
             else:
-                _venv_python = os.path.join(_backend, ".venv", "bin", "python3")
-            if os.path.exists(_venv_python):
-                env.setdefault("UV_PYTHON", _venv_python)
+                p_venv_python = os.path.join(p_backend, ".venv", "bin", "python3")
+            if os.path.exists(p_venv_python):
+                env.setdefault("UV_PYTHON", p_venv_python)
 
     return config

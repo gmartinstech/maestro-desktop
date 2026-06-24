@@ -328,13 +328,13 @@ def p_schedule(coro) -> None:
         return
     import threading
 
-    def _run():
+    def p_run():
         try:
             asyncio.run(coro)
         except Exception:
             pass
 
-    threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(target=p_run, daemon=True).start()
 
 
 # --------------------------------------------------------------------------

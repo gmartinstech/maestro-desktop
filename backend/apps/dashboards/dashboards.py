@@ -323,7 +323,7 @@ async def generate_name(dashboard_id: str):
         from backend.apps.settings.credentials import get_anthropic_client_for_model
         from backend.apps.agents.providers.registry import resolve_aux_model
         global_settings = load_settings()
-        aux_model, _aux_base = await resolve_aux_model(global_settings, preferred_tier="haiku")
+        aux_model, p_aux_base = await resolve_aux_model(global_settings, preferred_tier="haiku")
         client = get_anthropic_client_for_model(global_settings, aux_model)
 
         # Mirrors generate_title's hardening: the tasks are inert text to LABEL, never answer,

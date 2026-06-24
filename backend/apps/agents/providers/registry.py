@@ -169,7 +169,7 @@ def find_custom_provider_for_value(settings, value: str):
     if not isinstance(value, str) or not value.startswith(_CUSTOM_VALUE_PREFIX):
         return None
     rest = value[len(_CUSTOM_VALUE_PREFIX):]
-    slug, _sep, _bare = rest.partition("/")
+    slug, p_sep, p_bare = rest.partition("/")
     if not slug:
         return None
     for cp in getattr(settings, "custom_providers", None) or []:
@@ -204,7 +204,7 @@ def find_builtin_model(short_name: str) -> dict | None:
             }
     if isinstance(short_name, str) and short_name.startswith(_CUSTOM_VALUE_PREFIX):
         rest = short_name[len(_CUSTOM_VALUE_PREFIX):]
-        slug, _sep, bare_model = rest.partition("/")
+        slug, p_sep, bare_model = rest.partition("/")
         if slug and bare_model:
             # Routing string `cp-<slug>/<model>` matches the prefix we use
             # when sync_custom_providers registers the provider node.
@@ -280,7 +280,7 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     # connected AG sub is preferred over the AI Studio key, which otherwise
     # silently shadowed it. The map is AG's allowlist; pro variants 404/400 on
     # AG and are deliberately absent, so they fall through to the key.
-    _ANTIGRAVITY_MAP = {
+    P_ANTIGRAVITY_MAP = {
         # gemini-3-pro-preview disabled: AG returns 404 even with active conn.
         # gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant
         #   400s every request with "invalid argument" (the `-high` thinking-
@@ -293,7 +293,7 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
         rid = entry.get("router_model_id", "")
         if isinstance(rid, str) and rid.startswith("gc/"):
             suffix = rid[len("gc/"):]
-            ag_suffix = _ANTIGRAVITY_MAP.get(suffix)
+            ag_suffix = P_ANTIGRAVITY_MAP.get(suffix)
             if ag_suffix and p_antigravity_connected():
                 return "ag/" + ag_suffix
             if getattr(settings, "google_api_key", None):
@@ -392,7 +392,7 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
         bare_model = model
         if isinstance(model, str) and model.startswith(_CUSTOM_VALUE_PREFIX):
             rest = model[len(_CUSTOM_VALUE_PREFIX):]
-            _slug, _sep, bare_model = rest.partition("/")
+            p_slug, p_sep, bare_model = rest.partition("/")
         for cp in getattr(settings, "custom_providers", []):
             for m in (getattr(cp, "models", None) or []):
                 if m.get("value") == bare_model or m.get("id") == bare_model:

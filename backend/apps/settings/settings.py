@@ -39,7 +39,7 @@ async def settings_lifespan():
         s = load_settings()
         import asyncio as _asyncio
 
-        async def _boot_router_then_sync():
+        async def p_boot_router_then_sync():
             """Boot 9Router then push key-based connections (sequential: sync helpers no-op pre-boot)."""
             needs_router = any([
                 getattr(s, "google_api_key", None),
@@ -75,7 +75,7 @@ async def settings_lifespan():
             await sync_openswarm_pro_as_claude(bearer, base)
             await sync_custom_providers(getattr(s, "custom_providers", None) or [])
 
-        _asyncio.create_task(_boot_router_then_sync())
+        _asyncio.create_task(p_boot_router_then_sync())
         _asyncio.create_task(p_upload_dir_gc_loop())
     except Exception as e:
         logger.warning(f"9Router sync startup failed: {e}")
@@ -297,7 +297,7 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
 
     # Off the request path: ensure_running() can take 5min on first install (npm pull) and would freeze the loop.
     if google_changed or openai_changed or openrouter_changed or custom_providers_changed:
-        async def _boot_and_sync_keys(
+        async def p_boot_and_sync_keys(
             google_key: str | None,
             openai_key: str | None,
             openrouter_key: str | None,
@@ -330,7 +330,7 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
             except Exception as e:
                 logger.warning(f"Background apikey sync failed: {e}")
 
-        asyncio.create_task(_boot_and_sync_keys(
+        asyncio.create_task(p_boot_and_sync_keys(
             getattr(body, "google_api_key", None),
             getattr(body, "openai_api_key", None),
             getattr(body, "openrouter_api_key", None),
@@ -611,7 +611,7 @@ async def summarize_file(req: p_SummarizeRequest):
         from backend.apps.agents.providers.registry import resolve_aux_model, get_api_type
         from backend.apps.settings.credentials import get_anthropic_client_for_model
         s = load_settings()
-        aux_model, _base = await resolve_aux_model(
+        aux_model, p_base = await resolve_aux_model(
             s,
             preferred_tier="haiku",
             primary_api=get_api_type(req.primary_model) if req.primary_model else None,
@@ -635,7 +635,7 @@ async def summarize_file(req: p_SummarizeRequest):
         CHUNK_CHARS = 200_000
         is_chunked = len(raw) > CHUNK_CHARS
 
-        async def _summarize_block(text: str, target_tokens: int, label: str) -> str:
+        async def p_summarize_block(text: str, target_tokens: int, label: str) -> str:
             user = (
                 f"Target length: ~{target_tokens} tokens.\n\n"
                 f"<document path=\"{label}\">\n{text}\n</document>\n\n"
@@ -657,7 +657,7 @@ async def summarize_file(req: p_SummarizeRequest):
             return out
 
         if not is_chunked:
-            summary = await _summarize_block(raw, req.target_tokens, os.path.basename(src))
+            summary = await p_summarize_block(raw, req.target_tokens, os.path.basename(src))
         else:
             chunks = [raw[i:i + CHUNK_CHARS] for i in range(0, len(raw), CHUNK_CHARS)]
             per_chunk_budget = max(800, req.target_tokens // len(chunks) + 600)
@@ -667,15 +667,15 @@ async def summarize_file(req: p_SummarizeRequest):
             # provider's per-key rate limit, and a single user summarizing
             # one file will never hit that.
             partials = await asyncio.gather(*[
-                _summarize_block(ch, per_chunk_budget, f"{os.path.basename(src)} (part {i + 1} of {len(chunks)})")
+                p_summarize_block(ch, per_chunk_budget, f"{os.path.basename(src)} (part {i + 1} of {len(chunks)})")
                 for i, ch in enumerate(chunks)
             ])
             merge_input = "\n\n".join(f"## Part {i + 1}\n{p}" for i, p in enumerate(partials))
-            summary = await _summarize_block(merge_input, req.target_tokens, f"merged summary of {os.path.basename(src)}")
+            summary = await p_summarize_block(merge_input, req.target_tokens, f"merged summary of {os.path.basename(src)}")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"summarize failed: {e}")
 
-    base, _ext = os.path.splitext(src)
+    base, p_ext = os.path.splitext(src)
     dest = f"{base}.summary.txt"
     counter = 1
     while os.path.exists(dest):

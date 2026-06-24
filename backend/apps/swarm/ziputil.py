@@ -71,7 +71,7 @@ def p_sandbox_entries(sandbox: str) -> dict[str, bytes]:
     relpath so it matches the keys pack() hashed (cross-platform)."""
     out: dict[str, bytes] = {}
     root = os.path.realpath(sandbox)
-    for base, _dirs, fnames in os.walk(root):
+    for base, p_dirs, fnames in os.walk(root):
         for fn in fnames:
             full = os.path.join(base, fn)
             rel = os.path.relpath(full, root).replace(os.sep, "/")

@@ -213,20 +213,20 @@ def cli_auth_headers() -> dict[str, str]:
 
 def p_find_9router_dir() -> str | None:
     """Locate the bundled 9Router directory (works in both dev and packaged mode)."""
-    _is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+    p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
 
-    if _is_packaged:
+    if p_is_packaged:
         import sys
-        _resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        _candidate = os.path.join(_resources, "router")
-        if os.path.isdir(_candidate):
-            return _candidate
+        p_resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        p_candidate = os.path.join(p_resources, "router")
+        if os.path.isdir(p_candidate):
+            return p_candidate
     else:
-        _backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        _project_root = os.path.dirname(_backend_dir)
-        _candidate = os.path.join(_project_root, "router")
-        if os.path.isdir(_candidate):
-            return _candidate
+        p_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        p_project_root = os.path.dirname(p_backend_dir)
+        p_candidate = os.path.join(p_project_root, "router")
+        if os.path.isdir(p_candidate):
+            return p_candidate
 
     return None
 
@@ -396,12 +396,12 @@ async def ensure_running():
 async def p_ensure_running_impl():
     """Start 9Router if not already running."""
     global p_process
-    _is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+    p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
 
     if is_running():
         # In dev mode, kill stale standalone servers (from previous builds)
         # so we can start `next dev` which always uses latest source code
-        if not _is_packaged:
+        if not p_is_packaged:
             import subprocess as _sp
             try:
                 result = _sp.run(
@@ -422,20 +422,20 @@ async def p_ensure_running_impl():
             logger.info("9Router already running on port %d", NINE_ROUTER_PORT)
             return
     p_rotate_request_log()
-    _9router_dir = p_find_9router_dir()
-    _patch = p_gpt5_patch_path()
+    p_9router_dir = p_find_9router_dir()
+    p_patch = p_gpt5_patch_path()
 
-    if _is_packaged:
+    if p_is_packaged:
         # Packaged: run the pre-built standalone server staged at
         # <resources>/router/server.js by fetch-router at build time. We do NOT
         # fall back to the dev npm path here, a user machine has no npm, so that
         # only ever fails silently; every miss is reported instead.
-        if not _9router_dir:
+        if not p_9router_dir:
             p_report_start_failure("router_not_bundled")
             return
-        standalone_server = os.path.join(_9router_dir, "server.js")
+        standalone_server = os.path.join(p_9router_dir, "server.js")
         if not os.path.exists(standalone_server):
-            standalone_server = os.path.join(_9router_dir, ".next", "standalone", "server.js")
+            standalone_server = os.path.join(p_9router_dir, ".next", "standalone", "server.js")
         if not os.path.exists(standalone_server):
             p_report_start_failure("server_missing", router_dir_found=True)
             return
@@ -444,7 +444,7 @@ async def p_ensure_running_impl():
             p_report_start_failure("node_not_found", router_dir_found=True, server_found=True)
             return
         logger.info("Starting 9Router (production) on port %d...", NINE_ROUTER_PORT)
-        cmd = [node, f"--max-old-space-size={P_NODE_HEAP_MB}"] + (["--require", _patch] if _patch else []) + [standalone_server]
+        cmd = [node, f"--max-old-space-size={P_NODE_HEAP_MB}"] + (["--require", p_patch] if p_patch else []) + [standalone_server]
         cwd = os.path.dirname(standalone_server)
         env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
         if node == os.environ.get("OPENSWARM_ELECTRON_PATH"):
@@ -464,7 +464,7 @@ async def p_ensure_running_impl():
             "Starting 9Router (dev cache, 9router@%s) on port %d...",
             NINE_ROUTER_NPM_VERSION, NINE_ROUTER_PORT,
         )
-        cmd = [node, f"--max-old-space-size={P_NODE_HEAP_MB}"] + (["--require", _patch] if _patch else []) + [cached_server]
+        cmd = [node, f"--max-old-space-size={P_NODE_HEAP_MB}"] + (["--require", p_patch] if p_patch else []) + [cached_server]
         cwd = os.path.dirname(cached_server)
         env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
 
@@ -473,30 +473,30 @@ async def p_ensure_running_impl():
     # whole reason #90 was un-diagnosable). Packaged prod (NODE_ENV=production
     # standalone) is quiet, so one fixed temp file, truncated each start attempt,
     # won't grow; dev keeps its chatty-Next.js DEVNULL unless debug is set.
-    _cap_path = os.path.join(tempfile.gettempdir(), "openswarm-9router-start.log")
-    _cap_file = None
-    if _is_packaged:
+    p_cap_path = os.path.join(tempfile.gettempdir(), "openswarm-9router-start.log")
+    p_cap_file = None
+    if p_is_packaged:
         try:
-            _cap_file = open(_cap_path, "wb")
-            _stdout, _stderr = _cap_file, subprocess.STDOUT
+            p_cap_file = open(p_cap_path, "wb")
+            p_stdout, p_stderr = p_cap_file, subprocess.STDOUT
         except OSError:
-            _stdout, _stderr = subprocess.DEVNULL, subprocess.DEVNULL
+            p_stdout, p_stderr = subprocess.DEVNULL, subprocess.DEVNULL
     elif os.environ.get("OPENSWARM_DEBUG_9ROUTER"):
-        _log_path = os.path.join(
+        p_log_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "data", "9router.log",
         )
-        os.makedirs(os.path.dirname(_log_path), exist_ok=True)
-        _stdout, _stderr = open(_log_path, "a", buffering=1), subprocess.STDOUT
-        logger.info(f"9Router debug logging enabled → {_log_path}")
+        os.makedirs(os.path.dirname(p_log_path), exist_ok=True)
+        p_stdout, p_stderr = open(p_log_path, "a", buffering=1), subprocess.STDOUT
+        logger.info(f"9Router debug logging enabled → {p_log_path}")
     else:
-        _stdout, _stderr = subprocess.DEVNULL, subprocess.DEVNULL
+        p_stdout, p_stderr = subprocess.DEVNULL, subprocess.DEVNULL
 
     try:
-        p_process = subprocess.Popen(cmd, cwd=cwd, stdout=_stdout, stderr=_stderr, env=env)
-        if _cap_file is not None:
-            _cap_file.close()  # the child holds its own fd; the parent copy isn't needed
-        timeout = 20 if _is_packaged else 30
+        p_process = subprocess.Popen(cmd, cwd=cwd, stdout=p_stdout, stderr=p_stderr, env=env)
+        if p_cap_file is not None:
+            p_cap_file.close()  # the child holds its own fd; the parent copy isn't needed
+        timeout = 20 if p_is_packaged else 30
         for _ in range(timeout * 2):
             await asyncio.sleep(0.5)
             if is_running():
@@ -506,19 +506,19 @@ async def p_ensure_running_impl():
         # exit code (non-None = it crashed; None = wedged or just slow).
         p_report_start_failure(
             "not_ready_in_time",
-            detail=p_read_capture_tail(_cap_path) if _is_packaged else "",
+            detail=p_read_capture_tail(p_cap_path) if p_is_packaged else "",
             returncode=p_process.poll(),
             timeout_s=timeout,
         )
     except Exception as e:
-        if _cap_file is not None and not _cap_file.closed:
+        if p_cap_file is not None and not p_cap_file.closed:
             try:
-                _cap_file.close()
+                p_cap_file.close()
             except OSError:
                 pass
         p_report_start_failure(
             "spawn_exception",
-            detail=f"{e}\n{p_read_capture_tail(_cap_path) if _is_packaged else ''}",
+            detail=f"{e}\n{p_read_capture_tail(p_cap_path) if p_is_packaged else ''}",
         )
 
 

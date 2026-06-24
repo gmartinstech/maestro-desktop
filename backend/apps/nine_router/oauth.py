@@ -80,7 +80,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
 
     callback_served = asyncio.Event()
 
-    async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def p_handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         try:
             # Read the request line ("GET /auth/callback?... HTTP/1.1\r\n")
             raw_request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
@@ -165,7 +165,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
                 pass
 
     try:
-        server = await asyncio.start_server(_handle, "127.0.0.1", P_CODEX_CALLBACK_PORT)
+        server = await asyncio.start_server(p_handle, "127.0.0.1", P_CODEX_CALLBACK_PORT)
     except OSError as e:
         # Port already in use; probably another Codex connect attempt still
         # running, or an actual Codex CLI process holding 1455. Log and bail.
@@ -175,7 +175,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
         )
         return None
 
-    async def _lifecycle():
+    async def p_lifecycle():
         try:
             await asyncio.wait_for(callback_served.wait(), timeout=timeout)
             # Give the served HTML a moment to run its JS (postMessage +
@@ -193,7 +193,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
             except Exception:
                 pass
 
-    asyncio.create_task(_lifecycle())
+    asyncio.create_task(p_lifecycle())
     logger.info(f"Started Codex callback listener on http://localhost:{P_CODEX_CALLBACK_PORT}{P_CODEX_CALLBACK_PATH}")
     return server
 

@@ -106,12 +106,12 @@ async def smart_wait(execute_fn, browser_id, tab_id, max_ms, *, until="",
     last_elems = None
     elems_changed_at = start  # DOM-settle clock: when the element count last changed
 
-    def _elapsed():
+    def p_elapsed():
         return (time.monotonic() - start) * 1000
 
-    while _elapsed() < max_ms:
-        await asyncio.sleep(min(poll_ms, max(0, max_ms - _elapsed())) / 1000)
-        if _elapsed() >= max_ms:
+    while p_elapsed() < max_ms:
+        await asyncio.sleep(min(poll_ms, max(0, max_ms - p_elapsed())) / 1000)
+        if p_elapsed() >= max_ms:
             break
         # Bound each probe so a wedged tab can't make us inherit the 30s command
         # timeout. A timeout is a not-responding signal (not a verdict): count
@@ -156,13 +156,13 @@ async def smart_wait(execute_fn, browser_id, tab_id, max_ms, *, until="",
                 break
             continue
         if decide_stop(probe.get("ready"), probe.get("quiet", 0), dom_stable_ms,
-                       probe.get("found"), _elapsed(),
+                       probe.get("found"), p_elapsed(),
                        floor_ms=floor_ms, settle_window_ms=quiet_window_ms):
             settled = True
             found = bool(probe.get("found"))
             break
 
-    waited = round(_elapsed())
+    waited = round(p_elapsed())
     if found:
         state = "found target"
     elif settled:

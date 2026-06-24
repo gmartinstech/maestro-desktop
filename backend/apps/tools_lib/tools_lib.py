@@ -505,7 +505,7 @@ async def m365_device_login(tool_id: str):
     import threading
     login_state: dict = {"proc": proc, "status": "waiting_for_code", "device_code": "", "device_code_url": "", "email": None, "output": ""}
 
-    def _read_output():
+    def p_read_output():
         import re
         for line in proc.stdout:
             login_state["output"] += line
@@ -544,7 +544,7 @@ async def m365_device_login(tool_id: str):
         else:
             login_state["status"] = "error"
 
-    thread = threading.Thread(target=_read_output, daemon=True)
+    thread = threading.Thread(target=p_read_output, daemon=True)
     thread.start()
 
     p_m365_login_processes[tool_id] = login_state
@@ -643,11 +643,11 @@ async def oauth_start(tool_id: str):
         )
     from backend.config.install_id import get_install_id
     install_id = get_install_id()
-    _port = os.environ.get("OPENSWARM_PORT", "8324")
+    p_port = os.environ.get("OPENSWARM_PORT", "8324")
     params = {
         "install_id": install_id,
         "tool_id": tool_id,
-        "local_port": _port,
+        "local_port": p_port,
     }
     auth_url = (
         f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/{proxied}/start?"

@@ -51,8 +51,8 @@ def collect_source(output: Output) -> dict[str, str]:
             src[name] = content
     if is_webapp(output):
         root = workspace_dir(output)
-        for base, _dirs, fnames in os.walk(root):
-            _dirs[:] = [d for d in _dirs if d not in WALK_SKIP_DIRS]
+        for base, p_dirs, fnames in os.walk(root):
+            p_dirs[:] = [d for d in p_dirs if d not in WALK_SKIP_DIRS]
             for fn in fnames:
                 if not fn.lower().endswith(P_SCAN_EXTS):
                     continue
@@ -115,7 +115,7 @@ async def llm_findings(src: dict[str, str], settings) -> tuple[list[str], str]:
     from backend.apps.settings.credentials import get_anthropic_client_for_model
     from backend.apps.agents.core.aux_llm import safe_resp_text
     try:
-        model, _base = await resolve_aux_model(settings, preferred_tier="haiku")
+        model, p_base = await resolve_aux_model(settings, preferred_tier="haiku")
     except Exception:
         return [], "clean"
     client = get_anthropic_client_for_model(settings, model)

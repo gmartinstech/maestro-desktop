@@ -79,7 +79,7 @@ async def build_static(output: Output) -> Optional[str]:
         env={**os.environ, "NODE_ENV": "production"},
     )
     try:
-        _out, err = await asyncio.wait_for(proc.communicate(), timeout=P_BUILD_TIMEOUT)
+        p_out, err = await asyncio.wait_for(proc.communicate(), timeout=P_BUILD_TIMEOUT)
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
@@ -120,7 +120,7 @@ def collect_bundle(output: Output, dist_dir: Optional[str]) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         if dist_dir:
-            for root, _dirs, files in os.walk(dist_dir):
+            for root, p_dirs, files in os.walk(dist_dir):
                 for fn in files:
                     full = os.path.join(root, fn)
                     if os.path.islink(full):

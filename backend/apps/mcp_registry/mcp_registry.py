@@ -253,7 +253,7 @@ async def p_fetch_github_stars(servers: dict[str, dict]):
     rate_limited = False
     fetched = 0
 
-    async def _fetch_one(client: httpx.AsyncClient, repo: str):
+    async def p_fetch_one(client: httpx.AsyncClient, repo: str):
         nonlocal rate_limited, fetched
         if rate_limited:
             return
@@ -277,7 +277,7 @@ async def p_fetch_github_stars(servers: dict[str, dict]):
                 logger.debug(f"GitHub stars fetch failed for {repo}: {exc}")
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        await asyncio.gather(*[_fetch_one(client, r) for r in to_fetch])
+        await asyncio.gather(*[p_fetch_one(client, r) for r in to_fetch])
 
     logger.info(f"GitHub stars: fetched {fetched} new, {len(p_stars_cache)} total cached")
     p_apply_stars(servers)

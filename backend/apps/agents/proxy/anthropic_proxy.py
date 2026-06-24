@@ -184,9 +184,9 @@ def scrub_request_for_openai_gpt5(body: bytes) -> bytes:
     if "temperature" in parsed and parsed["temperature"] != 1:
         parsed.pop("temperature", None)
         mutated = True
-    for _k in ("top_p", "top_k", "frequency_penalty", "presence_penalty",
+    for p_k in ("top_p", "top_k", "frequency_penalty", "presence_penalty",
                "logprobs", "top_logprobs", "logit_bias"):
-        if parsed.pop(_k, None) is not None:
+        if parsed.pop(p_k, None) is not None:
             mutated = True
     try:
         before = json.dumps(parsed.get("messages"), sort_keys=True) if "messages" in parsed else ""
@@ -426,22 +426,22 @@ async def proxy(rest: str, request: Request):
             forward_to_openrouter as _forward_or,
         )
         from backend.apps.settings.settings import load_settings as _load
-        _s = _load()
+        p_s = _load()
         if p_is_openai_max_completion_tokens_model(model):
-            _oak = (getattr(_s, "openai_api_key", "") or "").strip()
-            if _should_bypass_oai(parsed_for_bypass, _oak):
+            p_oak = (getattr(p_s, "openai_api_key", "") or "").strip()
+            if _should_bypass_oai(parsed_for_bypass, p_oak):
                 status, body_stream, hdrs = await _forward_oai(
-                    parsed_for_bypass, _oak,
+                    parsed_for_bypass, p_oak,
                 )
                 return StreamingResponse(
                     body_stream, status_code=status, headers=hdrs,
                     media_type=hdrs.get("content-type", "text/event-stream"),
                 )
         if p_is_openrouter_model(model):
-            _ork = (getattr(_s, "openrouter_api_key", "") or "").strip()
-            if _should_bypass_or(parsed_for_bypass, _ork):
+            p_ork = (getattr(p_s, "openrouter_api_key", "") or "").strip()
+            if _should_bypass_or(parsed_for_bypass, p_ork):
                 status, body_stream, hdrs = await _forward_or(
-                    parsed_for_bypass, _ork,
+                    parsed_for_bypass, p_ork,
                 )
                 return StreamingResponse(
                     body_stream, status_code=status, headers=hdrs,
@@ -479,11 +479,11 @@ async def proxy(rest: str, request: Request):
     # the retry, which hangs the whole turn for the full read window. Bound Gemini
     # so a stalled first response fails fast (~2 min) instead of stalling ~10 min;
     # other providers keep the generous window for long reasoning turns.
-    _read_timeout = 120.0 if p_is_gemini_model(model) else 600.0
+    p_read_timeout = 120.0 if p_is_gemini_model(model) else 600.0
 
     try:
         if wants_stream:
-            client = httpx.AsyncClient(timeout=httpx.Timeout(_read_timeout, connect=30.0))
+            client = httpx.AsyncClient(timeout=httpx.Timeout(p_read_timeout, connect=30.0))
             req = client.build_request(
                 request.method, url, content=body, headers=forward_headers,
                 params=dict(request.query_params),
@@ -507,7 +507,7 @@ async def proxy(rest: str, request: Request):
                 media_type=upstream.headers.get("content-type", "text/event-stream"),
             )
         else:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(_read_timeout, connect=30.0)) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(p_read_timeout, connect=30.0)) as client:
                 r = await client.request(
                     request.method, url, content=body, headers=forward_headers,
                     params=dict(request.query_params),

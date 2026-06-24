@@ -124,7 +124,7 @@ def p_try_heal_npx_cache(stderr: str) -> str | None:
     return hash_
 
 
-async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, env: dict | None = None, _attempt: int = 0) -> list[dict]:
+async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, env: dict | None = None, p_attempt: int = 0) -> list[dict]:
     """Spawn a stdio MCP server process and call tools/list via JSON-RPC over stdin/stdout.
 
     On the first attempt, a failure that looks like corrupted npx cache
@@ -155,7 +155,7 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
     # the opaque "discovery failed" we used to show.
     stderr_tail: list[str] = []
 
-    async def _drain_stderr() -> None:
+    async def p_drain_stderr() -> None:
         try:
             while True:
                 chunk = await proc.stderr.readline()
@@ -169,14 +169,14 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
         except Exception:
             return
 
-    stderr_task = asyncio.create_task(_drain_stderr())
+    stderr_task = asyncio.create_task(p_drain_stderr())
 
     async def p_send(msg: dict) -> None:
         line = json.dumps(msg) + "\n"
         proc.stdin.write(line.encode())
         await proc.stdin.drain()
 
-    async def _recv(timeout_s: float = 30.0) -> dict:
+    async def p_recv(timeout_s: float = 30.0) -> dict:
         """Read JSON-RPC responses, skipping notification lines (no 'id' field)."""
         while True:
             line = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout_s)
@@ -217,12 +217,12 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
         # AV-scan every file npm writes; total install time often exceeds
         # 60 s and occasionally pushes past 90 s. Subsequent reads run
         # against an already-running server and stay at the default 30 s.
-        await _recv(timeout_s=120.0)
+        await p_recv(timeout_s=120.0)
 
         await p_send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
         await p_send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        data = await _recv()
+        data = await p_recv()
 
         tools_list = data.get("result", {}).get("tools", [])
         return [{"name": t.get("name", ""), "description": t.get("description", ""), "inputSchema": t.get("inputSchema")} for t in tools_list]
@@ -231,8 +231,8 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
         # Heal-on-corrupt-npx-cache still triggers from the EOF branch,
         # which now includes the full stderr tail in `e.detail`; so the
         # ERR_MODULE_NOT_FOUND signature is still discoverable here.
-        if _attempt == 0 and p_try_heal_npx_cache(str(e.detail) if e.detail is not None else ""):
-            return await discover_mcp_tools_stdio(command, args, env, _attempt=1)
+        if p_attempt == 0 and p_try_heal_npx_cache(str(e.detail) if e.detail is not None else ""):
+            return await discover_mcp_tools_stdio(command, args, env, p_attempt=1)
         raise
     except asyncio.TimeoutError:
         # Most common cause: cold npx cache on Windows. The npm install

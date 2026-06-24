@@ -182,11 +182,11 @@ async def arm_free_trial(settings_obj) -> dict:
         # over a sub that's merely still loading. CAPPED on purpose: a genuinely
         # sub-less user exhausts these in ~1.2s and falls through to arm, so this
         # never waits on a subscription that doesn't exist.
-        for _i in range(5):
+        for p_i in range(5):
             if await p_has_connected_subscription():
                 has_sub = True
                 break
-            if _i < 4:
+            if p_i < 4:
                 await asyncio.sleep(0.3)
     if own or has_sub:
         # A real model exists now (key, custom provider, or a 9Router sub). If we

@@ -335,7 +335,7 @@ class AppRuntime:
         # end doesn't double-release if a success path beat it.
         lock_released = False
 
-        def _release_boot_lock() -> None:
+        def p_release_boot_lock() -> None:
             nonlocal lock_released
             if lock_released:
                 return
@@ -377,7 +377,7 @@ class AppRuntime:
                     # ready; the next queued workspace can start its
                     # own bundle now even though we'll keep streaming
                     # logs for this one.
-                    _release_boot_lock()
+                    p_release_boot_lock()
                     return
                 except (OSError, asyncio.TimeoutError):
                     pass
@@ -395,7 +395,7 @@ class AppRuntime:
             # any exception in the poll body. _release_boot_lock is
             # idempotent so this is safe even after the success path
             # already released.
-            _release_boot_lock()
+            p_release_boot_lock()
 
     async def _start_old_mode(self) -> bool:
         if not self.has_backend_file:
@@ -487,10 +487,10 @@ class AppRuntime:
             except Exception:
                 pass
 
-        def _unsub() -> None:
+        def p_unsub() -> None:
             self._subscribers.discard(cb)
 
-        return _unsub
+        return p_unsub
 
     def _broadcast(self, line: LogLine) -> None:
         self.log_buffer.append(line)

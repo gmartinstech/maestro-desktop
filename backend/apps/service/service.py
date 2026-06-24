@@ -271,7 +271,7 @@ async def usage_summary():
     for s in agent_manager.get_all_sessions():
         sessions.append(s.model_dump(mode="json"))
 
-    def _is_real(sess: dict) -> bool:
+    def p_is_real(sess: dict) -> bool:
         # "Real" = actually ran. Empty draft/abandoned sessions (no assistant turn, no tokens,
         # no active time) otherwise inflate the count and drag every average toward zero.
         if (sess.get("agent_active_ms") or 0) > 0 or (sess.get("cost_usd") or 0) > 0:
@@ -281,7 +281,7 @@ async def usage_summary():
             return True
         return any(m.get("role") == "assistant" for m in sess.get("messages", []))
 
-    sessions = [s for s in sessions if _is_real(s)]
+    sessions = [s for s in sessions if p_is_real(s)]
 
     total_sessions = len(sessions)
     total_cost = sum(s.get("cost_usd", 0) for s in sessions)
