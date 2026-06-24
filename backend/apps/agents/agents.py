@@ -13,7 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Dedup concurrent generate-group-meta calls; collapses the 429 thundering herd by sharing one upstream Future per (session, group).
-_group_meta_inflight: dict[tuple[str, str], asyncio.Future] = {}
+p_group_meta_inflight: dict[tuple[str, str], asyncio.Future] = {}
 
 @asynccontextmanager
 async def agents_lifespan():
@@ -164,7 +164,7 @@ async def generate_group_meta(session_id: str, body: dict):
     is_refinement = body.get("is_refinement", False)
     key = (session_id, group_id)
     if not is_refinement:
-        existing = _group_meta_inflight.get(key)
+        existing = p_group_meta_inflight.get(key)
         if existing is not None and not existing.done():
             try:
                 return await existing
@@ -174,7 +174,7 @@ async def generate_group_meta(session_id: str, body: dict):
 
     future: asyncio.Future = asyncio.get_event_loop().create_future()
     if not is_refinement:
-        _group_meta_inflight[key] = future
+        p_group_meta_inflight[key] = future
     try:
         result = await agent_manager.generate_group_meta(
             session_id,
@@ -191,8 +191,8 @@ async def generate_group_meta(session_id: str, body: dict):
             future.set_exception(e)
         raise
     finally:
-        if not is_refinement and _group_meta_inflight.get(key) is future:
-            _group_meta_inflight.pop(key, None)
+        if not is_refinement and p_group_meta_inflight.get(key) is future:
+            p_group_meta_inflight.pop(key, None)
 
 @agents.router.patch("/sessions/{session_id}")
 async def update_session(session_id: str, body: dict):
@@ -383,10 +383,10 @@ async def subscriptions_connect(body: dict):
             raise HTTPException(status_code=503, detail="9Router not available. Please install Node.js.")
 
     # Reconnecting gemini-cli must wipe antigravity; registry prefers AG and a stale AG token would 400 after gemini-cli refreshes.
-    cascade = _PROVIDER_CASCADE_REMOVES.get(provider, [])
+    cascade = P_PROVIDER_CASCADE_REMOVES.get(provider, [])
     if cascade:
         try:
-            await _delete_provider_connections(cascade)
+            await p_delete_provider_connections(cascade)
         except Exception:
             pass
 
@@ -809,12 +809,12 @@ async def list_models():
 
 
 # gemini-cli and antigravity are two Google OAuth lanes; registry prefers AG, so we cascade-wipe AG when reconnecting gemini-cli to avoid stale-AG 400s. One-directional: AG operations MUST NOT cascade back.
-_PROVIDER_CASCADE_REMOVES: dict[str, list[str]] = {
+P_PROVIDER_CASCADE_REMOVES: dict[str, list[str]] = {
     "gemini-cli": ["antigravity"],
 }
 
 
-async def _delete_provider_connections(providers: list[str]) -> int:
+async def p_delete_provider_connections(providers: list[str]) -> int:
     """Delete 9Router connections in `providers`; returns count removed, silent on 9Router unreachable."""
     import httpx
     from backend.apps.nine_router import NINE_ROUTER_API, get_providers
@@ -842,8 +842,8 @@ async def subscriptions_disconnect(body: dict):
         raise HTTPException(status_code=400, detail="provider required")
 
     try:
-        to_remove = [provider, *_PROVIDER_CASCADE_REMOVES.get(provider, [])]
-        removed = await _delete_provider_connections(to_remove)
+        to_remove = [provider, *P_PROVIDER_CASCADE_REMOVES.get(provider, [])]
+        removed = await p_delete_provider_connections(to_remove)
         if removed:
             from backend.apps.service.client import sync as _sync
             from backend.apps.settings.settings import load_settings

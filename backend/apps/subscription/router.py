@@ -27,7 +27,7 @@ async def subscription_lifespan():
 subscription = SubApp("subscription", subscription_lifespan)
 
 
-def _proxy_url() -> str:
+def p_proxy_url() -> str:
     """Cloud router base URL. Overridable per-user via settings, falling back
     to the module-default. No trailing slash."""
     settings_obj = load_settings()
@@ -36,7 +36,7 @@ def _proxy_url() -> str:
     return url.rstrip("/")
 
 
-async def _sync_pro_routing(settings_obj) -> None:
+async def p_sync_pro_routing(settings_obj) -> None:
     """Mirror connection state into 9Router's Claude lane (WebSearch on
     non-Claude primaries). PUT /api/settings no longer carries these fields,
     so the state-change endpoints here are the only trigger left."""
@@ -47,7 +47,7 @@ async def _sync_pro_routing(settings_obj) -> None:
         logger.debug("pro routing sync skipped: %s", e)
 
 
-async def _clear_subscription(settings_obj, *, drop_bearer: bool = True) -> None:
+async def p_clear_subscription(settings_obj, *, drop_bearer: bool = True) -> None:
     """Revert to own_key mode and drop OpenSwarm Pro routing state.
 
     `drop_bearer=True` (the default) is the original behavior, used when the
@@ -67,11 +67,11 @@ async def _clear_subscription(settings_obj, *, drop_bearer: bool = True) -> None
     settings_obj.openswarm_subscription_expires = None
     settings_obj.openswarm_usage_cached = None
     await save_settings_async(settings_obj)
-    _sync_subscription_identity(settings_obj)
-    await _sync_pro_routing(settings_obj)
+    p_sync_subscription_identity(settings_obj)
+    await p_sync_pro_routing(settings_obj)
 
 
-def _sync_subscription_identity(settings_obj) -> None:
+def p_sync_subscription_identity(settings_obj) -> None:
     """Push the installation's current subscription state into service-sync person
     properties so every event from this user is segmentable by plan /
     paying-vs-free. Safe to call from hot paths; service-sync is fire-and-forget
@@ -119,7 +119,7 @@ async def activate(body: ActivateRequest):
     if not body.token or len(body.token) < 16:
         raise HTTPException(status_code=400, detail="Invalid token")
 
-    proxy = _proxy_url()
+    proxy = p_proxy_url()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.get(
@@ -166,8 +166,8 @@ async def activate(body: ActivateRequest):
         settings_obj.openswarm_usage_cached = usage
 
     await save_settings_async(settings_obj)
-    _sync_subscription_identity(settings_obj)
-    await _sync_pro_routing(settings_obj)
+    p_sync_subscription_identity(settings_obj)
+    await p_sync_pro_routing(settings_obj)
     return {"ok": True, "plan": settings_obj.openswarm_subscription_plan}
 
 
@@ -200,7 +200,7 @@ async def status():
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.get(
-                f"{_proxy_url()}/api/me",
+                f"{p_proxy_url()}/api/me",
                 headers={"Authorization": f"Bearer {bearer}"},
             )
         upstream_code = r.status_code
@@ -220,7 +220,7 @@ async def status():
     # through a dead subscription. Settings UI sees connected=False and
     # falls back to the Subscribe CTA; chat reverts to own_key routing.
     if upstream_code in (401, 402):
-        await _clear_subscription(settings_obj)
+        await p_clear_subscription(settings_obj)
         return {
             "connected": False,
             "connection_mode": "own_key",
@@ -267,7 +267,7 @@ async def sync():
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.post(
-                f"{_proxy_url()}/api/subscription/sync",
+                f"{p_proxy_url()}/api/subscription/sync",
                 headers={"Authorization": f"Bearer {bearer}"},
             )
     except httpx.HTTPError as e:
@@ -279,7 +279,7 @@ async def sync():
     # the bearer is dead or the sub expired, clear local state so the app
     # reverts to own_key instead of hammering a useless token.
     if r.status_code in (401, 402):
-        await _clear_subscription(settings_obj)
+        await p_clear_subscription(settings_obj)
         reason = "revoked" if r.status_code == 401 else "expired"
         _sync(settings_obj.model_dump())
         return {
@@ -308,7 +308,7 @@ async def sync():
             datetime.fromtimestamp(period_end_ms / 1000, tz=timezone.utc).isoformat()
         )
     await save_settings_async(settings_obj)
-    _sync_subscription_identity(settings_obj)
+    p_sync_subscription_identity(settings_obj)
     _sync(settings_obj.model_dump())
     return {
         "ok": True,
@@ -334,7 +334,7 @@ async def portal():
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         r = await client.post(
-            f"{_proxy_url()}/api/billing/portal",
+            f"{p_proxy_url()}/api/billing/portal",
             headers={"Authorization": f"Bearer {bearer}"},
         )
     if r.status_code >= 400:
@@ -374,5 +374,5 @@ async def disconnect():
     does NOT sign the user out of OpenSwarm (use /api/auth/signout for that).
     Useful when a user wants to temporarily route through their own API key
     without losing their account state."""
-    await _clear_subscription(load_settings(), drop_bearer=False)
+    await p_clear_subscription(load_settings(), drop_bearer=False)
     return {"ok": True}

@@ -44,11 +44,11 @@ def patch_settings(tmp_path):
 @pytest.fixture(autouse=True)
 def fresh_client(tmp_path):
     import backend.apps.service.client as client
-    client._install_id = None
-    client._user_id = None
-    client._test_sink = None
+    client.install_id = None
+    client.p_user_id = None
+    client.test_sink = None
     spool = tmp_path / "spool.db"
-    with patch.object(client, "_spool_path", lambda: str(spool)):
+    with patch.object(client, "spool_path", lambda: str(spool)):
         yield
 
 
@@ -257,7 +257,7 @@ def test_buffer_missing_file(tmp_path):
 def test_buffer_corrupt_row_dropped(tmp_path):
     from backend.apps.service import buffer
     spool = str(tmp_path / "s.db")
-    with buffer._conn(spool) as c:
+    with buffer.conn(spool) as c:
         c.execute(
             "INSERT INTO spool (kind, payload, created_at) VALUES (?, ?, ?)",
             ("s:/x", "{not json", time.time()),
@@ -291,7 +291,7 @@ def test_install_id_persisted(sink, tmp_path):
     import backend.apps.settings.store as settings_mod
     settings_mod.SETTINGS_FILE = str(sf)
     import backend.apps.service.client as client
-    client._install_id = None
+    client.install_id = None
     from backend.apps.service.client import sync
     sync({})
     _, body = sink[0]
@@ -347,7 +347,7 @@ async def test_endpoint_spool_count(tmp_path):
     from backend.apps.service import client as svc, buffer
     from backend.apps.service.service import spool_count
     spool = str(tmp_path / "spool.db")
-    with patch.object(svc, "_spool_path", lambda: spool):
+    with patch.object(svc, "spool_path", lambda: spool):
         buffer.enqueue(spool, "s:/x", {}, now=time.time())
         result = await spool_count()
         assert result == {"pending": 1}

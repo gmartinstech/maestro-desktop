@@ -34,26 +34,26 @@ from backend.apps.service.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BASE = "https://api.openswarm.com"
-_PATH_BY_KIND = {
+P_DEFAULT_BASE = "https://api.openswarm.com"
+P_PATH_BY_KIND = {
     "state": "/api/service/state",
     "session": "/api/service/sync",
     "diagnostic": "/api/service/diagnostics",
     "event": "/api/service/event",
 }
 
-_TIMEOUT_SECONDS = 5.0
-_MAX_INFLIGHT = 16
+P_TIMEOUT_SECONDS = 5.0
+P_MAX_INFLIGHT = 16
 
-_test_sink: Optional[Any] = None
-_install_id: Optional[str] = None
-_user_id: Optional[str] = None
-_inflight = 0
-_inflight_lock = asyncio.Lock()
-_drain_lock = asyncio.Lock()
+test_sink: Optional[Any] = None
+install_id: Optional[str] = None
+p_user_id: Optional[str] = None
+p_inflight = 0
+p_inflight_lock = asyncio.Lock()
+p_drain_lock = asyncio.Lock()
 
 
-def _spool_path() -> str:
+def spool_path() -> str:
     try:
         from backend.config.paths import SETTINGS_DIR
         return os.path.join(SETTINGS_DIR, "service_spool.db")
@@ -63,14 +63,14 @@ def _spool_path() -> str:
 
 def set_test_sink(fn: Optional[Any]) -> None:
     """Test seam; receives every submission instead of the network."""
-    global _test_sink
-    _test_sink = fn
+    global test_sink
+    test_sink = fn
 
 
-def _get_install_id() -> str:
-    global _install_id
-    if _install_id:
-        return _install_id
+def p_get_install_id() -> str:
+    global install_id
+    if install_id:
+        return install_id
     try:
         from backend.apps.settings.store import load_settings, save_settings
         s = load_settings()
@@ -79,16 +79,16 @@ def _get_install_id() -> str:
             iid = uuid4().hex
             s.installation_id = iid
             save_settings(s)
-        _install_id = iid
+        install_id = iid
     except Exception:
-        _install_id = uuid4().hex
-    return _install_id
+        install_id = uuid4().hex
+    return install_id
 
 
-def _get_user_id() -> Optional[str]:
-    global _user_id
-    if _user_id:
-        return _user_id
+def p_get_user_id() -> Optional[str]:
+    global p_user_id
+    if p_user_id:
+        return p_user_id
     try:
         from backend.apps.settings.store import load_settings
         s = load_settings()
@@ -108,11 +108,11 @@ def _get_user_id() -> Optional[str]:
 
 
 def set_user_id(uid: Optional[str]) -> None:
-    global _user_id
-    _user_id = uid or None
+    global p_user_id
+    p_user_id = uid or None
 
 
-def _is_enabled(kind: str) -> bool:
+def p_is_enabled(kind: str) -> bool:
     """Honour user opt-out. Diagnostic always flows (errors block usability);
     state + session honour the toggle."""
     if kind == "diagnostic":
@@ -130,10 +130,10 @@ def _is_enabled(kind: str) -> bool:
         return True
 
 
-def _envelope() -> dict:
+def p_envelope() -> dict:
     """Identity + environment metadata stamped on every submission."""
-    env: dict[str, Any] = {"install_id": _get_install_id()}
-    uid = _get_user_id()
+    env: dict[str, Any] = {"install_id": p_get_install_id()}
+    uid = p_get_user_id()
     if uid:
         env["user_id"] = uid
     try:
@@ -182,20 +182,20 @@ def _envelope() -> dict:
     return env
 
 
-def _base_url() -> str:
+def p_base_url() -> str:
     try:
         from backend.apps.settings.store import load_settings
         from backend.apps.settings.credentials import OPENSWARM_DEFAULT_PROXY_URL
         s = load_settings()
         return (getattr(s, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL).rstrip("/")
     except Exception:
-        return _DEFAULT_BASE
+        return P_DEFAULT_BASE
 
 
-async def _post(path: str, body: dict) -> int | None:
-    url = f"{_base_url()}{path}"
+async def p_post(path: str, body: dict) -> int | None:
+    url = f"{p_base_url()}{path}"
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as c:
+        async with httpx.AsyncClient(timeout=P_TIMEOUT_SECONDS) as c:
             r = await c.post(url, json=body)
         return r.status_code
     except Exception as e:
@@ -203,42 +203,42 @@ async def _post(path: str, body: dict) -> int | None:
         return None
 
 
-def _delivered(status: int | None) -> bool:
+def p_delivered(status: int | None) -> bool:
     return status is not None and 200 <= status < 300
 
 
 # 429/timeouts/5xx/network are worth retrying; other 4xx means the payload itself is rejected and retrying forever would just poison the spool.
-def _retryable(status: int | None) -> bool:
+def p_retryable(status: int | None) -> bool:
     return status is None or status >= 500 or status in (408, 429)
 
 
-async def _post_or_spool(path: str, body: dict, kind: str) -> None:
-    global _inflight
-    if _test_sink is not None:
+async def p_post_or_spool(path: str, body: dict, kind: str) -> None:
+    global p_inflight
+    if test_sink is not None:
         try:
-            _test_sink(kind, body)
+            test_sink(kind, body)
         except Exception as e:
             logger.debug("test sink raised: %s", e)
         return
-    async with _inflight_lock:
-        if _inflight >= _MAX_INFLIGHT:
-            buffer.enqueue(_spool_path(), f"{kind}:{path}", body, now=time.time())
+    async with p_inflight_lock:
+        if p_inflight >= P_MAX_INFLIGHT:
+            buffer.enqueue(spool_path(), f"{kind}:{path}", body, now=time.time())
             return
-        _inflight += 1
+        p_inflight += 1
     try:
-        status = await _post(path, body)
-        if _retryable(status):
-            buffer.enqueue(_spool_path(), f"{kind}:{path}", body, now=time.time())
-        elif not _delivered(status):
+        status = await p_post(path, body)
+        if p_retryable(status):
+            buffer.enqueue(spool_path(), f"{kind}:{path}", body, now=time.time())
+        elif not p_delivered(status):
             logger.warning("service POST %s rejected with HTTP %s; payload dropped", path, status)
     finally:
-        async with _inflight_lock:
-            _inflight = max(0, _inflight - 1)
+        async with p_inflight_lock:
+            p_inflight = max(0, p_inflight - 1)
 
 
 async def drain_spool(batch_size: int = 50) -> int:
-    async with _drain_lock:
-        entries = buffer.drain(_spool_path(), batch_size=batch_size)
+    async with p_drain_lock:
+        entries = buffer.drain(spool_path(), batch_size=batch_size)
         if not entries:
             return 0
         succeeded: list[int] = []
@@ -247,16 +247,16 @@ async def drain_spool(batch_size: int = 50) -> int:
             if not path:
                 succeeded.append(rid)
                 continue
-            status = await _post(path, body)
-            if _delivered(status):
+            status = await p_post(path, body)
+            if p_delivered(status):
                 succeeded.append(rid)
-            elif _retryable(status):
+            elif p_retryable(status):
                 break
             else:
                 logger.warning("service replay %s rejected with HTTP %s; dropping spooled row", path, status)
                 succeeded.append(rid)
         if succeeded:
-            buffer.acknowledge(_spool_path(), succeeded)
+            buffer.acknowledge(spool_path(), succeeded)
         return len(succeeded)
 
 
@@ -264,7 +264,7 @@ async def drain_spool(batch_size: int = 50) -> int:
 # Public API
 # --------------------------------------------------------------------------
 
-def _log(kind: str, payload: dict) -> None:
+def p_log(kind: str, payload: dict) -> None:
     """Append to the rolling operational log for diagnostics."""
     try:
         from backend.apps.service.ring_buffer import record
@@ -288,26 +288,26 @@ def sync(data: dict | None = None) -> None:
     Fire-and-forget; never raises.
     """
     payload = data or {}
-    if not _is_enabled("state"):
+    if not p_is_enabled("state"):
         return
     body = {
-        "client_state": _envelope(),
+        "client_state": p_envelope(),
         "d": payload,
         "t": time.time(),
         "submission_id": uuid4().hex,
     }
-    _log("s", payload)
-    if _test_sink is not None:
+    p_log("s", payload)
+    if test_sink is not None:
         try:
-            _test_sink("s", body)
+            test_sink("s", body)
         except Exception as e:
             logger.debug("test sink raised: %s", e)
         return
-    _schedule(_post_or_spool(_DEFAULT_SYNC_PATH, body, "s"))
+    p_schedule(p_post_or_spool(P_DEFAULT_SYNC_PATH, body, "s"))
 
 
 # Internal routing; the cloud has one endpoint for everything.
-_DEFAULT_SYNC_PATH = "/api/service/sync"
+P_DEFAULT_SYNC_PATH = "/api/service/sync"
 
 
 def submit(kind: str, payload: dict) -> None:
@@ -318,7 +318,7 @@ def submit(kind: str, payload: dict) -> None:
     sync(payload)
 
 
-def _schedule(coro) -> None:
+def p_schedule(coro) -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:

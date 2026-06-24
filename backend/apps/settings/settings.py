@@ -230,8 +230,8 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
     # owned, so the loop above just restored it to "free-trial") would keep them
     # pinned to the forced Haiku lane even though they pasted a real key.
     if getattr(old, "connection_mode", "own_key") == "free-trial":
-        from backend.apps.subscription.free_trial import _has_own_model
-        if _has_own_model(body):
+        from backend.apps.subscription.free_trial import has_own_model
+        if has_own_model(body):
             body.connection_mode = "own_key"
             body.free_trial_token = None
             body.free_trial_remaining = None

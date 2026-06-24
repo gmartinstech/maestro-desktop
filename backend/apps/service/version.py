@@ -8,7 +8,7 @@ import json
 import os
 
 
-def _read_app_version() -> str:
+def read_app_version() -> str:
     # Preferred: Electron's main process injects this when spawning the
     # backend (see electron/main.js; OPENSWARM_APP_VERSION). Always reliable
     # in packaged builds because it comes from app.getVersion() rather than
@@ -32,4 +32,4 @@ def _read_app_version() -> str:
         return "unknown"
 
 
-APP_VERSION = _read_app_version()
+APP_VERSION = read_app_version()

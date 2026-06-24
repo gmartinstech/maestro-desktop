@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 
 # Namespaces the hash so a raw hardware UUID never leaves the device. Public on
 # purpose (open-source): it only prevents transmitting the raw id, not a secret.
-_FP_SALT = "openswarm-free-trial-v1"
+P_FP_SALT = "openswarm-free-trial-v1"
 
 
-def _enabled() -> bool:
+def p_enabled() -> bool:
     # Default ON as of 1.2.80: the cloud free-trial proxy is live on prod
     # (api.openswarm.com) and arming + metered Haiku were verified end to end.
     # Set OPENSWARM_FREE_TRIAL_ENABLED=0 to force it off. The pool-shed gate +
@@ -40,7 +40,7 @@ def _enabled() -> bool:
     return os.environ.get("OPENSWARM_FREE_TRIAL_ENABLED", "1") == "1"
 
 
-def _raw_hardware_id() -> str | None:
+def p_raw_hardware_id() -> str | None:
     """A stable per-machine id that survives app reinstall / data wipe."""
     system = platform.system()
     try:
@@ -69,18 +69,18 @@ def _raw_hardware_id() -> str | None:
     return None
 
 
-def _fingerprint(settings_obj) -> str | None:
-    raw = _raw_hardware_id()
+def p_fingerprint(settings_obj) -> str | None:
+    raw = p_raw_hardware_id()
     if not raw:
         # Fail-soft: installation_id is less durable (regenerates on wipe) but
         # better than nothing on a machine where the hardware id can't be read.
         raw = getattr(settings_obj, "installation_id", None)
     if not raw:
         return None
-    return hashlib.sha256((_FP_SALT + raw).encode("utf-8")).hexdigest()
+    return hashlib.sha256((P_FP_SALT + raw).encode("utf-8")).hexdigest()
 
 
-def _has_own_model(s) -> bool:
+def has_own_model(s) -> bool:
     """True if the user already has any real model path in settings; never shadow it."""
     if any(getattr(s, k, None) for k in (
         "anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
@@ -97,7 +97,7 @@ def _has_own_model(s) -> bool:
     return False
 
 
-async def _has_connected_subscription() -> bool:
+async def p_has_connected_subscription() -> bool:
     """True if 9Router holds a live Claude/ChatGPT/Gemini subscription. Those
     connections live in 9Router, not settings, so the sync check above misses
     them; this catches a sub connected while the trial was armed."""
@@ -123,11 +123,11 @@ async def _has_connected_subscription() -> bool:
         return False
 
 
-def _proxy_base(settings_obj) -> str:
+def p_proxy_base(settings_obj) -> str:
     return (getattr(settings_obj, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL).rstrip("/")
 
 
-async def _sync_routing(settings_obj) -> None:
+async def p_sync_routing(settings_obj) -> None:
     try:
         from backend.apps.nine_router import sync_pro_routing
         await sync_pro_routing(settings_obj)
@@ -149,23 +149,23 @@ async def clear_free_trial(settings_obj) -> None:
             settings_obj.default_model = "sonnet"
     settings_obj.free_trial_token = None
     await save_settings_async(settings_obj)
-    await _sync_routing(settings_obj)
+    await p_sync_routing(settings_obj)
 
 
 async def arm_free_trial(settings_obj) -> dict:
     """Mint (or re-fetch) the machine's grant and, if runs remain, flip into
     free-trial mode. Guarded: never arms over a real key/subscription."""
-    if not _enabled():
+    if not p_enabled():
         return {"armed": False, "reason": "disabled"}
     mode = getattr(settings_obj, "connection_mode", "own_key")
     if mode not in ("own_key", "free-trial"):
         return {"armed": False, "reason": "other_mode"}
-    own = _has_own_model(settings_obj)
+    own = has_own_model(settings_obj)
     has_sub = False
     if not own:
         # A subscription lives in 9Router, not settings, and 9Router now starts in
         # the BACKGROUND (non-blocking boot), so at first-launch mint time it isn't
-        # up yet. Without this wait _has_connected_subscription() reads False and
+        # up yet. Without this wait p_has_connected_subscription() reads False and
         # we'd arm the free trial OVER a real Claude/ChatGPT/Gemini sub, pinning the
         # user to Haiku until they manually reload. Bring 9Router up so the sub is
         # actually visible before we decide. Bounded + idempotent (shares the start
@@ -183,7 +183,7 @@ async def arm_free_trial(settings_obj) -> dict:
         # sub-less user exhausts these in ~1.2s and falls through to arm, so this
         # never waits on a subscription that doesn't exist.
         for _i in range(5):
-            if await _has_connected_subscription():
+            if await p_has_connected_subscription():
                 has_sub = True
                 break
             if _i < 4:
@@ -195,11 +195,11 @@ async def arm_free_trial(settings_obj) -> dict:
             await clear_free_trial(settings_obj)
         return {"armed": False, "reason": "has_model"}
 
-    fp = _fingerprint(settings_obj)
+    fp = p_fingerprint(settings_obj)
     if not fp:
         return {"armed": False, "reason": "no_fingerprint"}
 
-    base = _proxy_base(settings_obj)
+    base = p_proxy_base(settings_obj)
     payload: dict = {"fingerprint_hash": fp}
     if getattr(settings_obj, "installation_id", None):
         payload["install_id"] = settings_obj.installation_id
@@ -230,7 +230,7 @@ async def arm_free_trial(settings_obj) -> dict:
         # Using Haiku end to end means the CLI never adds it, so the run just works.
         settings_obj.default_model = "haiku"
         await save_settings_async(settings_obj)
-        await _sync_routing(settings_obj)
+        await p_sync_routing(settings_obj)
         return {"armed": True, "runs_remaining": remaining, "runs_limit": settings_obj.free_trial_runs_limit}
 
     # Already spent on this machine: record it but don't arm.
@@ -245,7 +245,7 @@ async def refresh_free_trial(settings_obj) -> dict:
     if getattr(settings_obj, "connection_mode", "own_key") != "free-trial" or not token:
         return {"connected": False, "runs_remaining": getattr(settings_obj, "free_trial_remaining", None)}
 
-    base = _proxy_base(settings_obj)
+    base = p_proxy_base(settings_obj)
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.post(

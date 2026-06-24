@@ -27,22 +27,22 @@ from fastapi import Body
 from backend.config.Apps import SubApp
 from backend.config.paths import SESSIONS_DIR
 from backend.apps.service import client as svc
-from backend.apps.service.version import APP_VERSION, _read_app_version
+from backend.apps.service.version import APP_VERSION, read_app_version
 
 logger = logging.getLogger(__name__)
 
-_pulse_task: asyncio.Task | None = None
-_drain_task: asyncio.Task | None = None
+p_pulse_task: asyncio.Task | None = None
+p_drain_task: asyncio.Task | None = None
 _9r_start_task: asyncio.Task | None = None
 
-_last_9r_cost: float | None = None
-_last_9r_prompt_tokens: int | None = None
-_last_9r_completion_tokens: int | None = None
-_last_9r_requests: int | None = None
-_RESTART_THRESHOLD = 1.0
+p_last_9r_cost: float | None = None
+p_last_9r_prompt_tokens: int | None = None
+p_last_9r_completion_tokens: int | None = None
+p_last_9r_requests: int | None = None
+P_RESTART_THRESHOLD = 1.0
 
 
-def _compute_delta(current: float, last: float | None, threshold: float = _RESTART_THRESHOLD) -> tuple[float, float]:
+def p_compute_delta(current: float, last: float | None, threshold: float = P_RESTART_THRESHOLD) -> tuple[float, float]:
     if last is None:
         return 0.0, current
     if current < last - threshold:
@@ -52,25 +52,25 @@ def _compute_delta(current: float, last: float | None, threshold: float = _RESTA
     return current - last, current
 
 
-_pulse_count = 0
-_pulse_hours: set = set()
-_pulse_delta_cost_total = 0.0
-_pulse_batch_size = 10
+p_pulse_count = 0
+p_pulse_hours: set = set()
+p_pulse_delta_cost_total = 0.0
+p_pulse_batch_size = 10
 
 
-async def _pulse_loop():
+async def p_pulse_loop():
     """Periodic state-pulse loop. Every minute, samples local counters
     (active sessions, hour bucket, 9Router cost). Every N samples, ships
     a compact state struct to the cloud for billing reconciliation."""
-    global _last_9r_cost, _last_9r_prompt_tokens, _last_9r_completion_tokens, _last_9r_requests
-    global _pulse_count, _pulse_hours, _pulse_delta_cost_total
+    global p_last_9r_cost, p_last_9r_prompt_tokens, p_last_9r_completion_tokens, p_last_9r_requests
+    global p_pulse_count, p_pulse_hours, p_pulse_delta_cost_total
 
     while True:
         await asyncio.sleep(60)
-        _pulse_count += 1
+        p_pulse_count += 1
         try:
             import datetime as _dt
-            _pulse_hours.add(_dt.datetime.now().hour)
+            p_pulse_hours.add(_dt.datetime.now().hour)
         except Exception:
             pass
 
@@ -84,34 +84,34 @@ async def _pulse_loop():
                     cur_prompt = stats.get("totalPromptTokens", 0) or 0
                     cur_completion = stats.get("totalCompletionTokens", 0) or 0
                     cur_requests = stats.get("totalRequests", 0) or 0
-                    cost_delta, _last_9r_cost = _compute_delta(cur_cost, _last_9r_cost)
-                    prompt_delta, _last_9r_prompt_tokens = _compute_delta(cur_prompt, _last_9r_prompt_tokens, threshold=1000)
-                    completion_delta, _last_9r_completion_tokens = _compute_delta(cur_completion, _last_9r_completion_tokens, threshold=1000)
-                    requests_delta, _last_9r_requests = _compute_delta(cur_requests, _last_9r_requests, threshold=10)
-                    _pulse_delta_cost_total += cost_delta
+                    cost_delta, p_last_9r_cost = p_compute_delta(cur_cost, p_last_9r_cost)
+                    prompt_delta, p_last_9r_prompt_tokens = p_compute_delta(cur_prompt, p_last_9r_prompt_tokens, threshold=1000)
+                    completion_delta, p_last_9r_completion_tokens = p_compute_delta(cur_completion, p_last_9r_completion_tokens, threshold=1000)
+                    requests_delta, p_last_9r_requests = p_compute_delta(cur_requests, p_last_9r_requests, threshold=10)
+                    p_pulse_delta_cost_total += cost_delta
         except Exception:
             pass
 
-        if _pulse_count >= _pulse_batch_size:
+        if p_pulse_count >= p_pulse_batch_size:
             try:
                 from backend.apps.agents.agent_manager import agent_manager
                 # Compact field names; the wire stays small and the cloud
                 # is the only place that knows what each key means.
                 svc.sync({
                     "a": len(agent_manager.sessions),       # active sessions
-                    "h": sorted(_pulse_hours),               # hour bucket set
-                    "n": _pulse_count,                       # samples in batch
-                    "c": _last_9r_cost or 0,                 # cumulative cost
-                    "d1": _pulse_delta_cost_total,           # cost delta since last batch
+                    "h": sorted(p_pulse_hours),               # hour bucket set
+                    "n": p_pulse_count,                       # samples in batch
+                    "c": p_last_9r_cost or 0,                 # cumulative cost
+                    "d1": p_pulse_delta_cost_total,           # cost delta since last batch
                 })
             except Exception:
                 pass
-            _pulse_count = 0
-            _pulse_hours = set()
-            _pulse_delta_cost_total = 0.0
+            p_pulse_count = 0
+            p_pulse_hours = set()
+            p_pulse_delta_cost_total = 0.0
 
 
-async def _drain_loop():
+async def p_drain_loop():
     while True:
         try:
             await svc.drain_spool()
@@ -122,7 +122,7 @@ async def _drain_loop():
 
 @asynccontextmanager
 async def service_lifespan():
-    global _pulse_task, _drain_task, _9r_start_task
+    global p_pulse_task, p_drain_task, _9r_start_task
 
     try:
         from backend.apps.settings.settings import load_settings, save_settings
@@ -204,26 +204,26 @@ async def service_lifespan():
     except Exception as e:
         logger.debug(f"9Router auto-start skipped: {e}")
 
-    _pulse_task = asyncio.create_task(_pulse_loop())
-    _drain_task = asyncio.create_task(_drain_loop())
+    p_pulse_task = asyncio.create_task(p_pulse_loop())
+    p_drain_task = asyncio.create_task(p_drain_loop())
 
     yield
 
-    if _pulse_task:
-        _pulse_task.cancel()
+    if p_pulse_task:
+        p_pulse_task.cancel()
         try:
-            await _pulse_task
+            await p_pulse_task
         except asyncio.CancelledError:
             pass
-        _pulse_task = None
+        p_pulse_task = None
 
-    if _drain_task:
-        _drain_task.cancel()
+    if p_drain_task:
+        p_drain_task.cancel()
         try:
-            await _drain_task
+            await p_drain_task
         except asyncio.CancelledError:
             pass
-        _drain_task = None
+        p_drain_task = None
 
     if _9r_start_task and not _9r_start_task.done():
         _9r_start_task.cancel()
@@ -249,7 +249,7 @@ service = SubApp("service", service_lifespan)
 # Usage endpoints (user-facing, read by the Settings / Usage page)
 # ---------------------------------------------------------------------------
 
-def _load_all_sessions() -> list[dict]:
+def p_load_all_sessions() -> list[dict]:
     results = []
     if not os.path.exists(SESSIONS_DIR):
         return results
@@ -267,7 +267,7 @@ def _load_all_sessions() -> list[dict]:
 async def usage_summary():
     from backend.apps.agents.agent_manager import agent_manager
 
-    sessions = _load_all_sessions()
+    sessions = p_load_all_sessions()
     for s in agent_manager.get_all_sessions():
         sessions.append(s.model_dump(mode="json"))
 
@@ -499,4 +499,4 @@ async def post_event(body: dict):
 @service.router.get("/spool/count")
 async def spool_count():
     from backend.apps.service import buffer
-    return {"pending": buffer.count(svc._spool_path())}
+    return {"pending": buffer.count(svc.spool_path())}

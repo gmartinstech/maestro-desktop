@@ -40,14 +40,14 @@ async def auth_lifespan():
 auth = SubApp("auth", auth_lifespan)
 
 
-def _proxy_url() -> str:
+def p_proxy_url() -> str:
     settings_obj = load_settings()
     url = (getattr(settings_obj, "openswarm_proxy_url", None)
            or OPENSWARM_DEFAULT_PROXY_URL)
     return url.rstrip("/")
 
 
-async def _sync_pro_routing(settings_obj) -> None:
+async def p_sync_pro_routing(settings_obj) -> None:
     """Mirror connection state into 9Router's Claude lane; sign-in can flip a
     paying user into pro mode and sign-out must tear the lane down so a
     revoked bearer doesn't linger in the router."""
@@ -58,7 +58,7 @@ async def _sync_pro_routing(settings_obj) -> None:
         logger.debug("pro routing sync skipped: %s", e)
 
 
-def _sync_identity_to_service(settings_obj) -> None:
+def p_sync_identity_to_service(settings_obj) -> None:
     """Push user_id + email + signin_method into the service-sync identify
     pipeline so every event from this user has the right Person properties."""
     try:
@@ -101,7 +101,7 @@ async def signin_activate(body: SigninActivateRequest):
     if not body.token or len(body.token) < 16:
         raise HTTPException(status_code=400, detail="Invalid token")
 
-    proxy = _proxy_url()
+    proxy = p_proxy_url()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.post(
@@ -157,8 +157,8 @@ async def signin_activate(body: SigninActivateRequest):
         settings_obj.openswarm_proxy_url = proxy
 
     await save_settings_async(settings_obj)
-    _sync_identity_to_service(settings_obj)
-    await _sync_pro_routing(settings_obj)
+    p_sync_identity_to_service(settings_obj)
+    await p_sync_pro_routing(settings_obj)
 
     return {
         "ok": True,
@@ -185,7 +185,7 @@ async def signout():
     """
     settings_obj = load_settings()
     bearer = getattr(settings_obj, "openswarm_bearer_token", None)
-    proxy = _proxy_url()
+    proxy = p_proxy_url()
     if bearer:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -245,6 +245,6 @@ async def signout():
     settings_obj.openswarm_subscription_expires = None
     settings_obj.openswarm_usage_cached = None
     await save_settings_async(settings_obj)
-    _sync_identity_to_service(settings_obj)
-    await _sync_pro_routing(settings_obj)
+    p_sync_identity_to_service(settings_obj)
+    await p_sync_pro_routing(settings_obj)
     return {"ok": True}

@@ -7,7 +7,7 @@ from typeguard import typechecked
 # error string to telemetry. own_key mode means the subprocess stderr can echo
 # the user's OWN provider key, so this scrub is the wall between a diagnostic
 # and a key leak; over-redacting is fine, leaking is not.
-_TELEMETRY_SECRET_PATTERNS = (
+P_TELEMETRY_SECRET_PATTERNS = (
     re.compile(r"sk-ant-[A-Za-z0-9_\-]{12,}"),
     re.compile(r"sk-[A-Za-z0-9_\-]{16,}"),
     re.compile(r"AIza[A-Za-z0-9_\-]{20,}"),
@@ -23,7 +23,7 @@ def redact_for_telemetry(text: str, *, limit: int = 2000) -> str:
     error/stderr string goes through here before it leaves the machine."""
     if not text:
         return ""
-    for pat in _TELEMETRY_SECRET_PATTERNS:
+    for pat in P_TELEMETRY_SECRET_PATTERNS:
         text = pat.sub("[redacted]", text)
     return text[-limit:]
 
@@ -51,7 +51,7 @@ TRANSIENT_CAPACITY_PATTERNS = re.compile(
 # zero tokens. That is NOT auth, reconnecting won't help, the request shape is
 # wrong, so we classify it apart and stop the catch-all from showing a
 # "reconnect your subscription" card for a tool-schema 400.
-_TRANSLATION_ERROR_PATTERNS = re.compile(
+P_TRANSLATION_ERROR_PATTERNS = re.compile(
     r"(?:function_declarations"
     r"|invalid_argument"
     r"|invalid\s+json\s+payload"
@@ -128,7 +128,7 @@ def is_translation_error(exc: BaseException, extra_text: str = "") -> bool:
     combined = f"{exc!s}\n{extra_text}".strip()
     if not combined:
         return False
-    return bool(_TRANSLATION_ERROR_PATTERNS.search(combined))
+    return bool(P_TRANSLATION_ERROR_PATTERNS.search(combined))
 
 
 @typechecked
