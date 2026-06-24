@@ -47,6 +47,8 @@ openswarm-cloud
 # leading slash so this doesn't accidentally ignore backend/apps/analytics/.
 /analytics
 .claude/
+# CLAUDE.md docs (root + per-package) are personal AI working notes, not contributor docs.
+CLAUDE.md
 # Local-only operator helpers (never commit)
 scripts/set-fly-*.sh
 # Local-only background dev-team state/docs (personal, never commit)
