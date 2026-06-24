@@ -25,12 +25,12 @@ class SkillExportable:
 
     @classmethod
     def load(cls, local_id: str) -> "SkillExportable | None":
-        md_path, kind = store.p_skill_md_path(local_id)
+        md_path, kind = store.skill_md_path(local_id)
         if not md_path:
             return None
         with open(md_path, encoding="utf-8") as f:
             content = f.read()
-        meta = store.p_load_index().get(local_id, {})
+        meta = store.load_index().get(local_id, {})
         name = meta.get("name") or local_id.replace("-", " ").replace("_", " ").title()
         payload = {
             "slug": local_id,
@@ -90,10 +90,10 @@ class SkillExportable:
             shutil.rmtree(skill_dir, ignore_errors=True)
         if os.path.isfile(flat):
             os.remove(flat)
-        index = store.p_load_index()
+        index = store.load_index()
         if local_id in index:
             index.pop(local_id, None)
-            store.p_save_index(index)
+            store.save_index(index)
 
 
 def p_read_supporting_files(skill_dir: str) -> dict[str, bytes]:
@@ -115,7 +115,7 @@ def p_read_supporting_files(skill_dir: str) -> dict[str, bytes]:
 
 def p_slug_taken(slug: str) -> bool:
     return (
-        slug in store.p_load_index()
+        slug in store.load_index()
         or os.path.isfile(os.path.join(store.SKILLS_DIR, f"{slug}.md"))
         or os.path.isdir(os.path.join(store.SKILLS_DIR, slug))
     )

@@ -27,9 +27,9 @@ def skill_store(tmp_path, monkeypatch):
 
 def _make_skill(d, slug, name, content, description="desc"):
     (d / f"{slug}.md").write_text(content, encoding="utf-8")
-    index = store.p_load_index()
+    index = store.load_index()
     index[slug] = {"name": name, "description": description, "command": slug}
-    store.p_save_index(index)
+    store.save_index(index)
 
 
 def test_skill_export_import_round_trip(skill_store):
@@ -506,7 +506,7 @@ def test_skill_rollback_removes_it(skill_store):
     assert (skill_store / sid / "SKILL.md").exists()
     SkillExportable.rollback(sid)
     assert not (skill_store / sid).exists()
-    assert sid not in store.p_load_index()
+    assert sid not in store.load_index()
 
 
 def test_commit_rolls_back_created_on_failure(skill_store, tmp_path):
@@ -527,7 +527,7 @@ def test_commit_rolls_back_created_on_failure(skill_store, tmp_path):
     )
     with pytest.raises(BundleError):
         closure.commit(str(sb), manifest, [])
-    assert "rollme" not in store.p_load_index()
+    assert "rollme" not in store.load_index()
     assert not (skill_store / "rollme").exists()  # the imported folder was rolled back
 
 

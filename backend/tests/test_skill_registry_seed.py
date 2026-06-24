@@ -16,8 +16,8 @@ from backend.apps.skill_registry import skill_registry as sr
 def test_bundled_snapshot_exists_and_includes_pdf():
     # The onboarding step targets the "pdf" skill via /pdf/i; it must be present
     # in the shipped snapshot or the tour times out even with a populated list.
-    assert os.path.exists(sr.P_BUNDLED_SNAPSHOT)
-    data = json.load(open(sr.P_BUNDLED_SNAPSHOT, encoding="utf-8"))
+    assert os.path.exists(sr.BUNDLED_SNAPSHOT)
+    data = json.load(open(sr.BUNDLED_SNAPSHOT, encoding="utf-8"))
     assert isinstance(data, dict) and len(data) >= 10
     assert any("pdf" in k.lower() or "pdf" in v.get("folder", "").lower()
                for k, v in data.items())
@@ -27,7 +27,7 @@ def test_seed_makes_catalog_non_empty_offline(monkeypatch, tmp_path):
     # Point the disk cache at an empty tmp dir so only the bundled snapshot can
     # seed; this is the brand-new-install, no-network case.
     monkeypatch.setenv("OPENSWARM_SKILL_CACHE_DIR", str(tmp_path))
-    seeded = sr.p_load_seed_cache()
+    seeded = sr.load_seed_cache()
     assert len(seeded) >= 10
 
     sr.CACHE = seeded
@@ -41,6 +41,6 @@ def test_disk_cache_roundtrip_and_priority(monkeypatch, tmp_path):
     sentinel = {"only-skill": {"name": "only-skill", "description": "", "content": "",
                                "folder": "skills/only-skill", "category": "Test",
                                "repositoryUrl": ""}}
-    sr.p_save_disk_cache(sentinel)
-    assert os.path.exists(sr.p_disk_cache_path())
-    assert sr.p_load_seed_cache() == sentinel
+    sr.save_disk_cache(sentinel)
+    assert os.path.exists(sr.disk_cache_path())
+    assert sr.load_seed_cache() == sentinel

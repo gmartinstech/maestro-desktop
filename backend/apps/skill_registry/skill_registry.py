@@ -30,25 +30,25 @@ P_RETRY_BACKOFF_MAX_S = 60
 # (build snapshot), and every successful live fetch is persisted to the user's
 # cache so subsequent launches are instant + offline-safe. The live fetch always
 # overwrites both once it lands, so neither can go stale at runtime.
-P_BUNDLED_SNAPSHOT = os.path.join(os.path.dirname(__file__), "skills_snapshot.json")
+BUNDLED_SNAPSHOT = os.path.join(os.path.dirname(__file__), "skills_snapshot.json")
 
 p_cache: dict[str, dict] = {}
 p_cache_updated_at: float = 0
 p_refresh_task: Optional[asyncio.Task] = None
 
 
-def p_disk_cache_path() -> str:
+def disk_cache_path() -> str:
     base = os.environ.get("OPENSWARM_SKILL_CACHE_DIR") or os.path.expanduser(
         "~/.openswarm/cache"
     )
     return os.path.join(base, "skill_registry.json")
 
 
-def p_load_seed_cache() -> dict[str, dict]:
+def load_seed_cache() -> dict[str, dict]:
     """Return a non-empty catalog from the on-disk last-good cache, falling back
     to the bundled snapshot, so the registry is never empty on a cold/offline
     start. Returns {} only if neither source is present/valid."""
-    for path in (p_disk_cache_path(), P_BUNDLED_SNAPSHOT):
+    for path in (disk_cache_path(), BUNDLED_SNAPSHOT):
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -60,12 +60,12 @@ def p_load_seed_cache() -> dict[str, dict]:
     return {}
 
 
-def p_save_disk_cache(skills: dict[str, dict]) -> None:
+def save_disk_cache(skills: dict[str, dict]) -> None:
     """Persist the last good live fetch so the next launch is instant. Atomic
     replace so a crash mid-write can't leave a truncated cache."""
     if not skills:
         return
-    path = p_disk_cache_path()
+    path = disk_cache_path()
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = f"{path}.tmp"
@@ -175,7 +175,7 @@ async def p_refresh_loop():
             if fetched:
                 p_cache = fetched
                 p_cache_updated_at = time.time()
-                p_save_disk_cache(p_cache)
+                save_disk_cache(p_cache)
                 ok = True
         except Exception as e:
             logger.exception(f"Skill registry refresh error: {e}")
@@ -197,7 +197,7 @@ async def skill_registry_lifespan():
     # Seed instantly from disk/bundled snapshot so the very first request never
     # sees an empty catalog (the live fetch below overwrites it when it lands).
     if not p_cache:
-        p_cache = p_load_seed_cache()
+        p_cache = load_seed_cache()
     p_refresh_task = asyncio.create_task(p_refresh_loop())
     yield
     if p_refresh_task:
