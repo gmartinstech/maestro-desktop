@@ -175,7 +175,7 @@ def test_runtime_injection():
     assert "OUTPUT_LLM" in html and "</head>" in html
 
 
-def _run_all():
+def p_run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:
         fn()
@@ -184,4 +184,4 @@ def _run_all():
 
 
 if __name__ == "__main__":
-    _run_all()
+    p_run_all()

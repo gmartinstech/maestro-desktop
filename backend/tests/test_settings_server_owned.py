@@ -35,7 +35,7 @@ def reset_settings():
     save_settings(original)
 
 
-def _activate_pro(client, token="repro-bearer-0123456789abcdef"):
+def p_activate_pro(client, token="repro-bearer-0123456789abcdef"):
     """Drive the real /api/subscription/activate with a mocked cloud /api/me."""
     fake_me = AsyncMock()
     fake_me.status_code = 200
@@ -61,7 +61,7 @@ def test_stale_settings_put_cannot_wipe_activation(client, reset_settings):
     snapshot = client.get("/api/settings").json()
     assert snapshot is not None
 
-    token = _activate_pro(client)
+    token = p_activate_pro(client)
 
     from backend.apps.settings.settings import load_settings
     s = load_settings()
@@ -110,7 +110,7 @@ def test_put_cannot_inject_server_owned_fields(client, reset_settings):
 def test_dedicated_endpoints_still_mutate(client, reset_settings):
     """Freezing PUT must not freeze the real owners: disconnect still reverts
     routing, and a fresh activate still re-connects afterwards."""
-    _activate_pro(client)
+    p_activate_pro(client)
 
     r = client.post("/api/subscription/disconnect")
     assert r.status_code == 200
@@ -119,7 +119,7 @@ def test_dedicated_endpoints_still_mutate(client, reset_settings):
     assert s.connection_mode == "own_key"
     assert s.openswarm_bearer_token is not None  # disconnect keeps sign-in
 
-    _activate_pro(client, token="second-bearer-aaaabbbbccccdddd")
+    p_activate_pro(client, token="second-bearer-aaaabbbbccccdddd")
     s = load_settings()
     assert s.connection_mode == "openswarm-pro"
     assert s.openswarm_bearer_token == "second-bearer-aaaabbbbccccdddd"

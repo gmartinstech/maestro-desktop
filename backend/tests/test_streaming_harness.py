@@ -14,18 +14,18 @@ from backend.apps.agents.agent_manager import AgentManager
 import backend.apps.agents.core.ws_manager as ws_mod
 
 
-def _stream(event):
+def p_stream(event):
     return StreamEvent(uuid="u", session_id="sdk-1", event=event)
 
 
-def _mock_query_yielding(*messages):
+def p_mock_query_yielding(*messages):
     async def p_q(*args, **kwargs):
         for m in messages:
             yield m
     return p_q
 
 
-def _drive(monkeypatch, messages, prompt="hi"):
+def p_drive(monkeypatch, messages, prompt="hi"):
     """Run one run_agent_loop turn against a mocked SDK message stream; return (session, ws_events)."""
     events = []
 
@@ -33,7 +33,7 @@ def _drive(monkeypatch, messages, prompt="hi"):
         events.append((event, data))
 
     monkeypatch.setattr(ws_mod.ws_manager, "send_to_session", fake_send, raising=True)
-    monkeypatch.setattr(claude_agent_sdk, "query", _mock_query_yielding(*messages), raising=True)
+    monkeypatch.setattr(claude_agent_sdk, "query", p_mock_query_yielding(*messages), raising=True)
 
     mgr = AgentManager()
     from backend.apps.agents.core.models import AgentSession
@@ -43,21 +43,21 @@ def _drive(monkeypatch, messages, prompt="hi"):
     return session, events
 
 
-def _result(**kw):
+def p_result(**kw):
     base = dict(subtype="success", duration_ms=100, duration_api_ms=80, is_error=False,
                 num_turns=1, session_id="sdk-1", usage={"input_tokens": 10, "output_tokens": 5})
     base.update(kw)
     return ResultMessage(**base)
 
 
-def _assistant(blocks, **kw):
+def p_assistant(blocks, **kw):
     base = dict(content=blocks, model="sonnet", message_id="m1", stop_reason="end_turn",
                 session_id="sdk-1", usage={"input_tokens": 10, "output_tokens": 5})
     base.update(kw)
     return AssistantMessage(**base)
 
 
-def _capture_env(monkeypatch, settings, api_type, resolved_model, model_entry):
+def p_capture_env(monkeypatch, settings, api_type, resolved_model, model_entry):
     """Drive the real loop with a mocked provider resolution; return the env dict the loop built
     into ClaudeAgentOptions (the provider-route auth config the SDK runs under)."""
     import backend.apps.agents.providers.registry as reg
@@ -70,8 +70,8 @@ def _capture_env(monkeypatch, settings, api_type, resolved_model, model_entry):
 
     async def capturing_query(*args, **kwargs):
         captured["options"] = kwargs.get("options")
-        yield _assistant([TextBlock(text="ok")])
-        yield _result()
+        yield p_assistant([TextBlock(text="ok")])
+        yield p_result()
 
     async def fake_send(session_id, event, data):
         pass
@@ -93,7 +93,7 @@ def test_loop_builds_pro_proxy_env(monkeypatch):
     import backend.apps.settings.credentials as creds
     monkeypatch.setattr(creds, "proxy_auth", lambda s: ("pro-bearer-xyz", "https://api.openswarm.com/proxy"), raising=True)
     settings = AppSettings(connection_mode="openswarm-pro")
-    env = _capture_env(monkeypatch, settings, "anthropic", "claude-sonnet-4-6", None)
+    env = p_capture_env(monkeypatch, settings, "anthropic", "claude-sonnet-4-6", None)
     assert env["ANTHROPIC_AUTH_TOKEN"] == "pro-bearer-xyz"
     assert env["ANTHROPIC_BASE_URL"] == "https://api.openswarm.com/proxy"
     assert "ANTHROPIC_API_KEY" not in env  # Pro never exposes a raw key
@@ -104,7 +104,7 @@ def test_loop_builds_direct_openai_key_env(monkeypatch):
     # max_tokens->max_completion_tokens rename GPT-5 requires. Pin the key + passthrough base url.
     from backend.apps.settings.models import AppSettings
     settings = AppSettings(openai_api_key="sk-openai-test")
-    env = _capture_env(monkeypatch, settings, "openai", "cp-openai/gpt-5",
+    env = p_capture_env(monkeypatch, settings, "openai", "cp-openai/gpt-5",
                        {"route": "api", "api": "openai"})
     assert env["OPENAI_API_KEY"] == "sk-openai-test"
     assert "openai-passthrough" in env["OPENAI_BASE_URL"]
@@ -115,7 +115,7 @@ def test_loop_builds_pinned_anthropic_api_route_env(monkeypatch):
     # api.anthropic.com, and pins the subagent + small-fast models so they don't drift to the proxy.
     from backend.apps.settings.models import AppSettings
     settings = AppSettings(anthropic_api_key="sk-ant-pinned")
-    env = _capture_env(monkeypatch, settings, "anthropic", "claude-3-5-api",
+    env = p_capture_env(monkeypatch, settings, "anthropic", "claude-3-5-api",
                        {"route": "api", "api": "anthropic"})
     assert env["ANTHROPIC_API_KEY"] == "sk-ant-pinned"
     assert env["ANTHROPIC_BASE_URL"] == "https://api.anthropic.com"
@@ -129,7 +129,7 @@ def test_loop_builds_9router_default_env(monkeypatch):
     import backend.apps.nine_router as nr
     monkeypatch.setattr(nr, "is_running", lambda: True, raising=True)
     settings = AppSettings(connection_mode="own_key")  # no keys at all
-    env = _capture_env(monkeypatch, settings, "anthropic", "cc/claude-sonnet-4-6", None)
+    env = p_capture_env(monkeypatch, settings, "anthropic", "cc/claude-sonnet-4-6", None)
     assert env["ANTHROPIC_API_KEY"] == "9router"
     assert env["ANTHROPIC_BASE_URL"] == "http://localhost:20128"
 
@@ -139,7 +139,7 @@ def test_loop_builds_direct_gemini_key_env(monkeypatch):
     # JSON-Schema fields Gemini rejects. Pin the Gemini keys + the proxy base url.
     from backend.apps.settings.models import AppSettings
     settings = AppSettings(google_api_key="g-key-test")
-    env = _capture_env(monkeypatch, settings, "gemini", "cp-gemini/gemini-2.5-pro",
+    env = p_capture_env(monkeypatch, settings, "gemini", "cp-gemini/gemini-2.5-pro",
                        {"route": "api", "api": "gemini"})
     assert env["GEMINI_API_KEY"] == "g-key-test"
     assert env["GOOGLE_API_KEY"] == "g-key-test"
@@ -153,7 +153,7 @@ def test_loop_builds_openrouter_env(monkeypatch):
     import backend.apps.nine_router as nr
     monkeypatch.setattr(nr, "is_running", lambda: True, raising=True)
     settings = AppSettings(openrouter_api_key="or-key-test")
-    env = _capture_env(monkeypatch, settings, "openrouter", "openrouter/anthropic/claude-sonnet-4.5", None)
+    env = p_capture_env(monkeypatch, settings, "openrouter", "openrouter/anthropic/claude-sonnet-4.5", None)
     assert env["ANTHROPIC_API_KEY"] == "9router"
     assert env["ANTHROPIC_BASE_URL"] == "http://localhost:20128"
     assert env["CLAUDE_CODE_SUBAGENT_MODEL"] == "openrouter/anthropic/claude-sonnet-4.5"
@@ -178,8 +178,8 @@ def test_loop_builds_direct_anthropic_key_env(monkeypatch):
 
     async def capturing_query(*args, **kwargs):
         captured["options"] = kwargs.get("options")
-        yield _assistant([TextBlock(text="ok")])
-        yield _result()
+        yield p_assistant([TextBlock(text="ok")])
+        yield p_result()
 
     async def fake_send(session_id, event, data):
         pass
@@ -216,8 +216,8 @@ def test_loop_with_session_cwd_runs_workspace_git_init(monkeypatch):
         events.append((event, data))
 
     monkeypatch.setattr(ws_mod.ws_manager, "send_to_session", fake_send, raising=True)
-    monkeypatch.setattr(claude_agent_sdk, "query", _mock_query_yielding(
-        _assistant([TextBlock(text="done")]), _result()), raising=True)
+    monkeypatch.setattr(claude_agent_sdk, "query", p_mock_query_yielding(
+        p_assistant([TextBlock(text="done")]), p_result()), raising=True)
 
     mgr = AgentManager()
     from backend.apps.agents.core.models import AgentSession
@@ -237,15 +237,15 @@ def test_full_streaming_turn_drives_the_complete_ws_contract(monkeypatch):
     # deltas, the committed assistant message, the token/context meter, the per-turn token math).
     # This exercises stream_event + assistant_message + result_message together, through the loop.
     msgs = [
-        _stream({"type": "content_block_start", "index": 0, "content_block": {"type": "text"}}),
-        _stream({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hel"}}),
-        _stream({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "lo!"}}),
-        _stream({"type": "content_block_stop", "index": 0}),
-        _stream({"type": "message_stop"}),
-        _assistant([TextBlock(text="Hello!")], usage={"input_tokens": 100, "output_tokens": 50}),
-        _result(usage={"input_tokens": 1100, "output_tokens": 550}),
+        p_stream({"type": "content_block_start", "index": 0, "content_block": {"type": "text"}}),
+        p_stream({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hel"}}),
+        p_stream({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "lo!"}}),
+        p_stream({"type": "content_block_stop", "index": 0}),
+        p_stream({"type": "message_stop"}),
+        p_assistant([TextBlock(text="Hello!")], usage={"input_tokens": 100, "output_tokens": 50}),
+        p_result(usage={"input_tokens": 1100, "output_tokens": 550}),
     ]
-    session, events = _drive(monkeypatch, msgs)
+    session, events = p_drive(monkeypatch, msgs)
     types = [e for e, _ in events]
     # the live streaming sequence the UI renders token-by-token
     assert "agent:stream_start" in types
@@ -269,8 +269,8 @@ def test_loop_wires_all_four_hooks_to_a_live_hook_context(monkeypatch):
 
     async def capturing_query(*args, **kwargs):
         captured["options"] = kwargs.get("options")
-        yield _assistant([TextBlock(text="ok")])
-        yield _result()
+        yield p_assistant([TextBlock(text="ok")])
+        yield p_result()
 
     async def fake_send(session_id, event, data):
         pass
@@ -298,9 +298,9 @@ def test_loop_wires_all_four_hooks_to_a_live_hook_context(monkeypatch):
 
 
 def test_streamed_text_lands_as_assistant_message(monkeypatch):
-    session, events = _drive(monkeypatch, [
-        _assistant([TextBlock(text="Hello there")]),
-        _result(),
+    session, events = p_drive(monkeypatch, [
+        p_assistant([TextBlock(text="Hello there")]),
+        p_result(),
     ])
     assert any(m.role == "assistant" and "Hello there" in str(m.content) for m in session.messages)
     assert session.status == "completed"
@@ -310,9 +310,9 @@ def test_streamed_text_lands_as_assistant_message(monkeypatch):
 
 
 def test_tool_use_is_recorded(monkeypatch):
-    session, events = _drive(monkeypatch, [
-        _assistant([ToolUseBlock(id="tu1", name="Read", input={"file_path": "/x.py"})]),
-        _result(),
+    session, events = p_drive(monkeypatch, [
+        p_assistant([ToolUseBlock(id="tu1", name="Read", input={"file_path": "/x.py"})]),
+        p_result(),
     ])
     assert any(m.role == "tool_call" for m in session.messages)
     # the tool name survives onto the recorded call
@@ -321,9 +321,9 @@ def test_tool_use_is_recorded(monkeypatch):
 
 
 def test_text_then_tool_in_one_turn(monkeypatch):
-    session, events = _drive(monkeypatch, [
-        _assistant([TextBlock(text="Let me read it."), ToolUseBlock(id="tu1", name="Read", input={"file_path": "/x.py"})]),
-        _result(),
+    session, events = p_drive(monkeypatch, [
+        p_assistant([TextBlock(text="Let me read it."), ToolUseBlock(id="tu1", name="Read", input={"file_path": "/x.py"})]),
+        p_result(),
     ])
     roles = [m.role for m in session.messages]
     assert "assistant" in roles and "tool_call" in roles
@@ -332,17 +332,17 @@ def test_text_then_tool_in_one_turn(monkeypatch):
 
 def test_completes_even_with_no_content(monkeypatch):
     # an empty assistant turn (e.g. a pure stop) must still finish cleanly, not hang
-    session, events = _drive(monkeypatch, [_assistant([]), _result()])
+    session, events = p_drive(monkeypatch, [p_assistant([]), p_result()])
     assert session.status == "completed"
 
 
 def test_thinking_block_before_text_is_handled(monkeypatch):
     # a ThinkingBlock mutates the separate thinking-state cluster; the turn must still
     # surface the final answer and complete (pins the thinking path for the restructuring)
-    session, events = _drive(monkeypatch, [
-        _assistant([ThinkingBlock(thinking="let me reason about this", signature="sig-1"),
+    session, events = p_drive(monkeypatch, [
+        p_assistant([ThinkingBlock(thinking="let me reason about this", signature="sig-1"),
                     TextBlock(text="the answer is 42")]),
-        _result(),
+        p_result(),
     ])
     assert any(m.role == "assistant" and "the answer is 42" in str(m.content) for m in session.messages)
     assert session.status == "completed"
@@ -365,8 +365,8 @@ def test_transient_capacity_error_is_retried_then_succeeds(monkeypatch):
         state["n"] += 1
         if state["n"] == 1:
             raise Exception("No pool capacity available. Try again shortly.")
-        yield _assistant([TextBlock(text="Recovered after backoff")])
-        yield _result()
+        yield p_assistant([TextBlock(text="Recovered after backoff")])
+        yield p_result()
 
     events = []
 
@@ -401,9 +401,9 @@ def test_thinking_pill_shows_per_turn_delta_not_cumulative(monkeypatch):
             pills.append(msg)
 
     async def q(*a, **k):
-        yield _assistant([ThinkingBlock(thinking="reasoning", signature="s"), TextBlock(text="answer")],
+        yield p_assistant([ThinkingBlock(thinking="reasoning", signature="s"), TextBlock(text="answer")],
                          usage={"input_tokens": 100, "output_tokens": 50})
-        yield _result(usage={"input_tokens": 1100, "output_tokens": 550})
+        yield p_result(usage={"input_tokens": 1100, "output_tokens": 550})
 
     monkeypatch.setattr(ws_mod.ws_manager, "send_to_session", fake_send, raising=True)
     monkeypatch.setattr(claude_agent_sdk, "query", q, raising=True)

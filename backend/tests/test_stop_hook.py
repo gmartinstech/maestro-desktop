@@ -11,7 +11,7 @@ from backend.apps.agents.manager.streaming import stop_hook as stop_hook_mod
 from backend.apps.agents.manager import view_builder_state
 
 
-def _ctx(mode: str) -> HookContext:
+def p_ctx(mode: str) -> HookContext:
     session = AgentSession(name="t", model="sonnet", dashboard_id="d", mode=mode)
     return HookContext(
         session=session, session_id=session.id, prompt="hi",
@@ -21,19 +21,19 @@ def _ctx(mode: str) -> HookContext:
 
 @pytest.mark.asyncio
 async def test_stop_hook_inert_when_not_view_builder():
-    ctx = _ctx("agent")
+    ctx = p_ctx("agent")
     assert await stop_hook_mod.stop_hook(ctx, {}, None, None) == {}
 
 
 @pytest.mark.asyncio
 async def test_stop_hook_inert_when_not_dirty():
-    ctx = _ctx("view-builder")  # dirty set is empty -> nothing to gate
+    ctx = p_ctx("view-builder")  # dirty set is empty -> nothing to gate
     assert await stop_hook_mod.stop_hook(ctx, {}, None, None) == {}
 
 
 @pytest.mark.asyncio
 async def test_stop_hook_blocks_on_render_error_under_cap():
-    ctx = _ctx("view-builder")
+    ctx = p_ctx("view-builder")
     sid = ctx.session.id
     view_builder_state.view_builder_dirty_sessions.add(sid)
     fake_runtime = MagicMock()

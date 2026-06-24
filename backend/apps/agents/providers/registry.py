@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Full set of model-id prefixes that force routing through 9Router.
-_NINEROUTER_MODEL_PREFIXES = ("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter/")
+NINEROUTER_MODEL_PREFIXES = ("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter/")
 
 # Entry fields: value, label, context_window, model_id, router_model_id, api,
 # subscription_only, reasoning, route ("cc"|"api"|"openrouter"|None).
@@ -152,7 +152,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
 # Model resolution (used by the live claude_agent_sdk path)
 # ---------------------------------------------------------------------------
 
-_CUSTOM_VALUE_PREFIX = "custom/"
+CUSTOM_VALUE_PREFIX = "custom/"
 
 
 def custom_provider_slug_for_lookup(name: str) -> str:
@@ -166,9 +166,9 @@ def custom_provider_slug_for_lookup(name: str) -> str:
 def find_custom_provider_for_value(settings, value: str):
     """Look up the CustomProvider whose slug matches the slug encoded in a
     `custom/<slug>/<model_id>` picker value. Returns None if no match."""
-    if not isinstance(value, str) or not value.startswith(_CUSTOM_VALUE_PREFIX):
+    if not isinstance(value, str) or not value.startswith(CUSTOM_VALUE_PREFIX):
         return None
-    rest = value[len(_CUSTOM_VALUE_PREFIX):]
+    rest = value[len(CUSTOM_VALUE_PREFIX):]
     slug, p_sep, p_bare = rest.partition("/")
     if not slug:
         return None
@@ -202,8 +202,8 @@ def find_builtin_model(short_name: str) -> dict | None:
                 "route": "openrouter",
                 "reasoning": False,
             }
-    if isinstance(short_name, str) and short_name.startswith(_CUSTOM_VALUE_PREFIX):
-        rest = short_name[len(_CUSTOM_VALUE_PREFIX):]
+    if isinstance(short_name, str) and short_name.startswith(CUSTOM_VALUE_PREFIX):
+        rest = short_name[len(CUSTOM_VALUE_PREFIX):]
         slug, p_sep, bare_model = rest.partition("/")
         if slug and bare_model:
             # Routing string `cp-<slug>/<model>` matches the prefix we use
@@ -390,8 +390,8 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
     # bare-model tail against any custom provider's models list.
     if settings:
         bare_model = model
-        if isinstance(model, str) and model.startswith(_CUSTOM_VALUE_PREFIX):
-            rest = model[len(_CUSTOM_VALUE_PREFIX):]
+        if isinstance(model, str) and model.startswith(CUSTOM_VALUE_PREFIX):
+            rest = model[len(CUSTOM_VALUE_PREFIX):]
             p_slug, p_sep, bare_model = rest.partition("/")
         for cp in getattr(settings, "custom_providers", []):
             for m in (getattr(cp, "models", None) or []):

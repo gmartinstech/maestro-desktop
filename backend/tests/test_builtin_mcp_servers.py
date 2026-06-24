@@ -6,14 +6,14 @@ from backend.apps.agents.core.models import AgentSession
 from backend.apps.agents.manager.builtin_mcp_servers import register_builtin_mcp_servers
 
 
-def _session():
+def p_session():
     return AgentSession(name="t", model="sonnet", dashboard_id="d")
 
 
 def test_registers_always_on_and_delegation_servers():
     mcp_servers = {}
     browser_tools, invoke_tools = register_builtin_mcp_servers(
-        mcp_servers, _session(), {}, None, "/agents")
+        mcp_servers, p_session(), {}, None, "/agents")
     # always-on
     assert "openswarm-mcp-meta" in mcp_servers
     assert "openswarm-settings-meta" in mcp_servers
@@ -29,7 +29,7 @@ def test_registers_always_on_and_delegation_servers():
 def test_fully_denied_delegation_servers_are_not_registered():
     mcp_servers = {}
     perms = {t: "deny" for t in ("CreateBrowserAgent", "BrowserAgent", "BrowserAgents", "InvokeAgent")}
-    register_builtin_mcp_servers(mcp_servers, _session(), perms, None, "/agents")
+    register_builtin_mcp_servers(mcp_servers, p_session(), perms, None, "/agents")
     assert "openswarm-browser-agent" not in mcp_servers   # all browser tools denied -> skip
     assert "openswarm-invoke-agent" not in mcp_servers
     assert "openswarm-mcp-meta" in mcp_servers             # always-on regardless

@@ -8,14 +8,14 @@ from backend.apps.agents.core.models import AgentSession
 from backend.apps.agents.manager.permissions.effective_tools import build_effective_tool_lists
 
 
-def _session(allowed):
+def p_session(allowed):
     s = AgentSession(name="t", model="sonnet", dashboard_id="d")
     s.allowed_tools = allowed
     return s
 
 
 def test_builtin_allow_and_deny_partition():
-    session = _session(["Read", "Write", "Bash"])
+    session = p_session(["Read", "Write", "Bash"])
     perms = {"Read": "always_allow", "Write": "always_allow", "Bash": "deny"}
     allowed, disallowed = build_effective_tool_lists(session, {}, perms, False, [], [])
     assert "Read" in allowed and "Write" in allowed
@@ -24,7 +24,7 @@ def test_builtin_allow_and_deny_partition():
 
 
 def test_web_mcp_suppresses_native_web_tools():
-    session = _session(["Read", "WebSearch", "WebFetch"])
+    session = p_session(["Read", "WebSearch", "WebFetch"])
     perms = {"Read": "always_allow", "WebSearch": "always_allow", "WebFetch": "always_allow"}
     allowed, disallowed = build_effective_tool_lists(session, {}, perms, True, [], [])
     # native WebSearch/WebFetch are stripped (they'd fail) and force-disallowed so the model
@@ -35,7 +35,7 @@ def test_web_mcp_suppresses_native_web_tools():
 
 
 def test_no_web_mcp_keeps_native_web_tools():
-    session = _session(["WebSearch"])
+    session = p_session(["WebSearch"])
     perms = {"WebSearch": "always_allow"}
     allowed, disallowed = build_effective_tool_lists(session, {}, perms, False, [], [])
     assert "WebSearch" in allowed  # native path kept when we didn't register the web MCP

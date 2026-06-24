@@ -66,8 +66,8 @@ async def test_arm_waits_for_9router_before_shadowing_a_background_started_sub(m
     a real Claude sub is invisible. arm() must bring 9Router up (so the sub becomes
     visible) BEFORE deciding, instead of arming the free trial over it."""
     saved: list = []
-    monkeypatch.setattr(ft, "save_settings_async", _record(saved))
-    monkeypatch.setattr(ft, "p_sync_routing", _noop)
+    monkeypatch.setattr(ft, "save_settings_async", p_record(saved))
+    monkeypatch.setattr(ft, "p_sync_routing", p_noop)
 
     started = {"called": False}
 
@@ -95,8 +95,8 @@ async def test_arm_waits_for_9router_before_shadowing_a_background_started_sub(m
 async def test_arm_tolerates_provider_load_lag(monkeypatch):
     """9Router's /api/providers can lag is_running on a cold start. arm must re-check
     a few times so a sub that loads a beat late is still caught, not shadowed."""
-    monkeypatch.setattr(ft, "save_settings_async", _noop)
-    monkeypatch.setattr(ft, "p_sync_routing", _noop)
+    monkeypatch.setattr(ft, "save_settings_async", p_noop)
+    monkeypatch.setattr(ft, "p_sync_routing", p_noop)
 
     async def fake_ensure_running():
         return None
@@ -144,8 +144,8 @@ async def test_arm_with_no_sub_is_bounded_and_falls_through_to_arm(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_clear_reverts_forced_haiku_so_it_doesnt_outlive_the_trial(monkeypatch):
-    monkeypatch.setattr(ft, "save_settings_async", _noop)
-    monkeypatch.setattr(ft, "p_sync_routing", _noop)
+    monkeypatch.setattr(ft, "save_settings_async", p_noop)
+    monkeypatch.setattr(ft, "p_sync_routing", p_noop)
 
     s = AppSettings(connection_mode="free-trial", free_trial_token="ftk", default_model="haiku")
     await clear_free_trial(s)
@@ -159,11 +159,11 @@ async def test_clear_reverts_forced_haiku_so_it_doesnt_outlive_the_trial(monkeyp
     assert s2.default_model == "haiku"
 
 
-async def _noop(*p_a, **p_k):
+async def p_noop(*p_a, **p_k):
     return None
 
 
-def _record(bucket):
+def p_record(bucket):
     async def p_inner(obj, *p_a, **p_k):
         bucket.append(obj)
     return p_inner

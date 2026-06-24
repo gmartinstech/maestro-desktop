@@ -14,7 +14,7 @@ from backend.apps.agents.manager.permissions.ApprovalDecision import ApprovalDec
 from backend.apps.agents.manager.prompt.prompt_context import TOOLSEARCH_LOOP_THRESHOLD
 
 
-def _ctx() -> HookContext:
+def p_ctx() -> HookContext:
     session = AgentSession(name="t", model="sonnet", dashboard_id="d")
     return HookContext(
         session=session,
@@ -28,7 +28,7 @@ def _ctx() -> HookContext:
 
 @pytest.mark.asyncio
 async def test_can_use_tool_always_allow_returns_allow():
-    ctx = _ctx()
+    ctx = p_ctx()
     with patch.object(gate_hooks.path_gate, "maybe_override_policy", return_value=("always_allow", None)):
         result = await gate_hooks.can_use_tool(ctx, "Read", {"file_path": "/x"}, None)
     assert isinstance(result, PermissionResultAllow)
@@ -36,7 +36,7 @@ async def test_can_use_tool_always_allow_returns_allow():
 
 @pytest.mark.asyncio
 async def test_can_use_tool_deny_returns_deny():
-    ctx = _ctx()
+    ctx = p_ctx()
     with patch.object(gate_hooks.path_gate, "maybe_override_policy", return_value=("deny", None)):
         result = await gate_hooks.can_use_tool(ctx, "Bash", {"command": "rm -rf /"}, None)
     assert isinstance(result, PermissionResultDeny)
@@ -44,7 +44,7 @@ async def test_can_use_tool_deny_returns_deny():
 
 @pytest.mark.asyncio
 async def test_can_use_tool_ask_routes_through_approval():
-    ctx = _ctx()
+    ctx = p_ctx()
     with patch.object(gate_hooks.path_gate, "maybe_override_policy", return_value=("ask", None)), \
          patch.object(gate_hooks, "request_user_approval", new=AsyncMock(return_value=ApprovalDecision(behavior="allow"))):
         result = await gate_hooks.can_use_tool(ctx, "Write", {"file_path": "/x"}, None)
@@ -53,7 +53,7 @@ async def test_can_use_tool_ask_routes_through_approval():
 
 @pytest.mark.asyncio
 async def test_pre_tool_hook_toolsearch_loopbreaker_fires_at_threshold():
-    ctx = _ctx()
+    ctx = p_ctx()
     ctx.ts_loop_count = TOOLSEARCH_LOOP_THRESHOLD - 1
     with patch.object(gate_hooks, "gated_mcp_server_names", return_value=["gmail"]), \
          patch.object(gate_hooks, "toolsearch_loop_redirect", return_value="Stop calling ToolSearch; use MCPActivate"):
@@ -65,7 +65,7 @@ async def test_pre_tool_hook_toolsearch_loopbreaker_fires_at_threshold():
 
 @pytest.mark.asyncio
 async def test_pre_tool_hook_counter_resets_on_non_toolsearch():
-    ctx = _ctx()
+    ctx = p_ctx()
     ctx.ts_loop_count = 5
     with patch.object(gate_hooks.path_gate, "maybe_override_policy", return_value=("always_allow", None)):
         out = await gate_hooks.pre_tool_hook(ctx, {"tool_name": "Read", "tool_input": {}}, "tu1", None)

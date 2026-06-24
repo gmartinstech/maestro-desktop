@@ -9,7 +9,7 @@ import backend.apps.agents.manager.context_budget as cb
 from backend.apps.agents.core.models import AgentSession, Message
 
 
-def _session_with(messages: int, input_tokens: int, context_window: int = 100, threshold: float = 0.65) -> AgentSession:
+def p_session_with(messages: int, input_tokens: int, context_window: int = 100, threshold: float = 0.65) -> AgentSession:
     s = AgentSession(name="t", model="sonnet")
     s.context_window = context_window
     s.compact_threshold_pct = threshold
@@ -18,7 +18,7 @@ def _session_with(messages: int, input_tokens: int, context_window: int = 100, t
     return s
 
 
-def _capture_ws(monkeypatch):
+def p_capture_ws(monkeypatch):
     sent = []
 
     async def fake_send(session_id, event, data):
@@ -31,35 +31,35 @@ def _capture_ws(monkeypatch):
 # ---- maybe_compact: every branch -------------------------------------------
 
 def test_compact_skipped_below_threshold():
-    s = _session_with(messages=10, input_tokens=10)  # 0.10 < 0.65
+    s = p_session_with(messages=10, input_tokens=10)  # 0.10 < 0.65
     assert cb.maybe_compact(s) is False
     assert s.compacted_through_msg_id is None
 
 
 def test_compact_fires_over_threshold_and_marks_boundary():
-    s = _session_with(messages=7, input_tokens=80)   # 0.80 >= 0.65; cutoff = 7-6 = 1
+    s = p_session_with(messages=7, input_tokens=80)   # 0.80 >= 0.65; cutoff = 7-6 = 1
     assert cb.maybe_compact(s) is True
     assert s.compacted_through_msg_id == s.messages[0].id
 
 
 def test_compact_keeps_the_last_six_messages():
-    s = _session_with(messages=10, input_tokens=80)  # cutoff = 10-6 = 4 -> boundary at msgs[3]
+    s = p_session_with(messages=10, input_tokens=80)  # cutoff = 10-6 = 4 -> boundary at msgs[3]
     assert cb.maybe_compact(s) is True
     assert s.compacted_through_msg_id == s.messages[3].id
 
 
 def test_compact_skipped_with_six_or_fewer_messages():
-    s = _session_with(messages=6, input_tokens=80)   # cutoff = max(0, 6-6) = 0
+    s = p_session_with(messages=6, input_tokens=80)   # cutoff = max(0, 6-6) = 0
     assert cb.maybe_compact(s) is False
 
 
 def test_compact_skipped_under_four_messages():
-    s = _session_with(messages=3, input_tokens=80)
+    s = p_session_with(messages=3, input_tokens=80)
     assert cb.maybe_compact(s) is False
 
 
 def test_compact_is_idempotent():
-    s = _session_with(messages=7, input_tokens=80)
+    s = p_session_with(messages=7, input_tokens=80)
     assert cb.maybe_compact(s) is True
     boundary = s.compacted_through_msg_id
     assert cb.maybe_compact(s) is False              # already marked through that id
@@ -67,7 +67,7 @@ def test_compact_is_idempotent():
 
 
 def test_force_bypasses_threshold_and_idempotency():
-    s = _session_with(messages=7, input_tokens=1)    # 0.01 < 0.65
+    s = p_session_with(messages=7, input_tokens=1)    # 0.01 < 0.65
     assert cb.maybe_compact(s, force=True) is True   # force ignores the ratio
     assert cb.maybe_compact(s, force=True) is True   # force re-marks even when unchanged
 
@@ -75,7 +75,7 @@ def test_force_bypasses_threshold_and_idempotency():
 # ---- emit_context_update ----------------------------------------------------
 
 def test_emit_persists_tokens_and_broadcasts(monkeypatch):
-    sent = _capture_ws(monkeypatch)
+    sent = p_capture_ws(monkeypatch)
     s = AgentSession(name="t", model="sonnet")
     s.context_window = 1000
 
@@ -92,7 +92,7 @@ def test_emit_persists_tokens_and_broadcasts(monkeypatch):
 
 
 def test_emit_defaults_to_existing_session_tokens(monkeypatch):
-    sent = _capture_ws(monkeypatch)
+    sent = p_capture_ws(monkeypatch)
     s = AgentSession(name="t", model="sonnet")
     s.tokens = {"input": 123, "output": 7}
 
@@ -102,7 +102,7 @@ def test_emit_defaults_to_existing_session_tokens(monkeypatch):
 
 
 def test_emit_zero_input_yields_zero_ctx_pct(monkeypatch):
-    sent = _capture_ws(monkeypatch)
+    sent = p_capture_ws(monkeypatch)
     s = AgentSession(name="t", model="sonnet")
 
     asyncio.run(cb.emit_context_update("sid", s, input_tokens=0))

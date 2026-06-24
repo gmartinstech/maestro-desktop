@@ -18,7 +18,7 @@ def metrics(monkeypatch):
     return bm, d
 
 
-def _read(d, name):
+def p_read(d, name):
     p = os.path.join(d, name)
     if not os.path.exists(p):
         return []
@@ -41,7 +41,7 @@ def test_record_tool_writes_event(metrics):
     bm, d = metrics
     bm.record_tool("s1", "b1", 2, "BrowserListInteractives", 18,
                    ok=True, error="", is_loop=False, stagnation_streak=0, result_len=120)
-    events = _read(d, "events.jsonl")
+    events = p_read(d, "events.jsonl")
     assert len(events) == 1
     e = events[0]
     assert e["tool"] == "BrowserListInteractives" and e["tier"] == "t3_action_surface"
@@ -53,7 +53,7 @@ def test_record_tool_captures_error(metrics):
     bm.record_tool("s1", "b1", 3, "BrowserClickIndex", 9,
                    ok=False, error="Index 4 is no longer valid", is_loop=True,
                    stagnation_streak=2, result_len=40)
-    e = _read(d, "events.jsonl")[0]
+    e = p_read(d, "events.jsonl")[0]
     assert e["ok"] is False and "no longer valid" in e["error"]
     assert e["is_loop"] is True and e["stagnation_streak"] == 2
 
@@ -75,7 +75,7 @@ def test_record_task_summary_and_rollups(metrics):
     assert summary["by_tier"]["t5_vision"]["calls"] == 1
     assert summary["total_ms"] >= 1000  # ~1.2s elapsed
     assert any("not found" in err[0].lower() for err in summary["recurring_errors"])
-    tasks = _read(d, "tasks.jsonl")
+    tasks = p_read(d, "tasks.jsonl")
     assert len(tasks) == 1 and tasks[0]["status"] == "completed"
 
 

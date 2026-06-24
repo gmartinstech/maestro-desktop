@@ -29,7 +29,7 @@ from backend.main import app
 SERVER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "apps", "agents", "settings_meta_server.py")
 
 
-def _free_port() -> int:
+def p_free_port() -> int:
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -42,7 +42,7 @@ def live_backend():
     import backend.auth as auth_mod
     if not auth_mod.TOKEN:
         auth_mod.TOKEN = secrets.token_urlsafe(32)
-    port = _free_port()
+    port = p_free_port()
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -64,7 +64,7 @@ def reset_settings():
     save_settings(original)
 
 
-def _run_stdio(port: int, token: str, session_id: str, changes: dict) -> str:
+def p_run_stdio(port: int, token: str, session_id: str, changes: dict) -> str:
     env = {
         **os.environ,
         "OPENSWARM_PORT": str(port),
@@ -98,7 +98,7 @@ def test_live_stdio_settingswrite_refuses_live_key_clears_other(live_backend, re
     agent_manager.sessions["live-stdio-test"] = AgentSession(id="live-stdio-test", name="t", model="opus-4-8")
 
     try:
-        text = _run_stdio(port, token, "live-stdio-test",
+        text = p_run_stdio(port, token, "live-stdio-test",
                           {"anthropic_api_key": "", "openai_api_key": "", "theme": "light"})
     finally:
         agent_manager.sessions.pop("live-stdio-test", None)

@@ -488,7 +488,7 @@ async def probe_model(body: dict):
             resolve_model_id_for_sdk,
             get_api_type,
             find_builtin_model,
-            _NINEROUTER_MODEL_PREFIXES,
+            NINEROUTER_MODEL_PREFIXES,
         )
         from backend.apps.settings.settings import load_settings
         from backend.apps.nine_router import is_running as p_9r_running
@@ -505,7 +505,7 @@ async def probe_model(body: dict):
         # Routing mirrors agent_manager: prefix takes precedence over Pro.
         resolved_is_9router = (
             isinstance(resolved, str)
-            and resolved.startswith(_NINEROUTER_MODEL_PREFIXES)
+            and resolved.startswith(NINEROUTER_MODEL_PREFIXES)
         )
 
         if resolved_is_9router:

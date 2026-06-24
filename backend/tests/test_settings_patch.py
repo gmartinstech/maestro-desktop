@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 
 
-def _auth_headers():
+def p_auth_headers():
     import backend.auth as auth_mod
     if not auth_mod.TOKEN:
         import secrets
@@ -25,7 +25,7 @@ def _auth_headers():
 
 @pytest.fixture
 def client():
-    return TestClient(app, headers=_auth_headers())
+    return TestClient(app, headers=p_auth_headers())
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ async def test_concurrent_renderer_patch_and_agent_write_both_survive(reset_sett
     save_settings(base)
 
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=_auth_headers()) as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=p_auth_headers()) as client:
         r1, r2 = await asyncio.gather(
             client.patch("/api/settings", json={"theme": "light"}),
             client.post("/api/settings-meta/write", json={"changes": {"default_mode": "chat"}}),

@@ -14,7 +14,7 @@ from backend.apps.agents.browser.browser_loop import (
 )
 
 
-def _fail(url="https://a.com"):
+def p_fail(url="https://a.com"):
     return {"text": "Element not found: '.x'", "url": url}
 
 
@@ -71,7 +71,7 @@ def test_advance_increments_on_failures_and_nudges_at_threshold():
     streak, url, text, nudge = 0, "", "", None
     nudges = []
     for _ in range(STAGNATION_ESCALATION_AT):
-        streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", _fail())
+        streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", p_fail())
         nudges.append(nudge)
     assert streak == STAGNATION_ESCALATION_AT
     assert nudges[-1] is not None  # nudge fires exactly when the threshold is hit
@@ -80,8 +80,8 @@ def test_advance_increments_on_failures_and_nudges_at_threshold():
 
 def test_advance_resets_on_progress():
     # two failures, then a navigation (URL change) clears the streak
-    streak, url, text, _ = advance_stagnation(0, "", "", "BrowserClick", _fail("https://a.com"))
-    streak, url, text, _ = advance_stagnation(streak, url, text, "BrowserClick", _fail("https://a.com"))
+    streak, url, text, _ = advance_stagnation(0, "", "", "BrowserClick", p_fail("https://a.com"))
+    streak, url, text, _ = advance_stagnation(streak, url, text, "BrowserClick", p_fail("https://a.com"))
     assert streak == 2
     streak, url, text, _ = advance_stagnation(
         streak, url, text, "BrowserNavigate", {"text": "Navigated", "url": "https://b.com"},
@@ -98,7 +98,7 @@ def test_advance_neutral_tools_pass_through_unchanged():
 
 def test_advance_fires_again_at_max():
     streak, url, text = STAGNATION_MAX - 1, "https://a.com", "prev different"
-    streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", _fail())
+    streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", p_fail())
     assert streak == STAGNATION_MAX
     assert nudge is not None and "RequestHumanIntervention" in nudge
     assert stagnation_exhausted(streak)

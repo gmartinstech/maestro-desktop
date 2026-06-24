@@ -75,8 +75,8 @@ CURATED_SHORTLIST: list[CuratedEntry] = [
 
 
 # Short-circuit for obviously-local prompts where no MCP helps. Saves ~200ms + ~$0.0001 per launch.
-_PATH_LIKE = re.compile(r"^[./~]|/[\w\-]+/|\.[a-zA-Z]{1,5}\b")
-_SHELL_PREFIX = re.compile(r"^\s*[\$!/]")
+P_PATH_LIKE = re.compile(r"^[./~]|/[\w\-]+/|\.[a-zA-Z]{1,5}\b")
+P_SHELL_PREFIX = re.compile(r"^\s*[\$!/]")
 
 
 def p_is_obviously_local(prompt: str) -> bool:
@@ -84,9 +84,9 @@ def p_is_obviously_local(prompt: str) -> bool:
     s = prompt.strip()
     if len(s) < 8:
         return True
-    if _SHELL_PREFIX.match(s):
+    if P_SHELL_PREFIX.match(s):
         return True
-    if " " not in s and _PATH_LIKE.search(s):
+    if " " not in s and P_PATH_LIKE.search(s):
         return True
     return False
 

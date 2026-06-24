@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, TYPE_CHECKING
 
 from backend.apps.agents.providers.registry import (
-    _CUSTOM_VALUE_PREFIX,
+    CUSTOM_VALUE_PREFIX,
     custom_provider_slug_for_lookup,
     find_builtin_model,
     find_custom_provider_for_value,
@@ -77,8 +77,8 @@ def p_custom_slug_for_model(model_value: str, settings: AppSettings) -> str | No
     if cp is not None:
         return custom_provider_slug_for_lookup(getattr(cp, "name", ""))
     # Fall back to the slug encoded in the picker value itself.
-    if isinstance(model_value, str) and model_value.startswith(_CUSTOM_VALUE_PREFIX):
-        slug = model_value[len(_CUSTOM_VALUE_PREFIX):].partition("/")[0]
+    if isinstance(model_value, str) and model_value.startswith(CUSTOM_VALUE_PREFIX):
+        slug = model_value[len(CUSTOM_VALUE_PREFIX):].partition("/")[0]
         return slug or None
     return None
 

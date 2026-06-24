@@ -25,7 +25,7 @@ async def configure_provider_env(
     sub_conns: List,
 ) -> None:
     from backend.apps.nine_router import is_running as nine_router_running
-    from backend.apps.agents.providers.registry import _NINEROUTER_MODEL_PREFIXES as NINEROUTER_MODEL_PREFIXES
+    from backend.apps.agents.providers.registry import NINEROUTER_MODEL_PREFIXES as NINEROUTER_MODEL_PREFIXES
     resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(NINEROUTER_MODEL_PREFIXES)
 
     from backend.apps.agents.providers.registry import find_builtin_model as find_builtin_model

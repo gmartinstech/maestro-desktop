@@ -19,13 +19,13 @@ from backend.apps.agents.agent_manager import agent_manager
 from backend.apps.agents.core.models import AgentSession
 
 
-def _assistant():
+def p_assistant():
     return AssistantMessage(content=[TextBlock(text="hello from the loop")], model="sonnet",
                             message_id="m1", stop_reason="end_turn", session_id="s",
                             usage={"input_tokens": 10, "output_tokens": 5})
 
 
-def _result():
+def p_result():
     return ResultMessage(subtype="success", duration_ms=10, duration_api_ms=8, is_error=False,
                          num_turns=1, session_id="s", usage={"input_tokens": 10, "output_tokens": 5})
 
@@ -34,8 +34,8 @@ def test_ws_endpoint_streams_a_full_turn_end_to_end(monkeypatch):
     monkeypatch.setattr(main_mod, "p_ws_auth_ok", lambda ws: True, raising=True)
 
     async def fake_query(*args, **kwargs):
-        yield _assistant()
-        yield _result()
+        yield p_assistant()
+        yield p_result()
 
     monkeypatch.setattr(claude_agent_sdk, "query", fake_query, raising=True)
 

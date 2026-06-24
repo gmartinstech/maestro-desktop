@@ -18,7 +18,7 @@ BUFFER_LIMIT = 500
 TERMINAL_STATUSES = {"completed", "stopped", "error"}
 
 
-class _SessionSeqLog:
+class p_SessionSeqLog:
     """Per-session lock + monotonic seq + recent-event ring buffer."""
 
     __slots__ = ("lock", "seq", "buffer")
@@ -31,10 +31,10 @@ class _SessionSeqLog:
 
 
 class SeqLogStore:
-    """Process-wide store. Per-session locks live inside `_SessionSeqLog`."""
+    """Process-wide store. Per-session locks live inside `p_SessionSeqLog`."""
 
     def __init__(self, persist_dir: Optional[str] = None) -> None:
-        self._per_session: dict[str, _SessionSeqLog] = {}
+        self._per_session: dict[str, p_SessionSeqLog] = {}
         # Coarse lock guards only the setdefault path; never crosses an await.
         self._dict_lock = asyncio.Lock()
         self._persist_dir = persist_dir
@@ -44,18 +44,18 @@ class SeqLogStore:
             except Exception:
                 logger.warning("seq_log: failed to create persist dir %s", persist_dir)
 
-    async def _get_or_create(self, session_id: str) -> _SessionSeqLog:
+    async def _get_or_create(self, session_id: str) -> p_SessionSeqLog:
         log = self._per_session.get(session_id)
         if log is not None:
             return log
         async with self._dict_lock:
             log = self._per_session.get(session_id)
             if log is None:
-                log = _SessionSeqLog()
+                log = p_SessionSeqLog()
                 self._per_session[session_id] = log
             return log
 
-    def _peek(self, session_id: str) -> Optional[_SessionSeqLog]:
+    def _peek(self, session_id: str) -> Optional[p_SessionSeqLog]:
         return self._per_session.get(session_id)
 
     @asynccontextmanager

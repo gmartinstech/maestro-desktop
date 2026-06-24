@@ -22,9 +22,9 @@ openai_passthrough = SubApp("openai-passthrough", openai_passthrough_lifespan)
 
 
 # Mirrors anthropic_proxy.py's GPT-5 matcher; duplicated to avoid the cross-module dep.
-_GPT5_PREFIXES = ("gpt-5",)
-_OPENAI_UPSTREAM = "https://api.openai.com/v1"
-_HOP_HEADERS = {
+P_GPT5_PREFIXES = ("gpt-5",)
+P_OPENAI_UPSTREAM = "https://api.openai.com/v1"
+P_HOP_HEADERS = {
     "host", "content-length", "connection", "keep-alive",
     "proxy-authenticate", "proxy-authorization", "te", "trailers",
     "transfer-encoding", "upgrade",
@@ -39,14 +39,14 @@ def p_is_gpt5(model: str) -> bool:
         if m.startswith(prefix):
             m = m[len(prefix):]
             break
-    return any(m.startswith(p) for p in _GPT5_PREFIXES)
+    return any(m.startswith(p) for p in P_GPT5_PREFIXES)
 
 
 # GPT-5 reasoning models reject sampling knobs: temperature must be the default
 # (only 1 is allowed), and top_p / penalties / logprobs are unsupported outright.
 # 9Router 0.3.60 is pinned and forwards whatever the user's picked model carried,
 # so we strip them at this last hop before OpenAI or the whole request 400s.
-_GPT5_UNSUPPORTED_PARAMS = (
+P_GPT5_UNSUPPORTED_PARAMS = (
     "top_p", "top_k", "frequency_penalty", "presence_penalty",
     "logprobs", "top_logprobs", "logit_bias",
 )
@@ -73,7 +73,7 @@ def scrub_gpt5_params(body: bytes) -> bytes:
     if "temperature" in parsed and parsed["temperature"] != 1:
         parsed.pop("temperature", None)
         mutated = True
-    for k in _GPT5_UNSUPPORTED_PARAMS:
+    for k in P_GPT5_UNSUPPORTED_PARAMS:
         if parsed.pop(k, None) is not None:
             mutated = True
     return json.dumps(parsed).encode("utf-8") if mutated else body
@@ -89,11 +89,11 @@ async def passthrough(rest: str, request: Request):
 
     forward_headers: dict[str, str] = {}
     for k, v in request.headers.items():
-        if k.lower() in _HOP_HEADERS:
+        if k.lower() in P_HOP_HEADERS:
             continue
         forward_headers[k] = v
 
-    upstream_url = f"{_OPENAI_UPSTREAM}/{rest}"
+    upstream_url = f"{P_OPENAI_UPSTREAM}/{rest}"
     if request.url.query:
         upstream_url = f"{upstream_url}?{request.url.query}"
 
@@ -117,7 +117,7 @@ async def passthrough(rest: str, request: Request):
 
     response_headers: dict[str, str] = {}
     for k, v in upstream_resp.headers.items():
-        if k.lower() in _HOP_HEADERS:
+        if k.lower() in P_HOP_HEADERS:
             continue
         response_headers[k] = v
 

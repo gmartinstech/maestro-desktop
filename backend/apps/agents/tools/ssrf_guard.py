@@ -27,7 +27,7 @@ class SSRFBlocked(Exception):
     """A fetch was refused because it targets a forbidden IP range."""
 
 
-_BLOCKED_V4_NETS = [
+P_BLOCKED_V4_NETS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
@@ -38,7 +38,7 @@ _BLOCKED_V4_NETS = [
     ipaddress.ip_network("198.18.0.0/15"),   # benchmarking
 ]
 
-_BLOCKED_V6_NETS = [
+P_BLOCKED_V6_NETS = [
     ipaddress.ip_network("fe80::/10"),       # link-local
     ipaddress.ip_network("fc00::/7"),        # ULA
     ipaddress.ip_network("ff00::/8"),        # multicast
@@ -65,8 +65,8 @@ def p_is_forbidden_ip(ip_str: str) -> bool:
     if ip.is_loopback:
         return False
     if ip.version == 4:
-        return any(ip in net for net in _BLOCKED_V4_NETS)
-    return any(ip in net for net in _BLOCKED_V6_NETS)
+        return any(ip in net for net in P_BLOCKED_V4_NETS)
+    return any(ip in net for net in P_BLOCKED_V6_NETS)
 
 
 async def assert_safe_url(url: str) -> str:

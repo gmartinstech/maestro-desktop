@@ -15,7 +15,7 @@ from backend.apps.tools_lib.mcp_config import sanitize_server_name
 from backend.apps.tools_lib.models import ToolDefinition
 
 
-def _mcp_tool(name: str) -> ToolDefinition:
+def p_mcp_tool(name: str) -> ToolDefinition:
     return ToolDefinition(name=name, mcp_config={"command": "x"}, enabled=True, tool_permissions={})
 
 
@@ -33,7 +33,7 @@ def test_slot_for_our_browser_and_invoke_agents_uses_inner_name():
 
 
 def test_slot_for_community_mcp_points_at_the_owning_tool():
-    tool = _mcp_tool("My Notion Server")
+    tool = p_mcp_tool("My Notion Server")
     slug = sanitize_server_name(tool.name)
     assert resolve_policy_slot(f"mcp__{slug}__notion-fetch", [tool]) == \
         PolicySlot("mcp", tool.id, "notion-fetch")
@@ -46,7 +46,7 @@ def test_slot_for_unknown_mcp_has_no_write_target():
 
 # read/write mirror the dispatch-gate branches in agent_manager
 # (effective_policy / set_tool_policy): both key through resolve_policy_slot.
-def _read(tool_name, builtin_perms, tools):
+def p_read(tool_name, builtin_perms, tools):
     slot = resolve_policy_slot(tool_name, tools)
     if slot.store == "builtin":
         return builtin_perms.get(slot.key, "ask")
@@ -57,7 +57,7 @@ def _read(tool_name, builtin_perms, tools):
     return "ask"
 
 
-def _write(tool_name, policy, builtin_perms, tools):
+def p_write(tool_name, policy, builtin_perms, tools):
     slot = resolve_policy_slot(tool_name, tools)
     if slot.store == "builtin":
         builtin_perms[slot.key] = policy
@@ -72,7 +72,7 @@ def _write(tool_name, policy, builtin_perms, tools):
 def test_always_approve_round_trips_for_every_tool_shape():
     """The invariant the old code violated: after WRITE(always_allow), the very
     next READ returns always_allow, for builtin, our agents, and community MCP."""
-    notion = _mcp_tool("Notion")
+    notion = p_mcp_tool("Notion")
     slug = sanitize_server_name("Notion")
     tools = [notion]
     builtin_perms: dict[str, str] = {}
@@ -85,21 +85,21 @@ def test_always_approve_round_trips_for_every_tool_shape():
         f"mcp__{slug}__notion-fetch",
     ]
     for tool_name in shapes:
-        assert _read(tool_name, builtin_perms, tools) != "always_allow"
-        _write(tool_name, "always_allow", builtin_perms, tools)
-        assert _read(tool_name, builtin_perms, tools) == "always_allow", \
+        assert p_read(tool_name, builtin_perms, tools) != "always_allow"
+        p_write(tool_name, "always_allow", builtin_perms, tools)
+        assert p_read(tool_name, builtin_perms, tools) == "always_allow", \
             f"{tool_name}: write did not land in the slot the gate reads"
 
 
 def test_two_actions_on_the_same_mcp_server_are_independent():
     """Approving one action must not silently approve a sibling action."""
-    tool = _mcp_tool("Notion")
+    tool = p_mcp_tool("Notion")
     slug = sanitize_server_name("Notion")
     tools = [tool]
     bp: dict[str, str] = {}
-    _write(f"mcp__{slug}__notion-fetch", "always_allow", bp, tools)
-    assert _read(f"mcp__{slug}__notion-fetch", bp, tools) == "always_allow"
-    assert _read(f"mcp__{slug}__notion-create-pages", bp, tools) == "ask"
+    p_write(f"mcp__{slug}__notion-fetch", "always_allow", bp, tools)
+    assert p_read(f"mcp__{slug}__notion-fetch", bp, tools) == "always_allow"
+    assert p_read(f"mcp__{slug}__notion-create-pages", bp, tools) == "ask"
 
 
 # ---- Integration: the same round-trip through the REAL file persistence the gate
@@ -123,7 +123,7 @@ def test_mcp_policy_survives_a_real_tool_file_reload(tmp_path, monkeypatch):
     monkeypatch.setattr(tl, "DATA_DIR", str(tmp_path))
     monkeypatch.setattr(tl, "p_tools_cache", None)
     monkeypatch.setattr(tl, "p_tools_cache_sig", None)
-    tl.save(_mcp_tool("Notion"))
+    tl.save(p_mcp_tool("Notion"))
     slug = sanitize_server_name("Notion")
     name = f"mcp__{slug}__notion-fetch"
 

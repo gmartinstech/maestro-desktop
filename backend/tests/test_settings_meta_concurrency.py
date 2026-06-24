@@ -19,7 +19,7 @@ import pytest
 from backend.main import app
 
 
-def _auth_headers():
+def p_auth_headers():
     import backend.auth as auth_mod
     if not auth_mod.TOKEN:
         import secrets
@@ -44,7 +44,7 @@ async def test_concurrent_writes_to_different_fields_both_survive(reset_settings
     base.default_mode = "agent"
     save_settings(base)
 
-    headers = _auth_headers()
+    headers = p_auth_headers()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=headers) as client:
         r1, r2 = await asyncio.gather(

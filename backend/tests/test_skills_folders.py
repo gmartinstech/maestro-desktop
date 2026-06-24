@@ -26,14 +26,14 @@ def skills_dir(tmp_path, monkeypatch):
     return d
 
 
-def _write(path, text):
+def p_write(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
 
 
 def test_corrupt_index_does_not_brick_skills_and_is_preserved(skills_dir):
-    _write(str(skills_dir / "alpha.md"), "content")
+    p_write(str(skills_dir / "alpha.md"), "content")
     with open(skills_dir / ".skills_index.json", "w") as f:
         f.write("{ not valid json")
     # Load returns empty instead of raising, and moves the bad file aside.
@@ -57,7 +57,7 @@ def test_save_index_is_atomic_no_temp_leftover(skills_dir):
 
 
 def test_flat_skill_still_syncs(skills_dir):
-    _write(str(skills_dir / "my-flat.md"), "do the flat thing")
+    p_write(str(skills_dir / "my-flat.md"), "do the flat thing")
     skills = {s.id: s for s in skills_mod.sync_skills()}
     assert "my-flat" in skills
     s = skills["my-flat"]
@@ -68,8 +68,8 @@ def test_flat_skill_still_syncs(skills_dir):
 
 def test_folder_skill_syncs_with_supporting_files(skills_dir):
     base = skills_dir / "remotion"
-    _write(str(base / "SKILL.md"), "---\nname: Remotion\ndescription: make videos\n---\nrender stuff")
-    _write(str(base / "helper.py"), "print('hi')")
+    p_write(str(base / "SKILL.md"), "---\nname: Remotion\ndescription: make videos\n---\nrender stuff")
+    p_write(str(base / "helper.py"), "print('hi')")
     skills = {s.id: s for s in skills_mod.sync_skills()}
     assert "remotion" in skills
     s = skills["remotion"]
@@ -83,7 +83,7 @@ def test_folder_skill_syncs_with_supporting_files(skills_dir):
 
 def test_folder_skill_without_extra_files_flags_false(skills_dir):
     base = skills_dir / "solo"
-    _write(str(base / "SKILL.md"), "just one file")
+    p_write(str(base / "SKILL.md"), "just one file")
     s = {x.id: x for x in skills_mod.sync_skills()}["solo"]
     assert s.dir_path == str(base)
     assert s.has_supporting_files is False
@@ -92,8 +92,8 @@ def test_folder_skill_without_extra_files_flags_false(skills_dir):
 @pytest.mark.asyncio
 async def test_delete_removes_folder(skills_dir):
     base = skills_dir / "doomed"
-    _write(str(base / "SKILL.md"), "x")
-    _write(str(base / "data.txt"), "y")
+    p_write(str(base / "SKILL.md"), "x")
+    p_write(str(base / "data.txt"), "y")
     assert base.is_dir()
     await skills_mod.delete_skill("doomed")
     assert not base.exists()
@@ -102,7 +102,7 @@ async def test_delete_removes_folder(skills_dir):
 @pytest.mark.asyncio
 async def test_update_writes_folder_skill_md(skills_dir):
     base = skills_dir / "editable"
-    _write(str(base / "SKILL.md"), "old body")
+    p_write(str(base / "SKILL.md"), "old body")
     from backend.apps.skills.models import SkillUpdate
     res = await skills_mod.update_skill("editable", SkillUpdate(content="new body", description="d"))
     assert res["ok"]
@@ -113,8 +113,8 @@ async def test_update_writes_folder_skill_md(skills_dir):
 
 def test_injection_points_at_folder_for_supporting_files(skills_dir):
     base = skills_dir / "withfiles"
-    _write(str(base / "SKILL.md"), "use the template")
-    _write(str(base / "template.html"), "<html></html>")
+    p_write(str(base / "SKILL.md"), "use the template")
+    p_write(str(base / "template.html"), "<html></html>")
 
     block = resolve_attached_skills([{"id": "withfiles", "name": "WithFiles", "content": "use the template"}])
     assert "[Using skill: WithFiles]" in block
@@ -137,8 +137,8 @@ def test_skill_injection_is_provider_agnostic_by_construction(skills_dir):
 
     # 2. A folder skill yields the body + a pointer to its folder via Read/Glob/Bash.
     base = skills_dir / "vid"
-    _write(str(base / "SKILL.md"), "render it")
-    _write(str(base / "helper.py"), "x")
+    p_write(str(base / "SKILL.md"), "render it")
+    p_write(str(base / "helper.py"), "x")
     block = resolve_attached_skills([{"id": "vid", "name": "Vid", "content": "render it"}])
     assert "[Using skill: Vid]" in block
     assert str(base) in block and "Read" in block
@@ -148,7 +148,7 @@ def test_skill_injection_is_provider_agnostic_by_construction(skills_dir):
 
 
 def test_injection_no_folder_note_for_flat_skill(skills_dir):
-    _write(str(skills_dir / "plain.md"), "plain content")
+    p_write(str(skills_dir / "plain.md"), "plain content")
     block = resolve_attached_skills([{"id": "plain", "name": "Plain", "content": "plain content"}])
     assert "[Using skill: Plain]" in block
     assert "supporting files" not in block.lower()
@@ -161,8 +161,8 @@ def test_injection_no_folder_note_for_flat_skill(skills_dir):
 def test_swarm_export_folder_skill_carries_supporting_files(skills_dir):
     from backend.apps.swarm.entities.skills import SkillExportable
     base = skills_dir / "vid"
-    _write(str(base / "SKILL.md"), "render")
-    _write(str(base / "scripts" / "go.py"), "print(1)")
+    p_write(str(base / "SKILL.md"), "render")
+    p_write(str(base / "scripts" / "go.py"), "print(1)")
     exp = SkillExportable.load("vid")
     assert exp is not None
     files = exp.files()
@@ -195,7 +195,7 @@ def test_swarm_import_always_writes_folder(skills_dir):
 async def test_create_writes_folder_and_supersedes_legacy_flat(skills_dir):
     from backend.apps.skills.models import SkillCreate
     # A pre-existing legacy flat skill of the same id...
-    _write(str(skills_dir / "notes.md"), "old flat")
+    p_write(str(skills_dir / "notes.md"), "old flat")
     # ...is superseded (not shadowed) when the user (re)creates it; folder wins,
     # and the phantom flat file is removed so there's exactly one shape on disk.
     res = await skills_mod.create_skill(SkillCreate(name="Notes", content="new body", description="d"))

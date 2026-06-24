@@ -29,13 +29,13 @@ def stores(tmp_path, monkeypatch):
     return ws_dir
 
 
-def _flat_app(html="<h1>v1</h1>"):
+def p_flat_app(html="<h1>v1</h1>"):
     o = Output(name="Flat", files={"index.html": html})
     workspace_io.save(o)
     return o
 
 
-def _webapp(ws_dir, files):
+def p_webapp(ws_dir, files):
     wsid = "wsid1"
     folder = os.path.join(str(ws_dir), wsid)
     os.makedirs(folder, exist_ok=True)
@@ -50,7 +50,7 @@ def _webapp(ws_dir, files):
 
 
 def test_flat_capture_list_and_restore(stores):
-    o = _flat_app("<h1>v1</h1>")
+    o = p_flat_app("<h1>v1</h1>")
     v1 = versions.capture(o.id, source="manual", label="v1")
     assert v1 is not None
 
@@ -75,7 +75,7 @@ def test_flat_capture_list_and_restore(stores):
 
 
 def test_dedupe_unchanged_state(stores):
-    o = _flat_app()
+    o = p_flat_app()
     v1 = versions.capture(o.id, label="a")
     v2 = versions.capture(o.id, label="b")  # nothing changed since v1
     assert v1.id == v2.id
@@ -83,7 +83,7 @@ def test_dedupe_unchanged_state(stores):
 
 
 def test_restore_no_redundant_backup_when_current_already_saved(stores):
-    o = _flat_app("<h1>v1</h1>")
+    o = p_flat_app("<h1>v1</h1>")
     versions.capture(o.id, label="v1")
     o.files = {"index.html": "<h1>v2</h1>"}
     workspace_io.save(o)
@@ -94,7 +94,7 @@ def test_restore_no_redundant_backup_when_current_already_saved(stores):
 
 
 def test_webapp_restore_preserves_env_and_removes_added_files(stores):
-    o, folder = _webapp(stores, {"index.html": "<h1>v1</h1>", "src/app.js": "console.log(1)"})
+    o, folder = p_webapp(stores, {"index.html": "<h1>v1</h1>", "src/app.js": "console.log(1)"})
     with open(os.path.join(folder, ".env"), "w") as f:
         f.write("SECRET=keepme\nFRONTEND_PORT=51000\n")
 
@@ -116,7 +116,7 @@ def test_webapp_restore_preserves_env_and_removes_added_files(stores):
 
 
 def test_branch_makes_independent_app(stores):
-    o, _ = _webapp(stores, {"index.html": "<h1>v1</h1>"})
+    o, _ = p_webapp(stores, {"index.html": "<h1>v1</h1>"})
     v1 = versions.capture(o.id, label="v1")
 
     new_id = versions.branch(o.id, v1.id)
@@ -134,7 +134,7 @@ def test_branch_makes_independent_app(stores):
 
 
 def test_delete_all_removes_history(stores):
-    o = _flat_app()
+    o = p_flat_app()
     versions.capture(o.id, label="v1")
     assert versions.list_versions(o.id)
     versions.delete_all(o.id)
@@ -144,7 +144,7 @@ def test_delete_all_removes_history(stores):
 def test_restore_is_undoable(stores):
     """Invariant: after any restore, the state you were on is recoverable (the
     pre_restore backup), so a wrong restore is never a dead end."""
-    o = _flat_app("<h1>v1</h1>")
+    o = p_flat_app("<h1>v1</h1>")
     v1 = versions.capture(o.id, label="v1")
     o.files = {"index.html": "<h1>v2</h1>"}
     workspace_io.save(o)
@@ -162,7 +162,7 @@ def test_restore_is_undoable(stores):
 
 def test_branch_does_not_mutate_source(stores):
     """Invariant: branching, then editing the copy, never touches the original."""
-    o, folder = _webapp(stores, {"index.html": "<h1>source</h1>"})
+    o, folder = p_webapp(stores, {"index.html": "<h1>source</h1>"})
     v1 = versions.capture(o.id, label="v1")
 
     new_id = versions.branch(o.id, v1.id)
@@ -193,7 +193,7 @@ def test_restore_clears_empty_schema(stores):
 def test_unchanged_files_are_not_duplicated(stores):
     """The whole efficiency point: changing 1 of 10 files across two versions
     adds 1 blob, not 10. Storage is O(unique content), not O(files x versions)."""
-    o, folder = _webapp(stores, {f"f{i}.txt": f"content {i}" for i in range(10)})
+    o, folder = p_webapp(stores, {f"f{i}.txt": f"content {i}" for i in range(10)})
     versions.capture(o.id, label="v1")
     with open(os.path.join(folder, "f0.txt"), "w") as f:
         f.write("changed")

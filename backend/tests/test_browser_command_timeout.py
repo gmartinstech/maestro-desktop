@@ -13,14 +13,14 @@ import pytest
 from backend.apps.agents.core import ws_manager as wsm
 
 
-class _FakeSock:
+class p_FakeSock:
     async def send_text(self, _):
         return None
 
 
-def _mgr():
+def p_mgr():
     m = wsm.ConnectionManager()
-    m.global_connections = [_FakeSock()]  # get past the 'no dashboard' guard
+    m.global_connections = [p_FakeSock()]  # get past the 'no dashboard' guard
     return m
 
 
@@ -39,7 +39,7 @@ async def test_hung_command_returns_fast_at_the_bound(monkeypatch):
     # the command must return a timeout error at ~the (default) bound, not hang.
     monkeypatch.setattr(wsm, "BROWSER_CMD_TIMEOUT_DEFAULT", 0.3)
     monkeypatch.setattr(wsm, "BROWSER_CMD_TIMEOUTS", {"navigate": 0.6})
-    m = _mgr()
+    m = p_mgr()
     t0 = time.monotonic()
     res = await m.send_browser_command("rid1", "get_text", "b1", {})  # never resolved
     elapsed = time.monotonic() - t0
@@ -51,7 +51,7 @@ async def test_hung_command_returns_fast_at_the_bound(monkeypatch):
 async def test_navigate_gets_the_longer_leash(monkeypatch):
     monkeypatch.setattr(wsm, "BROWSER_CMD_TIMEOUT_DEFAULT", 0.3)
     monkeypatch.setattr(wsm, "BROWSER_CMD_TIMEOUTS", {"navigate": 0.7})
-    m = _mgr()
+    m = p_mgr()
     t0 = time.monotonic()
     await m.send_browser_command("rid2", "navigate", "b1", {"url": "x"})
     elapsed = time.monotonic() - t0
@@ -64,7 +64,7 @@ async def test_lost_first_delivery_heals_via_rebroadcast(monkeypatch):
     # rebroadcast interval must reach the (reconnected) client and succeed
     monkeypatch.setattr(wsm, "BROWSER_CMD_TIMEOUT_DEFAULT", 5.0)
     monkeypatch.setattr(wsm, "BROWSER_CMD_REBROADCAST_S", 0.1)
-    m = _mgr()
+    m = p_mgr()
     sends = []
 
     class p_CountingSock:
@@ -84,7 +84,7 @@ async def test_lost_first_delivery_heals_via_rebroadcast(monkeypatch):
 async def test_a_resolved_command_returns_immediately(monkeypatch):
     # a healthy command returns the moment the renderer resolves it, not at the bound
     monkeypatch.setattr(wsm, "BROWSER_CMD_TIMEOUT_DEFAULT", 5.0)
-    m = _mgr()
+    m = p_mgr()
 
     async def p_resolve_soon():
         await asyncio.sleep(0.05)

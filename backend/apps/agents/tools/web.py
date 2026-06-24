@@ -12,9 +12,9 @@ from typeguard import typechecked
 from backend.apps.agents.tools.base import BaseTool, ToolContext
 from backend.apps.agents.tools.ssrf_guard import SSRFBlocked, safe_fetch
 
-_HTTP_TIMEOUT = 30
-_MAX_OUTPUT_BYTES = 250 * 1024  # ~250 KB covers ~95% of articles/wikis/docs.
-_USER_AGENT = (
+P_HTTP_TIMEOUT = 30
+P_MAX_OUTPUT_BYTES = 250 * 1024  # ~250 KB covers ~95% of articles/wikis/docs.
+P_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
@@ -93,7 +93,7 @@ def should_register_web_mcp(
     return not has_anthropic_path
 
 
-def p_truncate(text: str, limit: int = _MAX_OUTPUT_BYTES) -> str:
+def p_truncate(text: str, limit: int = P_MAX_OUTPUT_BYTES) -> str:
     if len(text) > limit:
         return text[:limit] + "\n... (output truncated)"
     return text
@@ -155,9 +155,9 @@ class WebSearchTool(BaseTool):
     async def _search_ddg(query: str, num_results: int) -> str:
         """Query DuckDuckGo HTML endpoint and parse results."""
         async with httpx.AsyncClient(
-            timeout=_HTTP_TIMEOUT,
+            timeout=P_HTTP_TIMEOUT,
             follow_redirects=True,
-            headers={"User-Agent": _USER_AGENT},
+            headers={"User-Agent": P_USER_AGENT},
         ) as client:
             resp = await client.post(
                 "https://html.duckduckgo.com/html/",
@@ -263,8 +263,8 @@ class WebFetchTool(BaseTool):
             resp = await safe_fetch(
                 url,
                 method="GET",
-                headers={"User-Agent": _USER_AGENT},
-                timeout=_HTTP_TIMEOUT,
+                headers={"User-Agent": P_USER_AGENT},
+                timeout=P_HTTP_TIMEOUT,
             )
             resp.raise_for_status()
         except SSRFBlocked as exc:

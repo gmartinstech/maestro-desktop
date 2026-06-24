@@ -23,8 +23,8 @@ import pytest
 # backend modules.
 # ---------------------------------------------------------------------------
 
-_TMPROOT = tempfile.mkdtemp(prefix="openswarm-phase1-stress-")
-os.environ.setdefault("OPENSWARM_DATA_DIR", _TMPROOT)
+P_TMPROOT = tempfile.mkdtemp(prefix="openswarm-phase1-stress-")
+os.environ.setdefault("OPENSWARM_DATA_DIR", P_TMPROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ def test_modes_lifespan_deletes_stale_chat():
                 "system_prompt": "old", "tools": ["AskUserQuestion"],
             }, f)
         with patch.object(modes_mod, "DATA_DIR", td):
-            asyncio.run(_run_lifespan(modes_mod))
+            asyncio.run(p_run_lifespan(modes_mod))
         assert not os.path.exists(chat_path), "stale built-in chat.json should be removed"
 
     # User-customized: leave alone
@@ -128,11 +128,11 @@ def test_modes_lifespan_deletes_stale_chat():
                 "system_prompt": "user wrote this",
             }, f)
         with patch.object(modes_mod, "DATA_DIR", td):
-            asyncio.run(_run_lifespan(modes_mod))
+            asyncio.run(p_run_lifespan(modes_mod))
         assert os.path.exists(chat_path), "user-customized chat.json must NOT be deleted"
 
 
-async def _run_lifespan(modes_mod):
+async def p_run_lifespan(modes_mod):
     async with modes_mod.modes_lifespan():
         pass
 

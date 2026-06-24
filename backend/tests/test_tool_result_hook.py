@@ -11,7 +11,7 @@ from backend.apps.agents.manager.streaming.hook_context import HookContext
 from backend.apps.agents.manager.streaming import tool_result_hook
 
 
-def _ctx(registry: dict) -> HookContext:
+def p_ctx(registry: dict) -> HookContext:
     session = AgentSession(name="t", model="sonnet", dashboard_id="d")
     registry[session.id] = session
     return HookContext(
@@ -27,7 +27,7 @@ def _ctx(registry: dict) -> HookContext:
 @pytest.mark.asyncio
 async def test_normal_tool_result_appends_message_and_continues():
     registry: dict = {}
-    ctx = _ctx(registry)
+    ctx = p_ctx(registry)
     before = len(ctx.session.messages)
     with patch.object(tool_result_hook.ws_manager, "send_to_session", new=AsyncMock()) as send:
         out = await tool_result_hook.post_tool_hook(
@@ -44,7 +44,7 @@ async def test_normal_tool_result_appends_message_and_continues():
 @pytest.mark.asyncio
 async def test_agent_tool_spawns_subsession_into_live_registry():
     registry: dict = {}
-    ctx = _ctx(registry)
+    ctx = p_ctx(registry)
     parent_id = ctx.session_id
     raw = {
         "content": [{"type": "text", "text": "sub-agent did the work"}],

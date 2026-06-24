@@ -32,15 +32,15 @@ from unittest.mock import patch, AsyncMock, MagicMock
 import pytest
 
 
-_TMPROOT = tempfile.mkdtemp(prefix="openswarm-v2-invariants-")
-os.environ.setdefault("OPENSWARM_DATA_DIR", _TMPROOT)
+P_TMPROOT = tempfile.mkdtemp(prefix="openswarm-v2-invariants-")
+os.environ.setdefault("OPENSWARM_DATA_DIR", P_TMPROOT)
 
 
 # ---------------------------------------------------------------------------
 # Fixture: build a fake ToolDefinition without touching disk.
 # ---------------------------------------------------------------------------
 
-def _fake_tool(
+def p_fake_tool(
     name: str,
     *,
     enabled: bool = True,
@@ -75,9 +75,9 @@ async def test_gate_blocks_when_active_mcps_empty():
     """Connected MCPs + active_mcps=[] → SDK gets empty mcp_servers dict."""
     from backend.apps.agents.agent_manager import AgentManager
     fake_tools = [
-        _fake_tool("Gmail"),
-        _fake_tool("Slack"),
-        _fake_tool("Notion"),
+        p_fake_tool("Gmail"),
+        p_fake_tool("Slack"),
+        p_fake_tool("Notion"),
     ]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
@@ -95,9 +95,9 @@ async def test_gate_allows_only_activated_servers():
     """active_mcps=['gmail'] → only gmail server in dispatch dict, others blocked."""
     from backend.apps.agents.agent_manager import AgentManager
     fake_tools = [
-        _fake_tool("Gmail"),
-        _fake_tool("Slack"),
-        _fake_tool("Notion"),
+        p_fake_tool("Gmail"),
+        p_fake_tool("Slack"),
+        p_fake_tool("Notion"),
     ]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
@@ -116,7 +116,7 @@ async def test_gate_allows_only_activated_servers():
 async def test_gate_unset_active_mcps_legacy_allows_all():
     """Pre-gate sessions use active_mcps=None → everything allowed (back-compat)."""
     from backend.apps.agents.agent_manager import AgentManager
-    fake_tools = [_fake_tool("Gmail"), _fake_tool("Slack")]
+    fake_tools = [p_fake_tool("Gmail"), p_fake_tool("Slack")]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
         mgr = AgentManager()
@@ -132,7 +132,7 @@ async def test_gate_unset_active_mcps_legacy_allows_all():
 async def test_gate_disabled_tool_blocked_even_when_activated():
     """Tool with enabled=False stays blocked even if in active_mcps."""
     from backend.apps.agents.agent_manager import AgentManager
-    fake_tools = [_fake_tool("Gmail", enabled=False)]
+    fake_tools = [p_fake_tool("Gmail", enabled=False)]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools):
         mgr = AgentManager()
         result = await mgr.build_mcp_servers(
@@ -146,7 +146,7 @@ async def test_gate_disabled_tool_blocked_even_when_activated():
 async def test_gate_unauthed_tool_blocked():
     """Tool with auth_status='disconnected' stays blocked."""
     from backend.apps.agents.agent_manager import AgentManager
-    fake_tools = [_fake_tool("Gmail", auth_status="disconnected")]
+    fake_tools = [p_fake_tool("Gmail", auth_status="disconnected")]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools):
         mgr = AgentManager()
         result = await mgr.build_mcp_servers(
@@ -160,7 +160,7 @@ async def test_gate_unauthed_tool_blocked():
 async def test_gate_allowed_tools_filter_intersects_active_mcps():
     """Activate gmail+slack but allowed_tools only has gmail → only gmail passes."""
     from backend.apps.agents.agent_manager import AgentManager
-    fake_tools = [_fake_tool("Gmail"), _fake_tool("Slack")]
+    fake_tools = [p_fake_tool("Gmail"), p_fake_tool("Slack")]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
         mgr = AgentManager()
@@ -182,7 +182,7 @@ async def test_gate_stress_random_activations():
     for _ in range(40):
         connected_count = random.randint(2, 8)
         connected_idx = random.sample(range(len(server_pool)), connected_count)
-        fake_tools = [_fake_tool(raw_names[i]) for i in connected_idx]
+        fake_tools = [p_fake_tool(raw_names[i]) for i in connected_idx]
         connected_sanitized = [server_pool[i] for i in connected_idx]
 
         # active set is a random subset of connected
@@ -259,7 +259,7 @@ async def test_gated_server_names_surface_only_inactive_servers():
     """The steer list must mirror the gate: connected-but-not-active servers
     only, never one that's already activated (callable) or denied."""
     from backend.apps.agents.manager.prompt.tool_catalog import gated_mcp_server_names
-    fake_tools = [_fake_tool("Gmail"), _fake_tool("Slack"), _fake_tool("Notion")]
+    fake_tools = [p_fake_tool("Gmail"), p_fake_tool("Slack"), p_fake_tool("Notion")]
     with patch("backend.apps.agents.manager.prompt.tool_catalog.load_all_tools", return_value=fake_tools):
         names = gated_mcp_server_names(
             allowed_tools=["mcp:Gmail", "mcp:Slack", "mcp:Notion"],
@@ -272,7 +272,7 @@ async def test_gated_server_names_surface_only_inactive_servers():
 @pytest.mark.asyncio
 async def test_gated_server_names_empty_when_all_active():
     from backend.apps.agents.manager.prompt.tool_catalog import gated_mcp_server_names
-    fake_tools = [_fake_tool("Gmail")]
+    fake_tools = [p_fake_tool("Gmail")]
     with patch("backend.apps.agents.manager.prompt.tool_catalog.load_all_tools", return_value=fake_tools):
         assert gated_mcp_server_names(["mcp:Gmail"], ["gmail"]) == []
 
@@ -962,7 +962,7 @@ def test_active_mcps_default_factory_creates_new_list():
 async def test_concurrent_gate_calls_isolated():
     """Two concurrent _build_mcp_servers calls with different active_mcps must not cross-contaminate."""
     from backend.apps.agents.agent_manager import AgentManager
-    fake_tools = [_fake_tool("Gmail"), _fake_tool("Slack"), _fake_tool("Notion")]
+    fake_tools = [p_fake_tool("Gmail"), p_fake_tool("Slack"), p_fake_tool("Notion")]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
         mgr = AgentManager()
@@ -1170,7 +1170,7 @@ def test_custom_provider_round_trip():
 async def test_gate_partially_denied_tool_blocked():
     """If permissions has _entirely_denied=True it's blocked."""
     from backend.apps.agents.manager.prompt.tool_catalog import is_fully_denied
-    fake = _fake_tool("Gmail", permissions={
+    fake = p_fake_tool("Gmail", permissions={
         "_tool_descriptions": {"send_email": "Send email"},
         "send_email": "deny",
     })
@@ -1182,7 +1182,7 @@ async def test_gate_partially_denied_tool_blocked():
 async def test_gate_handles_missing_refresh_token_gracefully():
     """Tool with auth_status='configured' and no oauth shouldn't crash the gate."""
     from backend.apps.agents.agent_manager import AgentManager
-    fake = _fake_tool("MyApiTool", auth_status="configured")
+    fake = p_fake_tool("MyApiTool", auth_status="configured")
     fake.auth_type = None  # no oauth
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=[fake]):
         mgr = AgentManager()
@@ -2648,7 +2648,7 @@ def test_custom_provider_with_very_long_name_still_works():
 # ===========================================================================
 
 
-def _make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=None):
+def p_make_mock_9router(initial_nodes=None, initial_conns=None, fail_endpoints=None):
     """Build a mock httpx.AsyncClient that simulates 9Router's HTTP API.
     Tracks state across requests so we can assert idempotency.
     Returns (mock_client_class, state_dict), state_dict is mutated by calls."""
@@ -2770,10 +2770,10 @@ def test_sync_custom_providers_creates_node_and_connection_for_new_provider():
     from backend.apps.nine_router import sync_custom_providers
     from backend.apps.settings.models import CustomProvider
 
-    MockClient, state = _make_mock_9router()
+    MockClient, state = p_make_mock_9router()
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
-         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+         upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([
             CustomProvider(name="Ollama Cloud", base_url="https://ollama.com/v1",
                           api_key="key1", models=[]),
@@ -2802,10 +2802,10 @@ def test_sync_custom_providers_appends_v1_when_baseurl_has_no_path():
     from backend.apps.nine_router import sync_custom_providers
     from backend.apps.settings.models import CustomProvider
 
-    MockClient, state = _make_mock_9router()
+    MockClient, state = p_make_mock_9router()
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
-         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+         upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([
             CustomProvider(name="Local Ollama", base_url="http://10.0.0.5:11434",
                            api_key="", models=[]),
@@ -2846,10 +2846,10 @@ def test_sync_custom_providers_updates_existing_node_in_place():
             "apiKey": "old-key",
         },
     ]
-    MockClient, state = _make_mock_9router(existing_nodes, existing_conns)
+    MockClient, state = p_make_mock_9router(existing_nodes, existing_conns)
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
-         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return(existing_conns)):
+         upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return(existing_conns)):
         asyncio.run(sync_custom_providers([
             CustomProvider(
                 name="Together AI",
@@ -2893,10 +2893,10 @@ def test_sync_custom_providers_deletes_orphaned_managed_nodes():
             "type": "openai-compatible",
         },
     ]
-    MockClient, state = _make_mock_9router(existing_nodes, [])
+    MockClient, state = p_make_mock_9router(existing_nodes, [])
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
-         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+         upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([]))  # empty list → delete all managed
 
     deletes = [c for c in state["calls"] if c[0] == "DELETE"]
@@ -2915,10 +2915,10 @@ def test_sync_custom_providers_skips_incomplete_entries():
     from backend.apps.nine_router import sync_custom_providers
     from backend.apps.settings.models import CustomProvider
 
-    MockClient, state = _make_mock_9router()
+    MockClient, state = p_make_mock_9router()
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
-         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+         upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([
             CustomProvider(name="", base_url="https://x/v1", api_key="k"),
             CustomProvider(name="OnlyName", base_url="", api_key="k"),
@@ -2937,10 +2937,10 @@ def test_sync_custom_providers_handles_node_post_failure_without_crashing():
     from backend.apps.nine_router import sync_custom_providers
     from backend.apps.settings.models import CustomProvider
 
-    MockClient, state = _make_mock_9router(fail_endpoints={"POST:provider-nodes"})
+    MockClient, state = p_make_mock_9router(fail_endpoints={"POST:provider-nodes"})
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
-         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+         upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         # Should NOT raise.
         asyncio.run(sync_custom_providers([
             CustomProvider(name="A", base_url="https://a/v1", api_key="k1"),
@@ -2956,10 +2956,10 @@ def test_sync_custom_providers_three_distinct_providers_create_three_nodes():
     from backend.apps.nine_router import sync_custom_providers
     from backend.apps.settings.models import CustomProvider
 
-    MockClient, state = _make_mock_9router()
+    MockClient, state = p_make_mock_9router()
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
-         upatch("backend.apps.nine_router.get_providers", new=lambda: _async_return([])):
+         upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([
             CustomProvider(name="Ollama Cloud", base_url="https://ollama.com/v1", api_key="k1"),
             CustomProvider(name="Together AI", base_url="https://api.together.xyz/v1", api_key="k2"),
@@ -2976,7 +2976,7 @@ def test_sync_custom_providers_three_distinct_providers_create_three_nodes():
         f"prefixes: {prefixes}"
 
 
-def _async_return(value):
+def p_async_return(value):
     """Helper: return a coroutine that resolves to value (for mocking
     `get_providers` which is called WITHOUT being awaited as a function)."""
     async def p_f():
@@ -3025,7 +3025,7 @@ def test_view_builder_mode_has_default_folder():
 @pytest.mark.asyncio
 async def test_gate_100_sequential_calls_no_leak():
     from backend.apps.agents.agent_manager import AgentManager
-    fake_tools = [_fake_tool(f"Server{i}") for i in range(10)]
+    fake_tools = [p_fake_tool(f"Server{i}") for i in range(10)]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
         mgr = AgentManager()
@@ -3140,7 +3140,7 @@ async def test_e2e_session_lifecycle_with_mcp_activation():
     """
     from backend.apps.agents.agent_manager import AgentManager
     from backend.apps.agents.core.models import AgentSession
-    fake_tools = [_fake_tool("Gmail"), _fake_tool("Slack")]
+    fake_tools = [p_fake_tool("Gmail"), p_fake_tool("Slack")]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools", return_value=fake_tools), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
         mgr = AgentManager()
@@ -3185,7 +3185,7 @@ async def test_e2e_50_random_activation_sequences():
     raw_names = [r for r, _ in server_pool]
     sanitized = [s for _, s in server_pool]
     with patch("backend.apps.agents.manager.RunSupportMixin.load_all_tools",
-               return_value=[_fake_tool(r) for r in raw_names]), \
+               return_value=[p_fake_tool(r) for r in raw_names]), \
          patch("backend.apps.agents.manager.RunSupportMixin.refresh_google_token", new=AsyncMock(return_value=True)):
         mgr = AgentManager()
         for _ in range(50):

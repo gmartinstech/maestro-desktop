@@ -10,7 +10,7 @@ from backend.apps.agents.core.models import AgentSession
 from backend.apps.agents.manager.prompt import system_prompt as sp
 
 
-def _compose(session: AgentSession):
+def p_compose(session: AgentSession):
     with patch.object(sp, "build_browser_context", return_value=None), \
          patch.object(sp, "build_mcp_registry_summary", return_value=None), \
          patch.object(sp, "build_selected_app_context", return_value=None), \
@@ -23,7 +23,7 @@ def _compose(session: AgentSession):
 
 def test_base_composition_includes_default_and_time_pin():
     session = AgentSession(name="t", model="sonnet", dashboard_id="d")
-    out = _compose(session)
+    out = p_compose(session)
     assert "You are a helpful agent." in out
     assert "<current_time>" in out  # the wall-clock pin is always appended
 
@@ -31,7 +31,7 @@ def test_base_composition_includes_default_and_time_pin():
 def test_view_builder_appends_live_skill_block():
     session = AgentSession(name="t", model="sonnet", dashboard_id="d", mode="view-builder")
     with patch("backend.apps.outputs.view_builder_templates.load_app_builder_skill", return_value="SKILL BODY"):
-        out = _compose(session)
+        out = p_compose(session)
     assert "<app_builder_reference>" in out
     assert "SKILL BODY" in out
 

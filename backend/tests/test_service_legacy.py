@@ -19,18 +19,18 @@ from uuid import uuid4
 import pytest
 
 # Sandbox the data dir before any module import touches settings on disk.
-_tmpdir = tempfile.mkdtemp()
-os.environ.setdefault("OPENSWARM_DATA_DIR", _tmpdir)
+p_tmpdir = tempfile.mkdtemp()
+os.environ.setdefault("OPENSWARM_DATA_DIR", p_tmpdir)
 
 # Captured syncs from this test run.
-_captured_syncs: list[dict] = []
+p_captured_syncs: list[dict] = []
 
 
 @pytest.fixture(autouse=True)
 def reset_captured_syncs():
-    _captured_syncs.clear()
+    p_captured_syncs.clear()
     yield
-    _captured_syncs.clear()
+    p_captured_syncs.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +76,7 @@ def install_sync_sink():
         props.setdefault("os", cs.get("os", ""))
         props.setdefault("platform", cs.get("os", ""))
 
-        _captured_syncs.append({
+        p_captured_syncs.append({
             "kind": kind,
             "distinct_id": cs.get("install_id", ""),
             "properties": props,
@@ -123,14 +123,14 @@ def mock_sessions_dir(tmp_path):
 def syncs(kind: str | None = None) -> list[dict]:
     """Return captured syncs, optionally filtered by inferred kind."""
     if kind:
-        return [s for s in _captured_syncs if s["kind"] == kind]
-    return list(_captured_syncs)
+        return [s for s in p_captured_syncs if s["kind"] == kind]
+    return list(p_captured_syncs)
 
 
 def last_sync(kind: str) -> dict:
     """Return the last captured sync of a given inferred kind."""
     matching = syncs(kind)
-    assert matching, f"No {kind} syncs captured. Got: {[s['kind'] for s in _captured_syncs]}"
+    assert matching, f"No {kind} syncs captured. Got: {[s['kind'] for s in p_captured_syncs]}"
     return matching[-1]
 
 

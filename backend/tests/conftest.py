@@ -13,7 +13,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _isolate_browser_state(monkeypatch):
+def p_isolate_browser_state(monkeypatch):
     skills_dir = tempfile.mkdtemp(prefix="os_skills_")
     metrics_dir = tempfile.mkdtemp(prefix="os_metrics_")
     playbook_dir = tempfile.mkdtemp(prefix="os_playbook_")

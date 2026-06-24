@@ -41,14 +41,14 @@ KNOWN_SECRET_FIELDS = [
 ]
 
 
-def _all_model_values() -> list[str]:
+def p_all_model_values() -> list[str]:
     vals = [m["value"] for rows in BUILTIN_MODELS.values() for m in rows]
     # Plus synthesized lanes the resolver must also place.
     vals += ["or:anthropic/claude-3.5", "custom/lmstudio/llama-3", "totally-made-up-model"]
     return vals
 
 
-def _settings_with(mode: str, keys: set[str], custom: bool = False) -> AppSettings:
+def p_settings_with(mode: str, keys: set[str], custom: bool = False) -> AppSettings:
     s = AppSettings(connection_mode=mode)
     if "anthropic" in keys:
         s.anthropic_api_key = "sk-ant-live-aaaa"
@@ -75,11 +75,11 @@ def test_live_api_key_can_never_be_blanked_but_others_can():
     key_subsets = [set(c) for r in range(5)
                    for c in itertools.combinations(["anthropic", "openai", "google", "openrouter"], r)]
     checked_api_key_runs = 0
-    for model in _all_model_values():
+    for model in p_all_model_values():
         for mode in CONNECTION_MODES:
             for keys in key_subsets:
                 for custom in (False, True):
-                    s = _settings_with(mode, keys, custom=custom)
+                    s = p_settings_with(mode, keys, custom=custom)
                     p = resolve_powering_credential(model, s)
 
                     if p.kind == "api_key" and p.protected_field:
@@ -114,7 +114,7 @@ def test_live_api_key_can_never_be_blanked_but_others_can():
 
 
 def test_custom_provider_run_protects_its_entry():
-    s = _settings_with("own_key", set(), custom=True)
+    s = p_settings_with("own_key", set(), custom=True)
     p = resolve_powering_credential("custom/lmstudio/llama-3", s)
     assert p.kind == "api_key" and p.provider == "custom"
 
@@ -132,7 +132,7 @@ def test_disconnect_all_models_spec_scenario():
     """The spec's worked example: Claude (api key) + OpenAI (api key) both
     connected, run on an Anthropic model, asked to disconnect everything. It
     must refuse to kill Claude (the live one) and allow killing OpenAI."""
-    s = _settings_with("own_key", {"anthropic", "openai"})
+    s = p_settings_with("own_key", {"anthropic", "openai"})
     p = resolve_powering_credential("opus-4-8", s)  # default Anthropic row, own_key -> api key
     assert p.kind == "api_key" and p.protected_field == "anthropic_api_key"
     assert write_would_suicide("anthropic_api_key", "", p)        # refuse self
@@ -153,8 +153,8 @@ def test_every_shipped_model_lane_classifies():
     """A new model row that the resolver can't place would silently fall to the
     fail-safe 'unknown' lane (over-blocking every key). Force every shipped row
     to resolve to a real api_key/subscription so new lanes get classified."""
-    s_pro = _settings_with("openswarm-pro", {"anthropic", "openai", "google", "openrouter"})
-    s_key = _settings_with("own_key", {"anthropic", "openai", "google", "openrouter"})
+    s_pro = p_settings_with("openswarm-pro", {"anthropic", "openai", "google", "openrouter"})
+    s_key = p_settings_with("own_key", {"anthropic", "openai", "google", "openrouter"})
     for rows in BUILTIN_MODELS.values():
         for m in rows:
             for s in (s_pro, s_key):
@@ -186,7 +186,7 @@ def test_redaction_fail_safe_catches_misnamed_secret_by_value():
 
 
 def test_redact_settings_never_emits_a_raw_secret():
-    s = _settings_with("openswarm-pro", {"anthropic", "openai", "google", "openrouter"}, custom=True)
+    s = p_settings_with("openswarm-pro", {"anthropic", "openai", "google", "openrouter"}, custom=True)
     s.claude_subscription_token = "should-never-appear"
     raw = s.model_dump()
     red = redact_settings(raw)

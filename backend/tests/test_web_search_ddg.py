@@ -15,7 +15,7 @@ import pytest
 from backend.apps.agents.tools.web import WebSearchTool, DDGRateLimited
 
 
-class _FakeResp:
+class p_FakeResp:
     def __init__(self, status_code: int, text: str):
         self.status_code = status_code
         self.text = text
@@ -25,9 +25,9 @@ class _FakeResp:
             raise httpx.HTTPStatusError("err", request=None, response=None)
 
 
-class _FakeClient:
+class p_FakeClient:
     """Stands in for httpx.AsyncClient; returns a canned response."""
-    def __init__(self, resp: _FakeResp):
+    def __init__(self, resp: p_FakeResp):
         self._resp = resp
 
     async def __aenter__(self):
@@ -40,12 +40,12 @@ class _FakeClient:
         return self._resp
 
 
-def _patch_client(monkeypatch, resp: _FakeResp):
-    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _FakeClient(resp))
+def p_patch_client(monkeypatch, resp: p_FakeResp):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: p_FakeClient(resp))
 
 
 # One real organic result + one sponsored (ad) row in DDG's html markup.
-_HTML_WITH_AD = """
+P_HTML_WITH_AD = """
 <div class="result results_links_deep">
   <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Freal&amp;rut=x">Real Result Title</a>
   <a class="result__snippet">A genuine snippet about the topic.</a>
@@ -59,14 +59,14 @@ _HTML_WITH_AD = """
 
 @pytest.mark.asyncio
 async def test_202_raises_rate_limited_not_empty(monkeypatch):
-    _patch_client(monkeypatch, _FakeResp(202, "<html>throttle challenge, no results</html>"))
+    p_patch_client(monkeypatch, p_FakeResp(202, "<html>throttle challenge, no results</html>"))
     with pytest.raises(DDGRateLimited):
         await WebSearchTool._search_ddg("anything", 5)
 
 
 @pytest.mark.asyncio
 async def test_execute_reports_rate_limit_clearly(monkeypatch):
-    _patch_client(monkeypatch, _FakeResp(202, "throttle"))
+    p_patch_client(monkeypatch, p_FakeResp(202, "throttle"))
     parts = await WebSearchTool().execute({"query": "x", "num_results": 5}, None)
     msg = parts[0]["text"].lower()
     assert "rate-limit" in msg
@@ -75,7 +75,7 @@ async def test_execute_reports_rate_limit_clearly(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ads_are_stripped_real_results_kept(monkeypatch):
-    _patch_client(monkeypatch, _FakeResp(200, _HTML_WITH_AD))
+    p_patch_client(monkeypatch, p_FakeResp(200, P_HTML_WITH_AD))
     out = await WebSearchTool._search_ddg("topic", 5)
     assert "example.com/real" in out
     assert "Real Result Title" in out
@@ -88,6 +88,6 @@ async def test_ads_are_stripped_real_results_kept(monkeypatch):
 @pytest.mark.asyncio
 async def test_genuinely_empty_is_not_a_rate_limit(monkeypatch):
     # 200 with no result blocks is a real empty result set, not a throttle.
-    _patch_client(monkeypatch, _FakeResp(200, "<html><body>nothing here</body></html>"))
+    p_patch_client(monkeypatch, p_FakeResp(200, "<html><body>nothing here</body></html>"))
     out = await WebSearchTool._search_ddg("zxcvqwer no hits", 5)
     assert out == ""

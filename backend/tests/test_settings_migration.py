@@ -22,7 +22,7 @@ def settings_file(tmp_path, monkeypatch):
     return f
 
 
-def _write(path, obj):
+def p_write(path, obj):
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(obj, fh)
 
@@ -60,7 +60,7 @@ def test_no_file_returns_defaults(settings_file):
 
 def test_minimal_old_file_fills_missing_with_defaults(settings_file):
     # An old build wrote only a couple of fields; everything else must default.
-    _write(settings_file, {"theme": "light"})
+    p_write(settings_file, {"theme": "light"})
     s = store.load_settings()
     assert s.theme == "light"
     assert s.default_model == "sonnet"  # filled from default
@@ -68,7 +68,7 @@ def test_minimal_old_file_fills_missing_with_defaults(settings_file):
 
 
 def test_legacy_fields_migrated_end_to_end(settings_file):
-    _write(settings_file, {"connection_mode": "managed", "openswarm_auth_token": "tok"})
+    p_write(settings_file, {"connection_mode": "managed", "openswarm_auth_token": "tok"})
     s = store.load_settings()
     assert s.connection_mode == "openswarm-pro"
     assert s.openswarm_bearer_token == "tok"
@@ -76,14 +76,14 @@ def test_legacy_fields_migrated_end_to_end(settings_file):
 
 def test_install_id_and_first_opened_continuity(settings_file):
     # The identity carried across upgrades must survive a load untouched.
-    _write(settings_file, {"installation_id": "abc-123", "first_opened_at": "2025-01-01T00:00:00Z"})
+    p_write(settings_file, {"installation_id": "abc-123", "first_opened_at": "2025-01-01T00:00:00Z"})
     s = store.load_settings()
     assert s.installation_id == "abc-123"
     assert s.first_opened_at == "2025-01-01T00:00:00Z"
 
 
 def test_null_system_prompt_backfilled(settings_file):
-    _write(settings_file, {"default_system_prompt": None})
+    p_write(settings_file, {"default_system_prompt": None})
     assert store.load_settings().default_system_prompt == DEFAULT_SYSTEM_PROMPT
 
 
@@ -91,7 +91,7 @@ def test_null_system_prompt_backfilled(settings_file):
 
 def test_unknown_removed_fields_are_ignored(settings_file):
     # A field that existed in a future/older schema but not this one must not crash.
-    _write(settings_file, {"theme": "light", "a_field_we_removed": 999, "another_ghost": {"x": 1}})
+    p_write(settings_file, {"theme": "light", "a_field_we_removed": 999, "another_ghost": {"x": 1}})
     s = store.load_settings()
     assert s.theme == "light"
 
@@ -99,7 +99,7 @@ def test_unknown_removed_fields_are_ignored(settings_file):
 def test_type_drifted_field_reverts_to_default_keeps_rest(settings_file):
     # dismissed_mcp_suggestions is dict[str,str] now; an old build stored a list.
     # The bad field must revert to its default, every valid field must survive.
-    _write(settings_file, {"theme": "light", "dismissed_mcp_suggestions": ["legacy", "list"]})
+    p_write(settings_file, {"theme": "light", "dismissed_mcp_suggestions": ["legacy", "list"]})
     s = store.load_settings()
     assert s.theme == "light"
     assert s.dismissed_mcp_suggestions == {}
@@ -107,14 +107,14 @@ def test_type_drifted_field_reverts_to_default_keeps_rest(settings_file):
 
 def test_retired_literal_value_reverts_to_default(settings_file):
     # default_thinking_level is a Literal; a retired value must not brick load.
-    _write(settings_file, {"theme": "light", "default_thinking_level": "ultra"})
+    p_write(settings_file, {"theme": "light", "default_thinking_level": "ultra"})
     s = store.load_settings()
     assert s.theme == "light"
     assert s.default_thinking_level == "auto"
 
 
 def test_multiple_bad_fields_all_revert_valid_survive(settings_file):
-    _write(settings_file, {
+    p_write(settings_file, {
         "theme": "light",
         "default_thinking_level": "ultra",       # retired literal
         "dismissed_mcp_suggestions": [1, 2, 3],   # wrong type
@@ -138,7 +138,7 @@ def test_corrupt_json_returns_defaults_and_preserves_file(settings_file):
 
 
 def test_non_dict_top_level_returns_defaults(settings_file):
-    _write(settings_file, ["not", "an", "object"])
+    p_write(settings_file, ["not", "an", "object"])
     s = store.load_settings()
     assert s.theme == "dark"
     assert os.path.exists(settings_file + ".corrupt")

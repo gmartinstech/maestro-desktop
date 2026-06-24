@@ -25,7 +25,7 @@ def skill_store(tmp_path, monkeypatch):
     return d
 
 
-def _make_skill(d, slug, name, content, description="desc"):
+def p_make_skill(d, slug, name, content, description="desc"):
     (d / f"{slug}.md").write_text(content, encoding="utf-8")
     index = store.load_index()
     index[slug] = {"name": name, "description": description, "command": slug}
@@ -33,7 +33,7 @@ def _make_skill(d, slug, name, content, description="desc"):
 
 
 def test_skill_export_import_round_trip(skill_store):
-    _make_skill(skill_store, "my-skill", "My Skill", "# hello\nbody text")
+    p_make_skill(skill_store, "my-skill", "My Skill", "# hello\nbody text")
     raw, name = closure.build_bundle(EntityType.skill, "my-skill")
     assert name == "My Skill"
     assert zipfile.is_zipfile(io.BytesIO(raw))
@@ -68,7 +68,7 @@ def test_bare_markdown_import(skill_store):
 
 def test_content_secret_redacted_in_bundle(skill_store):
     secret = "sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAA"
-    _make_skill(skill_store, "leaky", "Leaky", f"use this key: {secret}")
+    p_make_skill(skill_store, "leaky", "Leaky", f"use this key: {secret}")
     raw, p_name = closure.build_bundle(EntityType.skill, "leaky")
     # Inspect the actual packed payload (zip entries are compressed, so grepping
     # the raw bytes proves nothing).
@@ -482,7 +482,7 @@ def test_dashboard_remap_invariant_generative(monkeypatch):
 
 
 def test_checksum_rejects_tampering(skill_store):
-    _make_skill(skill_store, "tmp", "Tmp", "# original")
+    p_make_skill(skill_store, "tmp", "Tmp", "# original")
     raw, _ = closure.build_bundle(EntityType.skill, "tmp")
     # Rebuild the zip with the same manifest (old checksum) but an edited payload.
     src = zipfile.ZipFile(io.BytesIO(raw))
@@ -565,7 +565,7 @@ def test_manifest_edge_to_unknown_entity_rejected():
         validate_manifest(m)
 
 
-def _zip_with(name, data=b"x"):
+def p_zip_with(name, data=b"x"):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr(name, data)
@@ -574,12 +574,12 @@ def _zip_with(name, data=b"x"):
 
 def test_zip_slip_rejected():
     with pytest.raises(BundleError):
-        unpack(_zip_with("../escape.txt"))
+        unpack(p_zip_with("../escape.txt"))
 
 
 def test_absolute_path_rejected():
     with pytest.raises(BundleError):
-        unpack(_zip_with("/etc/evil"))
+        unpack(p_zip_with("/etc/evil"))
 
 
 def test_symlink_entry_rejected():

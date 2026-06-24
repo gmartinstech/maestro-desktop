@@ -61,7 +61,7 @@ wait $PYTHON_PID
 """
 
 
-def _make_fake_workspace(tmp: str, frontend_port: int, backend_port: str = "NONE") -> str:
+def p_make_fake_workspace(tmp: str, frontend_port: int, backend_port: str = "NONE") -> str:
     ws = os.path.join(tmp, "ws")
     os.makedirs(ws)
     with open(os.path.join(ws, "run.sh"), "w") as f:
@@ -72,7 +72,7 @@ def _make_fake_workspace(tmp: str, frontend_port: int, backend_port: str = "NONE
     return ws
 
 
-def _pid_alive(pid: int) -> bool:
+def p_pid_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
         return True
@@ -118,7 +118,7 @@ def test_write_env_value():
 async def test_stop_all_kills_active():
     with tempfile.TemporaryDirectory() as tmp:
         port = find_free_port()
-        ws = _make_fake_workspace(tmp, port)
+        ws = p_make_fake_workspace(tmp, port)
         m = AppRuntimeManager()
         rt = await m.attach("ws1", ws)
         assert rt.running, "runtime should be running after attach"
@@ -134,7 +134,7 @@ async def test_stop_all_kills_active():
         assert killed >= 1, f"stop_all reported {killed} reaped"
         # Bash + python child must be gone within the grace window.
         for _ in range(60):
-            if not _pid_alive(pid):
+            if not p_pid_alive(pid):
                 break
             await asyncio.sleep(0.1)
         else:
@@ -154,7 +154,7 @@ async def test_stop_all_kills_active():
 async def test_stop_all_kills_idle():
     with tempfile.TemporaryDirectory() as tmp:
         port = find_free_port()
-        ws = _make_fake_workspace(tmp, port)
+        ws = p_make_fake_workspace(tmp, port)
         m = AppRuntimeManager()
         rt = await m.attach("ws-idle", ws)
         pid = rt.process.pid
@@ -167,7 +167,7 @@ async def test_stop_all_kills_idle():
         killed = await m.stop_all()
         assert killed == 1
         for _ in range(60):
-            if not _pid_alive(pid):
+            if not p_pid_alive(pid):
                 break
             await asyncio.sleep(0.1)
         else:
@@ -185,7 +185,7 @@ async def test_stop_all_kills_idle():
 async def test_port_collision_reallocates_env():
     with tempfile.TemporaryDirectory() as tmp:
         squatted_port = find_free_port()
-        ws = _make_fake_workspace(tmp, squatted_port)
+        ws = p_make_fake_workspace(tmp, squatted_port)
         # Squat the persisted port so the runtime can't use it.
         squatter = socket.socket()
         squatter.bind(("127.0.0.1", squatted_port))
@@ -232,7 +232,7 @@ async def test_descendant_tree_killed_despite_exit_only_trap():
     must walk the descendant tree to nuke the grandchild explicitly."""
     with tempfile.TemporaryDirectory() as tmp:
         port = find_free_port()
-        ws = _make_fake_workspace(tmp, port)
+        ws = p_make_fake_workspace(tmp, port)
         m = AppRuntimeManager()
         rt = await m.attach("ws-tree", ws)
         bash_pid = rt.process.pid
@@ -270,7 +270,7 @@ async def test_descendant_tree_killed_despite_exit_only_trap():
         await m.stop_all()
         # Every descendant must be gone, not just bash.
         for _ in range(80):
-            still_alive = [p for p in all_descendants if _pid_alive(p)]
+            still_alive = [p for p in all_descendants if p_pid_alive(p)]
             if not still_alive:
                 break
             await asyncio.sleep(0.1)
