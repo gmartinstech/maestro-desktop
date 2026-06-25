@@ -159,6 +159,11 @@ export function getWorkflowToolInputDisplay(input: any, action?: string, serverS
   return compactWorkflowAction(input, action) || getWorkflowToolLabel(action) || 'Workflow action';
 }
 
+// Drop the "--- Selected UI Elements: ..." block the select feature appends to a prompt/task, and collapse newlines so a multi-line task reads as one clean summary line.
+function p_cleanSummaryText(s: string): string {
+  return s.split(/\n*---\nSelected UI Elements:/)[0].replace(/\s+/g, ' ').trim();
+}
+
 export function getMcpInputSummary(input: any, action?: string, serverSlug?: string): string {
   if (!input || typeof input !== 'object') return '';
   if (serverSlug === 'openswarm-schedule' || (action && getWorkflowToolLabel(action))) {
@@ -174,12 +179,12 @@ export function getMcpInputSummary(input: any, action?: string, serverSlug?: str
   if (keys.length === 0) return '';
   if (keys.length === 1) {
     const v = input[keys[0]];
-    const s = typeof v === 'string' ? v : JSON.stringify(v);
+    const s = typeof v === 'string' ? p_cleanSummaryText(v) : JSON.stringify(v);
     return s.length > 60 ? s.slice(0, 60) + '…' : s;
   }
   return keys.slice(0, 3).map((k) => {
     const v = input[k];
-    const s = typeof v === 'string' ? v : JSON.stringify(v);
+    const s = typeof v === 'string' ? p_cleanSummaryText(v) : JSON.stringify(v);
     return `${k}: ${s.length > 30 ? s.slice(0, 30) + '…' : s}`;
   }).join('  ');
 }
