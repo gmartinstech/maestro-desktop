@@ -80,21 +80,9 @@ async def handle_stream_event(
             tool_msg_id = uuid4().hex
             turn.stream_tool_msg_ids_ordered.append(tool_msg_id)
             turn.stream_block_index_map[index] = tool_msg_id
-            # Stream-level tool count for the
-            # consolidated thinking pill. The
-            # AssistantMessage path (further down)
-            # ALSO increments turn.tool_count when
-            # ToolUseBlocks fully arrive, but for
-            # OpenAI/Gemini through 9Router the
-            # AssistantMessage envelope is sometimes
-            # incomplete, so this stream-level count
-            # is what guarantees the "N tools used"
-            # segment renders cross-provider. To
-            # avoid double-counting we DON'T also
-            # increment on AssistantMessage when
-            # this code path already fired, see
-            # the dedupe at the AssistantMessage
-            # block below.
+            # Stream-level tool count for the thinking pill. OpenAI/Gemini-through-9Router
+            # AssistantMessage envelopes are sometimes incomplete, so this stream count guarantees
+            # "N tools used" renders cross-provider; the AssistantMessage path dedupes against it.
             turn.tool_count += 1
             await ws_manager.send_to_session(session_id, "agent:stream_start", {
                 "session_id": session_id,

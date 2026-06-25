@@ -50,27 +50,6 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
         self.cancel_events: Dict[str, asyncio.Event] = {}
 
 
-
-
-    # ------------------------------------------------------------------
-    # Compaction & token guard (Phase 2)
-    #
-    # Triggered by *live* context-usage ratio, not turn count. The signal
-    # is the same `ctx_used_pct` we already broadcast to the UI on every
-    # turn: input_tokens / context_window. Three escalating thresholds:
-    #   - compact_threshold_pct (default 0.65): summarize stale tool_results
-    #     and old user/assistant pairs before the next query() call
-    #   - context_soft_cap_pct (default 0.90): pre-send hard guard. After
-    #     compaction, if still over, LRU-trim active_mcps
-    #   - >= 1.0 hits the proxy/Anthropic 200K ceiling, friendly card
-    #     surfaces from the catch-all
-    # ------------------------------------------------------------------
-
-
-
-
-
-
     @typechecked
     async def run_agent_loop(self, session_id: str, prompt: str, images: Optional[List] = None, context_paths: Optional[List] = None, forced_tools: Optional[List[str]] = None, attached_skills: Optional[List] = None, fork_session: bool = False, selected_browser_ids: Optional[List[str]] = None, selected_app_output_ids: Optional[List[str]] = None, selected_setting_ids: Optional[List[str]] = None):
         """Run the Claude Agent SDK query loop for a session."""
