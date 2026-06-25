@@ -26,18 +26,21 @@ class SessionPersistence(AgentManagerProtocol):
     @typechecked
     async def reconcile_on_startup(self) -> None:
         """Mark any stale running sessions as stopped."""
+        marked = 0
         for sid, data in load_all_session_data():
             dirty = False
             if data.get("status") in ("running", "waiting_approval"):
                 data["status"] = "stopped"
                 dirty = True
-                logger.info(f"Marked stale session {sid} as stopped")
+                marked += 1
             # Mode migration: Chat was merged into Ask. Rewrite mode="chat" so old sessions keep loading after the chat.json file is gone.
             if data.get("mode") == "chat":
                 data["mode"] = "ask"
                 dirty = True
             if dirty:
                 save_session(sid, data)
+        if marked:
+            logger.info(f"Marked {marked} stale session(s) as stopped")
 
     @typechecked
     async def persist_all_sessions(self) -> None:
@@ -54,7 +57,8 @@ class SessionPersistence(AgentManagerProtocol):
             doc_data = session.model_dump(mode="json")
             doc_data["search_text"] = self.build_search_text(session)
             save_session(session_id, doc_data)
-            logger.info(f"Persisted session {session_id} on shutdown")
+        if self.sessions:
+            logger.info(f"Persisted {len(self.sessions)} session(s) on shutdown")
         self.sessions.clear()
         self.tasks.clear()
 
@@ -66,6 +70,7 @@ class SessionPersistence(AgentManagerProtocol):
         shutdown).  Sessions with closed_at were explicitly closed by the user
         and stay on disk so the history endpoint can still serve them.
         """
+        restored = 0
         for sid, data in load_all_session_data():
             try:
                 session = AgentSession(**data)
@@ -80,4 +85,7 @@ class SessionPersistence(AgentManagerProtocol):
             apply_context_window(session)
             self.sessions[session.id] = session
             delete_session_file(sid)
-            logger.info(f"Restored session {session.id}")
+            restored += 1
+        # One summary line, not one per session (startups with hundreds of sessions flooded the console).
+        if restored:
+            logger.info(f"Restored {restored} session(s)")
