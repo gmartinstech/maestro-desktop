@@ -42,9 +42,7 @@ def save_page_data(cwd: str | None, session_id: str, filename: str, content: str
         dest_dir = p_dest_dir(cwd, session_id)
         dest_real = os.path.realpath(dest_dir)
         full = os.path.realpath(os.path.join(dest_dir, name))
-        # realpath + os.sep guard: defeats traversal, absolute paths, symlinks, AND a
-        # prefix-collision sibling (browser-data vs browser-data-evil). basename already
-        # neutralizes most of it; this is the belt to that suspenders.
+        # realpath + os.sep guard: defeats traversal, absolute paths, symlinks, AND a prefix-collision sibling (browser-data vs browser-data-evil). basename already neutralizes most of it; this is the belt to that suspenders.
         if full != dest_real and not full.startswith(dest_real + os.sep):
             return "Save failed: that filename escapes the workspace; use a plain name."
         with open(full, "w", encoding="utf-8") as f:

@@ -32,18 +32,13 @@ async def web_lifespan():
 web = SubApp("web", web_lifespan)
 
 
-# ---------------------------------------------------------------------------
-# Request models
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Request models ---------------------------------------------------------------------------
 
 
 class SearchBody(BaseModel):
     query: str = Field(..., description="The search query.")
     num_results: int = Field(5, ge=1, le=10, description="Max results to return.")
-    # Hint from the MCP server about which primary provider the session
-    # is using. Lets us route to that provider's native search tool
-    # (Gemini googleSearch, OpenAI web_search_preview) when available , 
-    # costs come out of the user's existing primary budget.
+    # Hint from the MCP server about which primary provider the session is using. Lets us route to that provider's native search tool (Gemini googleSearch, OpenAI web_search_preview) when available, costs come out of the user's existing primary budget.
     primary: str | None = Field(None, description="Primary provider hint: 'gemini' | 'openai' | 'anthropic' | None")
 
 
@@ -53,9 +48,7 @@ class FetchBody(BaseModel):
     primary: str | None = Field(None, description="Primary provider hint.")
 
 
-# ---------------------------------------------------------------------------
-# Helper; extract plain text from a tool's structured output list
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Helper; extract plain text from a tool's structured output list ---------------------------------------------------------------------------
 
 
 def p_join_text(parts: list[dict[str, Any]]) -> str:
@@ -66,9 +59,7 @@ def p_join_text(parts: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Endpoints ---------------------------------------------------------------------------
 
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
@@ -77,19 +68,10 @@ GEMINI_GROUNDING_MODEL = "gemini-2.5-flash"  # cheapest + fastest for grounded c
 OPENAI_API_BASE = "https://api.openai.com/v1"
 OPENAI_SEARCH_MODEL = "gpt-5-mini"  # cheapest model that supports web_search_preview
 
-# Per-attempt timeouts for the search/fetch cascade. The fast-first ORDERING is
-# what fixes the ~75s stall (DDG answers in ~1s so the slow grounded backends are
-# rarely reached); these bounds are hang safety-nets, set just ABOVE each path's
-# own httpx timeout so a normally-slow call still completes and only a truly hung
-# provider (no response at all) gets cut. Grounded native search legitimately
-# takes 32-42s (httpx ceiling 45s), so its leash sits at 48s, NOT below 45, or
-# we'd clip the slow tail of a valid paid call.
+# Per-attempt timeouts for the search/fetch cascade. The fast-first ORDERING is what fixes the ~75s stall (DDG answers in ~1s so the slow grounded backends are rarely reached); these bounds are hang safety-nets, set just ABOVE each path's own httpx timeout so a normally-slow call still completes and only a truly hung provider (no response at all) gets cut. Grounded native search legitimately takes 32-42s (httpx ceiling 45s), so its leash sits at 48s, NOT below 45, or we'd clip the slow tail of a valid paid call.
 P_DDG_ATTEMPT_TIMEOUT = 6.0       # DDG answers <1s; >6s is a network hang, fall through
 P_GROUNDED_ATTEMPT_TIMEOUT = 48.0  # just above the providers' own 45s httpx timeout
-# Local httpx + trafilatura fetch of a real page; the fast path for /fetch
-# (normal pages return in <2s). Set just above WebFetchTool's own 30s httpx
-# ceiling so a valid-but-slow page still completes locally instead of being
-# clipped down to a grounded summary; only a truly hung server gets cut.
+# Local httpx + trafilatura fetch of a real page; the fast path for /fetch (normal pages return in <2s). Set just above WebFetchTool's own 30s httpx ceiling so a valid-but-slow page still completes locally instead of being clipped down to a grounded summary; only a truly hung server gets cut.
 P_LOCAL_FETCH_TIMEOUT = 32.0
 
 
@@ -182,10 +164,7 @@ def p_resolve_openai_api_key() -> str | None:
         return None
 
 
-# Cache of which 9Router subscriptions are connected. Refreshed via
-# `_refresh_9r_connected()` rather than hit on every search call , 
-# 9Router's /api/providers is fast but not free, and we already
-# query it from many places.
+# Cache of which 9Router subscriptions are connected. Refreshed via `_refresh_9r_connected()` rather than hit on every search call, 9Router's /api/providers is fast but not free, and we already query it from many places.
 P_NINE_ROUTER_CONNECTED: set[str] = set()
 P_NINE_ROUTER_CACHE_AT: float = 0.0
 
@@ -228,8 +207,7 @@ async def p_gemini_grounded_via_9router(prompt: str, use_url_context: bool) -> d
     matches the existing `_gemini_grounded_call` so downstream
     `_format_grounded_as_search_results` works unchanged."""
     import httpx
-    # Prefer Gemini CLI (broader model coverage). Fall back to
-    # Antigravity if CLI isn't connected.
+    # Prefer Gemini CLI (broader model coverage). Fall back to Antigravity if CLI isn't connected.
     connected = await p_refresh_9r_connected()
     if "gemini-cli" in connected:
         model = "gc/gemini-2.5-flash"
@@ -259,11 +237,7 @@ async def p_gemini_grounded_via_9router(prompt: str, use_url_context: bool) -> d
         if r.status_code != 200:
             return {}
         data = r.json()
-    # Synthesize a grounded shape so the existing formatter works:
-    # _format_grounded_as_search_results expects {"text": str, "chunks":
-    # [(title, uri), ...]}. 9Router doesn't surface citations as a
-    # structured field uniformly across providers, so we hand back
-    # text-only and let the formatter do its thing.
+    # Synthesize a grounded shape so the existing formatter works: _format_grounded_as_search_results expects {"text": str, "chunks": [(title, uri), ...]}. 9Router doesn't surface citations as a structured field uniformly across providers, so we hand back text-only and let the formatter do its thing.
     text = ""
     for block in (data.get("content") or []):
         if isinstance(block, dict) and block.get("type") == "text":
@@ -447,25 +421,18 @@ async def search(body: SearchBody) -> dict:
         }
 
     async def try_ddg():
-        # Fast path: direct HTML search, sub-second when DDG isn't throttling us.
-        # Returns None on a real no-hits OR a 202 throttle so the chain falls
-        # through to the slower-but-grounded backends.
+        # Fast path: direct HTML search, sub-second when DDG isn't throttling us. Returns None on a real no-hits OR a 202 throttle so the chain falls through to the slower-but-grounded backends.
         from backend.apps.agents.tools.web import WebSearchTool, DDGRateLimited
         try:
             text = await WebSearchTool.search_ddg(body.query, body.num_results)
         except DDGRateLimited:
-            # Surface the throttle as a recorded error (not a silent None) so the
-            # caller can see WHY we fell through to a slower backend.
+            # Surface the throttle as a recorded error (not a silent None) so the caller can see WHY we fell through to a slower backend.
             raise RuntimeError("DuckDuckGo rate-limited (HTTP 202)") from None
         if not text:
             return None
         return {"query": body.query, "results": text, "backend": "ddg"}
 
-    # Fast-first cascade: DDG leads (~1s = human speed); the 30-42s LLM-grounded
-    # backends are the reliable fallback when DDG is throttled or empty. The
-    # primary hint only reorders the grounded tier (native key before the
-    # same-provider subscription). Every attempt is wait_for-bounded so a slow
-    # or hung provider fails over fast instead of stalling the whole request.
+    # Fast-first cascade: DDG leads (~1s = human speed); the 30-42s LLM-grounded backends are the reliable fallback when DDG is throttled or empty. The primary hint only reorders the grounded tier (native key before the same-provider subscription). Every attempt is wait_for-bounded so a slow or hung provider fails over fast instead of stalling the whole request.
     grounded = [
         ("gemini_native", try_gemini),
         ("gemini_subscription", try_gemini_subscription),
@@ -517,9 +484,7 @@ async def search(body: SearchBody) -> dict:
 @typechecked
 async def fetch(body: FetchBody) -> dict:
     """Fetch a URL, primary-aware. Mirrors /search cascade logic."""
-    # Belt-and-suspenders: even though we delegate to remote Gemini/OpenAI
-    # fetchers (which can't reach private IPs), validating the URL here means
-    # a private/metadata URL gets a 4xx instead of being silently forwarded.
+    # Belt-and-suspenders: even though we delegate to remote Gemini/OpenAI fetchers (which can't reach private IPs), validating the URL here means a private/metadata URL gets a 4xx instead of being silently forwarded.
     from backend.apps.agents.tools.ssrf_guard import SSRFBlocked, assert_safe_url
     try:
         await assert_safe_url(body.url)
@@ -571,8 +536,7 @@ async def fetch(body: FetchBody) -> dict:
         }
 
     async def try_openai_subscription():
-        # Codex's web_search is general; URL fetch via search query
-        # works adequately for our use.
+        # Codex's web_search is general; URL fetch via search query works adequately for our use.
         prompt = f"Fetch this URL and summarize: {body.url}"
         if body.prompt:
             prompt += f"\nFocus on: {body.prompt}"
@@ -585,15 +549,11 @@ async def fetch(body: FetchBody) -> dict:
             "backend": "openai_subscription",
         }
 
-    # Remembered so a thin/errored local read is still returned as the last
-    # resort if every grounded fetcher also fails (never worse than before).
+    # Remembered so a thin/errored local read is still returned as the last resort if every grounded fetcher also fails (never worse than before).
     local_text: str | None = None
 
     async def try_local():
-        # Fast path: direct httpx + trafilatura, sub-second to a few seconds and
-        # returns the page's ACTUAL text (the grounded fetchers summarize, which
-        # is slower and loses detail). Thin/errored reads (JS walls, paywalls,
-        # HTTP errors) fall through to the grounded fetchers that can render them.
+        # Fast path: direct httpx + trafilatura, sub-second to a few seconds and returns the page's ACTUAL text (the grounded fetchers summarize, which is slower and loses detail). Thin/errored reads (JS walls, paywalls, HTTP errors) fall through to the grounded fetchers that can render them.
         nonlocal local_text
         from backend.apps.agents.tools.web import WebFetchTool
         parts = await WebFetchTool().execute(
@@ -634,8 +594,7 @@ async def fetch(body: FetchBody) -> dict:
         except Exception as e:
             errors.append(f"{name}: {str(e)[:150]}")
 
-    # Grounded all failed; hand back whatever the local read got (even an error
-    # string is useful signal) rather than nothing.
+    # Grounded all failed; hand back whatever the local read got (even an error string is useful signal) rather than nothing.
     if local_text is not None:
         return {"url": body.url, "content": local_text, "backend": "local",
                 **({"cascade_errors": errors} if errors else {})}

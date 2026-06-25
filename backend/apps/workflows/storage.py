@@ -23,9 +23,7 @@ RUNS_DIR = os.path.join(DATA_DIR, "runs")
 PAUSED_FILE = os.path.join(DATA_DIR, "paused.json")
 MISSED_FILE = os.path.join(DATA_DIR, "missed.json")
 
-# Hard ceiling on pending missed fires kept on disk. The review card only
-# shows 50; this just stops the file growing without bound if the user keeps
-# quitting without acting on the card.
+# Hard ceiling on pending missed fires kept on disk. The review card only shows 50; this just stops the file growing without bound if the user keeps quitting without acting on the card.
 MAX_MISSED = 200
 
 _io_lock = Lock()
@@ -47,9 +45,7 @@ def _resolve_host_tz_name() -> str:
             name = ""
     return name or "UTC"
 
-# Keep this much run history per workflow on disk. Older runs are pruned;
-# the History tab caps at ~20 anyway, and unbounded growth turned the JSON
-# read into a real cost on hot-reload of the schedule page.
+# Keep this much run history per workflow on disk. Older runs are pruned; the History tab caps at ~20 anyway, and unbounded growth turned the JSON read into a real cost on hot-reload of the schedule page.
 RUNS_PER_WORKFLOW = 200
 
 
@@ -99,10 +95,7 @@ def _load_all_from_disk() -> None:
         try:
             with open(os.path.join(DATA_DIR, fname)) as f:
                 wf = Workflow(**json.load(f))
-            # Coerce legacy timezone="local" to the host IANA zone in
-            # memory only. We don't rewrite the file here so backup/sync
-            # tooling doesn't see mtime churn on every startup; the next
-            # user-driven save migrates the on-disk record naturally.
+            # Coerce legacy timezone="local" to the host IANA zone in memory only. We don't rewrite the file here so backup/sync tooling doesn't see mtime churn on every startup; the next user-driven save migrates the on-disk record naturally.
             if wf.schedule.timezone == "local":
                 wf.schedule.timezone = host_tz
             _workflow_cache[wf.id] = wf
@@ -144,9 +137,7 @@ def init() -> None:
 def list_workflows() -> list[Workflow]:
     if not _cache_loaded:
         init()
-    # Soft-deleted records are filtered here so the scheduler, calendar, and
-    # every list view skip them with no per-caller guard. Trash reads via
-    # list_deleted_workflows; restore/purge fetch by id with get_workflow.
+    # Soft-deleted records are filtered here so the scheduler, calendar, and every list view skip them with no per-caller guard. Trash reads via list_deleted_workflows; restore/purge fetch by id with get_workflow.
     return [w for w in _workflow_cache.values() if w.deleted_at is None]
 
 
@@ -253,8 +244,7 @@ def add_missed(run: MissedRun) -> MissedRun:
     with _io_lock:
         _ensure_dirs()
         _missed_cache.append(run)
-        # Keep the newest MAX_MISSED by scheduled_for so a never-acked card
-        # can't grow the file forever across repeated launches.
+        # Keep the newest MAX_MISSED by scheduled_for so a never-acked card can't grow the file forever across repeated launches.
         if len(_missed_cache) > MAX_MISSED:
             _missed_cache.sort(key=lambda m: m.scheduled_for)
             del _missed_cache[: len(_missed_cache) - MAX_MISSED]

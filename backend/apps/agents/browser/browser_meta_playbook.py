@@ -140,8 +140,7 @@ def clear(wipe_disk: bool = False) -> None:
                 pass
 
 
-# Shipped starting priors: the hard-won universal lessons from this codebase's own
-# browser work, so tier 3 is useful on day one and accrues more as sites confirm them.
+# Shipped starting priors: the hard-won universal lessons from this codebase's own browser work, so tier 3 is useful on day one and accrues more as sites confirm them.
 P_SEED = (
     "A message composer CLEARS when the send goes through; the empty box IS your "
     "confirmation, do not hunt the thread for the sent text to 'verify'.",

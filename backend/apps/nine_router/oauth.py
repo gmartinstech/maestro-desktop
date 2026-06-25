@@ -15,12 +15,7 @@ from backend.apps.oauth_state import pending_oauth, mark_oauth_completed
 
 logger = logging.getLogger(__name__)
 
-# OpenAI's Codex OAuth client is registered with a fixed redirect URI
-# `http://localhost:1455/auth/callback` and rejects any other with `unknown_error`.
-# Anthropic and Google's clients accept arbitrary localhost callbacks (we use
-# 9Router's 20128 callback page). For Codex we spawn a one-shot listener on
-# 1455 that serves the same postMessage/BroadcastChannel/localStorage relay so
-# the frontend's existing popup + msgHandler flow works unchanged.
+# OpenAI's Codex OAuth client is registered with a fixed redirect URI `http://localhost:1455/auth/callback` and rejects any other with `unknown_error`. Anthropic and Google's clients accept arbitrary localhost callbacks (we use 9Router's 20128 callback page). For Codex we spawn a one-shot listener on 1455 that serves the same postMessage/BroadcastChannel/localStorage relay so the frontend's existing popup + msgHandler flow works unchanged.
 
 P_CODEX_CALLBACK_PORT = 1455
 P_CODEX_CALLBACK_PATH = "/auth/callback"
@@ -90,18 +85,13 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
                 if not line or line in (b"\r\n", b"\n"):
                     break
 
-            # Only respond to the OAuth callback path. Chrome preflights and
-            # favicon fetches get a 404 so they don't trigger the served-event.
+            # Only respond to the OAuth callback path. Chrome preflights and favicon fetches get a 404 so they don't trigger the served-event.
             parts = request_line.split(" ")
             path = parts[1] if len(parts) >= 2 else ""
             method = parts[0] if parts else ""
 
             if method == "GET" and path.startswith(P_CODEX_CALLBACK_PATH):
-                # Parse code/state out of the query string and exchange
-                # server-side before serving the HTML. Duplicate exchanges
-                # are harmless (single-use auth codes fail the second call,
-                # which we swallow) so racing with the frontend's
-                # msgHandler-driven exchange is fine.
+                # Parse code/state out of the query string and exchange server-side before serving the HTML. Duplicate exchanges are harmless (single-use auth codes fail the second call, which we swallow) so racing with the frontend's msgHandler-driven exchange is fine.
                 try:
                     from urllib.parse import urlparse, parse_qs
                     parsed = urlparse(path)
@@ -124,11 +114,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
                                     f"Codex callback: server-side exchange succeeded for state {state[:8]}..."
                                 )
                             except Exception as e:
-                                # Put the pending entry back so the
-                                # frontend's msgHandler retry via
-                                # /agents/subscriptions/exchange still
-                                # has a shot. Safe because we only popped
-                                # it a moment ago.
+                                # Put the pending entry back so the frontend's msgHandler retry via /agents/subscriptions/exchange still has a shot. Safe because we only popped it a moment ago.
                                 pending_oauth[state] = pending
                                 logger.debug(
                                     f"Codex callback: server-side exchange failed ({e}); leaving for frontend retry"
@@ -167,8 +153,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
     try:
         server = await asyncio.start_server(p_handle, "127.0.0.1", P_CODEX_CALLBACK_PORT)
     except OSError as e:
-        # Port already in use; probably another Codex connect attempt still
-        # running, or an actual Codex CLI process holding 1455. Log and bail.
+        # Port already in use; probably another Codex connect attempt still running, or an actual Codex CLI process holding 1455. Log and bail.
         logger.warning(
             f"Could not start Codex callback listener on port {P_CODEX_CALLBACK_PORT}: {e}. "
             "If another connection attempt is in progress, wait for it to finish or time out."
@@ -178,9 +163,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
     async def p_lifecycle():
         try:
             await asyncio.wait_for(callback_served.wait(), timeout=timeout)
-            # Give the served HTML a moment to run its JS (postMessage +
-            # window.close) before we close the socket. Chromium closes
-            # the tab on window.close() but the JS needs to run first.
+            # Give the served HTML a moment to run its JS (postMessage + window.close) before we close the socket. Chromium closes the tab on window.close() but the JS needs to run first.
             await asyncio.sleep(2.0)
         except asyncio.TimeoutError:
             logger.info(f"Codex callback listener timed out after {timeout}s")
@@ -198,20 +181,7 @@ async def p_start_codex_callback_listener(timeout: float = 300.0) -> asyncio.bas
     return server
 
 
-# Providers whose OAuth flow MUST run in the user's real browser via
-# shell.openExternal, not the in-Electron window.open popup:
-# - gemini-cli, antigravity: Google's Embedded WebView Restrictions policy uses
-#   JS-fingerprint detection that no UA spoof defeats. RFC 8252 and Google's
-#   own Desktop-app OAuth guidance both prescribe the system browser.
-# - codex: auth.openai.com renders blank in our popup on some machines (newer
-#   embed detection + regional checks); system browser surfaces the real error.
-# - claude: email magic-link opens in the user's default browser, which is a
-#   different cookie jar from the embedded popup, so the popup can never receive
-#   the auth. Forcing the OAuth flow into the system browser keeps everything
-#   in one cookie jar.
-# The callback for gemini-cli/antigravity lands on /api/subscriptions/callback
-# and runs the exchange server-side; codex uses its fixed 1455 listener; claude
-# is special-cased in p_callback_uri_for_provider below.
+# Providers whose OAuth flow MUST run in the user's real browser via shell.openExternal, not the in-Electron window.open popup: - gemini-cli, antigravity: Google's Embedded WebView Restrictions policy uses JS-fingerprint detection that no UA spoof defeats. RFC 8252 and Google's own Desktop-app OAuth guidance both prescribe the system browser. - codex: auth.openai.com renders blank in our popup on some machines (newer embed detection + regional checks); system browser surfaces the real error. - claude: email magic-link opens in the user's default browser, which is a different cookie jar from the embedded popup, so the popup can never receive the auth. Forcing the OAuth flow into the system browser keeps everything in one cookie jar. The callback for gemini-cli/antigravity lands on /api/subscriptions/callback and runs the exchange server-side; codex uses its fixed 1455 listener; claude is special-cased in p_callback_uri_for_provider below.
 P_EXTERNAL_BROWSER_PROVIDERS: set[str] = {"gemini-cli", "antigravity", "codex", "claude"}
 
 
@@ -248,8 +218,7 @@ def p_callback_uri_for_provider(provider: str) -> str:
     """
     if provider == "codex":
         return f"http://localhost:{P_CODEX_CALLBACK_PORT}{P_CODEX_CALLBACK_PATH}"
-    # Anthropic's OAuth client only whitelists localhost:20128/callback;
-    # 9router_gpt5_patch.js 302-rewrites the hit to the backend handler.
+    # Anthropic's OAuth client only whitelists localhost:20128/callback; 9router_gpt5_patch.js 302-rewrites the hit to the backend handler.
     if provider == "claude":
         return f"http://localhost:{NINE_ROUTER_PORT}/callback"
     if provider in P_EXTERNAL_BROWSER_PROVIDERS:

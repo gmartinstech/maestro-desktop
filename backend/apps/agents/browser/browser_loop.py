@@ -10,9 +10,7 @@ prevents the model from burning the entire turn budget on a failing approach.
 import json
 import re
 
-# Tools that are read-only / idempotent and should NOT count toward loop
-# detection. Repeating these is normal (scrolling through a feed, taking
-# successive screenshots, polling for an element to appear).
+# Tools that are read-only / idempotent and should NOT count toward loop detection. Repeating these is normal (scrolling through a feed, taking successive screenshots, polling for an element to appear).
 LOOP_DETECTION_EXCLUDED_TOOLS = {
     "BrowserScreenshot",
     "BrowserGetText",
@@ -32,13 +30,7 @@ P_LOOP_REPEAT_THRESHOLD = 2  # the SECOND identical (tool,input,result) is alrea
 LOOP_HARD_CAP = 5
 
 
-# Universal close-affordance vocabulary for blocking popups (cookie walls,
-# upsells, app-install nags, coachmarks). These phrases sit on a throwaway
-# dismiss and NEVER on a control a real task needs (you never "No thanks" your
-# way through a send), so a mechanical dismiss of one cannot close something the
-# task required. Deliberately omits generic "Close"/"Dismiss"/"Skip", which DO
-# appear on needed dialogs (e.g. "Close your conversation"). Keys on the pattern,
-# not any one site, so it generalizes.
+# Universal close-affordance vocabulary for blocking popups (cookie walls, upsells, app-install nags, coachmarks). These phrases sit on a throwaway dismiss and NEVER on a control a real task needs (you never "No thanks" your way through a send), so a mechanical dismiss of one cannot close something the task required. Deliberately omits generic "Close"/"Dismiss"/"Skip", which DO appear on needed dialogs (e.g. "Close your conversation"). Keys on the pattern, not any one site, so it generalizes.
 P_DISMISS_NAMES = frozenset({
     "no thanks", "no, thanks", "maybe later", "not now", "skip for now",
     "remind me later", "got it", "decline", "no, maybe later", "not interested",
@@ -118,16 +110,9 @@ LOOP_WARNING_TEXT = (
 )
 
 
-# --- Stagnation detection -------------------------------------------------
-# Distinct from the exact-repeat loop above. The agent can be "busy but stuck":
-# trying selector A, then B, then C, all failing. The inputs differ so the
-# exact-repeat detector never fires, yet the page never changes. We watch for a
-# run of state-mutating actions that produced no URL change AND looked like
-# failures (or just repeated the same observation), and nudge the model down
-# the strategy ladder before it burns the whole turn budget.
+# --- Stagnation detection ------------------------------------------------- Distinct from the exact-repeat loop above. The agent can be "busy but stuck": trying selector A, then B, then C, all failing. The inputs differ so the exact-repeat detector never fires, yet the page never changes. We watch for a run of state-mutating actions that produced no URL change AND looked like failures (or just repeated the same observation), and nudge the model down the strategy ladder before it burns the whole turn budget.
 
-# Read-only / meta tools don't count toward stagnation (same exemption set as
-# the loop detector): re-orienting is not "being stuck".
+# Read-only / meta tools don't count toward stagnation (same exemption set as the loop detector): re-orienting is not "being stuck".
 P_STAGNATION_NEUTRAL_TOOLS = LOOP_DETECTION_EXCLUDED_TOOLS
 STAGNATION_ESCALATION_AT = 3
 STAGNATION_MAX = 5
@@ -229,11 +214,7 @@ def stagnation_exhausted(streak: int) -> bool:
     return streak >= STAGNATION_MAX
 
 
-# --- completion honesty gate ----------------------------------------------
-# A model that ends its turn is NOT proof the goal happened. The worst ghost we
-# measured: multi-minute runs where every tool errored, still reported
-# "completed". This deterministic gate reality-checks the run before we let the
-# status say "done", so a fake success is reported as the failure it actually is.
+# --- completion honesty gate ---------------------------------------------- A model that ends its turn is NOT proof the goal happened. The worst ghost we measured: multi-minute runs where every tool errored, still reported "completed". This deterministic gate reality-checks the run before we let the status say "done", so a fake success is reported as the failure it actually is.
 
 # State-changing tools: a task that needed to DO something must land one of these.
 P_PRODUCTIVE_TOOLS = {
@@ -247,12 +228,7 @@ P_READ_TOOLS = {
 }
 
 
-# A card the agent can't make progress on, EITHER gone (closed/dashboard not open;
-# unrecoverable) OR hung (a wedged tab where every command times out / the page
-# never responds). Both look the same to the agent: retrying just burns time (the
-# 20-minute LinkedIn spin), so we fail fast. The streak (reset on any good result)
-# absorbs a one-off transient; only a SUSTAINED pattern trips it, so a merely-busy
-# page that recovers is never mistaken for dead.
+# A card the agent can't make progress on, EITHER gone (closed/dashboard not open; unrecoverable) OR hung (a wedged tab where every command times out / the page never responds). Both look the same to the agent: retrying just burns time (the 20-minute LinkedIn spin), so we fail fast. The streak (reset on any good result) absorbs a one-off transient; only a SUSTAINED pattern trips it, so a merely-busy page that recovers is never mistaken for dead.
 P_CARD_GONE_MARKERS = (
     "not an electron webview",   # card closed / destroyed
     "no dashboard is connected", # dashboard view not mounted
@@ -267,11 +243,7 @@ def card_is_unavailable(result: dict) -> bool:
     return any(m in err for m in P_CARD_GONE_MARKERS)
 
 
-# Errors where the action MISSED but the page is alive (stale index after a
-# reshuffle, a transient overlay covering the target, off-screen). The page
-# itself is fine, so re-attaching the CURRENT element list to the error lets the
-# model re-act next turn instead of burning a turn re-listing. This NEVER retries
-# the action (no double-send risk); it only enriches the error with fresh state.
+# Errors where the action MISSED but the page is alive (stale index after a reshuffle, a transient overlay covering the target, off-screen). The page itself is fine, so re-attaching the CURRENT element list to the error lets the model re-act next turn instead of burning a turn re-listing. This NEVER retries the action (no double-send risk); it only enriches the error with fresh state.
 P_RECOVERABLE_ERR_MARKERS = (
     "no longer valid", "no node with given id", "page may have changed",
     "covered it", "obscured", "intercepted", "not clickable",
@@ -288,9 +260,7 @@ def recoverable_tool_error(err: str) -> bool:
     return any(m in e for m in P_RECOVERABLE_ERR_MARKERS)
 
 
-# Actions that DIRTY the page so replay-from-here is no longer equivalent to a
-# clean dispatch. Navigation and reads don't dirty anything (they just get us to
-# the page), so the deferred replay re-check is allowed after only those.
+# Actions that DIRTY the page so replay-from-here is no longer equivalent to a clean dispatch. Navigation and reads don't dirty anything (they just get us to the page), so the deferred replay re-check is allowed after only those.
 P_REPLAY_DIRTYING_TOOLS = {
     "BrowserType", "BrowserClick", "BrowserClickIndex",
     "BrowserPressKey", "BrowserScroll", "BrowserBatch",
@@ -304,8 +274,7 @@ def replay_recheck_is_safe(action_log: list[dict]) -> bool:
     return not any(a.get("tool") in P_REPLAY_DIRTYING_TOOLS for a in action_log)
 
 
-# What the user ASKED FOR outranks how the sub narrated it: an info ask can
-# never replay (the answer must be fresh), an action ask can.
+# What the user ASKED FOR outranks how the sub narrated it: an info ask can never replay (the answer must be fresh), an action ask can.
 P_INFO_ASK_RE = re.compile(
     r"\b(tell me|what(?:'s| is| are)|how (?:many|much)|count|list|summari[sz]e|"
     r"extract|find (?:me|out)|show me|look up|read (?:me|the)|get the|give me|which|"

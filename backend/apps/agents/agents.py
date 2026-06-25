@@ -458,8 +458,7 @@ async def subscriptions_exchange(body: dict):
     try:
         result = await exchange_oauth(provider, code, redirect_uri, code_verifier, state)
         if result.get("success"):
-            # Claude races this path against /api/subscriptions/callback (popup + 9router patch
-            # 302 to backend); dedup so the loser sees the success page, not "Session expired".
+            # Claude races this path against /api/subscriptions/callback (popup + 9router patch 302 to backend); dedup so the loser sees the success page, not "Session expired".
             if state:
                 pending_oauth.pop(state, None)
                 mark_completed(state)
@@ -651,32 +650,26 @@ async def list_models():
             result["Anthropic"] = p_serialize(anth_alternates)
     elif has_api_key or has_claude_sub:
         rows = p_serialize(adaptive)
-        # When an Anthropic key is set, these adaptive rows run on it: own-key routing prefers the
-        # user's key over any sub (agent_manager + anthropic_proxy._pick_upstream), so it holds even
-        # with a Claude sub connected. Label + bucket as API key (not 9router-state dependent).
+        # When an Anthropic key is set, these adaptive rows run on it: own-key routing prefers the user's key over any sub (agent_manager + anthropic_proxy._pick_upstream), so it holds even with a Claude sub connected. Label + bucket as API key (not 9router-state dependent).
         if has_api_key:
             for r in rows:
                 if not r["label"].endswith("(API key)"):
                     r["label"] += " (API key)"
                 r["billing_kind"] = "api_key"
                 r["is_free"] = False
-            # Models that only exist on the API-key route (Fable 5, whose sub route 404s
-            # on our pinned 9Router) have no adaptive twin to relabel, so add them or they vanish.
+            # Models that only exist on the API-key route (Fable 5, whose sub route 404s on our pinned 9Router) have no adaptive twin to relabel, so add them or they vanish.
             adaptive_ids = {m.get("model_id") for m in adaptive}
             api_only = [m for m in api_variants if m.get("model_id") not in adaptive_ids]
             rows = p_serialize(api_only) + rows
         elif has_claude_sub:
-            # Only a sub: the adaptive rows route through 9router's cc/ lane, so they're covered
-            # by the subscription, not pay-per-use.
+            # Only a sub: the adaptive rows route through 9router's cc/ lane, so they're covered by the subscription, not pay-per-use.
             for r in rows:
                 r["billing_kind"] = "subscription"
             # Sub-only models with no adaptive twin (Fable 5) won't ride the relabeled rows, so add their cc/ entry.
             adaptive_ids = {m.get("model_id") for m in adaptive}
             cc_only = [m for m in cc_variants if m.get("model_id") not in adaptive_ids]
             rows = p_serialize(cc_only) + rows
-        # With BOTH a key and a sub the adaptive rows above run on the key, so also surface the
-        # subscription (cc) variants; they route via 9router's cc/ lane and stay selectable, the
-        # way OpenAI/Gemini show both a subscription row and an API-key row.
+        # With BOTH a key and a sub the adaptive rows above run on the key, so also surface the subscription (cc) variants; they route via 9router's cc/ lane and stay selectable, the way OpenAI/Gemini show both a subscription row and an API-key row.
         if has_api_key and has_claude_sub:
             rows += p_serialize(cc_variants)
         result["Anthropic"] = rows

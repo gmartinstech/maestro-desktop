@@ -163,9 +163,7 @@ class WebSearchTool(BaseTool):
                 "https://html.duckduckgo.com/html/",
                 data={"q": query},
             )
-            # DDG serves its throttle challenge as 202 (a ~14KB no-results page),
-            # which is a 2xx so raise_for_status() sails right past it. Catch it
-            # explicitly so we report "rate-limited" instead of a bogus "no hits".
+            # DDG serves its throttle challenge as 202 (a ~14KB no-results page), which is a 2xx so raise_for_status() sails right past it. Catch it explicitly so we report "rate-limited" instead of a bogus "no hits".
             if resp.status_code == 202:
                 raise DDGRateLimited(query)
             resp.raise_for_status()
@@ -200,9 +198,7 @@ class WebSearchTool(BaseTool):
 
             raw_url = html.unescape(link_match.group(1))
 
-            # Drop sponsored rows: DDG ads point at its own y.js click-tracker
-            # (ad_domain/ad_provider) instead of a real uddg= redirect, so they'd
-            # otherwise show up as junk "duckduckgo.com/y.js?ad_..." results.
+            # Drop sponsored rows: DDG ads point at its own y.js click-tracker (ad_domain/ad_provider) instead of a real uddg= redirect, so they'd otherwise show up as junk "duckduckgo.com/y.js?ad_..." results.
             if "/y.js?" in raw_url or "ad_provider=" in raw_url or "ad_domain=" in raw_url:
                 continue
 

@@ -15,10 +15,7 @@ BROWSER_HISTORY: dict[str, list[dict]] = {}
 # Cap history to prevent unbounded growth on long-lived browsers.
 MAX_HISTORY_MESSAGES = 30
 
-# Per-apex-domain advisory notes, distilled from the agent's own ReportProgress
-# working_memory. Process-lifetime only (never written to disk); seeds a later
-# agent on the same domain so it skips re-learning the same quirks. Advisory
-# text only, never auto-executed.
+# Per-apex-domain advisory notes, distilled from the agent's own ReportProgress working_memory. Process-lifetime only (never written to disk); seeds a later agent on the same domain so it skips re-learning the same quirks. Advisory text only, never auto-executed.
 DOMAIN_NOTES: dict[str, str] = {}
 MAX_DOMAIN_NOTE_CHARS = 600
 
@@ -94,8 +91,7 @@ def prune_old_screenshots(messages: list[dict], keep_first: bool = True, keep_re
     return collapsed
 
 
-# Sentinel prefixing the auto-attached element list on mutating action results.
-# Lives here so the attacher (browser_agent) and the pruner share one spelling.
+# Sentinel prefixing the auto-attached element list on mutating action results. Lives here so the attacher (browser_agent) and the pruner share one spelling.
 PAGE_STATE_MARKER = "[page state after action]"
 P_STATE_STUB = "[stale page state pruned; see the latest action result for current state]"
 P_HEAVY_READ_TOOLS = {"BrowserListInteractives", "BrowserGetText"}
@@ -338,8 +334,7 @@ def trim_history_by_turns(messages: list[dict], max_messages: int) -> list[dict]
     target_tail_size = max_messages - 1  # leave room for the summary message
     cut_index: int | None = None
 
-    # First pass: walk forward looking for the EARLIEST clean cut point that
-    # gets us under the cap. This preserves the most recent detail.
+    # First pass: walk forward looking for the EARLIEST clean cut point that gets us under the cap. This preserves the most recent detail.
     for i in range(1, len(messages)):
         if not p_is_fresh_user_message(messages[i]):
             continue
@@ -347,10 +342,7 @@ def trim_history_by_turns(messages: list[dict], max_messages: int) -> list[dict]
             cut_index = i
             break
 
-    # Second pass: if no cut point gets us under the cap (e.g. the current
-    # turn alone is bigger than max_messages), use the LATEST clean cut point
-    # available. The tail will still exceed the cap, but it's the smallest
-    # safe history we can produce; and any compaction is better than none.
+    # Second pass: if no cut point gets us under the cap (e.g. the current turn alone is bigger than max_messages), use the LATEST clean cut point available. The tail will still exceed the cap, but it's the smallest safe history we can produce; and any compaction is better than none.
     if cut_index is None:
         for i in range(len(messages) - 1, 0, -1):
             if p_is_fresh_user_message(messages[i]):
@@ -358,12 +350,10 @@ def trim_history_by_turns(messages: list[dict], max_messages: int) -> list[dict]
                 break
 
     if cut_index is None:
-        # No clean cut anywhere in the history. Return original; better to
-        # exceed the cap than to corrupt the conversation.
+        # No clean cut anywhere in the history. Return original; better to exceed the cap than to corrupt the conversation.
         return list(messages)
 
-    # Compact: summarize messages[0..cut_index-1], prepend as a single
-    # user-text message, then keep messages[cut_index..end] verbatim.
+    # Compact: summarize messages[0..cut_index-1], prepend as a single user-text message, then keep messages[cut_index..end] verbatim.
     summary_text = p_summarize_messages(messages[:cut_index])
     summary_msg = {"role": "user", "content": summary_text}
     return [summary_msg] + list(messages[cut_index:])

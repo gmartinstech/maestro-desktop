@@ -62,8 +62,7 @@ class Manifest(BaseModel):
     created_with: str = "OpenSwarm"
     created_at: str = ""
     bundle_id: str
-    # sha256 over every entity payload + file (not the manifest itself); set at
-    # pack time, re-checked on import to reject a corrupted or edited archive.
+    # sha256 over every entity payload + file (not the manifest itself); set at pack time, re-checked on import to reject a corrupted or edited archive.
     checksum: Optional[str] = None
     root: EntityRef
     entities: list[EntityRef] = Field(default_factory=list)

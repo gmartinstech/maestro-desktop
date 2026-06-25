@@ -43,15 +43,13 @@ from backend.apps.agents.browser.browser_loop import (
 )
 from backend.apps.agents.browser.browser_validator import adjudicate_stuck
 
-# Single actions the model could have folded into one BrowserBatch turn;
-# reads, waits, and the batch tools themselves don't count toward the streak.
+# Single actions the model could have folded into one BrowserBatch turn; reads, waits, and the batch tools themselves don't count toward the streak.
 P_BATCHABLE_ACTION_TOOLS = {
     "BrowserNavigate", "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
     "BrowserType", "BrowserPressKey", "BrowserScroll",
 }
 
-# Injected when the spin backstop trips: one chance to land a real answer from
-# what's already gathered, instead of the loop cutting it off mid-thought.
+# Injected when the spin backstop trips: one chance to land a real answer from what's already gathered, instead of the loop cutting it off mid-thought.
 P_WRAPUP_NUDGE = (
     "You've spent several turns looking without finishing. Wrap up NOW: call Done with the "
     "best answer you can give from what you've ALREADY gathered. For a find/list ask, put the "
@@ -82,8 +80,7 @@ from backend.apps.tools_lib.tools_lib import load_builtin_permissions
 
 logger = logging.getLogger(__name__)
 
-# Mutating actions that can carry an `expect` (the change they should cause) and be
-# confirmed after running. Reads/waits aren't here, there's nothing to confirm.
+# Mutating actions that can carry an `expect` (the change they should cause) and be confirmed after running. Reads/waits aren't here, there's nothing to confirm.
 P_CONFIRM_TOOLS = {
     "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
     "BrowserType", "BrowserNavigate", "BrowserPressKey", "BrowserBatch",
@@ -124,10 +121,7 @@ def p_extract_domain(url: str) -> str | None:
 
 
 def strip_lone_surrogates(s: str) -> str:
-    # The JS/webview hands us page text as UTF-16, so an emoji can arrive as half
-    # of its surrogate pair; Python carries the orphan but .encode('utf-8') later
-    # (the SDK serializing the request to the LLM) detonates with "surrogates not
-    # allowed" and kills the turn. Swap any orphan for the replacement char.
+    # The JS/webview hands us page text as UTF-16, so an emoji can arrive as half of its surrogate pair; Python carries the orphan but .encode('utf-8') later (the SDK serializing the request to the LLM) detonates with "surrogates not allowed" and kills the turn. Swap any orphan for the replacement char.
     return re.sub(r"[\ud800-\udfff]", "�", s) if s else s
 
 
@@ -154,8 +148,7 @@ def format_tool_result(result: dict, tool_name: str) -> list[dict]:
     return [{"type": "text", "text": strip_lone_surrogates(str(text))}]
 
 
-# Mutating tools whose results get fresh page state attached (the browser-use
-# loop shape: act, settle, see), so acting and seeing are one turn, not two.
+# Mutating tools whose results get fresh page state attached (the browser-use loop shape: act, settle, see), so acting and seeing are one turn, not two.
 P_AUTO_STATE_TOOLS = {
     "BrowserNavigate", "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
     "BrowserType", "BrowserPressKey", "BrowserScroll", "BrowserBatch",
@@ -207,9 +200,7 @@ def delta_state(text: str, seen_lines: set[str]) -> str:
     )
 
 
-# A button row whose name is exactly a Send control (not "Send InMail credit" or
-# "Send a message to X"); used to hand the model the Send button after it types,
-# so it never burns turns hunting a button that's right there.
+# A button row whose name is exactly a Send control (not "Send InMail credit" or "Send a message to X"); used to hand the model the Send button after it types, so it never burns turns hunting a button that's right there.
 P_SEND_ROW_RE = re.compile(r'\[(\d+)\]\*?<\s*button\s+"([^"]*)"', re.I)
 
 
@@ -261,11 +252,7 @@ async def post_action_state(
     lst = None
     p_send_si = None
     if p_composer_fill:
-        # The Send button lazy-renders a beat LATER than the text commits (measured:
-        # not in the AX tree even at 2.5s, worse under load), and a single re-list races
-        # that and loses, the old handoff never fired (send-ready=0 across 10 A/B legs).
-        # So POLL the actual interactives list for a REAL Send button and stop the instant
-        # it appears; this checks for the exact thing we hand over, not just 'Send' text.
+        # The Send button lazy-renders a beat LATER than the text commits (measured: not in the AX tree even at 2.5s, worse under load), and a single re-list races that and loses, the old handoff never fired (send-ready=0 across 10 A/B legs). So POLL the actual interactives list for a REAL Send button and stop the instant it appears; this checks for the exact thing we hand over, not just 'Send' text.
         p_deadline = time.monotonic() + 6.0
         while True:
             try:
@@ -292,9 +279,7 @@ async def post_action_state(
         return ""
     state = lst["text"] if seen_lines is None else delta_state(lst["text"], seen_lines)
     out = f"\n\n{PAGE_STATE_MARKER}\n{p_truncate_state(state)}"
-    # Hand the Send button's index over so the model clicks it directly instead of
-    # scanning the list or hunting via CSS/JS/screenshots (the polled list above is what
-    # makes Send actually present to point at, the two work together).
+    # Hand the Send button's index over so the model clicks it directly instead of scanning the list or hunting via CSS/JS/screenshots (the polled list above is what makes Send actually present to point at, the two work together).
     if p_send_si:
         out = (f"\n\n[send-ready] Your message is typed and the Send button is index "
                f"{p_send_si[0]} below. To deliver, click it SOLO with BrowserClickIndex + an "
@@ -390,9 +375,7 @@ async def run_browser_agent(
         "session": session.model_dump(mode="json"),
     })
 
-    # Perception we prefetch on a known starting page so the model can ACT on
-    # turn 1 instead of spending turns 0-2 orienting (screenshot/get_elements).
-    # Pure speed: it's the same reads the agent would do anyway, just front-loaded.
+    # Perception we prefetch on a known starting page so the model can ACT on turn 1 instead of spending turns 0-2 orienting (screenshot/get_elements). Pure speed: it's the same reads the agent would do anyway, just front-loaded.
     async def p_perceive(label_url: str) -> tuple[str, str]:
         """Cheap list+text perception of the CURRENT page. Returns
         (front_load_block, current_url, read_records). The read_records are real
@@ -423,10 +406,7 @@ async def run_browser_agent(
             logger.debug(f"[browser-perf] perception prefetch skipped: {e}")
             return "", (label_url or ""), recs
 
-    # current_url is the live URL of the card. When the parent delegates to an
-    # EXISTING browser (no initial_url), the backend has no record of where that
-    # card navigated to, so we read it here. Without it, skill replay could never
-    # resolve the host on a repeat task and the whole fast path stayed dead.
+    # current_url is the live URL of the card. When the parent delegates to an EXISTING browser (no initial_url), the backend has no record of where that card navigated to, so we read it here. Without it, skill replay could never resolve the host on a repeat task and the whole fast path stayed dead.
     preloaded_perception = ""
     current_url = ""
     preloaded_reads: list[dict] = []  # real front-loaded reads, seeded into action_log
@@ -438,8 +418,7 @@ async def run_browser_agent(
         logger.info(f"Browser agent {session_id}: navigated to {initial_url}: {nav_result.get('text', nav_result.get('error', ''))}")
         preloaded_perception, current_url, preloaded_reads = await p_perceive(initial_url)
     elif not p_resumed:
-        # Fresh task on an existing card: perceive the current page to learn its
-        # host (for replay) and front-load turn 1 (this path used to start cold).
+        # Fresh task on an existing card: perceive the current page to learn its host (for replay) and front-load turn 1 (this path used to start cold).
         preloaded_perception, current_url, preloaded_reads = await p_perceive("")
 
     from backend.apps.settings.settings import load_settings
@@ -450,13 +429,7 @@ async def run_browser_agent(
         resolve_aux_model,
     )
     browser_settings = load_settings()
-    # Resolve the model string to whatever the SDK / 9Router expects.
-    # When the parent session is running on a non-Claude model (e.g. gpt-5.4),
-    # the browser agent inherits it and we route through 9Router's prefix.
-    # Tool-use fidelity for browser-specific tools (BrowserNavigate, click,
-    # type, etc.) through 9Router's claude→openai translator is UNVERIFIED , 
-    # if translation is poor, the user should manually switch this session
-    # back to Claude in the model picker.
+    # Resolve the model string to whatever the SDK / 9Router expects. When the parent session is running on a non-Claude model (e.g. gpt-5.4), the browser agent inherits it and we route through 9Router's prefix. Tool-use fidelity for browser-specific tools (BrowserNavigate, click, type, etc.) through 9Router's claude→openai translator is UNVERIFIED, if translation is poor, the user should manually switch this session back to Claude in the model picker.
     if find_builtin_model(model) is not None:
         api_model = resolve_model_id_for_sdk(model, browser_settings)
     else:
@@ -464,9 +437,7 @@ async def run_browser_agent(
         try:
             api_model, _ = await resolve_aux_model(browser_settings, preferred_tier="haiku")
         except ValueError:
-            # Nothing connected at all; surface a clear error so the caller
-            # (parent agent) sees it in the tool result instead of crashing
-            # on a 400 from 9Router.
+            # Nothing connected at all; surface a clear error so the caller (parent agent) sees it in the tool result instead of crashing on a 400 from 9Router.
             session.status = "error"
             error_text = (
                 "Browser agent requires an active LLM subscription. "
@@ -490,19 +461,10 @@ async def run_browser_agent(
                 "action_log": [],
                 "final_screenshot": None,
             }
-    # Route the client based on the resolved model id, not just
-    # connection_mode. Without this, a pinned-route value like "sonnet-cc"
-    # resolves to "cc/claude-sonnet-4-6" but the old get_anthropic_client()
-    # still returned an OpenSwarm-proxy client (because connection_mode was
-    # openswarm-pro), which then rejected the cc/ prefix and surfaced as a
-    # misleading "OpenSwarm servers are busy" error.
+    # Route the client based on the resolved model id, not just connection_mode. Without this, a pinned-route value like "sonnet-cc" resolves to "cc/claude-sonnet-4-6" but the old get_anthropic_client() still returned an OpenSwarm-proxy client (because connection_mode was openswarm-pro), which then rejected the cc/ prefix and surfaced as a misleading "OpenSwarm servers are busy" error.
     client = get_anthropic_client_for_model(browser_settings, api_model)
 
-    # Resume prior conversation on this browser if we have one cached. This
-    # lets the sub-agent skip the "take a screenshot to figure out where I am"
-    # cycle every time the parent issues a new task. Defensively validate
-    # the cache; if it's somehow corrupted (orphaned tool_use_ids), drop
-    # it and start fresh rather than crash on the next API call.
+    # Resume prior conversation on this browser if we have one cached. This lets the sub-agent skip the "take a screenshot to figure out where I am" cycle every time the parent issues a new task. Defensively validate the cache; if it's somehow corrupted (orphaned tool_use_ids), drop it and start fresh rather than crash on the next API call.
     prior_messages = browser_history.BROWSER_HISTORY.get(browser_id) or []
     if prior_messages and not validate_message_pairing(prior_messages):
         logger.warning(
@@ -511,13 +473,10 @@ async def run_browser_agent(
         )
         clear_browser_history(browser_id)
         prior_messages = []
-    # Front-load the prefetched perception into the first user turn so the model
-    # can act immediately (only when this is a fresh conversation; a resumed one
-    # already knows the page). The visible task text stays clean.
+    # Front-load the prefetched perception into the first user turn so the model can act immediately (only when this is a fresh conversation; a resumed one already knows the page). The visible task text stays clean.
     first_user_content = task + preloaded_perception if (preloaded_perception and not prior_messages) else task
     messages: list[dict] = list(prior_messages) + [{"role": "user", "content": first_user_content}]
-    # Seed with the front-loaded reads: they really ran and returned content, so a
-    # read task the agent answers straight from them is NOT a "did nothing" ghost.
+    # Seed with the front-loaded reads: they really ran and returned content, so a read task the agent answers straight from them is NOT a "did nothing" ghost.
     action_log: list[dict] = list(preloaded_reads)
     final_screenshot: str | None = None
     metrics_started_at = time.time()  # wall-clock start for per-task timing
@@ -529,15 +488,13 @@ async def run_browser_agent(
     card_gone_streak = 0  # consecutive "card is gone" results -> fail fast, don't spin
     route_hinted_hosts: set[str] = set()  # surface the fast network tier once per host
 
-    # Stagnation state: busy-but-stuck detection (no URL change + failures
-    # across a run of actions), distinct from the exact-repeat loop above.
+    # Stagnation state: busy-but-stuck detection (no URL change + failures across a run of actions), distinct from the exact-repeat loop above.
     stagnation_streak = 0
     stagnation_prev_url = ""
     stagnation_prev_text = ""
     aux_adjudicated = False  # the one-shot stuck-adjudication fires at most once per run
 
-    # Lazily-resolved cheap aux client, used only for the rare stuck-adjudication
-    # call once deterministic nudging is exhausted. Provider-agnostic.
+    # Lazily-resolved cheap aux client, used only for the rare stuck-adjudication call once deterministic nudging is exhausted. Provider-agnostic.
     p_aux_state = {"resolved": False, "client": None, "model": None}
 
     async def p_get_aux_client():
@@ -553,8 +510,7 @@ async def run_browser_agent(
 
     latest_working_mem = ""  # most recent ReportProgress memory, for the tier-2 playbook distill
 
-    # auto candidate scan: aux-read results pages so pick-a-candidate happens in
-    # the same turn as the landing, not a read-then-decide pair later
+    # auto candidate scan: aux-read results pages so pick-a-candidate happens in the same turn as the landing, not a read-then-decide pair later
     auto_scanned_urls: set[str] = set()
     dismissed_popup_urls: set[str] = set()  # interstitials auto-closed, once per URL
     recovery_attaches = 0  # recoverable errors enriched with fresh state (saves a re-list turn)
@@ -586,14 +542,10 @@ async def run_browser_agent(
             out = ""
         return out or "", int((time.time() - p_t0) * 1000)
 
-    # Latest goal from ReportProgress; threaded into BrowserListInteractives so
-    # the frontend floats goal-matching elements to the top of the list. Seeded
-    # with the task so the first listing (before any ReportProgress) is boosted.
+    # Latest goal from ReportProgress; threaded into BrowserListInteractives so the frontend floats goal-matching elements to the top of the list. Seeded with the task so the first listing (before any ReportProgress) is boosted.
     current_next_goal = task
 
-    # Advisory per-domain hints: seed the system prompt with what a prior agent
-    # learned about this domain (if we know the domain at start), and keep the
-    # store fresh from each ReportProgress. Re-verify, never blindly trust.
+    # Advisory per-domain hints: seed the system prompt with what a prior agent learned about this domain (if we know the domain at start), and keep the store fresh from each ReportProgress. Re-verify, never blindly trust.
     start_domain = p_extract_domain(initial_url) if initial_url else None
     run_system_prompt = SYSTEM_PROMPT
     if start_domain:
@@ -607,9 +559,7 @@ async def run_browser_agent(
                 + prior_note
             )
 
-    # Tier-2 memory: seed the DURABLE strategy playbook for this host (distilled
-    # from past successful runs) so the model skips re-discovery. Advisory text,
-    # re-verified by the agent, never auto-run. Keyed by full host like skills.
+    # Tier-2 memory: seed the DURABLE strategy playbook for this host (distilled from past successful runs) so the model skips re-discovery. Advisory text, re-verified by the agent, never auto-run. Keyed by full host like skills.
     pb_seeded = False  # whether tier-2 strategy was injected, for measuring its effect
     p_pb_host = browser_skills.host_of(initial_url or current_url or "")
     if p_pb_host:
@@ -617,8 +567,7 @@ async def run_browser_agent(
         if p_pb_block:
             run_system_prompt = run_system_prompt + p_pb_block
             pb_seeded = True
-    # Tier-3 memory: the cross-site priors learned on EVERY other site, injected on
-    # every run (host-agnostic) so a brand-new site isn't fully cold. Advisory, capped.
+    # Tier-3 memory: the cross-site priors learned on EVERY other site, injected on every run (host-agnostic) so a brand-new site isn't fully cold. Advisory, capped.
     try:
         p_meta_block = browser_meta_playbook.format_for_prompt()
         if p_meta_block:
@@ -626,9 +575,7 @@ async def run_browser_agent(
     except Exception:
         pass
 
-    # Prompt-caching shapes built once: system as a single cached text block,
-    # and the last tool carrying the cache_control marker (Anthropic keys on the
-    # trailing marker, so one marker covers the whole tool array + system).
+    # Prompt-caching shapes built once: system as a single cached text block, and the last tool carrying the cache_control marker (Anthropic keys on the trailing marker, so one marker covers the whole tool array + system).
     p_cached_system = [{
         "type": "text", "text": run_system_prompt,
         "cache_control": {"type": "ephemeral"},
@@ -644,9 +591,7 @@ async def run_browser_agent(
         "message": user_msg.model_dump(mode="json"),
     })
 
-    # Perceived value, zero clicks: one calm line so the user FEELS the agent is
-    # picking up where it left off, not figuring the site out cold again. Only
-    # when strategy was actually seeded, so it's honest, never noise.
+    # Perceived value, zero clicks: one calm line so the user FEELS the agent is picking up where it left off, not figuring the site out cold again. Only when strategy was actually seeded, so it's honest, never noise.
     if pb_seeded and p_pb_host:
         session.memory_recalled = True  # drives the subtle "Remembered" card chip
         p_recall_msg = Message(role="assistant",
@@ -655,8 +600,7 @@ async def run_browser_agent(
         await ws_manager.send_to_session(session_id, "agent:message", {
             "session_id": session_id, "message": p_recall_msg.model_dump(mode="json"),
         })
-        # Push the session so the "Remembered" chip shows WHILE it works (the
-        # high-value moment), not just on the finished card.
+        # Push the session so the "Remembered" chip shows WHILE it works (the high-value moment), not just on the finished card.
         await ws_manager.send_to_session(session_id, "agent:status", {
             "session_id": session_id, "status": session.status,
             "session": session.model_dump(mode="json"),
@@ -675,14 +619,7 @@ async def run_browser_agent(
             return None
         return task.result()
 
-    # Skill key: prefer the USER's original request over the orchestrator's
-    # reformulation. The reformulation varies run-to-run ("click the search box"
-    # vs "find the search box") and that variance silently breaks exact-key
-    # replay (measured: two issuances of one request produced two skills). The
-    # user's words are stable across repeats. Guard: if the message carries
-    # multiple quoted values, several same-host sub-tasks could collide on one
-    # key, so fall back to the (differentiated) delegated task; the verify gate
-    # backs this up if a key is ever too loose.
+    # Skill key: prefer the USER's original request over the orchestrator's reformulation. The reformulation varies run-to-run ("click the search box" vs "find the search box") and that variance silently breaks exact-key replay (measured: two issuances of one request produced two skills). The user's words are stable across repeats. Guard: if the message carries multiple quoted values, several same-host sub-tasks could collide on one key, so fall back to the (differentiated) delegated task; the verify gate backs this up if a key is ever too loose.
     skill_key_task = task
     if parent_session_id:
         try:
@@ -697,15 +634,10 @@ async def run_browser_agent(
         except Exception:
             pass
 
-    # --- Fast path: replay a previously-learned skill with NO LLM round-trips.
-    # This is what gets a REPEAT task from ~50s (full agent loop) down to ~1s,
-    # i.e. faster than a human. Robust by construction: clicks re-resolve by
-    # (role,name), every step is verified, and ANY miss aborts to the full LLM
-    # agent below (which re-records), so a changed page can never ghost-succeed.
+    # --- Fast path: replay a previously-learned skill with NO LLM round-trips. This is what gets a REPEAT task from ~50s (full agent loop) down to ~1s, i.e. faster than a human. Robust by construction: clicks re-resolve by (role,name), every step is verified, and ANY miss aborts to the full LLM agent below (which re-records), so a changed page can never ghost-succeed.
     replay_attempted = False
 
-    # set by a prefix replay; appended to the first user message so the model
-    # wakes up at the composer instead of redoing the navigation
+    # set by a prefix replay; appended to the first user message so the model wakes up at the composer instead of redoing the navigation
     replay_prefix_note = ""
 
     async def p_try_replay(host: str, turns_spent: int, allow_prefix: bool = False) -> dict | None:
@@ -748,9 +680,7 @@ async def run_browser_agent(
         if not (sk_obj and steps):
             logger.info(f"[browser-skills] no skill for host={host!r} after {turns_spent} turn(s)")
             return None
-        # Audit finding: replay bypasses the per-tool gate and act-and-confirm,
-        # so a recorded Send/Submit must never re-fire silently. Those flows
-        # always run the live agent, which confirms before anything outward.
+        # Audit finding: replay bypasses the per-tool gate and act-and-confirm, so a recorded Send/Submit must never re-fire silently. Those flows always run the live agent, which confirms before anything outward.
         unsafe_i, why = browser_skills.first_unsafe_step(steps)
         if unsafe_i >= 0:
             if not (allow_prefix and unsafe_i >= 1):
@@ -855,18 +785,13 @@ async def run_browser_agent(
             })
             return {
                 "session_id": session_id, "browser_id": browser_id,
-                # Clean human confirmation, never the replay mechanics ('skill
-                # replay / N steps / no LLM'); `done` is the structured success
-                # signal the parent reads instead of grepping for a tag.
+                # Clean human confirmation, never the replay mechanics ('skill replay / N steps / no LLM'); `done` is the structured success signal the parent reads instead of grepping for a tag.
                 "summary": "Done, I took care of that for you.",
                 "done": True,
                 "action_log": rlog, "final_screenshot": final_screenshot,
                 "replayed": True,
             }
-        # Replay didn't fully succeed. Update the skill's trust: an unproven skill
-        # that failed gets quarantined (never replayed again -> pure-LLM baseline),
-        # a proven one tolerates a transient miss. The full agent re-records edit-
-        # aware (new steps -> new rev).
+        # Replay didn't fully succeed. Update the skill's trust: an unproven skill that failed gets quarantined (never replayed again -> pure-LLM baseline), a proven one tolerates a transient miss. The full agent re-records edit- aware (new steps -> new rev).
         if not cancel_event.is_set():
             verdict = browser_skills.mark_replay_failed(host, skill_key_task)
             logger.info(f"[browser-skills] replay fell back to full agent (trust verdict: {verdict})")
@@ -879,10 +804,7 @@ async def run_browser_agent(
         m = re.search(r"https?://\S+", task)
         if m:
             replay_host = browser_skills.host_of(m.group(0))
-    # The card might have started on the WRONG host (the orchestrator often opens
-    # a fresh card on google and only navigates to the target later); if so, this
-    # dispatch check misses and the deferred re-check inside the loop catches it
-    # after the first navigation.
+    # The card might have started on the WRONG host (the orchestrator often opens a fresh card on google and only navigates to the target later); if so, this dispatch check misses and the deferred re-check inside the loop catches it after the first navigation.
     replay_rechecked = False
     logger.info(f"[browser-skills] dispatch replay check: host={replay_host!r}")
     p_dispatch_replay = await p_try_replay(replay_host, 0, allow_prefix=True)
@@ -891,9 +813,7 @@ async def run_browser_agent(
     if replay_prefix_note:
         messages[-1]["content"] = f"{messages[-1]['content']}{replay_prefix_note}"
 
-    # Route hint: replay declined (send-gated, no exact key, or different
-    # wording), but a similar verified route may exist; hand it to the model as
-    # advisory text so it follows a known path instead of re-exploring.
+    # Route hint: replay declined (send-gated, no exact key, or different wording), but a similar verified route may exist; hand it to the model as advisory text so it follows a known path instead of re-exploring.
     route_hint_keys: list[tuple] = []
     if not replay_prefix_note:
         p_h_skill, p_h_score = browser_skills.find_similar_skill(replay_host, skill_key_task)
@@ -906,8 +826,7 @@ async def run_browser_agent(
                     f"sim={p_h_score:.2f} steps={len(route_hint_keys)} state={p_h_skill.get('state')}"
                 )
 
-    # Pre-nav landed on a results page (the cold entry case): scan it NOW so the
-    # model's very first turn can pick a candidate instead of read-then-decide.
+    # Pre-nav landed on a results page (the cold entry case): scan it NOW so the model's very first turn can pick a candidate instead of read-then-decide.
     p_start_url = (current_url or initial_url or "").split("#")[0]
     if p_start_url and RESULTS_URL_RE.search(p_start_url):
         auto_scanned_urls.add(p_start_url)
@@ -935,32 +854,20 @@ async def run_browser_agent(
 
     text_parts = []  # initialized before loop so post-loop summary (line ~1294) has a default
     rp_violations = 0  # turns the model acted without ReportProgress (now accepted + reminded, not rejected)
-    # The model finishes by calling the Done tool; `message` is the clean human
-    # reply, `success` whether the goal was met. Falls back to terminal text on
-    # the rare run that stops without calling Done.
+    # The model finishes by calling the Done tool; `message` is the clean human reply, `success` whether the goal was met. Falls back to terminal text on the rare run that stops without calling Done.
     done_called = False
     done_message = ""
     done_success = True
     done_keep_open = False
-    # Completion detection: once an irreversible SEND has confirmed, the goal is
-    # met. The model otherwise stalls re-verifying what the confirm already proved
-    # (measured: send done at turn ~11, then ~12 wasted perception turns). We drive
-    # it to the OUTCOME and, if it keeps re-perceiving, end the run. A genuine
-    # multi-send task issues its NEXT send (an action) which resets the stall, so
-    # only true spinning ends here. This whole shortcut is meaningless for a
-    # gather/read task (no send to confirm), and arming it there let a cookie
-    # 'Accept all' click masquerade as the task's send, so we gate it on intent.
+    # Completion detection: once an irreversible SEND has confirmed, the goal is met. The model otherwise stalls re-verifying what the confirm already proved (measured: send done at turn ~11, then ~12 wasted perception turns). We drive it to the OUTCOME and, if it keeps re-perceiving, end the run. A genuine multi-send task issues its NEXT send (an action) which resets the stall, so only true spinning ends here. This whole shortcut is meaningless for a gather/read task (no send to confirm), and arming it there let a cookie 'Accept all' click masquerade as the task's send, so we gate it on intent.
     task_is_send = not deliverable_is_informational("", task)
     send_confirmed = False
     perception_stall = 0           # consecutive turns the model only LOOKED (no action)
     P_POST_SEND_STALL_LIMIT = 2     # once the send registered, finish fast
     P_PERCEPTION_STALL_LIMIT = 6    # backstop when we couldn't detect the send (e.g. Enter): bound the spin
-    # When the spin backstop trips we don't guillotine the run (that leaks the
-    # model's half-finished sentence as the reply). We nudge it to wrap up ONCE,
-    # so it summarizes what it has via Done; a second trip then stops for real.
+    # When the spin backstop trips we don't guillotine the run (that leaks the model's half-finished sentence as the reply). We nudge it to wrap up ONCE, so it summarizes what it has via Done; a second trip then stops for real.
     wrapup_nudged = False
-    # Distinct read results seen, so the backstop tells a productive page-by-page
-    # gather (new data each turn) from genuine spinning (re-reading the same thing).
+    # Distinct read results seen, so the backstop tells a productive page-by-page gather (new data each turn) from genuine spinning (re-reading the same thing).
     seen_read_sigs: set[str] = set()
     # rows already shown to the model; attached state shrinks to the delta
     attached_state_seen: set[str] = set()
@@ -978,10 +885,7 @@ async def run_browser_agent(
             if cancel_event.is_set():
                 break
 
-            # Drop stale screenshots before each call: keep first + previous +
-            # current, stub the rest. Images are ~1.3-2k tokens each and get
-            # re-read every turn, so this is the biggest per-turn context win on
-            # any visual task (measured ~2.9x fewer image tokens, ~5x less upload).
+            # Drop stale screenshots before each call: keep first + previous + current, stub the rest. Images are ~1.3-2k tokens each and get re-read every turn, so this is the biggest per-turn context win on any visual task (measured ~2.9x fewer image tokens, ~5x less upload).
             browser_history.prune_old_screenshots(messages)
             browser_history.prune_stale_page_state(messages)
             browser_history.place_cache_marker(messages)
@@ -989,11 +893,7 @@ async def run_browser_agent(
             response = await p_cancellable(client.messages.create(
                 model=api_model,
                 max_tokens=4096,
-                # Cache the ~4k-token fixed prefix (system + tool schema) so it's
-                # reprocessed once, not on every turn: big TTFT + cost win on the
-                # first run, which is dominated by turns x per-turn prefill. The
-                # trailing cache_control marker is what Anthropic keys on; on
-                # non-Anthropic routes (9router) the marker is harmlessly ignored.
+                # Cache the ~4k-token fixed prefix (system + tool schema) so it's reprocessed once, not on every turn: big TTFT + cost win on the first run, which is dominated by turns x per-turn prefill. The trailing cache_control marker is what Anthropic keys on; on non-Anthropic routes (9router) the marker is harmlessly ignored.
                 system=p_cached_system,
                 tools=p_cached_tools,
                 messages=messages,
@@ -1002,8 +902,7 @@ async def run_browser_agent(
                 break
             p_llm_ms = int((time.monotonic() - p_llm_t0) * 1000)
             llm_ms_total += p_llm_ms
-            # Guard against empty content (e.g. upstream API error from
-            # 9Router that the SDK parsed into a partial response object).
+            # Guard against empty content (e.g. upstream API error from 9Router that the SDK parsed into a partial response object).
             if not response.content:
                 logger.warning(f"Browser agent {session_id}: empty response content from {api_model}")
                 break
@@ -1014,17 +913,14 @@ async def run_browser_agent(
                 p_in = response.usage.input_tokens or 0
                 out_tokens_total += p_out
                 session.tokens["input"] = session.tokens.get("input", 0) + p_in
-                # Already-uncached here (cache tracked separately below), so the
-                # fresh lane that feeds the parent's pill mirrors it 1:1.
+                # Already-uncached here (cache tracked separately below), so the fresh lane that feeds the parent's pill mirrors it 1:1.
                 session.tokens["input_fresh"] = session.tokens.get("input_fresh", 0) + p_in
                 session.tokens["output"] = session.tokens.get("output", 0) + p_out
                 p_cr = getattr(response.usage, "cache_read_input_tokens", 0) or 0
                 p_cw = getattr(response.usage, "cache_creation_input_tokens", 0) or 0
                 if p_cr:
                     session.tokens["cache_read"] = session.tokens.get("cache_read", 0) + p_cr
-                # Per-turn OUTPUT tokens are the latency driver (generation is serial,
-                # input is cached), so log every turn: this is how we verify the plan-
-                # once/terse-execution prompt actually shrinks per-turn output live.
+                # Per-turn OUTPUT tokens are the latency driver (generation is serial, input is cached), so log every turn: this is how we verify the plan- once/terse-execution prompt actually shrinks per-turn output live.
                 logger.info(f"[browser-tokens] turn={turn} out={p_out} in={p_in} cache_read={p_cr} cache_write={p_cw} llm_ms={p_llm_ms}")
 
             assistant_content = []
@@ -1044,9 +940,7 @@ async def run_browser_agent(
                         "input": block.input,
                     })
 
-            # think-shorter telemetry: a turn that emits BOTH prose and an action
-            # tool is the redundant narration the prompt now forbids; count it so
-            # the bench can verify the prose actually went away.
+            # think-shorter telemetry: a turn that emits BOTH prose and an action tool is the redundant narration the prompt now forbids; count it so the bench can verify the prose actually went away.
             if any(t.strip() for t in text_parts) and any(
                 tu.name in ACTION_TOOLS_REQUIRING_REPORT for tu in tool_uses
             ):
@@ -1083,22 +977,12 @@ async def run_browser_agent(
             cancelled = False
             wrapup_pending = False  # set when the spin backstop wants to nudge this turn
 
-            # Sort tool_uses so ReportProgress is always processed first within
-            # a turn, even if the model emits it after action tools. This way
-            # the brain state is recorded before any actions execute.
+            # Sort tool_uses so ReportProgress is always processed first within a turn, even if the model emits it after action tools. This way the brain state is recorded before any actions execute.
             has_report_progress = any(tu.name == "ReportProgress" for tu in tool_uses)
             has_action_tools = any(
                 tu.name in ACTION_TOOLS_REQUIRING_REPORT for tu in tool_uses
             )
-            # Violation: action tools without ReportProgress in the same turn.
-            # The model MUST articulate its evaluation/memory/goal before acting.
-            # Acted without the ReportProgress preamble. Do NOT reject and burn
-            # the turn (measured 5/28 turns lost to this on one run): ReportProgress
-            # is a reflection/UX aid, NOT a safety gate (the send-guard, completion
-            # gate and act-and-confirm are separate and untouched). Let the action
-            # run, synthesize a minimal goal so the UX card + tracking aren't blank,
-            # and remind once on the result. Genuine runaway is still caught by the
-            # loop detector and MAX_TURNS, which is what actually bounds a loop.
+            # Violation: action tools without ReportProgress in the same turn. The model MUST articulate its evaluation/memory/goal before acting. Acted without the ReportProgress preamble. Do NOT reject and burn the turn (measured 5/28 turns lost to this on one run): ReportProgress is a reflection/UX aid, NOT a safety gate (the send-guard, completion gate and act-and-confirm are separate and untouched). Let the action run, synthesize a minimal goal so the UX card + tracking aren't blank, and remind once on the result. Genuine runaway is still caught by the loop detector and MAX_TURNS, which is what actually bounds a loop.
             report_progress_violation = has_action_tools and not has_report_progress
             rp_reminder_pending = False
             if report_progress_violation:
@@ -1117,8 +1001,7 @@ async def run_browser_agent(
                 key=lambda t: 0 if t.name == "ReportProgress" else 1,
             )
 
-            # Under-batching detector: the model ignores prompt-level batching
-            # invitations, so measure each turn and nudge mechanically below.
+            # Under-batching detector: the model ignores prompt-level batching invitations, so measure each turn and nudge mechanically below.
             p_turn_actions = sum(1 for t in tool_uses_sorted if t.name in P_BATCHABLE_ACTION_TOOLS)
             p_turn_has_batch = any(t.name in ("BrowserBatch", "BrowserRepeatFlow") for t in tool_uses_sorted)
             if p_turn_actions >= 2 or p_turn_has_batch:
@@ -1133,10 +1016,7 @@ async def run_browser_agent(
                 f"batch={p_turn_has_batch} streak={single_action_streak}"
             )
 
-            # Progress = an action OR a read that returned content we haven't seen.
-            # A page-by-page gather (a fresh BrowserExtract each turn) is real progress,
-            # not spinning, so detecting new data here keeps the backstop from cutting
-            # it off with partial results. Re-reading the same page yields no new sig.
+            # Progress = an action OR a read that returned content we haven't seen. A page-by-page gather (a fresh BrowserExtract each turn) is real progress, not spinning, so detecting new data here keeps the backstop from cutting it off with partial results. Re-reading the same page yields no new sig.
             p_novel_read = False
             for p_a in action_log:
                 if (p_a.get("ok") and p_a.get("tool") not in P_BATCHABLE_ACTION_TOOLS
@@ -1146,41 +1026,33 @@ async def run_browser_agent(
                         seen_read_sigs.add(p_sig)
                         p_novel_read = True
 
-            # Out of turn budget with no answer yet: nudge a wrap-up so a long-running
-            # gather delivers what it has via Done at the cap, instead of the for-loop
-            # ending on the model's half-finished sentence. Same one-shot channel.
+            # Out of turn budget with no answer yet: nudge a wrap-up so a long-running gather delivers what it has via Done at the cap, instead of the for-loop ending on the model's half-finished sentence. Same one-shot channel.
             if turn >= MAX_TURNS - 4 and not wrapup_nudged and not done_called and not send_confirmed:
                 wrapup_nudged = True
                 wrapup_pending = True
                 logger.info(f"[browser-agent {session_id}] turn budget low ({turn}/{MAX_TURNS}); nudging wrap-up")
 
-            # Spin backstop: a pure-perception turn that ISN'T gathering new data is
-            # wasted (re-verifying a send, or re-looking at the same page). Bound it.
+            # Spin backstop: a pure-perception turn that ISN'T gathering new data is wasted (re-verifying a send, or re-looking at the same page). Bound it.
             if p_turn_actions == 0:
-                # gather tasks: new content IS the work, so it resets the stall. After
-                # a send confirmed, re-reading is just re-verification, never progress.
+                # gather tasks: new content IS the work, so it resets the stall. After a send confirmed, re-reading is just re-verification, never progress.
                 if p_novel_read and not send_confirmed:
                     perception_stall = 0
                 else:
                     perception_stall += 1
-                    # The general backstop only applies AFTER the agent has actually
-                    # done something; early pure-perception is legitimate orienting on a
-                    # cold/slow page, which we must never cut short.
+                    # The general backstop only applies AFTER the agent has actually done something; early pure-perception is legitimate orienting on a cold/slow page, which we must never cut short.
                     p_acted = any(a.get("ok") and a.get("tool") in (P_BATCHABLE_ACTION_TOOLS | {"BrowserBatch"})
                                  for a in action_log)
                     p_stall_limit = (P_POST_SEND_STALL_LIMIT if send_confirmed
                                     else (P_PERCEPTION_STALL_LIMIT if p_acted else 10 ** 9))
                     if perception_stall >= p_stall_limit:
                         if send_confirmed:
-                            # the send registered: hand the parent a real done. The raw
-                            # action-log proof (indices/coords) is machine-speak, kept out.
+                            # the send registered: hand the parent a real done. The raw action-log proof (indices/coords) is machine-speak, kept out.
                             done_called = True
                             done_message = "All set, your message went through and it's showing in the conversation now."
                             logger.info(f"[browser-agent {session_id}] ending: {perception_stall} post-send perception turns")
                             break
                         if not wrapup_nudged:
-                            # don't cut it off mid-thought: ride a wrap-up nudge out on
-                            # this turn's tool_results so next turn it answers via Done.
+                            # don't cut it off mid-thought: ride a wrap-up nudge out on this turn's tool_results so next turn it answers via Done.
                             wrapup_nudged = True
                             wrapup_pending = True
                             perception_stall = 0
@@ -1200,8 +1072,7 @@ async def run_browser_agent(
                     cancelled = True
                     break
 
-                # Handle ReportProgress; no-op execution that just records the
-                # model's brain state and streams it to the dashboard.
+                # Handle ReportProgress; no-op execution that just records the model's brain state and streams it to the dashboard.
                 if tu.name == "ReportProgress":
                     eval_prev = tu.input.get("evaluation_previous", "")
                     working_mem = tu.input.get("working_memory", "")
@@ -1210,11 +1081,7 @@ async def run_browser_agent(
                         current_next_goal = next_goal
                     if working_mem:
                         latest_working_mem = working_mem  # for the tier-2 playbook distill at the end
-                    # Distill the agent's own working memory into a per-domain
-                    # hint for the next visit. Only persist when the run stayed
-                    # on a SINGLE apex domain: working_memory is cumulative, so
-                    # on a multi-domain run it would describe one site but get
-                    # filed under whichever domain happens to be current.
+                    # Distill the agent's own working memory into a per-domain hint for the next visit. Only persist when the run stayed on a SINGLE apex domain: working_memory is cumulative, so on a multi-domain run it would describe one site but get filed under whichever domain happens to be current.
                     note_domain = (
                         session.browser_domains[-1]
                         if session.browser_domains
@@ -1242,10 +1109,7 @@ async def run_browser_agent(
                     })
                     continue
 
-                # Skill self-awareness (backend-inline; the skill store is here,
-                # not in the webview). The agent can inspect what shortcuts it has
-                # for this site and prune stale ones. Kept off the LLM context by
-                # default (it's a tool the agent calls only when it wants).
+                # Skill self-awareness (backend-inline; the skill store is here, not in the webview). The agent can inspect what shortcuts it has for this site and prune stale ones. Kept off the LLM context by default (it's a tool the agent calls only when it wants).
                 if tu.name in ("BrowserListSkills", "BrowserDeprecateSkill"):
                     cur_host = browser_skills.host_of(last_seen_url) or replay_host
                     if tu.name == "BrowserListSkills":
@@ -1276,9 +1140,7 @@ async def run_browser_agent(
                     })
                     continue
 
-                # Schema extract (backend-inline): the aux model reads the page
-                # text so the main model gets just the JSON it asked for, never
-                # the 15k raw chars. Read-only; falls back honest on any miss.
+                # Schema extract (backend-inline): the aux model reads the page text so the main model gets just the JSON it asked for, never the 15k raw chars. Read-only; falls back honest on any miss.
                 if tu.name == "BrowserExtract":
                     instruction = str(tu.input.get("instruction", "")).strip()
                     st = time.time()
@@ -1303,8 +1165,7 @@ async def run_browser_agent(
                                 "Extraction unavailable right now; use BrowserGetText and read the page yourself."
                             )
                             ex_ok = bool(data)
-                    # every attempt is logged (the completion gate cross-examines
-                    # this; a successful extract IS the productive read of a task)
+                    # every attempt is logged (the completion gate cross-examines this; a successful extract IS the productive read of a task)
                     action_log.append({
                         "tool": "BrowserExtract", "input": {"instruction": instruction[:200]},
                         "result_summary": ex_text[:200],
@@ -1324,9 +1185,7 @@ async def run_browser_agent(
                     })
                     continue
 
-                # Bulk-data sink: write a page-assembled dataset straight to a file so a
-                # big list never has to squeeze through the (truncating) reply. The JS runs
-                # in the page, but Python picks the path, so the write stays sandboxed.
+                # Bulk-data sink: write a page-assembled dataset straight to a file so a big list never has to squeeze through the (truncating) reply. The JS runs in the page, but Python picks the path, so the write stays sandboxed.
                 if tu.name == "BrowserSaveData":
                     st = time.time()
                     p_expr = tu.input.get("expression") or ""
@@ -1361,9 +1220,7 @@ async def run_browser_agent(
                     })
                     continue
 
-                # Intra-run batch replay: run a learned mechanical flow for many
-                # inputs at machine speed, verify every step, gate sends, never
-                # ghost. Reads/searches loop freely; irreversible steps refuse.
+                # Intra-run batch replay: run a learned mechanical flow for many inputs at machine speed, verify every step, gate sends, never ghost. Reads/searches loop freely; irreversible steps refuse.
                 if tu.name == "BrowserRepeatFlow":
                     steps_tmpl = tu.input.get("steps") or []
                     values = [str(v) for v in (tu.input.get("values") or [])]
@@ -1390,8 +1247,7 @@ async def run_browser_agent(
                                     item_ok = False; item_text = "cancelled"; break
                                 el = int((time.time() - st) * 1000)
                                 step_ok = "error" not in res
-                                # carry each step's output; the LAST read step's text is
-                                # the data the agent wanted from this item.
+                                # carry each step's output; the LAST read step's text is the data the agent wanted from this item.
                                 if step_ok and res.get("text"):
                                     item_text = str(res["text"])
                                 action_log.append({
@@ -1422,11 +1278,7 @@ async def run_browser_agent(
                     })
                     continue
 
-                # Handle Done: the model's typed-field finish. The `message` is
-                # the clean human reply (no OUTCOME tag, no UI mechanics), so it
-                # goes to the user as-is. Add its tool_result here (the post-loop
-                # integrity backfill pairs the rest + appends), set the flag, and
-                # break; the outer loop exits on done_called right after.
+                # Handle Done: the model's typed-field finish. The `message` is the clean human reply (no OUTCOME tag, no UI mechanics), so it goes to the user as-is. Add its tool_result here (the post-loop integrity backfill pairs the rest + appends), set the flag, and break; the outer loop exits on done_called right after.
                 if tu.name == "Done":
                     done_called = True
                     done_message = (tu.input.get("message") or "").strip()
@@ -1512,8 +1364,7 @@ async def run_browser_agent(
                         continue
 
                 start = time.time()
-                # did the PREVIOUS action already hand us fresh page state? a solo
-                # re-read now is a wasted round-trip; remembered before we overwrite it
+                # did the PREVIOUS action already hand us fresh page state? a solo re-read now is a wasted round-trip; remembered before we overwrite it
                 p_had_fresh_state = fresh_state_pending
                 tool_input = tu.input
                 if tu.name == "BrowserListInteractives" and current_next_goal:
@@ -1522,8 +1373,7 @@ async def run_browser_agent(
                 async def p_wait_exec(tool, params, bid, tid):
                     return await p_cancellable(execute_browser_tool(tool, params, bid, tid))
 
-                # Hard send-guard: an irreversible step physically cannot ride in a
-                # batch (the solo-send rule was prompt-only before; prompts drift).
+                # Hard send-guard: an irreversible step physically cannot ride in a batch (the solo-send rule was prompt-only before; prompts drift).
                 p_guard_why = (browser_batch_replay.live_batch_guard(
                     (tool_input or {}).get("actions"), attached_state_seen,
                     composer_pending=bool(browser_batch_replay.send_payload_from_log(action_log)))
@@ -1540,8 +1390,7 @@ async def run_browser_agent(
                         "batch only the routine steps around it."
                     )}
                 elif tu.name == "BrowserWait":
-                    # Smart wait: return as soon as the page is ready (target or DOM
-                    # settle), not on a blind timer (the audit's 42%-of-time hog).
+                    # Smart wait: return as soon as the page is ready (target or DOM settle), not on a blind timer (the audit's 42%-of-time hog).
                     result = await browser_wait.smart_wait(
                         p_wait_exec, browser_id, tab_id, tu.input.get("milliseconds"),
                         until=(tu.input.get("until") or ""),
@@ -1555,17 +1404,11 @@ async def run_browser_agent(
                     break
                 elapsed_ms = int((time.time() - start) * 1000)
 
-                # Act-and-confirm: if the agent declared the change it expects, VERIFY
-                # it actually happened, success is observed, never assumed. A hit returns
-                # fast (act + confirm in one turn); a miss is a clear "may not have worked"
-                # (and a wedge surfaces as a clean not-confirmed, not a blind 20s timeout),
-                # so the agent never claims a success it didn't see or re-fires blindly.
+                # Act-and-confirm: if the agent declared the change it expects, VERIFY it actually happened, success is observed, never assumed. A hit returns fast (act + confirm in one turn); a miss is a clear "may not have worked" (and a wedge surfaces as a clean not-confirmed, not a blind 20s timeout), so the agent never claims a success it didn't see or re-fires blindly.
                 p_expect = (str(tu.input.get("expect") or "").strip()
                            if isinstance(tu.input, dict) else "")
                 if p_expect and "error" not in result and tu.name in P_CONFIRM_TOOLS:
-                    # target_only: wait for the expected text to actually appear, don't
-                    # call it 'not confirmed' just because the page settled first (a sent
-                    # message lands in the thread a beat after settle, esp. under load)
+                    # target_only: wait for the expected text to actually appear, don't call it 'not confirmed' just because the page settled first (a sent message lands in the thread a beat after settle, esp. under load)
                     p_conf = await browser_wait.smart_wait(p_wait_exec, browser_id, tab_id, 4000,
                                                           until=p_expect, target_only=True)
                     if isinstance(p_conf, dict):
@@ -1582,13 +1425,7 @@ async def run_browser_agent(
                                 "(Send/Submit/Pay/Post) without first verifying the previous one did not go through."
                             )
 
-                # Send completion: a SUCCESSFUL click on a send-class control (Send/
-                # Submit/Post, opener-excluded so 'Message' never trips it) means the
-                # message went out, the composer clears instantly. We do NOT depend on
-                # the thread-text confirm here: the sent text often renders late, split
-                # across nodes, or scrolled off, so the text-probe is unreliable, which
-                # is exactly what left the model stalling to "double-check". A clean
-                # send click is proof enough; drive to the OUTCOME.
+                # Send completion: a SUCCESSFUL click on a send-class control (Send/ Submit/Post, opener-excluded so 'Message' never trips it) means the message went out, the composer clears instantly. We do NOT depend on the thread-text confirm here: the sent text often renders late, split across nodes, or scrolled off, so the text-probe is unreliable, which is exactly what left the model stalling to "double-check". A clean send click is proof enough; drive to the OUTCOME.
                 if task_is_send and not send_confirmed and "error" not in result and tu.name in P_CONFIRM_TOOLS:
                     p_cn = result.get("clickedName") or ""
                     p_cr = result.get("clickedRole") or ""
@@ -1613,8 +1450,7 @@ async def run_browser_agent(
                     "ok": "error" not in result,
                     "clicked_role": result.get("clickedRole"),
                     "clicked_name": result.get("clickedName"),
-                    # per-sub click identities, aligned by index, so a batched
-                    # click_index can distill into a replayable ClickByName
+                    # per-sub click identities, aligned by index, so a batched click_index can distill into a replayable ClickByName
                     "sub_results": [
                         {"index": r.get("index"), "ok": "error" not in r,
                          "clicked_role": r.get("clickedRole"), "clicked_name": r.get("clickedName")}
@@ -1625,11 +1461,7 @@ async def run_browser_agent(
                     last_seen_url = result["url"]
                 card_gone_streak = card_gone_streak + 1 if card_is_unavailable(result) else 0
 
-                # Error-recovery: the action MISSED (stale index, occlusion, off
-                # screen) but the page is alive. The model would otherwise spend a
-                # whole turn re-listing to see what happened; attach the CURRENT
-                # element list to the error so it re-acts next turn instead. Pure
-                # state enrichment, the action is NEVER retried (no double-send risk).
+                # Error-recovery: the action MISSED (stale index, occlusion, off screen) but the page is alive. The model would otherwise spend a whole turn re-listing to see what happened; attach the CURRENT element list to the error so it re-acts next turn instead. Pure state enrichment, the action is NEVER retried (no double-send risk).
                 if "error" in result and card_gone_streak == 0 and recoverable_tool_error(result.get("error", "")):
                     try:
                         p_rl = await asyncio.wait_for(
@@ -1662,24 +1494,17 @@ async def run_browser_agent(
                 )
                 if p_auto_state:
                     result["text"] = f"{result.get('text') or ''}{p_auto_state}"
-                    # a mutation attached fresh state; it stays "available" through
-                    # intervening reads (Wait/Extract don't invalidate it), so a
-                    # later solo re-list is still caught as redundant.
+                    # a mutation attached fresh state; it stays "available" through intervening reads (Wait/Extract don't invalidate it), so a later solo re-list is still caught as redundant.
                     fresh_state_pending = True
 
-                # One gentle nudge per violating turn, folded onto the action that
-                # ran, so the model self-corrects next turn without us costing it one.
+                # One gentle nudge per violating turn, folded onto the action that ran, so the model self-corrects next turn without us costing it one.
                 if rp_reminder_pending and tu.name in ACTION_TOOLS_REQUIRING_REPORT:
                     rp_reminder_pending = False
                     result["text"] = (f"{result.get('text') or ''}\n\n[note] Action ran. Next turn, "
                                        "include ReportProgress (working_memory + next_goal) alongside "
                                        "your action so your plan stays visible.")
 
-                # Auto-dismiss a blocking junk popup (cookie wall / upsell /
-                # coachmark) before it costs the model a turn. Mechanical, once
-                # per URL, only on the tight throwaway-dismiss vocabulary that
-                # never sits on a task-needed control, so it can't close anything
-                # required. After closing, re-list so the model sees the page beneath.
+                # Auto-dismiss a blocking junk popup (cookie wall / upsell / coachmark) before it costs the model a turn. Mechanical, once per URL, only on the tight throwaway-dismiss vocabulary that never sits on a task-needed control, so it can't close anything required. After closing, re-list so the model sees the page beneath.
                 if tu.name in P_AUTO_STATE_TOOLS and "error" not in result:
                     p_pop_url = (result.get("url") or last_seen_url or "").split("#")[0]
                     if p_pop_url and p_pop_url not in dismissed_popup_urls:
@@ -1698,10 +1523,7 @@ async def run_browser_agent(
                                 result["text"] = (f"{result.get('text') or ''}\n\n[auto] Closed a blocking "
                                                   f"popup ('{p_close}'); the page beneath is now active.{p_fresh}")
 
-                # Auto candidate scan: landing on a results-shaped page normally
-                # costs a read-then-decide turn pair; the cheap aux model reads it
-                # now so the pick happens on this same turn. Capped, per-URL,
-                # fail-silent (a miss just means the old two-turn dance).
+                # Auto candidate scan: landing on a results-shaped page normally costs a read-then-decide turn pair; the cheap aux model reads it now so the pick happens on this same turn. Capped, per-URL, fail-silent (a miss just means the old two-turn dance).
                 if (tu.name in P_AUTO_STATE_TOOLS and "error" not in result
                         and auto_scan_count < P_AUTO_SCAN_MAX_PER_RUN):
                     p_scan_url = (result.get("url") or last_seen_url or "").split("#")[0]
@@ -1733,11 +1555,7 @@ async def run_browser_agent(
                                 f"{p_scan_url[:90]} after {p_sc_ms}ms"
                             )
 
-                # Deferred replay re-check: the orchestrator often opens a fresh
-                # card on the wrong host, so the dispatch-time replay missed. Once
-                # a navigation lands us on a host that DOES have a matching skill,
-                # and nothing has dirtied the page yet, switch to replay (still
-                # verified per-step, still trust-gated). Fires at most once.
+                # Deferred replay re-check: the orchestrator often opens a fresh card on the wrong host, so the dispatch-time replay missed. Once a navigation lands us on a host that DOES have a matching skill, and nothing has dirtied the page yet, switch to replay (still verified per-step, still trust-gated). Fires at most once.
                 if (not replay_rechecked and tu.name == "BrowserNavigate"
                         and replay_recheck_is_safe(action_log)):
                     cur_host = browser_skills.host_of(last_seen_url)
@@ -1746,8 +1564,7 @@ async def run_browser_agent(
                         p_deferred = await p_try_replay(cur_host, turn + 1, allow_prefix=True)
                         if p_deferred is not None:
                             return p_deferred
-                        # a prefix replay just moved the page; tell the model on
-                        # THIS result so it continues from the composer
+                        # a prefix replay just moved the page; tell the model on THIS result so it continues from the composer
                         if replay_prefix_note:
                             result["text"] = f"{result.get('text') or ''}{replay_prefix_note}"
                             replay_prefix_note = ""
@@ -1765,14 +1582,7 @@ async def run_browser_agent(
                 if tu.name == "BrowserScreenshot" and result.get("image"):
                     final_screenshot = result["image"]
 
-                # Loop detection: did we just repeat the same (tool, input,
-                # result) for the third time in a row? If so, attach a loud
-                # warning to this tool_result so the model is forced to
-                # acknowledge it on its next turn.
-                # Loop detection only covers the non-excluded tools, so skip the
-                # hash entirely for the excluded ones; otherwise a screenshot/read
-                # serializes its full ~1MB result here just for detect_loop to
-                # discard it (it short-circuits excluded tools to False anyway).
+                # Loop detection: did we just repeat the same (tool, input, result) for the third time in a row? If so, attach a loud warning to this tool_result so the model is forced to acknowledge it on its next turn. Loop detection only covers the non-excluded tools, so skip the hash entirely for the excluded ones; otherwise a screenshot/read serializes its full ~1MB result here just for detect_loop to discard it (it short-circuits excluded tools to False anyway).
                 if tu.name in LOOP_DETECTION_EXCLUDED_TOOLS:
                     is_loop = False
                 else:
@@ -1791,9 +1601,7 @@ async def run_browser_agent(
                             session.browser_domains.append(domain)
                 except Exception:
                     pass
-                # The fast tier is ~0% used because the agent never thinks to ask.
-                # Once per host, when safe GET routes have been captured, nudge it:
-                # reading via the API beats re-scraping, especially in a batch loop.
+                # The fast tier is ~0% used because the agent never thinks to ask. Once per host, when safe GET routes have been captured, nudge it: reading via the API beats re-scraping, especially in a batch loop.
                 try:
                     p_rc = int(result.get("routes_available") or 0)
                     p_rhost = browser_skills.host_of(result.get("url") or last_seen_url)
@@ -1818,15 +1626,11 @@ async def run_browser_agent(
                         {"type": "text", "text": f"\n\n⚠️ {warning}"}
                     ]
 
-                # Stagnation: busy-but-stuck (no URL change + failures across a
-                # run of actions), distinct from the exact-repeat loop above.
+                # Stagnation: busy-but-stuck (no URL change + failures across a run of actions), distinct from the exact-repeat loop above.
                 stagnation_streak, stagnation_prev_url, stagnation_prev_text, stag_nudge = advance_stagnation(
                     stagnation_streak, stagnation_prev_url, stagnation_prev_text, tu.name, result,
                 )
-                # Skip the nudge when the loud loop warning already fired this
-                # turn (avoid double-messaging), but the aux adjudication below
-                # is NOT gated on is_loop: repeated identical failures trip BOTH
-                # detectors, and that's exactly when the escape hatch is needed.
+                # Skip the nudge when the loud loop warning already fired this turn (avoid double-messaging), but the aux adjudication below is NOT gated on is_loop: repeated identical failures trip BOTH detectors, and that's exactly when the escape hatch is needed.
                 if stag_nudge and not is_loop:
                     logger.warning(
                         f"[browser-agent {session_id}] stagnation streak "
@@ -1836,9 +1640,7 @@ async def run_browser_agent(
                         {"type": "text", "text": f"\n\n⚠️ {stag_nudge}"}
                     ]
 
-                # Under-batching nudge: two consecutive turns each spent a full
-                # model round-trip on ONE predictable action; say so on the
-                # result the model is about to read. Deterministic, code-fired.
+                # Under-batching nudge: two consecutive turns each spent a full model round-trip on ONE predictable action; say so on the result the model is about to read. Deterministic, code-fired.
                 if (tu is tool_uses_sorted[-1] and single_action_streak >= 2
                         and "error" not in result and not is_loop and not stag_nudge):
                     single_action_streak = 0
@@ -1855,9 +1657,7 @@ async def run_browser_agent(
                         "(Send/Submit/Pay/Post) solo."
                     )}]
 
-                # Redundant-read nudge: the previous action already attached a fresh
-                # element list, and this turn spent a whole round-trip re-reading it.
-                # Reads are the biggest turn sink (measured ~16 of 25 turns).
+                # Redundant-read nudge: the previous action already attached a fresh element list, and this turn spent a whole round-trip re-reading it. Reads are the biggest turn sink (measured ~16 of 25 turns).
                 if (tu.name in ("BrowserListInteractives", "BrowserGetText")
                         and p_had_fresh_state and "error" not in result):
                     redundant_read_nudges += 1
@@ -1872,8 +1672,7 @@ async def run_browser_agent(
                         "straight from the attached state; only re-read after it says it was truncated "
                         "or you genuinely changed the page in a way that list wouldn't reflect."
                     )}]
-                # Deterministic nudging exhausted: ONE cheap aux adjudication
-                # to suggest a concrete next step before we keep failing.
+                # Deterministic nudging exhausted: ONE cheap aux adjudication to suggest a concrete next step before we keep failing.
                 if stagnation_exhausted(stagnation_streak) and not aux_adjudicated:
                     aux_adjudicated = True
                     aux_client, aux_model = await p_get_aux_client()
@@ -1917,12 +1716,7 @@ async def run_browser_agent(
                     "message": result_msg.model_dump(mode="json"),
                 })
 
-            # Integrity backfill: every tool_use in the assistant turn MUST have a
-            # matching tool_result or the next API call 400s ("tool_use without
-            # tool_result"). A break mid-loop (cancel, or a turn that ran past the
-            # 30s upstream reset) can leave some unanswered, which silently corrupts
-            # the history AND the resume snapshot. Stub any missing one so the array
-            # is always well-formed, no matter which path fired.
+            # Integrity backfill: every tool_use in the assistant turn MUST have a matching tool_result or the next API call 400s ("tool_use without tool_result"). A break mid-loop (cancel, or a turn that ran past the 30s upstream reset) can leave some unanswered, which silently corrupts the history AND the resume snapshot. Stub any missing one so the array is always well-formed, no matter which path fired.
             p_answered = {tr.get("tool_use_id") for tr in tool_results}
             for tu in tool_uses_sorted:
                 if tu.id not in p_answered:
@@ -1932,9 +1726,7 @@ async def run_browser_agent(
                             "(not run, the turn ended before this tool executed)"}],
                         "is_error": True,
                     })
-            # Spin backstop asked for a wrap-up: ride the nudge out on this turn's
-            # tool_results (a text block alongside them) so the model's next turn is
-            # a clean Done instead of more looking.
+            # Spin backstop asked for a wrap-up: ride the nudge out on this turn's tool_results (a text block alongside them) so the model's next turn is a clean Done instead of more looking.
             if wrapup_pending:
                 tool_results.append({"type": "text", "text": P_WRAPUP_NUDGE})
             messages.append({"role": "user", "content": tool_results})
@@ -1945,9 +1737,7 @@ async def run_browser_agent(
             if cancelled:
                 break
 
-            # Hard cap on loops: if the model keeps repeating itself even
-            # after we warn it, force-exit so we don't burn the entire turn
-            # budget on a stuck agent.
+            # Hard cap on loops: if the model keeps repeating itself even after we warn it, force-exit so we don't burn the entire turn budget on a stuck agent.
             if loop_trigger_count >= LOOP_HARD_CAP:
                 logger.warning(
                     f"[browser-agent {session_id}] hit loop hard cap "
@@ -1955,10 +1745,7 @@ async def run_browser_agent(
                 )
                 break
 
-            # The card is unusable, gone (closed) OR hung (commands keep timing
-            # out / the page never responds). Either way the agent can't make
-            # progress, so stop retrying after a short streak and report honestly,
-            # instead of the 20-minute spin on a wedged tab.
+            # The card is unusable, gone (closed) OR hung (commands keep timing out / the page never responds). Either way the agent can't make progress, so stop retrying after a short streak and report honestly, instead of the 20-minute spin on a wedged tab.
             if card_gone_streak >= CARD_GONE_LIMIT:
                 logger.warning(
                     f"[browser-agent {session_id}] browser card {browser_id} is unusable "
@@ -1984,10 +1771,7 @@ async def run_browser_agent(
                 "final_screenshot": final_screenshot,
             }
 
-        # The model finishes through Done, so its `message` IS the user's reply
-        # (clean, conversational, no tag). The rare run that stops without calling
-        # Done falls back to its own terminal text, which is plain prose since no
-        # prompt asks for a machine tag anymore.
+        # The model finishes through Done, so its `message` IS the user's reply (clean, conversational, no tag). The rare run that stops without calling Done falls back to its own terminal text, which is plain prose since no prompt asks for a machine tag anymore.
         if done_called:
             summary = done_message or "Done."
         else:
@@ -2003,19 +1787,12 @@ async def run_browser_agent(
             except Exception:
                 pass
 
-        # Persist conversation history so the next BrowserAgent call on this
-        # browser can resume rather than re-orient. Trim to the most recent
-        # MAX_HISTORY_MESSAGES turns to keep token usage bounded; but
-        # never split a tool_use ↔ tool_result pair across the cut, or the
-        # next API request will 400.
+        # Persist conversation history so the next BrowserAgent call on this browser can resume rather than re-orient. Trim to the most recent MAX_HISTORY_MESSAGES turns to keep token usage bounded; but never split a tool_use ↔ tool_result pair across the cut, or the next API request will 400.
         browser_history.BROWSER_HISTORY[browser_id] = trim_history_by_turns(
             messages, MAX_HISTORY_MESSAGES,
         )
 
-        # Honesty gate: the model declaring done is not proof the goal happened.
-        # If the run did no real work (zero actions, all actions errored, or only
-        # looked around), report the truth instead of a ghost "completed". A gone
-        # card gets its own precise reason instead of the generic verdict.
+        # Honesty gate: the model declaring done is not proof the goal happened. If the run did no real work (zero actions, all actions errored, or only looked around), report the truth instead of a ghost "completed". A gone card gets its own precise reason instead of the generic verdict.
         if card_gone_streak >= CARD_GONE_LIMIT:
             honest, dishonest_reason = False, "the browser became unresponsive (the tab hung or was closed); it needs a fresh browser to continue"
         else:
@@ -2035,9 +1812,7 @@ async def run_browser_agent(
             f"nudges={batching_nudges} redundant_reads={redundant_read_nudges} "
             f"guard_blocks={batch_guard_blocks}"
         )
-        # Route-hint adoption: of the hinted steps, how many did the run actually
-        # take? Pure telemetry; this is how we learn whether hints steer or get
-        # ignored (the batching-nudge lesson: measure, don't assume).
+        # Route-hint adoption: of the hinted steps, how many did the run actually take? Pure telemetry; this is how we learn whether hints steer or get ignored (the batching-nudge lesson: measure, don't assume).
         if route_hint_keys:
             p_adopted = sum(1 for k in route_hint_keys if browser_skills.hint_step_adopted(k, action_log))
             logger.info(
@@ -2054,9 +1829,7 @@ async def run_browser_agent(
             f"tool_errors={p_err_tools} recovery_attaches={recovery_attaches} rp_violations={rp_violations}"
         )
         p_nt = turn + 1
-        # merge-verify telemetry: read-only tool calls AFTER the last state-changing
-        # action are the redundant trailing "let me re-verify" turns the prompt now
-        # folds into the OUTCOME line; this should trend to 0 on the confirmed path.
+        # merge-verify telemetry: read-only tool calls AFTER the last state-changing action are the redundant trailing "let me re-verify" turns the prompt now folds into the OUTCOME line; this should trend to 0 on the confirmed path.
         p_act_tools = {"BrowserType", "BrowserClickIndex", "BrowserClick", "BrowserClickByName",
                       "BrowserPressKey", "BrowserScroll", "BrowserBatch", "BrowserNavigate"}
         p_read_tools = {"BrowserScreenshot", "BrowserGetText", "BrowserGetElements",
@@ -2075,11 +1848,7 @@ async def run_browser_agent(
                                     path="llm_fallback" if replay_attempted else "llm",
                                     task_sig=browser_skills.compute_sig(skill_key_task),
                                     playbook_seeded=pb_seeded)
-        # Learn this task ONLY from a genuinely successful run whose deliverable a
-        # deterministic replay can actually reproduce. We skip recording when the
-        # run was dishonest (ghost) OR when its answer was gathered/judged content
-        # (a list/report): replay can redo the clicks but not regenerate the
-        # judgment, so recording it would create a thin shortcut that later ghosts.
+        # Learn this task ONLY from a genuinely successful run whose deliverable a deterministic replay can actually reproduce. We skip recording when the run was dishonest (ghost) OR when its answer was gathered/judged content (a list/report): replay can redo the clicks but not regenerate the judgment, so recording it would create a thin shortcut that later ghosts.
         informational = deliverable_is_informational(summary, skill_key_task)
         logger.info(f"[browser-skills] record gate: honest={honest} informational={informational}")
         if honest and not informational:
@@ -2101,10 +1870,7 @@ async def run_browser_agent(
             logger.info("[browser-skills] NOT recorded (deliverable was gathered/judged content; "
                         "replay can't reproduce it, so no thin-shortcut ghost)")
 
-        # Tier-2 memory: on a substantive verified success, distill this run into
-        # the DURABLE strategy playbook (one cheap aux call, mem0-style distill+
-        # reconcile). Fires for BOTH mechanical and judgment tasks, it's how the
-        # judgment ones (which can't be skills) still get faster/wiser next time.
+        # Tier-2 memory: on a substantive verified success, distill this run into the DURABLE strategy playbook (one cheap aux call, mem0-style distill+ reconcile). Fires for BOTH mechanical and judgment tasks, it's how the judgment ones (which can't be skills) still get faster/wiser next time.
         if browser_playbook.should_learn(honest, turn + 1):
             try:
                 pb_host = browser_skills.host_of(last_seen_url)
@@ -2114,9 +1880,7 @@ async def run_browser_agent(
                         pb_host, skill_key_task, latest_working_mem, summary,
                         aux_client, aux_model,
                     )
-                    # Perceived value, zero clicks: a calm closing line so the user
-                    # sees the agent got a little smarter for next time. Only when
-                    # it genuinely learned something, so it stays honest + rare.
+                    # Perceived value, zero clicks: a calm closing line so the user sees the agent got a little smarter for next time. Only when it genuinely learned something, so it stays honest + rare.
                     if changed:
                         session.memory_learned = True  # drives the subtle "Learned" card chip
                         p_learn_msg = Message(role="assistant",
@@ -2127,12 +1891,7 @@ async def run_browser_agent(
                         })
             except Exception as e:
                 logger.debug(f"[browser-playbook] distill skipped: {e}")
-        # The model asked to leave the browser open because the deliverable lives
-        # on the page (a video playing, a page to read). Pin the card so the
-        # auto-close on parent finish skips it. Only on honest success: never pin
-        # a broken or ghost run open. The keep broadcast lands before the parent
-        # reaches terminal state (it awaits this run), so the frontend has the
-        # flag set before any close path runs.
+        # The model asked to leave the browser open because the deliverable lives on the page (a video playing, a page to read). Pin the card so the auto-close on parent finish skips it. Only on honest success: never pin a broken or ghost run open. The keep broadcast lands before the parent reaches terminal state (it awaits this run), so the frontend has the flag set before any close path runs.
         if honest and done_keep_open and dashboard_id:
             try:
                 from backend.apps.dashboards.dashboards import load, save
@@ -2160,14 +1919,9 @@ async def run_browser_agent(
             "session_id": session_id,
             "browser_id": browser_id,
             "summary": summary,
-            # structured success signal the parent reads (replaces grepping the
-            # summary for a tag): true ONLY when the model explicitly finished via
-            # Done with success AND the honesty gate agreed. A run that just stopped
-            # (max turns, gave up, never called Done) is NOT a clean success, so the
-            # fast path recovers instead of shipping a silent half-finish.
+            # structured success signal the parent reads (replaces grepping the summary for a tag): true ONLY when the model explicitly finished via Done with success AND the honesty gate agreed. A run that just stopped (max turns, gave up, never called Done) is NOT a clean success, so the fast path recovers instead of shipping a silent half-finish.
             "done": honest and done_called and done_success,
-            # surface the honest failure to the parent so it doesn't treat a
-            # did-nothing run as a success it can build on
+            # surface the honest failure to the parent so it doesn't treat a did-nothing run as a success it can build on
             **({} if honest else {"error": summary}),
             "action_log": action_log,
             "final_screenshot": final_screenshot,
@@ -2200,11 +1954,9 @@ async def run_browser_agent(
         }
 
 
-# Cards a sub-agent is actively driving in this process. Reuse must never hand
-# two agents one webview (their commands would interleave into chaos).
+# Cards a sub-agent is actively driving in this process. Reuse must never hand two agents one webview (their commands would interleave into chaos).
 ACTIVE_AGENT_CARDS: set[str] = set()
-# find+claim+create must be one critical section or two parallel dispatches
-# race to claim the same idle card (or both miss and double-create).
+# find+claim+create must be one critical section or two parallel dispatches race to claim the same idle card (or both miss and double-create).
 p_card_pick_lock = asyncio.Lock()
 
 
@@ -2285,11 +2037,7 @@ async def run_browser_agents(
     """
     pass  # Browser agent launch captured via session dump
 
-    # No dashboard renderer means every browser command is dead on arrival;
-    # failing here saves the 2-5 LLM turns a sub burns narrating timeouts at a
-    # corpse before card-gone detection trips. But a CPU-starved renderer can
-    # briefly drop its WS then auto-reconnect, so wait (capped) for it to come
-    # back before refusing, turning a load blip into a pause, not a failed run.
+    # No dashboard renderer means every browser command is dead on arrival; failing here saves the 2-5 LLM turns a sub burns narrating timeouts at a corpse before card-gone detection trips. But a CPU-starved renderer can briefly drop its WS then auto-reconnect, so wait (capped) for it to come back before refusing, turning a load blip into a pause, not a failed run.
     if not ws_manager.global_connections and not await await_reconnect(lambda: bool(ws_manager.global_connections)):
         logger.warning("[browser-agent] dispatch refused: no dashboard after reconnect wait")
         return [{
@@ -2302,11 +2050,7 @@ async def run_browser_agents(
 
     pre_selected = set(pre_selected_browser_ids or [])
 
-    # The user explicitly picked a browser via select-mode, so that card must be driven
-    # instead of spawning a fresh one. The model often omits browser_id when calling the
-    # tool, which used to fall through to host-based auto-create (the "it always opens its
-    # own browser" bug); here we hand each unclaimed selected card to the next task that
-    # named none, BEFORE the parallel dispatch so it can't race the card-pick lock.
+    # The user explicitly picked a browser via select-mode, so that card must be driven instead of spawning a fresh one. The model often omits browser_id when calling the tool, which used to fall through to host-based auto-create (the "it always opens its own browser" bug); here we hand each unclaimed selected card to the next task that named none, BEFORE the parallel dispatch so it can't race the card-pick lock.
     p_unclaimed = [b for b in (pre_selected_browser_ids or []) if b]
     for p_t in tasks:
         if not p_t.get("browser_id") and p_unclaimed:
@@ -2316,15 +2060,12 @@ async def run_browser_agents(
         browser_id = task_def.get("browser_id", "")
         task_text = task_def.get("task", "")
         url = task_def.get("url", "")
-        # advisory deep entry (from the fast-path brief): a NEW card opens on it
-        # directly (no google detour); a REUSED card is never moved by it, so a
-        # warm card's deeper page state always wins
+        # advisory deep entry (from the fast-path brief): a NEW card opens on it directly (no google detour); a REUSED card is never moved by it, so a warm card's deeper page state always wins
         entry_url = task_def.get("entry_url", "")
 
         reused = False
         if not browser_id and dashboard_id:
-            # the url param is often empty with the target buried in the task
-            # text; a url there still names the host we must not duplicate
+            # the url param is often empty with the target buried in the task text; a url there still names the host we must not duplicate
             host_src = url or entry_url or next(iter(re.findall(r"https?://[^\s)\"'<>]+", task_text)), "")
             async with p_card_pick_lock:
                 browser_id = find_reusable_card(dashboard_id, host_src, parent_session_id)

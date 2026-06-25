@@ -28,12 +28,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# One probe, built per wait so it can also look for the agent's target. Returns:
-#   ready  - document.readyState === 'complete'
-#   quiet  - ms since the last network resource (the old network-idle signal)
-#   elems  - element count; the loop watches it stop changing = DOM/visual settle
-#   found  - the agent's `until` target is present + visible (visible text or selector)
-# `until` is JSON-encoded into a string literal, so it's data, never executable.
+# One probe, built per wait so it can also look for the agent's target. Returns: ready  - document.readyState === 'complete' quiet  - ms since the last network resource (the old network-idle signal) elems  - element count; the loop watches it stop changing = DOM/visual settle found  - the agent's `until` target is present + visible (visible text or selector) `until` is JSON-encoded into a string literal, so it's data, never executable.
 def p_probe_js(until: str) -> str:
     spec = json.dumps(until or "")
     return (
@@ -53,12 +48,7 @@ def p_probe_js(until: str) -> str:
 P_QUIET_WINDOW_MS = 400   # network must be silent this long to count as settled
 P_FLOOR_MS = 250          # never return before this (a momentary gap isn't 'settled')
 P_POLL_MS = 150
-# A healthy probe is tens of ms. A busy-but-fine SPA (heavy main-thread work mid-
-# hydration) can occasionally block longer, so a slow probe is NOT proof of death,
-# it's just a reason to stop THIS wait early instead of inheriting the 30s command
-# timeout. We bound each probe at this, and after a few consecutive non-responses
-# we surface hung=True as a SIGNAL (the loop folds it into a cross-command streak
-# and only then acts), never as a unilateral abort from a single wait.
+# A healthy probe is tens of ms. A busy-but-fine SPA (heavy main-thread work mid- hydration) can occasionally block longer, so a slow probe is NOT proof of death, it's just a reason to stop THIS wait early instead of inheriting the 30s command timeout. We bound each probe at this, and after a few consecutive non-responses we surface hung=True as a SIGNAL (the loop folds it into a cross-command streak and only then acts), never as a unilateral abort from a single wait.
 P_PROBE_TIMEOUT_S = 2.5
 MAX_PROBE_TIMEOUTS = 3
 
@@ -113,10 +103,7 @@ async def smart_wait(execute_fn, browser_id, tab_id, max_ms, *, until="",
         await asyncio.sleep(min(poll_ms, max(0, max_ms - p_elapsed())) / 1000)
         if p_elapsed() >= max_ms:
             break
-        # Bound each probe so a wedged tab can't make us inherit the 30s command
-        # timeout. A timeout is a not-responding signal (not a verdict): count
-        # consecutive ones and surface hung only after the threshold; any non-
-        # timeout error is a different problem, treated as 'keep waiting'.
+        # Bound each probe so a wedged tab can't make us inherit the 30s command timeout. A timeout is a not-responding signal (not a verdict): count consecutive ones and surface hung only after the threshold; any non- timeout error is a different problem, treated as 'keep waiting'.
         try:
             res = await asyncio.wait_for(
                 execute_fn("BrowserEvaluate", {"expression": probe_js}, browser_id, tab_id),
@@ -146,9 +133,7 @@ async def smart_wait(execute_fn, browser_id, tab_id, max_ms, *, until="",
             last_elems = elems
             elems_changed_at = time.monotonic()
         dom_stable_ms = (time.monotonic() - elems_changed_at) * 1000
-        # Confirming an action (target_only): only the target appearing counts; a
-        # bare settle without it keeps waiting, so a late-rendering result isn't a
-        # false miss. Bounded by max_ms either way.
+        # Confirming an action (target_only): only the target appearing counts; a bare settle without it keeps waiting, so a late-rendering result isn't a false miss. Bounded by max_ms either way.
         if target_only and until:
             if probe.get("found"):
                 settled = True

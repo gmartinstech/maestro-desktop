@@ -10,8 +10,7 @@ from backend.apps.agents.core.models import (
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.settings import load_settings
 from backend.apps.tools_lib.tools_lib import load_builtin_permissions
-# SESSIONS_DIR is re-exported on purpose: session_store reads agent_manager.SESSIONS_DIR at
-# call time (dodging a circular import), and the disk-resilience test monkeypatches it here.
+# SESSIONS_DIR is re-exported on purpose: session_store reads agent_manager.SESSIONS_DIR at call time (dodging a circular import), and the disk-resilience test monkeypatches it here.
 from backend.config.paths import SESSIONS_DIR as SESSIONS_DIR
 from backend.apps.agents.manager.session.session_store import (
     save_session,
@@ -40,13 +39,9 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
     def __init__(self):
         self.sessions: Dict[str, AgentSession] = {}
         self.tasks: Dict[str, asyncio.Task] = {}
-        # Live mirror of the in-flight streamed assistant text per session, so a
-        # stop can persist the partial reply instantly instead of waiting out the
-        # multi-second SDK teardown the cancel handler sits behind.
+        # Live mirror of the in-flight streamed assistant text per session, so a stop can persist the partial reply instantly instead of waiting out the multi-second SDK teardown the cancel handler sits behind.
         self.live_partial: Dict[str, PartialReply] = {}
-        # Per-session cancel signal: the loop stashes its asyncio.Event here so a
-        # stop/close can set it. Lives on the manager, not the AgentSession model,
-        # so it stays out of serialization (an Event can't be model_dump'd).
+        # Per-session cancel signal: the loop stashes its asyncio.Event here so a stop/close can set it. Lives on the manager, not the AgentSession model, so it stays out of serialization (an Event can't be model_dump'd).
         self.cancel_events: Dict[str, asyncio.Event] = {}
 
 
@@ -65,9 +60,7 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
         )
 
         try:
-            # SDK presence check: fall to mock mode here, before the options build,
-            # so a missing SDK is a clean mock run, not an error card. The real use
-            # is in run_options / turn_runner (lazy-imported there).
+            # SDK presence check: fall to mock mode here, before the options build, so a missing SDK is a clean mock run, not an error card. The real use is in run_options / turn_runner (lazy-imported there).
             import claude_agent_sdk  # noqa: F401
         except ImportError:
             logger.warning("claude_agent_sdk not installed, running in mock mode")
@@ -76,11 +69,7 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
 
         session.status = "running"
 
-        # Resolve the model id now so every closure (approval hook, tool
-        # executed handler, etc.) has both the short name and the
-        # 9Router-prefixed id available without re-resolving. The short
-        # name is what the user sees; the router id is what 9Router
-        # reports its per-model counters under.
+        # Resolve the model id now so every closure (approval hook, tool executed handler, etc.) has both the short name and the 9Router-prefixed id available without re-resolving. The short name is what the user sees; the router id is what 9Router reports its per-model counters under.
         from backend.apps.agents.providers.registry import (
             resolve_model_id_for_sdk as p_resolve_model_id_early,
             get_api_type as p_get_api_type_early,
@@ -90,17 +79,8 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
 
         builtin_perms = load_builtin_permissions()
 
-        # Per-tool DEFAULT policy (overridden by anything the user has set
-        # explicitly in builtin_permissions.json). Bash defaults to
-        # always_allow like every other builtin, for a frictionless run.
-        # Three guards in path_gate STILL force a prompt even on always_allow:
-        # the catastrophic-pattern match (rm -rf and friends), OS-scheduling
-        # (cron/launchd persistence), and the sensitive-path gate. So the
-        # poisoned-email -> destructive-command case is still caught; what
-        # this trades away is the prompt on ordinary shell commands. Users
-        # who want a prompt on every command can flip Bash to "ask" in the UI.
-        # Bind turn + stderr buffer first: build_agent_options can raise early (e.g.
-        # no provider configured), and the except hands both to handle_run_error.
+        # Builtins default to always_allow (frictionless); path_gate still force-prompts on catastrophic patterns (rm -rf), OS-scheduling, and sensitive paths, so poisoned-email -> destructive-command is still caught. Flip Bash to "ask" in the UI for a prompt on every command.
+        # Bind turn + stderr first: build_agent_options can raise early (no provider) and the except hands both to handle_run_error.
         turn = TurnState()
         p_stderr_buffer: List[str] = []
         try:
@@ -119,15 +99,7 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
             )
             session.status = "completed"
 
-            # Auto-continuation hook (Phase 3). If MCPActivate (or any
-            # analogous flow) flagged pending_continuation during this
-            # turn, kick off a follow-up turn immediately with the
-            # captured prompt. We dispatch as a fire-and-forget task so
-            # the current run_agent_loop frame can unwind cleanly
-            # before the next turn's options + history rebuild kicks in.
-            # The follow-up is `hidden=True` so it doesn't add a user
-            # bubble to the visible chat; the model sees it as a
-            # synthetic prompt to keep working.
+            # Auto-continuation hook (Phase 3). If MCPActivate (or any analogous flow) flagged pending_continuation during this turn, kick off a follow-up turn immediately with the captured prompt. We dispatch as a fire-and-forget task so the current run_agent_loop frame can unwind cleanly before the next turn's options + history rebuild kicks in. The follow-up is `hidden=True` so it doesn't add a user bubble to the visible chat; the model sees it as a synthetic prompt to keep working.
             try:
                 if getattr(session, "pending_continuation", False):
                     p_continuation_prompt = session.pending_continuation_prompt or "Continue."
@@ -142,30 +114,19 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
             except Exception:
                 logger.exception("auto-continuation dispatch failed")
         except asyncio.CancelledError:
-            # Only act if we're still the session's live task. A user stop pops
-            # this task (stop_agent already finalized status + partial), and a
-            # follow-up message may have started a newer turn; either way this
-            # dying task must NOT clobber the live status or pop the new turn's
-            # in-flight partial mirror.
+            # Only act if we're still the session's live task. A user stop pops this task (stop_agent already finalized status + partial), and a follow-up message may have started a newer turn; either way this dying task must NOT clobber the live status or pop the new turn's in-flight partial mirror.
             if self.tasks.get(session_id) is asyncio.current_task():
                 session.status = "stopped"
-                # A cancelled turn desyncs the CLI's resume transcript from
-                # session.messages (the SDK never recorded the interrupted
-                # turn), so force the next turn to rebuild history from
-                # session.messages, else resume/follow-ups replay a transcript
-                # with no trace of the stopped reply ("nothing to continue").
+                # A cancelled turn desyncs the CLI's resume transcript from session.messages (the SDK never recorded the interrupted turn), so force the next turn to rebuild history from session.messages, else resume/follow-ups replay a transcript with no trace of the stopped reply ("nothing to continue").
                 session.needs_fresh_session = True
-                # Persist whatever streamed before the cancel (edit / branch
-                # switch paths; the user-stop path already did this in stop_agent).
+                # Persist whatever streamed before the cancel (edit / branch switch paths; the user-stop path already did this in stop_agent).
                 await self.commit_partial_now(session)
             turn.stream_text_msg_id = None
             turn.stream_text_accum = ""
         except Exception as e:
             await handle_run_error(e, session, session_id, turn, p_stderr_buffer)
         except BaseException as e:
-            # Catch BaseExceptionGroup from anyio task groups (e.g. concurrent
-            # CLI crash + pending approval cancellation) so it doesn't escape
-            # and kill the uvicorn process.
+            # Catch BaseExceptionGroup from anyio task groups (e.g. concurrent CLI crash + pending approval cancellation) so it doesn't escape and kill the uvicorn process.
             logger.exception(f"Agent {session_id} fatal error: {e}")
             session.status = "error"
             error_msg = Message(role="system", content=f"Error: {str(e)}", branch_id=session.active_branch_id)
@@ -175,31 +136,18 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
                 "message": error_msg.model_dump(mode="json"),
             })
         finally:
-            # Only the session's live task finalizes. A stopped task (popped by
-            # stop_agent, which already finalized status + saved) or one
-            # superseded by a newer turn must not pop the new turn's partial
-            # mirror, broadcast a stale terminal status, or overwrite the
-            # snapshot the live turn is writing.
+            # Only the session's live task finalizes. A stopped task (popped by stop_agent, which already finalized status + saved) or one superseded by a newer turn must not pop the new turn's partial mirror, broadcast a stale terminal status, or overwrite the snapshot the live turn is writing.
             p_is_live_task = self.tasks.get(session_id) is asyncio.current_task()
             if p_is_live_task:
                 self.live_partial.pop(session_id, None)
             if session_id in self.sessions and p_is_live_task:
-                # For canvas-launched App Builder sessions, the workspace
-                # folder IS the session_id (see launch_agent), so meta.json
-                # lives at outputs_workspace/<session_id>/meta.json. Read it
-                # and propagate name/description into the Output row before
-                # the terminal status fires; without this, the row stays
-                # "Untitled App" forever because no React component polls
-                # the file on the canvas path. Best-effort, only acts when
-                # the row's name is still the default placeholder.
+                # For canvas-launched App Builder sessions, the workspace folder IS the session_id (see launch_agent), so meta.json lives at outputs_workspace/<session_id>/meta.json. Read it and propagate name/description into the Output row before the terminal status fires; without this, the row stays "Untitled App" forever because no React component polls the file on the canvas path. Best-effort, only acts when the row's name is still the default placeholder.
                 if session.mode == "view-builder":
                     try:
                         from backend.apps.outputs.outputs import sync_output_from_meta_json
                         from backend.apps.outputs.workspace_io import load_all as load_outputs
                         if sync_output_from_meta_json(session_id, fallback_name=session.name):
-                            # Broadcast the renamed row so the sidebar
-                            # flips from "Untitled App" to the real name
-                            # without waiting for the next mount.
+                            # Broadcast the renamed row so the sidebar flips from "Untitled App" to the real name without waiting for the next mount.
                             try:
                                 matching = [o for o in load_outputs() if o.workspace_id == session_id]
                                 if matching:
@@ -219,21 +167,6 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
                     save_session(session_id, session.model_dump(mode="json"))
                 except Exception as e:
                     logger.warning(f"Failed to snapshot session {session_id}: {e}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 agent_manager = AgentManager()

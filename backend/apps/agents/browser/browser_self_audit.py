@@ -63,9 +63,7 @@ def audit(metrics_dir: str) -> dict:
     skill_events = p_read_jsonl(os.path.join(metrics_dir, "skill_events.jsonl"))
     findings: list[dict] = []
 
-    # 1) THRASH: a skill re-versioned (edit) or sent to quarantine many times but
-    # never PROMOTED, the kinds the skill layer actually records. It keeps re-learning
-    # and never earns trust = the recorded steps don't hold up at replay.
+    # 1) THRASH: a skill re-versioned (edit) or sent to quarantine many times but never PROMOTED, the kinds the skill layer actually records. It keeps re-learning and never earns trust = the recorded steps don't hold up at replay.
     churn: dict[tuple, int] = defaultdict(int)
     promotes: dict[tuple, int] = defaultdict(int)
     for e in skill_events:
@@ -136,8 +134,7 @@ def audit(metrics_dir: str) -> dict:
 
 
 def p_host_of_task(task: dict) -> str:
-    # tasks.jsonl doesn't store host directly; task_sig is host-agnostic, so fall
-    # back to a coarse bucket. browser_id groups a card's runs well enough for norms.
+    # tasks.jsonl doesn't store host directly; task_sig is host-agnostic, so fall back to a coarse bucket. browser_id groups a card's runs well enough for norms.
     return task.get("browser_id") or task.get("task_sig") or "unknown"
 
 

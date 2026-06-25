@@ -57,10 +57,7 @@ async def outputs_lifespan():
     try:
         yield
     finally:
-        # Reap every per-app subprocess. Without this each `bash run.sh`
-        # (and its vite/uvicorn descendants) reparents to PID 1 when the
-        # main backend dies, leaving ghost listeners on the .env-pinned
-        # ports that block the next OpenSwarm launch's reload preview.
+        # Reap every per-app subprocess. Without this each `bash run.sh` (and its vite/uvicorn descendants) reparents to PID 1 when the main backend dies, leaving ghost listeners on the .env-pinned ports that block the next OpenSwarm launch's reload preview.
         try:
             from backend.apps.outputs.runtime import manager as runtime_manager
             killed = await runtime_manager.stop_all()
@@ -73,9 +70,7 @@ async def outputs_lifespan():
 outputs = SubApp("outputs", outputs_lifespan)
 
 
-# ---------------------------------------------------------------------------
-# File-serving endpoints (for iframe preview with multi-file support)
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- File-serving endpoints (for iframe preview with multi-file support) ---------------------------------------------------------------------------
 
 @outputs.router.get("/workspace/{workspace_id}/serve/{filepath:path}")
 async def serve_workspace_file(workspace_id: str, filepath: str, p_d: str = ""):
@@ -94,9 +89,7 @@ async def serve_workspace_file(workspace_id: str, filepath: str, p_d: str = ""):
         input_json, result_json = decode_data_param(p_d) if p_d else ("{}", "null")
         backend_url_json = backend_url_for_workspace(workspace_id)
         content = inject_data_into_html(content, input_json, result_json, backend_url_json, with_runtime=True)
-        # Iframe sub-resource fetches (<link>, <script src>, <img>) drop the
-        # parent's ?token= query string, so rewrite the HTML to put the token
-        # back on every relative URL; otherwise sub-resources 401.
+        # Iframe sub-resource fetches (<link>, <script src>, <img>) drop the parent's ?token= query string, so rewrite the HTML to put the token back on every relative URL; otherwise sub-resources 401.
         content = inject_token_into_relative_urls(content, get_auth_token())
 
     mime, _ = mimetypes.guess_type(filepath)
@@ -121,9 +114,7 @@ async def serve_output_file(output_id: str, filepath: str, p_d: str = ""):
     return Response(content=content, media_type=mime or "text/plain")
 
 
-# ---------------------------------------------------------------------------
-# CRUD + workspace endpoints
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- CRUD + workspace endpoints ---------------------------------------------------------------------------
 
 @outputs.router.get("/list")
 async def list_outputs():
@@ -146,9 +137,7 @@ async def read_workspace(workspace_id: str):
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Include `path` so the frontend can rehydrate without re-calling /seed.
-    # /seed unconditionally overwrites, which would clobber any in-progress edits
-    # the agent made since the last save.
+    # Include `path` so the frontend can rehydrate without re-calling /seed. /seed unconditionally overwrites, which would clobber any in-progress edits the agent made since the last save.
     return {"files": files, "meta": meta, "path": os.path.abspath(folder)}
 
 
@@ -276,20 +265,13 @@ async def seed_workspace(body: WorkspaceSeedRequest):
     folder = os.path.join(WORKSPACE_DIR, body.workspace_id)
     os.makedirs(folder, exist_ok=True)
 
-    # An explicit non-empty `files` payload means the caller has flat-mode
-    # content to write (a saved legacy Output being reseeded). Don't
-    # clobber that with the React template even if template_mode is the
-    # new default; the migration helper has its own path for that.
+    # An explicit non-empty `files` payload means the caller has flat-mode content to write (a saved legacy Output being reseeded). Don't clobber that with the React template even if template_mode is the new default; the migration helper has its own path for that.
     effective_mode = body.template_mode
     if body.files:
         effective_mode = "flat"
 
     if effective_mode == "webapp_template":
-        # Idempotency guard: re-seeding an existing webapp_template
-        # workspace would clobber the agent's edits (the helper uses
-        # dirs_exist_ok=True + copytree). If `run.sh` already exists,
-        # the workspace was seeded on a previous visit; skip the file
-        # copy and only re-derive the frontend port from .env.
+        # Idempotency guard: re-seeding an existing webapp_template workspace would clobber the agent's edits (the helper uses dirs_exist_ok=True + copytree). If `run.sh` already exists, the workspace was seeded on a previous visit; skip the file copy and only re-derive the frontend port from .env.
         from backend.apps.outputs.runtime import find_free_port, read_env_value
         already_seeded = os.path.exists(os.path.join(folder, "run.sh"))
         if already_seeded:
@@ -301,23 +283,14 @@ async def seed_workspace(body: WorkspaceSeedRequest):
         else:
             frontend_port = find_free_port()
             seed_webapp_template_workspace(folder, frontend_port)
-            # SKILL.md still goes in workspace root; agent reads it for
-            # context. Live content (user-editable via Skills page) is
-            # injected into the system prompt regardless.
+            # SKILL.md still goes in workspace root; agent reads it for context. Live content (user-editable via Skills page) is injected into the system prompt regardless.
             with open(os.path.join(folder, "SKILL.md"), "w", encoding="utf-8") as f:
                 f.write(load_app_builder_skill())
         meta = body.meta or {}
         if body.meta and not already_seeded:
             with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as f:
                 json.dump(body.meta, f, indent=2)
-        # Create (or look up) the Output record so the app appears in
-        # the Apps sidebar the moment the user kicks off generation.
-        # Previously the record only landed when the editor's autosave
-        # fired, which itself was gated on `files['index.html']` being
-        # non-empty (a flat-template invariant); meaning React+Vite
-        # apps that navigated-away mid-build had no way back. The record
-        # is a thin pointer (name + workspace_id); the workspace itself
-        # remains the source of truth for the code.
+        # Create (or look up) the Output record so the app appears in the Apps sidebar the moment the user kicks off generation. Previously the record only landed when the editor's autosave fired, which itself was gated on `files['index.html']` being non-empty (a flat-template invariant); meaning React+Vite apps that navigated-away mid-build had no way back. The record is a thin pointer (name + workspace_id); the workspace itself remains the source of truth for the code.
         output_id: Optional[str] = None
         try:
             existing = [o for o in load_all() if o.workspace_id == body.workspace_id]
@@ -346,11 +319,7 @@ async def seed_workspace(body: WorkspaceSeedRequest):
             "already_seeded": already_seeded,
         }
 
-    # Legacy flat path. Seed only fills in MISSING files; it never overwrites
-    # what's already on disk. A reopen re-sends the inline output.files snapshot,
-    # which lags behind whatever the agent just wrote to the workspace; writing it
-    # back reverted every edited file (new files survived, edited ones snapped to
-    # the snapshot). Disk wins once an app exists.
+    # Legacy flat path. Seed only fills in MISSING files; it never overwrites what's already on disk. A reopen re-sends the inline output.files snapshot, which lags behind whatever the agent just wrote to the workspace; writing it back reverted every edited file (new files survived, edited ones snapped to the snapshot). Disk wins once an app exists.
     if body.files:
         for rel_path, content in body.files.items():
             full_path = os.path.normpath(os.path.join(folder, rel_path))
@@ -369,8 +338,7 @@ async def seed_workspace(body: WorkspaceSeedRequest):
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
-    # SKILL.md is a creation-time snapshot; the live rules reach the agent via
-    # the system-prompt injection regardless, so never rewrite an existing one.
+    # SKILL.md is a creation-time snapshot; the live rules reach the agent via the system-prompt injection regardless, so never rewrite an existing one.
     skill_path = os.path.join(folder, "SKILL.md")
     if not os.path.exists(skill_path):
         with open(skill_path, "w", encoding="utf-8") as f:
@@ -385,11 +353,7 @@ async def seed_workspace(body: WorkspaceSeedRequest):
     return {"path": os.path.abspath(folder), "template_mode": "flat"}
 
 
-# ---------------------------------------------------------------------------
-# Persistent app-backend runtime control. backend.py runs as a long-lived
-# subprocess for the lifetime of the App being open; auto-allocated port,
-# log streaming via WebSocket. See runtime.py for the manager.
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Persistent app-backend runtime control. backend.py runs as a long-lived subprocess for the lifetime of the App being open; auto-allocated port, log streaming via WebSocket. See runtime.py for the manager. ---------------------------------------------------------------------------
 
 
 def runtime_status_payload(workspace_id: str) -> dict:
@@ -397,12 +361,7 @@ def runtime_status_payload(workspace_id: str) -> dict:
     from backend.apps.outputs.runtime import is_new_mode
     rt = runtime_manager.get(workspace_id)
     if not rt:
-        # Even without a live runtime, the editor needs is_new_mode to
-        # decide whether the preview pane should fall back to the legacy
-        # /serve/index.html URL (old-mode flat workspaces) or show the
-        # "starting preview…" placeholder (new-mode webapp_template).
-        # Compute from disk so a failed runtime/start still gives the
-        # client the right hint instead of dumping it onto a 404.
+        # Even without a live runtime, the editor needs is_new_mode to decide whether the preview pane should fall back to the legacy /serve/index.html URL (old-mode flat workspaces) or show the "starting preview…" placeholder (new-mode webapp_template). Compute from disk so a failed runtime/start still gives the client the right hint instead of dumping it onto a 404.
         folder = os.path.join(WORKSPACE_DIR, workspace_id)
         is_new = is_new_mode(folder) if os.path.isdir(folder) else False
         return {
@@ -418,13 +377,9 @@ def runtime_status_payload(workspace_id: str) -> dict:
         "running": rt.running,
         "port": rt.port,
         "has_backend_file": rt.has_backend_file,
-        # For old-mode: backend.py serves; backend_url is its port. For
-        # new-mode: backend.py is optional (gated by BACKEND_PORT!=NONE);
-        # only populated if the agent ran bash backend_init.sh.
+        # For old-mode: backend.py serves; backend_url is its port. For new-mode: backend.py is optional (gated by BACKEND_PORT!=NONE); only populated if the agent ran bash backend_init.sh.
         "backend_url": f"http://127.0.0.1:{rt.port}" if rt.running and rt.port else None,
-        # New-mode only: where the Vite dev server is reachable.
-        # Old-mode workspaces report null and the editor falls back to
-        # the legacy /api/outputs/workspace/{ws}/serve/... path.
+        # New-mode only: where the Vite dev server is reachable. Old-mode workspaces report null and the editor falls back to the legacy /api/outputs/workspace/{ws}/serve/... path.
         "frontend_port": rt.frontend_port,
         "frontend_url": rt.frontend_url if rt.running else None,
         "is_new_mode": rt.is_new_mode,
@@ -454,9 +409,7 @@ async def runtime_restart(workspace_id: str):
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
     from backend.apps.outputs.runtime import manager as runtime_manager
-    # Restart only if something's attached; otherwise this is a no-op
-    # silently (a hard-reload click while the runtime was already torn
-    # down; we'd rather not silently respawn an orphan).
+    # Restart only if something's attached; otherwise this is a no-op silently (a hard-reload click while the runtime was already torn down; we'd rather not silently respawn an orphan).
     rt = runtime_manager.get(workspace_id)
     if rt:
         await runtime_manager.restart(workspace_id, os.path.abspath(folder))
@@ -514,11 +467,7 @@ async def write_workspace_file(workspace_id: str, filepath: str, body: dict):
         raise HTTPException(status_code=404, detail="Workspace not found")
     folder_norm = os.path.normpath(folder)
     full_path = os.path.normpath(os.path.join(folder, filepath))
-    # `startswith(folder_norm + os.sep)` (not just folder_norm) so a workspace
-    # `abc-123` can't be tricked into writing into a sibling `abc-1234-evil` , 
-    # prefix-string collision rather than path-component containment. Today's
-    # UUID-format ids make the collision unlikely in practice, but the check
-    # is one character and immunizes future id schemes.
+    # `startswith(folder_norm + os.sep)` (not just folder_norm) so a workspace `abc-123` can't be tricked into writing into a sibling `abc-1234-evil`, prefix-string collision rather than path-component containment. Today's UUID-format ids make the collision unlikely in practice, but the check is one character and immunizes future id schemes.
     if full_path != folder_norm and not full_path.startswith(folder_norm + os.sep):
         raise HTTPException(status_code=403, detail="Path traversal not allowed")
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
@@ -574,10 +523,7 @@ async def create_output(body: OutputCreate):
 @outputs.router.put("/{output_id}")
 async def update_output(output_id: str, body: OutputUpdate):
     output = load(output_id)
-    # exclude_unset, NOT exclude_none: a PUT that explicitly sends session_id=null
-    # (the Apps stale-link self-heal) must clear the field. exclude_none silently
-    # dropped that null, so the dead pointer never cleared and the app 404'd on
-    # every open, forever. Unset fields stay untouched; only what the client sent applies.
+    # exclude_unset, NOT exclude_none: a PUT that explicitly sends session_id=null (the Apps stale-link self-heal) must clear the field. exclude_none silently dropped that null, so the dead pointer never cleared and the app 404'd on every open, forever. Unset fields stay untouched; only what the client sent applies.
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(output, k, v)
     now = datetime.now().isoformat()
@@ -709,22 +655,14 @@ async def execute_output(body: OutputExecute):
     warnings_out: Optional[list[str]] = None
     code_preview: Optional[str] = None
     if output.backend_code:
-        # HITL gate: collect warnings up front. If the caller hasn't opted
-        # in via force=True AND the code touches anything outside the safe
-        # allowlist, return the warnings + the code itself so the UI can
-        # show a preview dialog. No subprocess is spawned on this path , 
-        # zero-cost when warnings exist, identical-to-before when they
-        # don't.
+        # HITL gate: collect warnings up front. If the caller hasn't opted in via force=True AND the code touches anything outside the safe allowlist, return the warnings + the code itself so the UI can show a preview dialog. No subprocess is spawned on this path, zero-cost when warnings exist, identical-to-before when they don't.
         if not body.force:
             warnings_out = get_code_warnings(output.backend_code)
             if warnings_out:
                 code_preview = output.backend_code
         if not warnings_out:
             try:
-                # We've either already vetted (no warnings above) or the
-                # user explicitly opted in with force=True. Pass
-                # skip_validation=True so we don't pay for a redundant
-                # AST walk inside execute_backend_code.
+                # We've either already vetted (no warnings above) or the user explicitly opted in with force=True. Pass skip_validation=True so we don't pay for a redundant AST walk inside execute_backend_code.
                 exec_result = await execute_backend_code(
                     output.backend_code, body.input_data, skip_validation=True
                 )
@@ -748,9 +686,7 @@ async def execute_output(body: OutputExecute):
     ).model_dump()
 
 
-# ---------------------------------------------------------------------------
-# Publishing to {slug}.openswarm.host
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Publishing to {slug}.openswarm.host ---------------------------------------------------------------------------
 
 @outputs.router.post("/publish/preflight")
 async def publish_preflight(body: PublishPreflightRequest):

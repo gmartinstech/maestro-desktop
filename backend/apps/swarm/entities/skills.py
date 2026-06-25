@@ -73,9 +73,7 @@ class SkillExportable:
             "description": payload.get("description", ""),
             "command": payload.get("command", slug),
         }
-        # Every imported skill lands as a folder (SKILL.md + any supporting files),
-        # one path for one-file and multi-file skills alike. write_folder_skill is
-        # path-traversal-safe, so an untrusted bundle can't escape the skill dir.
+        # Every imported skill lands as a folder (SKILL.md + any supporting files), one path for one-file and multi-file skills alike. write_folder_skill is path-traversal-safe, so an untrusted bundle can't escape the skill dir.
         bundle = {"SKILL.md": payload.get("content", "")}
         for rel, data in files.items():
             bundle[rel] = data.decode("utf-8", errors="replace")

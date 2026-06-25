@@ -54,8 +54,7 @@ async def restore_output_version(output_id: str, version_id: str):
     output = load_output(output_id)
     if output is None:
         raise HTTPException(status_code=404, detail="Output not found")
-    # Don't restore out from under a live builder run. The frontend disables the
-    # button while the agent is active; this is the backend half of that guard.
+    # Don't restore out from under a live builder run. The frontend disables the button while the agent is active; this is the backend half of that guard.
     if output.session_id:
         from backend.apps.agents.agent_manager import agent_manager
         session = agent_manager.sessions.get(output.session_id)

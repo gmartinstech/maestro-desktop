@@ -36,13 +36,9 @@ class BrowserCardPosition(BaseModel):
     y: float = 0
     width: float = 1280
     height: float = 800
-    # Agent session id that spawned this browser, or None for user-created.
-    # Used by the frontend to auto-remove the browser when its owner agent
-    # reaches a terminal completed/error state.
+    # Agent session id that spawned this browser, or None for user-created. Used by the frontend to auto-remove the browser when its owner agent reaches a terminal completed/error state.
     spawned_by: Optional[str] = None
-    # When the agent leaves the deliverable on the page (a video playing, a page
-    # to read), it sets this so the frontend's auto-close on parent finish skips
-    # the card and the browser stays put.
+    # When the agent leaves the deliverable on the page (a video playing, a page to read), it sets this so the frontend's auto-close on parent finish skips the card and the browser stays put.
     keep_open: bool = False
 
 

@@ -8,8 +8,7 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-# `or:` prefix on picker values so resolve_model_id_for_sdk recognises them
-# without a side-table.
+# `or:` prefix on picker values so resolve_model_id_for_sdk recognises them without a side-table.
 OPENROUTER_VALUE_PREFIX = "or:"
 
 P_OR_MODELS_TTL_OK = 3600.0
@@ -19,12 +18,7 @@ p_or_models_cache: dict = {"models": None, "fetched_at": 0.0, "ok": False}
 p_9router_cache: dict = {"available": None, "checked_at": 0}
 
 
-# Per-model published pricing in $/1M tokens (input, output) for direct
-# API key lanes. Sourced from each provider's official pricing page as of
-# May 2026. The Claude Agent SDK ALWAYS computes total_cost_usd at
-# Anthropic rates; for any non-Anthropic upstream the SDK number is
-# 50-1000x wrong and we MUST recompute. Used by agent_manager's cost
-# recompute logic.
+# Per-model published pricing in $/1M tokens (input, output) for direct API key lanes. Sourced from each provider's official pricing page as of May 2026. The Claude Agent SDK ALWAYS computes total_cost_usd at Anthropic rates; for any non-Anthropic upstream the SDK number is 50-1000x wrong and we MUST recompute. Used by agent_manager's cost recompute logic.
 P_DIRECT_API_PRICING: dict[str, tuple[float, float]] = {
     # OpenAI GPT-5.x family (source: platform.openai.com/docs/pricing).
     "gpt-5.5":             (1.25, 10.00),

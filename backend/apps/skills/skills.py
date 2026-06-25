@@ -40,10 +40,7 @@ def load_index() -> dict[str, dict]:
     return {}
 
 
-# Guards the index write so an atomic replace is never interleaved by another
-# writer. Today every index write runs on the single backend event-loop thread
-# (no await between a load and its save, so no lost-update race), but this stays
-# correct if a save ever moves to a thread pool the way settings' did.
+# Guards the index write so an atomic replace is never interleaved by another writer. Today every index write runs on the single backend event-loop thread (no await between a load and its save, so no lost-update race), but this stays correct if a save ever moves to a thread pool the way settings' did.
 p_index_write_lock = threading.Lock()
 
 
@@ -73,15 +70,9 @@ def save_index(index: dict[str, dict]):
             raise
 
 
-# Built-in skills shipped with OpenSwarm itself. Each entry describes a
-# skill file we copy into ~/.claude/skills/ on first boot and tag with
-# `built_in: true` in the index. Users can edit the content (their
-# changes flow through to the matching agent's prompt on the next turn),
-# but they can't delete the file; the DELETE endpoint refuses with 409.
+# Built-in skills shipped with OpenSwarm itself. Each entry describes a skill file we copy into ~/.claude/skills/ on first boot and tag with `built_in: true` in the index. Users can edit the content (their changes flow through to the matching agent's prompt on the next turn), but they can't delete the file; the DELETE endpoint refuses with 409.
 def p_built_in_skill_registry() -> list[dict]:
-    # Imported lazily so this module stays cheap to import from
-    # everywhere (the skills outputs module pulls in pydantic+fastapi
-    # transitively and we don't want a cycle).
+    # Imported lazily so this module stays cheap to import from everywhere (the skills outputs module pulls in pydantic+fastapi transitively and we don't want a cycle).
     from backend.apps.outputs.view_builder_templates import (
         APP_BUILDER_SKILL_SOURCE_PATH,
         SWARM_DEBUG_SKILL_SOURCE_PATH,
@@ -135,9 +126,7 @@ def p_seed_built_in_skills() -> None:
             except FileNotFoundError:
                 logger.warning("built-in skill source missing: %s", entry["source_path"])
                 continue
-        # Refresh index metadata. Existing user-changed name/description
-        # in the index stays, but built_in always gets re-asserted in case
-        # the index was created before this mechanism existed.
+        # Refresh index metadata. Existing user-changed name/description in the index stays, but built_in always gets re-asserted in case the index was created before this mechanism existed.
         meta = dict(index.get(skill_id, {}))
         meta.setdefault("name", entry["name"])
         meta.setdefault("description", entry["description"])
@@ -159,8 +148,7 @@ async def skills_lifespan():
     try:
         p_seed_built_in_skills()
     except Exception:
-        # Don't block app startup on a skill-seed failure; the worst
-        # case is the user has to manually paste the skill in once.
+        # Don't block app startup on a skill-seed failure; the worst case is the user has to manually paste the skill in once.
         logger.exception("failed to seed built-in skills")
     yield
 
@@ -354,8 +342,7 @@ def write_folder_skill(skill_id: str, files: dict[str, str], meta: dict) -> Skil
     slug = p_safe_slug(skill_id)
     base = os.path.join(SKILLS_DIR, slug)
     base_abs = os.path.abspath(base)
-    # A folder write supersedes any legacy flat <slug>.md, so we never leave a
-    # phantom flat file shadowed by the folder (folder wins in skill_md_path).
+    # A folder write supersedes any legacy flat <slug>.md, so we never leave a phantom flat file shadowed by the folder (folder wins in skill_md_path).
     legacy_flat = os.path.join(SKILLS_DIR, f"{slug}.md")
     if os.path.isfile(legacy_flat):
         try:
@@ -390,9 +377,7 @@ def write_folder_skill(skill_id: str, files: dict[str, str], meta: dict) -> Skil
 
 @skills.router.post("/create")
 async def create_skill(body: SkillCreate):
-    # All user skills are folders now (<id>/SKILL.md); flat files stay readable
-    # but are no longer written, so a skill's on-disk shape no longer depends on
-    # how it was created vs imported.
+    # All user skills are folders now (<id>/SKILL.md); flat files stay readable but are no longer written, so a skill's on-disk shape no longer depends on how it was created vs imported.
     meta = {"name": body.name, "description": body.description}
     if body.command:
         meta["command"] = body.command

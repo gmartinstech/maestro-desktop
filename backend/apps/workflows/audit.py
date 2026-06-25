@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 AUDIT_DIR = os.path.join(DATA_DIR, "audit")
 _io_lock = Lock()
-# Soft cap on bytes per audit file. When exceeded we truncate to the last
-# CAP/2 bytes on next write so attackers (or a runaway PATCH loop) can't
-# fill the disk. 256 KiB is ~2000 edits; we never expect to hit it.
+# Soft cap on bytes per audit file. When exceeded we truncate to the last CAP/2 bytes on next write so attackers (or a runaway PATCH loop) can't fill the disk. 256 KiB is ~2000 edits; we never expect to hit it.
 SOFT_CAP_BYTES = 256 * 1024
 
 
@@ -58,8 +56,7 @@ def log_change(wid: str, who: str, before: dict, after: dict) -> None:
             os.makedirs(AUDIT_DIR, exist_ok=True)
             path = _audit_path(wid)
             if os.path.exists(path) and os.path.getsize(path) > SOFT_CAP_BYTES:
-                # Keep the tail half. Cheap, lossy, prevents pathological
-                # disk growth without crashing on a corrupt file.
+                # Keep the tail half. Cheap, lossy, prevents pathological disk growth without crashing on a corrupt file.
                 with open(path, "rb") as f:
                     f.seek(-(SOFT_CAP_BYTES // 2), os.SEEK_END)
                     tail = f.read()

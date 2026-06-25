@@ -28,8 +28,7 @@ from collections import Counter
 
 logger = logging.getLogger(__name__)
 
-# Map each tool to the waterfall tier it represents, so per-tier speed/cost
-# rolls up cleanly. Control/meta tools are their own bucket.
+# Map each tool to the waterfall tier it represents, so per-tier speed/cost rolls up cleanly. Control/meta tools are their own bucket.
 P_TIER = {
     "BrowserDetectWebMCP": "t1_webmcp",
     "BrowserListRoutes": "t2_route_list",
@@ -94,9 +93,7 @@ def p_append(filename: str, obj: dict) -> None:
         logger.debug(f"[browser-metrics] write failed: {e}")
 
 
-# A task prompt can carry a literal secret ("log in with password hunter2");
-# scrub the value before it lands in tasks.jsonl. Keyword+value and known
-# token prefixes only; the task's normal words stay greppable.
+# A task prompt can carry a literal secret ("log in with password hunter2"); scrub the value before it lands in tasks.jsonl. Keyword+value and known token prefixes only; the task's normal words stay greppable.
 P_TASK_SECRET_RE = re.compile(
     r"\b(password|passcode|passphrase|pin|otp|token|secret|api[_-]?key)\b\s*(?:is|[:=])?\s*\S+",
     re.I,

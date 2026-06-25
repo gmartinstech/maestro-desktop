@@ -74,30 +74,17 @@ class AppRuntime:
     def __init__(self, workspace_id: str, workspace_path: str):
         self.workspace_id = workspace_id
         self.workspace_path = workspace_path
-        # Old-mode: `port` is the backend.py port. New-mode: `port` is
-        # the workspace's optional FastAPI backend (only set if
-        # BACKEND_PORT!=NONE) and `frontend_port` is the Vite dev
-        # server port. Both Nones until start() decides what's there.
+        # Old-mode: `port` is the backend.py port. New-mode: `port` is the workspace's optional FastAPI backend (only set if BACKEND_PORT!=NONE) and `frontend_port` is the Vite dev server port. Both Nones until start() decides what's there.
         self.port: Optional[int] = None
         self.frontend_port: Optional[int] = None
-        # New-mode only: flips True once something is actually listening
-        # on frontend_port (we kick off a background poll task in
-        # p_start_new_mode). frontend_url returns null until this flips,
-        # so the preview pane doesn't try to navigate to an unbound port
-        # and show a "Site can't be reached" error mid-npm-install.
+        # New-mode only: flips True once something is actually listening on frontend_port (we kick off a background poll task in p_start_new_mode). frontend_url returns null until this flips, so the preview pane doesn't try to navigate to an unbound port and show a "Site can't be reached" error mid-npm-install.
         self.p_frontend_ready: bool = False
-        # True while the process tree is SIGSTOP'd in the idle pool. A frozen
-        # vite still holds its port but can't answer it, so frontend_url must
-        # stay null while suspended (else the webview loads a dead port = the
-        # ERR_FAILED on fast app-switching).
+        # True while the process tree is SIGSTOP'd in the idle pool. A frozen vite still holds its port but can't answer it, so frontend_url must stay null while suspended (else the webview loads a dead port = the ERR_FAILED on fast app-switching).
         self.p_suspended: bool = False
         self.process: Optional[asyncio.subprocess.Process] = None
         self.log_buffer: deque[LogLine] = deque(maxlen=LOG_BUFFER_LINES)
         self.p_subscribers: set[LogSubscriber] = set()
-        # Recent build/runtime errors scraped from stderr; drained by
-        # the agent's post-tool hook after Write/Edit so the agent sees
-        # vite/babel/uvicorn errors in its next turn and can self-fix
-        # instead of leaving the user with a red iframe overlay.
+        # Recent build/runtime errors scraped from stderr; drained by the agent's post-tool hook after Write/Edit so the agent sees vite/babel/uvicorn errors in its next turn and can self-fix instead of leaving the user with a red iframe overlay.
         self.recent_errors: deque[str] = deque(maxlen=RECENT_ERRORS_MAX)
         self.render_state: Optional[str] = None
         self.render_error_text: str = ""
@@ -141,16 +128,7 @@ class AppRuntime:
 
     @property
     def frontend_url(self) -> Optional[str]:
-        # Gated on `_frontend_ready` (set by the background bind-poll
-        # task in p_start_new_mode) so the preview pane only switches
-        # over once Vite is actually accepting connections. Without
-        # this, the editor flashes a "Site can't be reached" error
-        # while `npm install` is running.
-        # Also gated on `running`: a vite that crashed or got orphaned still
-        # has _frontend_ready=True, and handing the webview that dead port is
-        # the ERR_FAILED you see on reopen. No live process, no URL.
-        # And gated on `not _suspended`: a SIGSTOP'd idle runtime is "running"
-        # (returncode is None) but frozen, so its port won't answer.
+        # Gated on `_frontend_ready` (set by the background bind-poll task in p_start_new_mode) so the preview pane only switches over once Vite is actually accepting connections. Without this, the editor flashes a "Site can't be reached" error while `npm install` is running. Also gated on `running`: a vite that crashed or got orphaned still has _frontend_ready=True, and handing the webview that dead port is the ERR_FAILED you see on reopen. No live process, no URL. And gated on `not _suspended`: a SIGSTOP'd idle runtime is "running" (returncode is None) but frozen, so its port won't answer.
         if self.frontend_port and self.p_frontend_ready and self.running and not self.p_suspended:
             return f"http://127.0.0.1:{self.frontend_port}/"
         return None
@@ -183,20 +161,12 @@ class AppRuntime:
                 return True
 
             if self.is_new_mode:
-                # Acquire the module-level boot lock BEFORE the spawn so
-                # only one new-mode workspace is mid-bundle at a time.
-                # The lock is released by the bind-poll task the moment
-                # vite emits "frontend ready" (or its 180s timeout
-                # fires), which is the moment the next workspace can
-                # start its own vite without competing for the same
-                # CPU. See `p_await_frontend_bind` for the release.
+                # Acquire the module-level boot lock BEFORE the spawn so only one new-mode workspace is mid-bundle at a time. The lock is released by the bind-poll task the moment vite emits "frontend ready" (or its 180s timeout fires), which is the moment the next workspace can start its own vite without competing for the same CPU. See `p_await_frontend_bind` for the release.
                 await p_vite_boot_lock.acquire()
                 try:
                     ok = await self.p_start_new_mode()
                     if not ok:
-                        # Spawn failed before the bind-poll task was
-                        # created; release synchronously so we don't
-                        # wedge the next workspace.
+                        # Spawn failed before the bind-poll task was created; release synchronously so we don't wedge the next workspace.
                         p_vite_boot_lock.release()
                     return ok
                 except Exception:
@@ -208,18 +178,12 @@ class AppRuntime:
         env_path = os.path.join(self.workspace_path, ".env")
         fp_raw = read_env_value(env_path, "FRONTEND_PORT")
         bp_raw = read_env_value(env_path, "BACKEND_PORT")
-        # FRONTEND_PORT is allocated by seed_workspace; should always be
-        # a number. If missing, fall back to a fresh allocation (rare
-        # edge case: workspace seeded by an older OpenSwarm).
+        # FRONTEND_PORT is allocated by seed_workspace; should always be a number. If missing, fall back to a fresh allocation (rare edge case: workspace seeded by an older OpenSwarm).
         try:
             self.frontend_port = int(fp_raw) if fp_raw else find_free_port()
         except ValueError:
             self.frontend_port = find_free_port()
-        # Port-collision safety net: if a ghost subprocess from a prior
-        # OpenSwarm run is still bound to the persisted port (force-quit,
-        # crash, OS killed the parent before stop_all could reap), Vite
-        # would EADDRINUSE silently. Re-probe and reallocate, then rewrite
-        # .env so the bash run.sh subprocess reads the new port.
+        # Port-collision safety net: if a ghost subprocess from a prior OpenSwarm run is still bound to the persisted port (force-quit, crash, OS killed the parent before stop_all could reap), Vite would EADDRINUSE silently. Re-probe and reallocate, then rewrite .env so the bash run.sh subprocess reads the new port.
         if self.frontend_port and not is_port_free(self.frontend_port):
             new_port = find_free_port()
             self.p_broadcast(LogLine(
@@ -228,16 +192,13 @@ class AppRuntime:
             ))
             self.frontend_port = new_port
             write_env_value(env_path, "FRONTEND_PORT", str(new_port))
-        # BACKEND_PORT may be the literal string "NONE" (frontend-only
-        # app; the common case) or a number once `backend_init.sh` has
-        # run. Only populate self.port when there's a real backend.
+        # BACKEND_PORT may be the literal string "NONE" (frontend-only app; the common case) or a number once `backend_init.sh` has run. Only populate self.port when there's a real backend.
         if bp_raw and bp_raw != "NONE":
             try:
                 self.port = int(bp_raw)
             except ValueError:
                 self.port = None
-            # Same collision check for the backend port; a leaked uvicorn
-            # from a prior session would otherwise block the new spawn.
+            # Same collision check for the backend port; a leaked uvicorn from a prior session would otherwise block the new spawn.
             if self.port and not is_port_free(self.port):
                 new_port = find_free_port()
                 self.p_broadcast(LogLine(
@@ -250,13 +211,7 @@ class AppRuntime:
             self.port = None
 
         env = self.p_spawn_env_base()
-        # bash run.sh reads .env itself; we don't need to set
-        # FRONTEND_PORT / BACKEND_PORT here. We DO export the install
-        # paths so the template's `backend/run.sh` can find our
-        # debugger to satisfy its `from swarm_debug import debug`.
-        # (Also written into .env at seed time, but env-var path is
-        # the more reliable read site for subshells.)
-        # NOTE: keep these in sync with seed_webapp_template_workspace.
+        # bash run.sh reads .env itself; we don't need to set FRONTEND_PORT / BACKEND_PORT here. We DO export the install paths so the template's `backend/run.sh` can find our debugger to satisfy its `from swarm_debug import debug`. (Also written into .env at seed time, but env-var path is the more reliable read site for subshells.) NOTE: keep these in sync with seed_webapp_template_workspace.
         from backend.apps.outputs.view_builder_templates import (
             DEBUGGER_PATH,
             TEMPLATE_BACKEND_PATH,
@@ -286,8 +241,7 @@ class AppRuntime:
         self.p_stdout_task = asyncio.create_task(self.p_pipe_stream(self.process.stdout, "stdout"))
         self.p_stderr_task = asyncio.create_task(self.p_pipe_stream(self.process.stderr, "stderr"))
         self.p_wait_task = asyncio.create_task(self.p_await_exit())
-        # Kick off the port-bind poller so frontend_url flips on once
-        # Vite is actually accepting connections.
+        # Kick off the port-bind poller so frontend_url flips on once Vite is actually accepting connections.
         self.p_frontend_ready = False
         self.p_frontend_ready_task = asyncio.create_task(self.p_await_frontend_bind())
         return True
@@ -331,8 +285,7 @@ class AppRuntime:
         release exactly once so the next queued workspace can start its
         own vite spawn. A try/finally on the lock guarantees that even
         an exception in the poll body doesn't strand the lock holding."""
-        # Track whether we've already released so the cleanup at the
-        # end doesn't double-release if a success path beat it.
+        # Track whether we've already released so the cleanup at the end doesn't double-release if a success path beat it.
         lock_released = False
 
         def p_release_boot_lock() -> None:
@@ -343,8 +296,7 @@ class AppRuntime:
             try:
                 p_vite_boot_lock.release()
             except RuntimeError:
-                # Lock already released (e.g. start() failure path
-                # released synchronously before spawning the poll task).
+                # Lock already released (e.g. start() failure path released synchronously before spawning the poll task).
                 pass
 
         try:
@@ -353,14 +305,11 @@ class AppRuntime:
             port = self.frontend_port
             deadline = asyncio.get_event_loop().time() + FRONTEND_BIND_TIMEOUT_SECONDS
             while asyncio.get_event_loop().time() < deadline:
-                # Stop polling if the process died; pointless to keep
-                # checking a port nothing will bind.
+                # Stop polling if the process died; pointless to keep checking a port nothing will bind.
                 if self.process is None or self.process.returncode is not None:
                     return
                 try:
-                    # asyncio.open_connection is the non-blocking equivalent
-                    # of socket.create_connection. 0.5s connect timeout to
-                    # avoid hanging if the host's TCP stack is under load.
+                    # asyncio.open_connection is the non-blocking equivalent of socket.create_connection. 0.5s connect timeout to avoid hanging if the host's TCP stack is under load.
                     fut = asyncio.open_connection("127.0.0.1", port)
                     reader, writer = await asyncio.wait_for(fut, timeout=0.5)
                     writer.close()
@@ -373,17 +322,13 @@ class AppRuntime:
                         "runtime",
                         f"[runtime] frontend ready at http://127.0.0.1:{port}/",
                     ))
-                    # Release the vite-boot mutex the INSTANT vite is
-                    # ready; the next queued workspace can start its
-                    # own bundle now even though we'll keep streaming
-                    # logs for this one.
+                    # Release the vite-boot mutex the INSTANT vite is ready; the next queued workspace can start its own bundle now even though we'll keep streaming logs for this one.
                     p_release_boot_lock()
                     return
                 except (OSError, asyncio.TimeoutError):
                     pass
                 await asyncio.sleep(FRONTEND_BIND_POLL_INTERVAL)
-            # Timed out; keep the runtime up (Terminal might show useful
-            # errors) but surface why the preview never appeared.
+            # Timed out; keep the runtime up (Terminal might show useful errors) but surface why the preview never appeared.
             self.p_broadcast(LogLine(
                 "runtime",
                 f"[runtime] frontend did NOT bind on port {port} after "
@@ -391,10 +336,7 @@ class AppRuntime:
                 f"for npm/vite errors.",
             ))
         finally:
-            # Catches process-death return, timeout fall-through, and
-            # any exception in the poll body. _release_boot_lock is
-            # idempotent so this is safe even after the success path
-            # already released.
+            # Catches process-death return, timeout fall-through, and any exception in the poll body. _release_boot_lock is idempotent so this is safe even after the success path already released.
             p_release_boot_lock()
 
     async def p_start_old_mode(self) -> bool:
@@ -406,9 +348,7 @@ class AppRuntime:
         env["PORT"] = str(self.port)
         env["BACKEND_PORT"] = str(self.port)  # alias; both common names work
         try:
-            # -u forces unbuffered stdout/stderr so the Terminal pane
-            # sees lines in real time, not whenever Python decides to
-            # flush its block buffer.
+            # -u forces unbuffered stdout/stderr so the Terminal pane sees lines in real time, not whenever Python decides to flush its block buffer.
             self.process = await asyncio.create_subprocess_exec(
                 sys.executable, "-u", "backend.py",
                 stdout=asyncio.subprocess.PIPE,
@@ -434,28 +374,19 @@ class AppRuntime:
         REST API back via its own creds if it really needs to, but it
         shouldn't inherit the host process's token by default."""
         env = {k: v for k, v in os.environ.items() if k != "OPENSWARM_AUTH_TOKEN"}
-        # Hand the workspace's backend/run.sh the exact interpreter we're
-        # running on. In the packaged build that's the bundled standalone
-        # Python, so a fresh machine with no system `python3` still works;
-        # in dev it's whatever launched uvicorn. OPENSWARM_NODE_PATH already
-        # rides in via os.environ (set by the Electron shell) for run.sh's
-        # Node resolution.
+        # Hand the workspace's backend/run.sh the exact interpreter we're running on. In the packaged build that's the bundled standalone Python, so a fresh machine with no system `python3` still works; in dev it's whatever launched uvicorn. OPENSWARM_NODE_PATH already rides in via os.environ (set by the Electron shell) for run.sh's Node resolution.
         env["OPENSWARM_PYTHON"] = sys.executable
         return env
 
     async def stop(self) -> None:
         async with self.p_lock:
             if not self.process or self.process.returncode is not None:
-                # Still cancel the bind poller in case stop() races a
-                # never-launched runtime; defensive no-op otherwise.
+                # Still cancel the bind poller in case stop() races a never-launched runtime; defensive no-op otherwise.
                 if self.p_frontend_ready_task and not self.p_frontend_ready_task.done():
                     self.p_frontend_ready_task.cancel()
                 return
             try:
-                # Walk the descendant tree first so vite/uvicorn grandchildren
-                # die before bash exits and orphans them to PID 1. The webapp
-                # template's run.sh only traps EXIT, not TERM, so a flat
-                # SIGTERM to bash kills bash silently and leaves vite alive.
+                # Walk the descendant tree first so vite/uvicorn grandchildren die before bash exits and orphans them to PID 1. The webapp template's run.sh only traps EXIT, not TERM, so a flat SIGTERM to bash kills bash silently and leaves vite alive.
                 kill_descendant_tree(self.process.pid, "TERM")
                 self.process.terminate()
                 try:
@@ -466,8 +397,7 @@ class AppRuntime:
                     await self.process.wait()
             except ProcessLookupError:
                 pass
-            # Cancel the bind poller so it stops scanning a port that's
-            # gone away, and reset the readiness flag.
+            # Cancel the bind poller so it stops scanning a port that's gone away, and reset the readiness flag.
             if self.p_frontend_ready_task and not self.p_frontend_ready_task.done():
                 self.p_frontend_ready_task.cancel()
             self.p_frontend_ready = False
@@ -533,9 +463,7 @@ class AppRuntime:
         if not self.process:
             return
         rc = await self.process.wait()
-        # Unclean death (vite crash, OOM, orphaned parent) must drop readiness;
-        # otherwise frontend_url keeps advertising a dead port and the preview
-        # navigates into ERR_FAILED. stop() already does this for clean stops.
+        # Unclean death (vite crash, OOM, orphaned parent) must drop readiness; otherwise frontend_url keeps advertising a dead port and the preview navigates into ERR_FAILED. stop() already does this for clean stops.
         self.p_frontend_ready = False
         self.p_broadcast(LogLine("runtime", f"[runtime] backend exited with code {rc}"))
 
@@ -554,46 +482,35 @@ class AppRuntimeManager:
         # workspace_id → AppRuntime, currently has >=1 subscriber.
         self.runtimes: dict[str, AppRuntime] = {}
         self.p_attached: dict[str, int] = {}
-        # workspace_id → AppRuntime with no subscribers but still
-        # alive. OrderedDict gives O(1) move_to_end + popitem(last=False)
-        # for LRU semantics.
+        # workspace_id → AppRuntime with no subscribers but still alive. OrderedDict gives O(1) move_to_end + popitem(last=False) for LRU semantics.
         self.idle_lru: "OrderedDict[str, AppRuntime]" = OrderedDict()
         self.p_lock = asyncio.Lock()
 
     async def attach(self, workspace_id: str, workspace_path: str) -> AppRuntime:
         revived = False
-        # Defined here so every code path below leaves it bound; the
-        # revive-idle branch used to skip the assignment, leaving the
-        # post-lock `if dead is not None:` check throwing UnboundLocalError.
+        # Defined here so every code path below leaves it bound; the revive-idle branch used to skip the assignment, leaving the post-lock `if dead is not None:` check throwing UnboundLocalError.
         dead: Optional[AppRuntime] = None
         async with self.p_lock:
             rt = self.runtimes.get(workspace_id)
             if rt is None:
-                # Maybe the runtime is sitting idle in the LRU; revive
-                # it without paying the spawn cost again.
+                # Maybe the runtime is sitting idle in the LRU; revive it without paying the spawn cost again.
                 idle_rt = self.idle_lru.pop(workspace_id, None)
                 if idle_rt is not None and idle_rt.running:
                     rt = idle_rt
                     rt.workspace_path = workspace_path
                     self.runtimes[workspace_id] = rt
                     revived = True
-                    # SIGCONT the process tree if A2 had it paused while
-                    # idle. Pair with the SIGSTOP in detach() below.
+                    # SIGCONT the process tree if A2 had it paused while idle. Pair with the SIGSTOP in detach() below.
                     resume_process_tree(rt.process)
                     rt.p_suspended = False
                 else:
                     if idle_rt is not None:
-                        # Stale idle entry; process died while idling.
-                        # Drop and spawn a fresh one below; old one
-                        # gets stopped outside the lock.
+                        # Stale idle entry; process died while idling. Drop and spawn a fresh one below; old one gets stopped outside the lock.
                         dead = idle_rt
                     rt = AppRuntime(workspace_id, workspace_path)
                     self.runtimes[workspace_id] = rt
             else:
-                # Workspace paths shouldn't change for a given id, but if
-                # somehow they did (e.g. the user moved the workspace
-                # folder), trust the latest caller; they have the
-                # current truth.
+                # Workspace paths shouldn't change for a given id, but if somehow they did (e.g. the user moved the workspace folder), trust the latest caller; they have the current truth.
                 rt.workspace_path = workspace_path
             self.p_attached[workspace_id] = self.p_attached.get(workspace_id, 0) + 1
         if not revived and not rt.running:
@@ -618,10 +535,7 @@ class AppRuntimeManager:
             rt = self.runtimes.pop(workspace_id, None)
             if rt is None:
                 return
-            # If the process is already dead, no point keeping it
-            # around; just clean up. Otherwise move to the LRU AND
-            # SIGSTOP the process tree so it consumes 0% CPU while
-            # idle. The matching SIGCONT lives in attach() above.
+            # If the process is already dead, no point keeping it around; just clean up. Otherwise move to the LRU AND SIGSTOP the process tree so it consumes 0% CPU while idle. The matching SIGCONT lives in attach() above.
             if not rt.running:
                 to_reap.append(rt)
             else:
@@ -631,16 +545,12 @@ class AppRuntimeManager:
                 rt.p_suspended = True
                 while len(self.idle_lru) > MAX_IDLE_RUNTIMES:
                     _, old_rt = self.idle_lru.popitem(last=False)
-                    # Reaping a stopped process: SIGCONT first so the
-                    # SIGTERM in stop() can be delivered cleanly (a
-                    # SIGSTOP'd process can't run its own shutdown).
+                    # Reaping a stopped process: SIGCONT first so the SIGTERM in stop() can be delivered cleanly (a SIGSTOP'd process can't run its own shutdown).
                     resume_process_tree(old_rt.process)
                     to_reap.append(old_rt)
             to_idle = rt if rt.running else None
 
-        # Stop any reaped runtimes OUTSIDE the lock. stop() is async and
-        # can take up to TERMINATE_GRACE_SECONDS; holding the lock for
-        # it would block every other attach/detach.
+        # Stop any reaped runtimes OUTSIDE the lock. stop() is async and can take up to TERMINATE_GRACE_SECONDS; holding the lock for it would block every other attach/detach.
         for old in to_reap:
             try:
                 await old.stop()
@@ -650,9 +560,7 @@ class AppRuntimeManager:
             logger.debug("workspace %s idled (LRU size now %d)", workspace_id, len(self.idle_lru))
 
     def get(self, workspace_id: str) -> Optional[AppRuntime]:
-        # Active subscribers see the live runtime; idle-pool members
-        # are also accessible so a status probe between detach and
-        # the next attach still works.
+        # Active subscribers see the live runtime; idle-pool members are also accessible so a status probe between detach and the next attach still works.
         rt = self.runtimes.get(workspace_id)
         if rt is not None:
             return rt
@@ -671,10 +579,7 @@ class AppRuntimeManager:
             abs_path = os.path.abspath(file_path)
         except Exception:
             return []
-        # Walk both active and idle runtimes; the user might have
-        # navigated away from the workspace mid-build, but the agent
-        # could still be editing files; the LRU keeps the runtime alive
-        # for ~3 idle slots.
+        # Walk both active and idle runtimes; the user might have navigated away from the workspace mid-build, but the agent could still be editing files; the LRU keeps the runtime alive for ~3 idle slots.
         for rt in (*self.runtimes.values(), *self.idle_lru.values()):
             try:
                 ws_root = os.path.abspath(rt.workspace_path)

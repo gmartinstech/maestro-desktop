@@ -42,10 +42,7 @@ def p_is_gpt5(model: str) -> bool:
     return any(m.startswith(p) for p in P_GPT5_PREFIXES)
 
 
-# GPT-5 reasoning models reject sampling knobs: temperature must be the default
-# (only 1 is allowed), and top_p / penalties / logprobs are unsupported outright.
-# 9Router 0.3.60 is pinned and forwards whatever the user's picked model carried,
-# so we strip them at this last hop before OpenAI or the whole request 400s.
+# GPT-5 reasoning models reject sampling knobs: temperature must be the default (only 1 is allowed), and top_p / penalties / logprobs are unsupported outright. 9Router 0.3.60 is pinned and forwards whatever the user's picked model carried, so we strip them at this last hop before OpenAI or the whole request 400s.
 P_GPT5_UNSUPPORTED_PARAMS = (
     "top_p", "top_k", "frequency_penalty", "presence_penalty",
     "logprobs", "top_logprobs", "logit_bias",

@@ -18,15 +18,12 @@ class Output(BaseModel):
     thumbnail: Optional[str] = None
     # Bumped only when a fresh thumbnail is saved; drives sidebar/grid order so merely opening an app doesn't reshuffle the list.
     preview_updated_at: Optional[str] = None
-    # Linkage so reopening the App Builder reattaches to the in-progress session
-    # and reuses the same on-disk workspace folder instead of seeding a fresh one
-    # (which would orphan the running agent + lose chat history on every navigate).
+    # Linkage so reopening the App Builder reattaches to the in-progress session and reuses the same on-disk workspace folder instead of seeding a fresh one (which would orphan the running agent + lose chat history on every navigate).
     session_id: Optional[str] = None
     workspace_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-    # App publishing to {slug}.openswarm.host. Server-managed: set by the publish
-    # endpoint, never accepted from OutputUpdate (so a client can't spoof a live URL).
+    # App publishing to {slug}.openswarm.host. Server-managed: set by the publish endpoint, never accepted from OutputUpdate (so a client can't spoof a live URL).
     published_slug: Optional[str] = None
     published_url: Optional[str] = None
     publish_status: Optional[Literal["publishing", "published", "error"]] = None
@@ -68,8 +65,7 @@ class OutputVersion(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex)
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     label: str = ""
-    # auto: saved after a builder edit run. manual: user clicked Save this version.
-    # pre_restore: the automatic backup taken right before a restore (so restore undoes).
+    # auto: saved after a builder edit run. manual: user clicked Save this version. pre_restore: the automatic backup taken right before a restore (so restore undoes).
     source: Literal["auto", "manual", "pre_restore"] = "auto"
     parent_id: Optional[str] = None
     thumbnail: Optional[str] = None
@@ -143,13 +139,7 @@ class OutputUpdate(BaseModel):
 class OutputExecute(BaseModel):
     output_id: str
     input_data: dict[str, Any] = Field(default_factory=dict)
-    # When False (default), `/execute` returns AST warnings instead of
-    # running if the backend code touches anything outside the safe
-    # data-shaping allowlist. The UI shows those warnings to the user and
-    # re-submits with force=True after they click "Run Anyway." This is
-    # a UX gate, not a security one; anyone holding the auth token can
-    # set force=True; the value is providing the user explicit visibility
-    # of what's about to execute.
+    # When False (default), `/execute` returns AST warnings instead of running if the backend code touches anything outside the safe data-shaping allowlist. The UI shows those warnings to the user and re-submits with force=True after they click "Run Anyway." This is a UX gate, not a security one; anyone holding the auth token can set force=True; the value is providing the user explicit visibility of what's about to execute.
     force: bool = False
 
 
@@ -162,9 +152,7 @@ class OutputExecuteResult(BaseModel):
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     error: Optional[str] = None
-    # Populated when the AST validator flagged risky constructs and the
-    # caller didn't set force=True. When present, `backend_result` is null
-    # because execution was deferred pending user consent.
+    # Populated when the AST validator flagged risky constructs and the caller didn't set force=True. When present, `backend_result` is null because execution was deferred pending user consent.
     warnings: Optional[list[str]] = None
     code_preview: Optional[str] = None
 
@@ -173,15 +161,7 @@ class WorkspaceSeedRequest(BaseModel):
     workspace_id: str
     files: Optional[dict[str, str]] = None
     meta: Optional[dict[str, Any]] = None
-    # "webapp_template" (default) → seed the vendored
-    # openswarm-ai/webapp-template snapshot (React + Vite + TS frontend
-    # with optional FastAPI backend), allocate a free FRONTEND_PORT,
-    # leave BACKEND_PORT=NONE. Runtime spawns `bash run.sh`; preview
-    # pane points at `http://localhost:{FRONTEND_PORT}/`.
-    # "flat" → legacy single-`index.html` workspace, kept for explicit
-    # opt-in (migration helper, regression tests). Workspaces predating
-    # this flip continue to work in old-mode automatically since the
-    # runtime detects mode via the presence of `run.sh`.
+    # "webapp_template" (default) → seed the vendored openswarm-ai/webapp-template snapshot (React + Vite + TS frontend with optional FastAPI backend), allocate a free FRONTEND_PORT, leave BACKEND_PORT=NONE. Runtime spawns `bash run.sh`; preview pane points at `http://localhost:{FRONTEND_PORT}/`. "flat" → legacy single-`index.html` workspace, kept for explicit opt-in (migration helper, regression tests). Workspaces predating this flip continue to work in old-mode automatically since the runtime detects mode via the presence of `run.sh`.
     template_mode: Literal["flat", "webapp_template"] = "webapp_template"
 
     @model_validator(mode="before")
@@ -244,8 +224,7 @@ class PublishResult(BaseModel):
     ok: bool = True
     published_slug: Optional[str] = None
     published_url: Optional[str] = None
-    # When the AST safety net blocks a non-force publish, carry the findings so
-    # the UI shows the review modal instead of a generic error toast.
+    # When the AST safety net blocks a non-force publish, carry the findings so the UI shows the review modal instead of a generic error toast.
     blocked: bool = False
     review: Optional[PublishReview] = None
     error: Optional[str] = None

@@ -20,8 +20,7 @@ from backend.apps.nine_router.sync import (
 
 logger = logging.getLogger(__name__)
 
-# We mirror settings.custom_providers[] with prefix `cp-<slug>` so they don't
-# collide with the user's primary OpenAI key.
+# We mirror settings.custom_providers[] with prefix `cp-<slug>` so they don't collide with the user's primary OpenAI key.
 NINE_ROUTER_CUSTOM_NAME_SUFFIX = " (OpenSwarm-managed)"
 
 
@@ -183,9 +182,7 @@ async def sync_custom_providers(providers: list) -> None:
         api_key = getattr(cp, "api_key", None) or (cp.get("api_key") if isinstance(cp, dict) else None) or ""
         if not name.strip() or not base_url.strip():
             continue
-        # Local OpenAI-compat servers (LM Studio, Ollama, etc.) reject a blank
-        # Bearer header even with auth disabled. Substitute a placeholder; real
-        # auth deployments always have api_key set.
+        # Local OpenAI-compat servers (LM Studio, Ollama, etc.) reject a blank Bearer header even with auth disabled. Substitute a placeholder; real auth deployments always have api_key set.
         api_key = api_key.strip() or "no-auth-required"
         slug = p_custom_provider_slug(name)
         prefix = f"cp-{slug}"
@@ -283,9 +280,7 @@ async def sync_openswarm_pro_as_claude(bearer_token: str | None, proxy_url: str 
     if not nr().is_running():
         return
 
-    # 9Router's POST /api/providers only accepts direct-API provider ids
-    # for apikey auth; `claude` is the subscription/IDE id, `anthropic`
-    # is the direct-API id. Use `anthropic`.
+    # 9Router's POST /api/providers only accepts direct-API provider ids for apikey auth; `claude` is the subscription/IDE id, `anthropic` is the direct-API id. Use `anthropic`.
     existing = await find_keyed_connection("anthropic", NINE_ROUTER_CLAUDE_PRO_NAME)
     try:
         async with nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
@@ -295,9 +290,7 @@ async def sync_openswarm_pro_as_claude(bearer_token: str | None, proxy_url: str 
                     "authType": "apikey",
                     "name": NINE_ROUTER_CLAUDE_PRO_NAME,
                     "apiKey": bearer_token,
-                    # Priority 1 so a real user-owned Claude subscription
-                    # (priority 0) still takes precedence if they have one.
-                    # Pro is the fallback, not the default.
+                    # Priority 1 so a real user-owned Claude subscription (priority 0) still takes precedence if they have one. Pro is the fallback, not the default.
                     "priority": 1,
                     "providerSpecificData": {
                         "baseUrl": proxy_url.rstrip("/") + "/v1",

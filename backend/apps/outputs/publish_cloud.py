@@ -39,8 +39,7 @@ async def upload_to_cloud(
             r = await client.post(
                 f"{base}/api/apps/publish",
                 headers={"Authorization": f"Bearer {token}"},
-                # output_id lets the cloud reuse this app's slug on republish instead
-                # of minting a duplicate; override marks a publish past a non-clean scan.
+                # output_id lets the cloud reuse this app's slug on republish instead of minting a duplicate; override marks a publish past a non-clean scan.
                 data={"name": name, "slug": slug_hint, "output_id": output_id, "override": "1" if override else "0"},
                 files={"bundle": ("app.tar.gz", bundle, "application/gzip")},
             )

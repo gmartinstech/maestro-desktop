@@ -39,8 +39,7 @@ class DashboardExportable:
         for oid, card in (layout.get("view_cards") or {}).items():
             bid = ctx.bundle_id_for(EntityType.app, oid)
             if bid:
-                # parent_session_id tethers the app card to the agent that built it;
-                # it's a session id, so it remaps like spawned_by on browser cards.
+                # parent_session_id tethers the app card to the agent that built it; it's a session id, so it remaps like spawned_by on browser cards.
                 parent = card.get("parent_session_id")
                 view_cards[bid] = {
                     **card, "output_id": bid,

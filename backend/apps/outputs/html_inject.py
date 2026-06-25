@@ -120,10 +120,7 @@ def backend_url_for_workspace(workspace_id: str) -> str:
     return "null"
 
 
-# URL schemes / prefixes that must NOT have ?token= appended. These are either
-# external (CDNs, mailto) or non-network references that the auth middleware
-# never sees. Anything else is treated as a same-origin relative URL pointing
-# at our /api/outputs/.../serve/ subtree, which DOES need the token.
+# URL schemes / prefixes that must NOT have ?token= appended. These are either external (CDNs, mailto) or non-network references that the auth middleware never sees. Anything else is treated as a same-origin relative URL pointing at our /api/outputs/.../serve/ subtree, which DOES need the token.
 P_ABSOLUTE_URL_PREFIXES = (
     "http://", "https://", "//", "data:", "blob:",
     "mailto:", "tel:", "javascript:", "about:", "#",
@@ -154,8 +151,7 @@ def inject_token_into_relative_urls(html: str, token: str) -> str:
             return match.group(0)
         if "token=" in url:
             return match.group(0)
-        # Split off any hash fragment so `?token=` lands in the query, not in
-        # the fragment: `page.html?v=1#sec` → `page.html?v=1&token=X#sec`.
+        # Split off any hash fragment so `?token=` lands in the query, not in the fragment: `page.html?v=1#sec` → `page.html?v=1&token=X#sec`.
         hash_idx = url.find("#")
         if hash_idx >= 0:
             base, frag = url[:hash_idx], url[hash_idx:]

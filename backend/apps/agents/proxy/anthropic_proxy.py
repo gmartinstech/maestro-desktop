@@ -35,14 +35,7 @@ P_GEMINI_MODEL_PREFIXES = ("gemini/", "gc/", "ag/")
 # Own-key Gemini ("gemini-3-flash-api" etc.) skips the gemini/ prefix; match bare names so $schema scrub still fires.
 P_GEMINI_BARE_MODEL_PATTERNS = ("gemini-",)
 
-# Gemini's function_declarations validator accepts only a small OpenAPI subset.
-# A denylist was whack-a-mole: every new JSON Schema construct that slipped
-# through (union `type`, anyOf, $comment, format, ...) was a fresh prod 400 with
-# zero tokens in. We invert it: keep ONLY the keys Gemini is known to accept, and
-# fold the two "optional" encodings Anthropic emits (a union `type` list, and an
-# anyOf whose other branch is `{"type":"null"}`) into the `nullable` flag Gemini
-# actually understands. Everything dropped is advisory; the model still reads it
-# from `description`. The win is structural: an unknown future key can't 400 us.
+# Gemini's function_declarations validator accepts only a small OpenAPI subset. A denylist was whack-a-mole: every new JSON Schema construct that slipped through (union `type`, anyOf, $comment, format, ...) was a fresh prod 400 with zero tokens in. We invert it: keep ONLY the keys Gemini is known to accept, and fold the two "optional" encodings Anthropic emits (a union `type` list, and an anyOf whose other branch is `{"type":"null"}`) into the `nullable` flag Gemini actually understands. Everything dropped is advisory; the model still reads it from `description`. The win is structural: an unknown future key can't 400 us.
 P_GEMINI_ALLOWED_SCHEMA_KEYS = {
     "type", "description", "nullable", "enum", "items", "properties",
     "required", "minimum", "maximum", "minItems", "maxItems",
@@ -62,8 +55,7 @@ def normalize_schema_for_gemini(node):
 
     nullable = bool(node.get("nullable"))
 
-    # Gemini can't represent unions; collapse anyOf/oneOf/allOf to one branch.
-    # A bare {"type": "null"} member just means the field is nullable.
+    # Gemini can't represent unions; collapse anyOf/oneOf/allOf to one branch. A bare {"type": "null"} member just means the field is nullable.
     for combiner in ("anyOf", "oneOf", "allOf"):
         branches = node.get(combiner)
         if isinstance(branches, list) and branches:
@@ -141,15 +133,7 @@ def p_rewrite_document_to_openai_file(parsed: dict) -> None:
                 continue
             media_type = src.get("media_type") or ""
 
-            # 9router 0.3.60 chunk 318 stringifies ANY non-`text`/`image_url`
-            # block. Image blocks → image_url with data: URL.
-            # PDFs on OpenAI direct are REFUSED upstream (agent_manager
-            # _resolve_attachments has openai NOT in supports_pdf) because
-            # OpenAI Chat Completions rejects non-image mime types inside
-            # image_url with "Invalid MIME type. Only image types are
-            # supported." (verified empirically May 2026). The shipping
-            # path for OpenAI PDFs is openrouter/openai/gpt-5 which uses
-            # OR's file-parser plugin.
+            # 9router 0.3.60 chunk 318 stringifies ANY non-`text`/`image_url` block. Image blocks → image_url with data: URL. PDFs on OpenAI direct are REFUSED upstream (agent_manager _resolve_attachments has openai NOT in supports_pdf) because OpenAI Chat Completions rejects non-image mime types inside image_url with "Invalid MIME type. Only image types are supported." (verified empirically May 2026). The shipping path for OpenAI PDFs is openrouter/openai/gpt-5 which uses OR's file-parser plugin.
             if btype != "image":
                 continue
             mt = media_type or "image/png"
@@ -179,8 +163,7 @@ def scrub_request_for_openai_gpt5(body: bytes) -> bytes:
     elif "max_tokens" in parsed and "max_completion_tokens" in parsed:
         parsed.pop("max_tokens", None)
         mutated = True
-    # GPT-5 reasoning models reject sampling knobs (temperature must be 1, top_p
-    # and penalties unsupported); the wire carries them for the user's picked model.
+    # GPT-5 reasoning models reject sampling knobs (temperature must be 1, top_p and penalties unsupported); the wire carries them for the user's picked model.
     if "temperature" in parsed and parsed["temperature"] != 1:
         parsed.pop("temperature", None)
         mutated = True
@@ -409,11 +392,7 @@ async def proxy(rest: str, request: Request):
         except Exception:
             pass
 
-    # 9router-bypass paths for PDF-bearing requests on providers where
-    # 9router 0.3.60 strips or mangles the relevant content/plugin
-    # fields. We translate + POST directly to the provider's API and
-    # convert the streaming response back to Anthropic SSE so the
-    # bundled Claude CLI subprocess consumes it unchanged.
+    # 9router-bypass paths for PDF-bearing requests on providers where 9router 0.3.60 strips or mangles the relevant content/plugin fields. We translate + POST directly to the provider's API and convert the streaming response back to Anthropic SSE so the bundled Claude CLI subprocess consumes it unchanged.
     try:
         parsed_for_bypass = json.loads(body) if body else None
     except Exception:
@@ -475,10 +454,7 @@ async def proxy(rest: str, request: Request):
         except Exception:
             pass
 
-    # Gemini (especially the AI Studio key) intermittently 503s and 9Router holds
-    # the retry, which hangs the whole turn for the full read window. Bound Gemini
-    # so a stalled first response fails fast (~2 min) instead of stalling ~10 min;
-    # other providers keep the generous window for long reasoning turns.
+    # Gemini (especially the AI Studio key) intermittently 503s and 9Router holds the retry, which hangs the whole turn for the full read window. Bound Gemini so a stalled first response fails fast (~2 min) instead of stalling ~10 min; other providers keep the generous window for long reasoning turns.
     p_read_timeout = 120.0 if p_is_gemini_model(model) else 600.0
 
     try:

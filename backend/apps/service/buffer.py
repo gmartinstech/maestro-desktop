@@ -23,9 +23,7 @@ from typing import Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
-# Cap the spool at 50 MB on disk. SQLite's overhead means the actual ceiling
-# on retained payloads is somewhat smaller, which is fine; this is a
-# best-effort cushion, not a guaranteed retention window.
+# Cap the spool at 50 MB on disk. SQLite's overhead means the actual ceiling on retained payloads is somewhat smaller, which is fine; this is a best-effort cushion, not a guaranteed retention window.
 P_MAX_BYTES = 50 * 1024 * 1024
 
 # Trim 25% when we cross the cap so we don't trim on every insert.
@@ -70,8 +68,7 @@ def enqueue(spool_path: str, kind: str, payload: dict, *, now: float) -> None:
             size = 0
         if size > P_MAX_BYTES:
             target = int(P_MAX_BYTES * P_TRIM_TARGET_FRACTION)
-            # Delete oldest rows until we're back under target. Use a
-            # reasonable batch size so we don't block forever.
+            # Delete oldest rows until we're back under target. Use a reasonable batch size so we don't block forever.
             dropped = 0
             for _ in range(64):
                 row = c.execute("SELECT id FROM spool ORDER BY id ASC LIMIT 1").fetchone()
@@ -87,8 +84,7 @@ def enqueue(spool_path: str, kind: str, payload: dict, *, now: float) -> None:
                     break
             if dropped:
                 logger.warning("Spool over %d MB cap; dropped %d oldest entries", P_MAX_BYTES // (1024 * 1024), dropped)
-            # VACUUM is expensive; only run if we still appear oversized after
-            # trimming, otherwise free pages get reused on next insert.
+            # VACUUM is expensive; only run if we still appear oversized after trimming, otherwise free pages get reused on next insert.
             try:
                 if os.path.getsize(spool_path) > P_MAX_BYTES:
                     c.execute("VACUUM")

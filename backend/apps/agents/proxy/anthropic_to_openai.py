@@ -30,22 +30,11 @@ logger = logging.getLogger(__name__)
 P_OPENAI_UPSTREAM = "https://api.openai.com/v1"
 P_OPENROUTER_UPSTREAM = "https://openrouter.ai/api/v1"
 
-# Concurrency cap for bypass-route requests. Each in-flight request holds
-# the base64'd PDF (raw_bytes * 1.33) in memory across httpx's request
-# pipeline + our SSE translator's chunk buffer + the response body. A
-# 30MB PDF is ~40MB base64; four in-flight = ~160MB of httpx buffers
-# plus Python overhead, which OOM-killed the dev backend on macOS during
-# concurrent probes. Cap at 2 so a Mehmet-style multi-PDF attach in one
-# session can't take the whole backend down. Requests above the cap
-# queue rather than fail.
+# Concurrency cap for bypass-route requests. Each in-flight request holds the base64'd PDF (raw_bytes * 1.33) in memory across httpx's request pipeline + our SSE translator's chunk buffer + the response body. A 30MB PDF is ~40MB base64; four in-flight = ~160MB of httpx buffers plus Python overhead, which OOM-killed the dev backend on macOS during concurrent probes. Cap at 2 so a Mehmet-style multi-PDF attach in one session can't take the whole backend down. Requests above the cap queue rather than fail.
 BYPASS_CONCURRENCY = 2
 bypass_sema = asyncio.Semaphore(BYPASS_CONCURRENCY)
 
-# Hard per-request body size ceiling. Anthropic API caps at 32MB,
-# OpenAI Chat Completions at 50MB, OpenRouter at whatever underlying
-# model accepts. We refuse anything over 40MB raw (≈53MB base64) before
-# we even build the request body, so a malicious or accidental huge
-# attach never reaches the in-memory pipeline.
+# Hard per-request body size ceiling. Anthropic API caps at 32MB, OpenAI Chat Completions at 50MB, OpenRouter at whatever underlying model accepts. We refuse anything over 40MB raw (≈53MB base64) before we even build the request body, so a malicious or accidental huge attach never reaches the in-memory pipeline.
 P_BYPASS_MAX_RAW_BYTES = 40 * 1024 * 1024
 
 
@@ -169,10 +158,7 @@ def translate_request(parsed: dict) -> dict:
         openai_body["max_completion_tokens"] = mt
     if isinstance(parsed.get("temperature"), (int, float)):
         openai_body["temperature"] = parsed["temperature"]
-    # OpenAI omits usage from streamed chunks unless explicitly asked.
-    # Without this, our Anthropic message_delta would always report 0
-    # tokens, breaking cost tracking + the context meter for bypass-route
-    # turns. OpenRouter respects the same flag.
+    # OpenAI omits usage from streamed chunks unless explicitly asked. Without this, our Anthropic message_delta would always report 0 tokens, breaking cost tracking + the context meter for bypass-route turns. OpenRouter respects the same flag.
     openai_body["stream_options"] = {"include_usage": True}
     return openai_body
 
@@ -210,9 +196,7 @@ async def p_translate_response_stream(
                 if not line:
                     continue
                 for ln in line.split("\n"):
-                    # SSE comments (`:` prefix) are keep-alives, e.g.
-                    # OpenRouter emits `: OPENROUTER PROCESSING` while
-                    # its file-parser plugin works. Drop them.
+                    # SSE comments (`:` prefix) are keep-alives, e.g. OpenRouter emits `: OPENROUTER PROCESSING` while its file-parser plugin works. Drop them.
                     if ln.startswith(":"):
                         continue
                     if not ln.startswith("data:"):
@@ -367,11 +351,7 @@ async def p_forward(
         "Accept": "text/event-stream",
     }
 
-    # Acquire the bypass-concurrency semaphore before opening a streaming
-    # connection. Without this, N simultaneous PDF attaches each hold a
-    # ~40MB request body + a streaming response buffer, and the OS
-    # OOM-kills the backend (observed on macOS during a 3-PDF probe
-    # burst). Semaphore serializes excess requests instead of failing.
+    # Acquire the bypass-concurrency semaphore before opening a streaming connection. Without this, N simultaneous PDF attaches each hold a ~40MB request body + a streaming response buffer, and the OS OOM-kills the backend (observed on macOS during a 3-PDF probe burst). Semaphore serializes excess requests instead of failing.
     await bypass_sema.acquire()
     client = httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=30.0))
     try:

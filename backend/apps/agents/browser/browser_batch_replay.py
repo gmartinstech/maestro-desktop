@@ -51,8 +51,7 @@ P_STEP_TOOLS: dict[str, tuple[str, tuple[str, ...]]] = {
 # Reads/navigation don't mutate anything irreversible; safe to loop freely.
 P_READONLY_ACTIONS = {"navigate", "get_text", "evaluate", "scroll", "replay_route"}
 
-# Irreversible / outward-facing words on a clicked control. Conservative on
-# purpose: we'd rather refuse a borderline loop than auto-send 10 messages.
+# Irreversible / outward-facing words on a clicked control. Conservative on purpose: we'd rather refuse a borderline loop than auto-send 10 messages.
 P_SEND_NAME_RE = re.compile(
     r"\b(send|submit|post|publish|connect|invite|follow|like|react|comment|reply|"
     r"share|message|dm|pay|buy|order|checkout|purchase|place\s*order|book|"
@@ -105,8 +104,7 @@ def template_safety(steps) -> tuple[bool, str]:
     return True, ""
 
 
-# Like P_SEND_NAME_RE minus composer-openers ("Message"/"DM" buttons open a
-# compose box, they don't send), so routine flows still batch freely.
+# Like P_SEND_NAME_RE minus composer-openers ("Message"/"DM" buttons open a compose box, they don't send), so routine flows still batch freely.
 P_LIVE_IRREVERSIBLE_RE = re.compile(
     r"\b(send|submit|post|publish|connect|invite|follow|like|react|comment|reply|"
     r"share|pay|buy|order|checkout|purchase|place\s*order|book|"
@@ -182,8 +180,7 @@ def live_batch_guard(actions, seen_lines, composer_pending: bool = False) -> str
             continue
         else:
             continue
-        # selectors hide words behind underscores/dashes (msg-form__send-button),
-        # which defeat \b; flatten separators so the word check still sees them
+        # selectors hide words behind underscores/dashes (msg-form__send-button), which defeat \b; flatten separators so the word check still sees them
         if label and P_LIVE_IRREVERSIBLE_RE.search(re.sub(r"[_\-./#\[\]]+", " ", label)):
             return (f"sub-action {i+1} ({typ}) targets {label.strip()!r}, "
                     "which is irreversible/outward-facing")
@@ -207,8 +204,7 @@ def send_payload_from_log(action_log, prompt: str = "") -> str:
             name = str(a.get("clicked_name") or "")
             role = str(a.get("clicked_role") or "")
             summ = str(a.get("result_summary") or "")
-            # focus+type results carry no clicked fields (r47's live miss); the
-            # executor's own "typed the text" wording is the surviving signal
+            # focus+type results carry no clicked fields (r47's live miss); the executor's own "typed the text" wording is the surviving signal
             if P_COMPOSE_SEL_RE.search(name) or (len(text) >= 20 and (
                     role == "textbox" or "typed the text" in summ.lower())):
                 typed.append(text)
@@ -229,8 +225,7 @@ def send_payload_from_log(action_log, prompt: str = "") -> str:
                     typed.append(sub_text)
     if not typed:
         return ""
-    # the task usually quotes the message; a candidate echoed there beats a
-    # longer search query or a garbled retype
+    # the task usually quotes the message; a candidate echoed there beats a longer search query or a garbled retype
     for t in reversed(typed):
         if t in (prompt or ""):
             return t
@@ -268,9 +263,7 @@ def is_readonly_template(steps) -> bool:
     return all(s.get("action") in P_READONLY_ACTIONS for s in steps)
 
 
-# A batch READ is useless if it doesn't hand the data back. We return each item's
-# read output, capped so a 20-item batch stays cheap, and stay honest about
-# failures (named, with the error) and truncation (named, never silently dropped).
+# A batch READ is useless if it doesn't hand the data back. We return each item's read output, capped so a 20-item batch stays cheap, and stay honest about failures (named, with the error) and truncation (named, never silently dropped).
 P_MAX_ITEM_CHARS = 500
 P_MAX_TOTAL_CHARS = 6000
 

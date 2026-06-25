@@ -133,12 +133,7 @@ def p_get_user_id() -> Optional[str]:
     try:
         from backend.apps.settings.store import load_settings
         s = load_settings()
-        # Prefer the cloud-issued user_id (UUID) if the user has signed in
-        # via Google OAuth, magic link, or Stripe checkout; that's the
-        # authoritative identity. Falls back to user_email for installs
-        # that haven't completed sign-in yet (so existing onboarding-only
-        # installs don't lose their Person history during the v1.0.29
-        # rollout). After every install signs in, this fallback drops out.
+        # Prefer the cloud-issued user_id (UUID) if the user has signed in via Google OAuth, magic link, or Stripe checkout; that's the authoritative identity. Falls back to user_email for installs that haven't completed sign-in yet (so existing onboarding-only installs don't lose their Person history during the v1.0.29 rollout). After every install signs in, this fallback drops out.
         return (
             getattr(s, "user_id", None)
             or getattr(s, "user_email", None)
@@ -183,11 +178,7 @@ def p_envelope() -> dict:
         env["device_type"] = "desktop"
     except Exception:
         pass
-    # Timezone: prefer the IANA zone name passed in by Electron (always
-    # canonical, e.g. "America/Los_Angeles") so cloud-side localTimeFields()
-    # can format hour-of-day correctly. Fall back to Python's local zone
-    # which sometimes returns abbreviations (PDT, CDT) or localized names
-    # ("Romance (zomertijd)") that don't round-trip through tzdata.
+    # Timezone: prefer the IANA zone name passed in by Electron (always canonical, e.g. "America/Los_Angeles") so cloud-side localTimeFields() can format hour-of-day correctly. Fall back to Python's local zone which sometimes returns abbreviations (PDT, CDT) or localized names ("Romance (zomertijd)") that don't round-trip through tzdata.
     try:
         ianatz = os.environ.get("OPENSWARM_TIMEZONE", "").strip()
         if not ianatz:
@@ -205,10 +196,7 @@ def p_envelope() -> dict:
             env["timezone"] = ianatz
     except Exception:
         pass
-    # Locale: BCP 47 string ("en-US", "es-ES", etc.) injected by Electron via
-    # app.getLocale(); see electron/main.js. We don't fall back to Python's
-    # locale.getdefaultlocale() because that's deprecated, often empty, and
-    # returns inconsistent OS-specific values across macOS/Windows/Linux.
+    # Locale: BCP 47 string ("en-US", "es-ES", etc.) injected by Electron via app.getLocale(); see electron/main.js. We don't fall back to Python's locale.getdefaultlocale() because that's deprecated, often empty, and returns inconsistent OS-specific values across macOS/Windows/Linux.
     try:
         loc = os.environ.get("OPENSWARM_LOCALE", "").strip()
         if loc:
@@ -216,9 +204,7 @@ def p_envelope() -> dict:
     except Exception:
         pass
     env["app_version"] = APP_VERSION
-    # How this build was packaged. Set by the platform-specific build script
-    # (electron-builder afterPack hooks for dmg / exe / appimage / deb / rpm).
-    # Defaults to "dev" when running from `bash run.sh` in a checked-out repo.
+    # How this build was packaged. Set by the platform-specific build script (electron-builder afterPack hooks for dmg / exe / appimage / deb / rpm). Defaults to "dev" when running from `bash run.sh` in a checked-out repo.
     env["install_method"] = os.environ.get("OPENSWARM_INSTALL_METHOD", "dev")
     return env
 
@@ -301,9 +287,7 @@ async def drain_spool(batch_size: int = 50) -> int:
         return len(succeeded)
 
 
-# --------------------------------------------------------------------------
-# Public API
-# --------------------------------------------------------------------------
+# -------------------------------------------------------------------------- Public API --------------------------------------------------------------------------
 
 def p_log(kind: str, payload: dict) -> None:
     """Append to the rolling operational log for diagnostics."""
@@ -378,12 +362,7 @@ def p_schedule(coro) -> None:
     threading.Thread(target=p_run, daemon=True).start()
 
 
-# --------------------------------------------------------------------------
-# Backwards-compat shims for legacy call sites. New code calls submit()
-# directly. These keep the ~50 existing import sites in the codebase
-# working unchanged. Removed in a future cleanup once nothing imports
-# from older import paths.
-# --------------------------------------------------------------------------
+# -------------------------------------------------------------------------- Backwards-compat shims for legacy call sites. New code calls submit() directly. These keep the ~50 existing import sites in the codebase working unchanged. Removed in a future cleanup once nothing imports from older import paths. --------------------------------------------------------------------------
 
 def submit_event(
     surface: str,

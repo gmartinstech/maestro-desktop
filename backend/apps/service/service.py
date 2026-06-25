@@ -95,8 +95,7 @@ async def p_pulse_loop():
         if p_pulse_count >= p_pulse_batch_size:
             try:
                 from backend.apps.agents.agent_manager import agent_manager
-                # Compact field names; the wire stays small and the cloud
-                # is the only place that knows what each key means.
+                # Compact field names; the wire stays small and the cloud is the only place that knows what each key means.
                 svc.sync({
                     "a": len(agent_manager.sessions),       # active sessions
                     "h": sorted(p_pulse_hours),               # hour bucket set
@@ -204,12 +203,7 @@ async def service_lifespan():
 
     try:
         from backend.apps.nine_router import ensure_running as ensure_9router
-        # Start 9Router in the BACKGROUND instead of awaiting it here. Awaiting
-        # it was ~7s (up to ~18s cold) of the startup critical path, blocking the
-        # HTTP bind and the whole UI behind it. 9Router is only needed when the
-        # user sends an agent message, and the dispatch path calls ensure_running()
-        # itself (now serialized, so no double-spawn), so the first message waits
-        # for readiness lazily. This is the single biggest warm-startup win.
+        # Start 9Router in the BACKGROUND instead of awaiting it here. Awaiting it was ~7s (up to ~18s cold) of the startup critical path, blocking the HTTP bind and the whole UI behind it. 9Router is only needed when the user sends an agent message, and the dispatch path calls ensure_running() itself (now serialized, so no double-spawn), so the first message waits for readiness lazily. This is the single biggest warm-startup win.
         p_9r_start_task = asyncio.create_task(ensure_9router())
     except Exception as e:
         logger.debug(f"9Router auto-start skipped: {e}")
@@ -263,9 +257,7 @@ async def service_lifespan():
 service = SubApp("service", service_lifespan)
 
 
-# ---------------------------------------------------------------------------
-# Usage endpoints (user-facing, read by the Settings / Usage page)
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Usage endpoints (user-facing, read by the Settings / Usage page) ---------------------------------------------------------------------------
 
 def p_load_all_sessions() -> list[dict]:
     results = []
@@ -290,8 +282,7 @@ async def usage_summary():
         sessions.append(s.model_dump(mode="json"))
 
     def p_is_real(sess: dict) -> bool:
-        # "Real" = actually ran. Empty draft/abandoned sessions (no assistant turn, no tokens,
-        # no active time) otherwise inflate the count and drag every average toward zero.
+        # "Real" = actually ran. Empty draft/abandoned sessions (no assistant turn, no tokens, no active time) otherwise inflate the count and drag every average toward zero.
         if (sess.get("agent_active_ms") or 0) > 0 or (sess.get("cost_usd") or 0) > 0:
             return True
         tk = sess.get("tokens") or {}
@@ -319,9 +310,7 @@ async def usage_summary():
         provider_counts[s.get("provider", "anthropic")] += 1
         status_counts[s.get("status", "unknown")] += 1
 
-        # Tool calls: tool_latencies carries authoritative per-tool counts; older sessions only have
-        # the sparse tool_call messages. Per session take whichever source recorded more so we never
-        # undercount what's on record (and so the total never drops below the old message-only count).
+        # Tool calls: tool_latencies carries authoritative per-tool counts; older sessions only have the sparse tool_call messages. Per session take whichever source recorded more so we never undercount what's on record (and so the total never drops below the old message-only count).
         lat_counts: Counter = Counter()
         for tool, d in (s.get("tool_latencies") or {}).items():
             cnt = (d or {}).get("count", 0) or 0
@@ -438,9 +427,7 @@ async def service_status():
     return {"status": "ok", "enabled": True}
 
 
-# ---------------------------------------------------------------------------
-# Frontend event endpoints
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Frontend event endpoints ---------------------------------------------------------------------------
 
 def p_bridge_to_analytics(item: dict) -> None:
     # Boundary adapter: validate the raw report() envelope into a typed event, hand it to the analytics bridge.
@@ -472,9 +459,7 @@ async def post_submit(body=Body(...)):
     with a 200 + `{ok:false}`, so every UI event from `report()` was
     dropped; `frontend.event` count was 0 in production analytics.
     """
-    # Shape 3: batched array. Recurse per-item so single-item handling
-    # logic stays in one place. Returns a single ok regardless of
-    # individual item shape; analytics calls aren't transactional.
+    # Shape 3: batched array. Recurse per-item so single-item handling logic stays in one place. Returns a single ok regardless of individual item shape; analytics calls aren't transactional.
     if isinstance(body, list):
         for item in body:
             if isinstance(item, dict):

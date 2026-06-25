@@ -23,8 +23,7 @@ from backend.apps.workflows import storage, scheduler, executor, audit, escalati
 
 logger = logging.getLogger(__name__)
 
-# Fixed opener for an existing workflow's edit chat. Deterministic on purpose,
-# no aux LLM call, so it never drifts and always lays out what the user can do.
+# Fixed opener for an existing workflow's edit chat. Deterministic on purpose, no aux LLM call, so it never drifts and always lays out what the user can do.
 EDIT_AGENT_INTRO = (
     "Here's your workflow's edit space. Tell me what you want and I'll handle it:\n\n"
     "- Add, remove, or reorder steps\n"
@@ -83,9 +82,7 @@ _cron_findings: list[str] = []
 async def workflows_lifespan():
     storage.init()
     await scheduler.start()
-    # Cheap one-shot scan for prior cron entries that reference us. We
-    # don't migrate automatically; the FE shows a banner with a "Convert
-    # to OpenSwarm scheduled tasks" button so the user is in control.
+    # Cheap one-shot scan for prior cron entries that reference us. We don't migrate automatically; the FE shows a banner with a "Convert to OpenSwarm scheduled tasks" button so the user is in control.
     global _cron_findings
     _cron_findings = _scan_cron_for_openswarm()
     try:
@@ -206,9 +203,7 @@ async def list_workflows(dashboard_id: Optional[str] = None):
     if dashboard_id:
         items = [w for w in items if not w.dashboard_id or w.dashboard_id == dashboard_id]
     items.sort(key=lambda w: w.updated_at or w.created_at, reverse=True)
-    # Enrich with cost_estimate so calendar tooltips and the WorkflowsHub
-    # list don't have to round-trip to GET /workflows/{id} per row. Cheap
-    # because fires_in_window walks at most ~30 fires per workflow.
+    # Enrich with cost_estimate so calendar tooltips and the WorkflowsHub list don't have to round-trip to GET /workflows/{id} per row. Cheap because fires_in_window walks at most ~30 fires per workflow.
     return {"workflows": [_enriched(w) for w in items]}
 
 
@@ -280,26 +275,16 @@ async def create_workflow(body: WorkflowCreate):
     source_approvals, source_tools, source_allowed_tools = p_source_session_memory(body.source_session_id)
     wf.remembered_approvals = source_approvals
     wf.source_tools = source_tools
-    # Convert-from-chat passes the steps signature so the workflow counts as
-    # already validated (the chat already prompted for permissions); a blank
-    # "New" create leaves it None so the first schedule warns to test first.
+    # Convert-from-chat passes the steps signature so the workflow counts as already validated (the chat already prompted for permissions); a blank "New" create leaves it None so the first schedule warns to test first.
     wf.tested_signature = body.tested_signature
     if not wf.icon:
         wf.icon = _derive_icon(wf)
     _normalize_schedule_state(wf, source_allowed_tools=source_allowed_tools)
-    # Force-generate title + description + per-step labels from the steps
-    # in a single aux call. Previously we only filled missing description,
-    # leaving stale session names ("Inbox check") as titles. Step labels
-    # are the 3-6 word at-a-glance headlines surfaced in StepList; without
-    # them the UI falls back to truncated raw prompts.
-    # When the FE already generated metadata at preview time it ships the title,
-    # description, and per-step labels on the body, so we skip the aux call here.
+    # Force-generate title + description + per-step labels from the steps in a single aux call. Previously we only filled missing description, leaving stale session names ("Inbox check") as titles. Step labels are the 3-6 word at-a-glance headlines surfaced in StepList; without them the UI falls back to truncated raw prompts. When the FE already generated metadata at preview time it ships the title, description, and per-step labels on the body, so we skip the aux call here.
     if not body.metadata_generated:
         try:
             title, description, labels = await _generate_workflow_metadata(wf)
-            # Respect a user-supplied title (auto_named=False); only auto-fill the
-            # name + description while the workflow is still auto-named. Labels are
-            # always safe to fill since they don't override a user's title.
+            # Respect a user-supplied title (auto_named=False); only auto-fill the name + description while the workflow is still auto-named. Labels are always safe to fill since they don't override a user's title.
             if wf.auto_named:
                 if title:
                     wf.title = title
@@ -327,8 +312,7 @@ async def create_workflow(body: WorkflowCreate):
 
 @workflows.router.post("/generate-metadata")
 async def generate_workflow_metadata(body: GenerateMetadataRequest) -> GenerateMetadataResponse:
-    # Preview-time naming for the convert-to-workflow draft. Generates without
-    # persisting so the card can show a real title before the user saves.
+    # Preview-time naming for the convert-to-workflow draft. Generates without persisting so the card can show a real title before the user saves.
     wf = Workflow(steps=body.steps, model=body.model or "sonnet")
     title, description, labels = await _generate_workflow_metadata(wf)
     return GenerateMetadataResponse(title=title, description=description, step_labels=labels)
@@ -360,9 +344,7 @@ async def p_generate_metadata_for_steps(
         return "", "", []
     settings = _ls()
     try:
-        # Stay on the family the user is actually paying for (same as
-        # generate_title); without primary_api the aux call can resolve to a
-        # lane that returns nothing on subscription setups.
+        # Stay on the family the user is actually paying for (same as generate_title); without primary_api the aux call can resolve to a lane that returns nothing on subscription setups.
         aux_model, _ = await resolve_aux_model(
             settings, preferred_tier="haiku", primary_api=get_api_type(model),
         )
@@ -421,11 +403,7 @@ async def p_generate_metadata_for_steps(
             return None
 
     try:
-        # Stream, don't use messages.create: 9router's non-streaming response
-        # translator drops `content` for some provider lanes (same reason
-        # generate_title streams), which left the title empty. Streaming also
-        # means no assistant-prefill hack; _extract_json_object finds the
-        # object even if the model wraps it in prose or a code fence.
+        # Stream, don't use messages.create: 9router's non-streaming response translator drops `content` for some provider lanes (same reason generate_title streams), which left the title empty. Streaming also means no assistant-prefill hack; _extract_json_object finds the object even if the model wraps it in prose or a code fence.
         chunks: list[str] = []
         async with client.messages.stream(
             model=aux_model,
@@ -516,23 +494,18 @@ async def p_relabel_steps(
         title, description, labels = await p_generate_metadata_for_steps(steps, model)
     except Exception:
         return
-    # One aux call covers labels AND auto-naming. A manual rename sets
-    # auto_named=False, so the title/description below are left untouched then.
+    # One aux call covers labels AND auto-naming. A manual rename sets auto_named=False, so the title/description below are left untouched then.
     if need_autoname:
         if title:
             wf.title = title
         else:
-            # Aux model returned nothing (flaky lane / rate limit). Fall back to
-            # a step-derived name so the workflow doesn't stay "Untitled workflow".
+            # Aux model returned nothing (flaky lane / rate limit). Fall back to a step-derived name so the workflow doesn't stay "Untitled workflow".
             fb = p_fallback_title_for_steps(steps)
             if fb:
                 wf.title = fb
         if description:
             wf.description = description
-    # Per-index, not all-or-nothing: the cheap aux tier sometimes returns a
-    # mis-sized (or non-list) step_labels, which used to drop EVERY label and
-    # leave the raw prompt showing as the step title. Take whatever aux gave for
-    # this slot, else a deterministic short label so a step is never its prompt.
+    # Per-index, not all-or-nothing: the cheap aux tier sometimes returns a mis-sized (or non-list) step_labels, which used to drop EVERY label and leave the raw prompt showing as the step title. Take whatever aux gave for this slot, else a deterministic short label so a step is never its prompt.
     for i in regen_idxs:
         aux = labels[i].strip() if i < len(labels) and labels[i] else ""
         new_label = aux or p_short_step_label(steps[i].text)
@@ -793,12 +766,7 @@ async def update_workflow(
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    # Optimistic concurrency: if the client passed If-Match, verify it
-    # matches the current updated_at. Stale writes (another window or a
-    # mid-edit background fire) get a 409 so the FE can prompt to reload
-    # instead of silently clobbering the other actor's changes. Missing
-    # header = legacy client, allow through (back-compat with the
-    # frontend's pre-409 code path; FE rolls out If-Match immediately).
+    # Optimistic concurrency: if the client passed If-Match, verify it matches the current updated_at. Stale writes (another window or a mid-edit background fire) get a 409 so the FE can prompt to reload instead of silently clobbering the other actor's changes. Missing header = legacy client, allow through (back-compat with the frontend's pre-409 code path; FE rolls out If-Match immediately).
     if if_match:
         current_stamp = wf.updated_at.isoformat() if hasattr(wf.updated_at, "isoformat") else str(wf.updated_at)
         # Strip quotes a well-behaved HTTP client might add per RFC 7232.
@@ -813,30 +781,18 @@ async def update_workflow(
             )
     before = wf.model_dump(mode="json")
     data = body.model_dump(exclude_unset=True)
-    # A user-initiated title rename locks the name so later step edits don't
-    # auto-rename over it. Only an actual change counts, so the full-object
-    # editor save (which echoes the current title unchanged) doesn't lock. If
-    # the FE passes auto_named explicitly, that wins (handled by setattr below).
+    # A user-initiated title rename locks the name so later step edits don't auto-rename over it. Only an actual change counts, so the full-object editor save (which echoes the current title unchanged) doesn't lock. If the FE passes auto_named explicitly, that wins (handled by setattr below).
     if "title" in data and "auto_named" not in data and data.get("title") != before.get("title"):
         wf.auto_named = False
-    # While an Edit-Agent draft is in flight, ANY PATCH that touches steps
-    # stages those steps into the draft instead of the live workflow, so the
-    # commit/discard pair is the only thing that moves the live steps. The
-    # match is "steps present", not "steps only", so a mixed patch can never
-    # leak an edit onto the live steps (which commit would then clobber with
-    # the stale draft). The main chat agent never opens an Edit Agent, so it
-    # has no draft and falls through to the live path below.
+    # While an Edit-Agent draft is in flight, ANY PATCH that touches steps stages those steps into the draft instead of the live workflow, so the commit/discard pair is the only thing that moves the live steps. The match is "steps present", not "steps only", so a mixed patch can never leak an edit onto the live steps (which commit would then clobber with the stale draft). The main chat agent never opens an Edit Agent, so it has no draft and falls through to the live path below.
     if wf.draft_steps is not None and "steps" in data:
         before_draft = before.get("draft_steps") or []
         wf.draft_steps = data["steps"]
-        # Any non-steps fields in the same patch still apply live (rare from
-        # the Edit Agent, whose tools only touch steps).
+        # Any non-steps fields in the same patch still apply live (rare from the Edit Agent, whose tools only touch steps).
         for k, v in data.items():
             if k != "steps":
                 setattr(wf, k, v)
-        # Label the new draft steps and name the workflow off them (once, while
-        # still "Untitled"), so the title + step labels fill in the instant a
-        # step lands instead of waiting for Save.
+        # Label the new draft steps and name the workflow off them (once, while still "Untitled"), so the title + step labels fill in the instant a step lands instead of waiting for Save.
         await p_relabel_steps(wf, before_draft, wf.draft_steps, wf.model)
         wf.updated_at = datetime.now()
         _normalize_schedule_state(wf)
@@ -863,9 +819,7 @@ async def update_workflow(
     storage.save_workflow(wf)
     audit.log_change(wf.id, "user", before, wf.model_dump(mode="json"))
     scheduler.kick()
-    # Push the change to every open dashboard so an agent-driven edit (the
-    # Edit Agent's add/delete/edit-step tools all PATCH here) refreshes the
-    # card live instead of looking stale until the next full refetch.
+    # Push the change to every open dashboard so an agent-driven edit (the Edit Agent's add/delete/edit-step tools all PATCH here) refreshes the card live instead of looking stale until the next full refetch.
     enriched = _enriched(wf)
     try:
         from backend.apps.agents.core.ws_manager import ws_manager
@@ -956,11 +910,7 @@ async def edit_agent_session(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    # Reattach to an in-progress edit session (the user closed and reopened the
-    # card mid-edit): resume the existing draft, don't reset it. Save/Discard
-    # clear edit_agent_session_id, so once an edit is finished the next entry
-    # falls through to the fresh path below: a brand-new chat against the
-    # current committed workflow.
+    # Reattach to an in-progress edit session (the user closed and reopened the card mid-edit): resume the existing draft, don't reset it. Save/Discard clear edit_agent_session_id, so once an edit is finished the next entry falls through to the fresh path below: a brand-new chat against the current committed workflow.
     existing_id = getattr(wf, "edit_agent_session_id", None) or None
     if existing_id:
         if wf.draft_steps is None:
@@ -968,17 +918,14 @@ async def edit_agent_session(workflow_id: str):
             storage.save_workflow(wf)
         return {"session_id": existing_id}
 
-    # Fresh edit session: snapshot a clean draft from the current committed
-    # steps so the Edit Agent's edits stage there (never the live workflow)
-    # until the user clicks Save, and Discard reverts to exactly this.
+    # Fresh edit session: snapshot a clean draft from the current committed steps so the Edit Agent's edits stage there (never the live workflow) until the user clicks Save, and Discard reverts to exactly this.
     wf.draft_steps = list(wf.steps)
     storage.save_workflow(wf)
 
     from backend.apps.agents.core.models import AgentConfig
     from backend.apps.agents.agent_manager import agent_manager
     steps_lines = "\n".join(f"{i+1}. {(s.label or '').strip() or (s.text or '')[:60]}\n   Prompt: {s.text}" for i, s in enumerate(wf.steps))
-    # A brand-new workflow ("+ New" in the hub) opens here with zero steps, so
-    # frame the agent as a builder rather than a fix-what-exists editor.
+    # A brand-new workflow ("+ New" in the hub) opens here with zero steps, so frame the agent as a builder rather than a fix-what-exists editor.
     intro = (
         "Help the user iterate on it."
         if wf.steps
@@ -1030,11 +977,7 @@ async def edit_agent_session(workflow_id: str):
         dashboard_id=wf.dashboard_id,
     )
     session = await agent_manager.launch_agent(config)
-    # launch_agent marks the session "running" assuming a turn fires immediately,
-    # but an edit-agent chat sits idle until the user sends something. Settle it
-    # to idle or the chat is stuck "thinking" forever. An existing workflow also
-    # gets a fixed (non-LLM) intro message; a brand-new build stays empty so the
-    # compose page can show its own starter prompts.
+    # launch_agent marks the session "running" assuming a turn fires immediately, but an edit-agent chat sits idle until the user sends something. Settle it to idle or the chat is stuck "thinking" forever. An existing workflow also gets a fixed (non-LLM) intro message; a brand-new build stays empty so the compose page can show its own starter prompts.
     session.status = "completed"
     if wf.steps:
         from backend.apps.agents.core.models import Message
@@ -1151,8 +1094,7 @@ async def commit_draft(workflow_id: str, body: Optional[DraftCommitBody] = None)
     if wf.draft_steps is None:
         if not _has_nonempty_steps(wf.steps):
             raise HTTPException(status_code=400, detail="Workflow must have at least one step")
-        # Clicking Save is the user committing to this workflow, so reveal it
-        # in the hub (clears the "+ New" build-in-progress flag).
+        # Clicking Save is the user committing to this workflow, so reveal it in the hub (clears the "+ New" build-in-progress flag).
         wf.unsaved = False
         p_sync_model_on_save(wf, body.model if body else None)
         if not (body and body.keep_session):
@@ -1162,10 +1104,7 @@ async def commit_draft(workflow_id: str, body: Optional[DraftCommitBody] = None)
     before = wf.model_dump(mode="json")
     if not _has_nonempty_steps(wf.draft_steps):
         raise HTTPException(status_code=400, detail="Workflow must have at least one step")
-    # Opening a workflow snapshots its own steps into the draft, and the card
-    # silently commits that draft. When it matches the live steps that's a no-op:
-    # clear it WITHOUT bumping updated_at, so merely viewing a workflow never
-    # reorders the "last edited" sidebar. Real edits fall through and bump.
+    # Opening a workflow snapshots its own steps into the draft, and the card silently commits that draft. When it matches the live steps that's a no-op: clear it WITHOUT bumping updated_at, so merely viewing a workflow never reorders the "last edited" sidebar. Real edits fall through and bump.
     no_change = [s.model_dump(mode="json") for s in wf.draft_steps] == (before.get("steps") or [])
     wf.unsaved = False
     wf.steps = wf.draft_steps
@@ -1177,8 +1116,7 @@ async def commit_draft(workflow_id: str, body: Optional[DraftCommitBody] = None)
             await p_end_edit_session(wf)
         storage.save_workflow(wf)
         return _enriched(wf)
-    # Clicking Save is the user committing to this workflow, so reveal it in
-    # the hub (clears the "+ New" build-in-progress flag).
+    # Clicking Save is the user committing to this workflow, so reveal it in the hub (clears the "+ New" build-in-progress flag).
     await p_relabel_changed_steps(wf, before.get("steps") or [])
     p_prune_step_tool_usage(wf)
     wf.updated_at = datetime.now()
@@ -1209,8 +1147,7 @@ async def discard_draft(workflow_id: str):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    # Discard wipes the whole edit session: drop the draft AND end the chat, so
-    # reopening Edit is a fresh conversation against the current committed steps.
+    # Discard wipes the whole edit session: drop the draft AND end the chat, so reopening Edit is a fresh conversation against the current committed steps.
     wf.draft_steps = None
     await p_end_edit_session(wf)
     p_prune_step_tool_usage(wf)
@@ -1252,8 +1189,7 @@ async def test_run_workflow(workflow_id: str, body: dict):
             if isinstance(s, dict) and str(s.get("text") or "").strip()
         ]
     else:
-        # No explicit override: prefer the pending draft so a mid-edit
-        # TestWorkflow call (from the Edit Agent itself) tests the draft.
+        # No explicit override: prefer the pending draft so a mid-edit TestWorkflow call (from the Edit Agent itself) tests the draft.
         src = wf.draft_steps if wf.draft_steps is not None else wf.steps
         step_entries = [s for s in src if s.text and s.text.strip()]
     if not step_entries:
@@ -1290,8 +1226,7 @@ async def test_run_workflow(workflow_id: str, body: dict):
         remember=executor.p_make_remember_approval(wf.id),
         ask_timeout=600.0,
     )
-    # Point the workflow at its latest test session so ReadTestTranscript can
-    # fetch the transcript on demand.
+    # Point the workflow at its latest test session so ReadTestTranscript can fetch the transcript on demand.
     try:
         wf.last_test_session_id = session.id
         storage.save_workflow(wf)
@@ -1433,9 +1368,7 @@ async def run_workflow_now(workflow_id: str, body: Optional[dict] = None):
     wf = storage.get_workflow(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    # executor.execute() owns the run record. Don't pre-create a stub here
-    # or we end up with two rows per manual fire (one orphan "running"
-    # row from this handler plus the real one from the executor).
+    # executor.execute() owns the run record. Don't pre-create a stub here or we end up with two rows per manual fire (one orphan "running" row from this handler plus the real one from the executor).
     pre_ids = {r.id for r in storage.list_runs(wf.id, limit=10)}
     tested_signature = body.get("signature") if isinstance(body, dict) else None
     asyncio.create_task(executor.execute(
@@ -1444,10 +1377,7 @@ async def run_workflow_now(workflow_id: str, body: Optional[dict] = None):
         tested_signature=tested_signature if isinstance(tested_signature, str) else None,
     ))
 
-    # Poll briefly for the newly created run id. We also surface the
-    # run's status + error string when it lands quickly (e.g. cost-cap
-    # short-circuit, _running collision) so the FE can render a toast
-    # instead of silently switching to History.
+    # Poll briefly for the newly created run id. We also surface the run's status + error string when it lands quickly (e.g. cost-cap short-circuit, _running collision) so the FE can render a toast instead of silently switching to History.
     for _ in range(25):
         for r in storage.list_runs(wf.id, limit=10):
             if r.id not in pre_ids and r.triggered_by == "manual":

@@ -54,20 +54,12 @@ async def settings_lifespan():
                     await p_9r_ensure()
                 except Exception as e:
                     logger.warning(f"9Router lifespan boot failed: {e}")
-            # Reconcile, don't just add: pass the key OR None so a cleared/never-set key
-            # also REMOVES the managed connection 9Router persists across restarts. The
-            # old add-only guards left a zombie managed key alive after disconnect, which
-            # kept routing to it (the "still defaults to gemini") and blocked the free
-            # trial from arming. Only acts when 9Router is already up (_sync no-ops if not).
+            # Reconcile, don't just add: pass the key OR None so a cleared/never-set key also REMOVES the managed connection 9Router persists across restarts. The old add-only guards left a zombie managed key alive after disconnect, which kept routing to it (the "still defaults to gemini") and blocked the free trial from arming. Only acts when 9Router is already up (_sync no-ops if not).
             if p_9r_running():
                 await sync_gemini_api_key(getattr(s, "google_api_key", None) or None)
                 await sync_openai_api_key(getattr(s, "openai_api_key", None) or None)
                 await sync_openrouter_api_key(getattr(s, "openrouter_api_key", None) or None)
-            # Reconcile the managed Pro/anthropic connection symmetrically too: keep it only
-            # for an active pro/free-trial bearer, else REMOVE it. Without the else, disconnecting
-            # Pro left a zombie managed Claude connection in 9Router, so the backend kept seeing a
-            # model and the free trial refused to arm ("disconnect Pro -> nothing happens"). Only
-            # the OpenSwarm-managed Pro node is touched; a user's own Claude sub (priority 0) is safe.
+            # Reconcile the managed Pro/anthropic connection symmetrically too: keep it only for an active pro/free-trial bearer, else REMOVE it. Without the else, disconnecting Pro left a zombie managed Claude connection in 9Router, so the backend kept seeing a model and the free trial refused to arm ("disconnect Pro -> nothing happens"). Only the OpenSwarm-managed Pro node is touched; a user's own Claude sub (priority 0) is safe.
             if getattr(s, "connection_mode", None) in ("openswarm-pro", "free-trial"):
                 from backend.apps.settings.credentials import proxy_auth
                 bearer, base = proxy_auth(s)
@@ -124,8 +116,7 @@ async def get_settings():
     return load_settings().model_dump()
 
 
-# Written only by their dedicated flows (Stripe activate, sign-in, signout, OAuth connects);
-# a full-object PUT from a stale renderer snapshot must never revert or forge them.
+# Written only by their dedicated flows (Stripe activate, sign-in, signout, OAuth connects); a full-object PUT from a stale renderer snapshot must never revert or forge them.
 SERVER_OWNED_FIELDS = (
     "connection_mode",
     "openswarm_bearer_token",
@@ -151,15 +142,7 @@ SERVER_OWNED_FIELDS = (
 
 import weakref as p_weakref
 
-# One serialization point for EVERY settings write (renderer PUT/PATCH + agent
-# tool), so two writes can't interleave and clobber each other mid read-modify-
-# write. Callers hold it across read->build->save; apply_settings_update itself
-# does NOT acquire it (would deadlock the agent path that reads under it), so
-# every caller wraps apply in it. Created lazily PER event loop: prod has one
-# loop so it's effectively a singleton, but a module-level asyncio.Lock binds to
-# the first loop that uses it and then errors on reuse from another loop (every
-# async test spins a fresh one). WeakKeyDictionary auto-drops a loop's lock once
-# the loop is gone.
+# One serialization point for EVERY settings write (renderer PUT/PATCH + agent tool), so two writes can't interleave and clobber each other mid read-modify- write. Callers hold it across read->build->save; apply_settings_update itself does NOT acquire it (would deadlock the agent path that reads under it), so every caller wraps apply in it. Created lazily PER event loop: prod has one loop so it's effectively a singleton, but a module-level asyncio.Lock binds to the first loop that uses it and then errors on reuse from another loop (every async test spins a fresh one). WeakKeyDictionary auto-drops a loop's lock once the loop is gone.
 p_settings_write_locks: "_weakref.WeakKeyDictionary" = p_weakref.WeakKeyDictionary()
 
 
@@ -221,18 +204,12 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
     for k in SERVER_OWNED_FIELDS:
         setattr(body, k, getattr(old, k, None))
 
-    # Second wall: if a write tries to clear a credential that's currently set and
-    # flagged as powering this run, restore it (like server-owned fields). The
-    # endpoint guard already strips these; this is the backstop that can't be
-    # bypassed by a logic slip upstream.
+    # Second wall: if a write tries to clear a credential that's currently set and flagged as powering this run, restore it (like server-owned fields). The endpoint guard already strips these; this is the backstop that can't be bypassed by a logic slip upstream.
     for f in (protect_fields or ()):
         if getattr(old, f, None) and not getattr(body, f, None):
             setattr(body, f, getattr(old, f, None))
 
-    # If the user connects their own model while the free trial is armed, hand
-    # the wheel back to their provider. Without this, connection_mode (server-
-    # owned, so the loop above just restored it to "free-trial") would keep them
-    # pinned to the forced Haiku lane even though they pasted a real key.
+    # If the user connects their own model while the free trial is armed, hand the wheel back to their provider. Without this, connection_mode (server- owned, so the loop above just restored it to "free-trial") would keep them pinned to the forced Haiku lane even though they pasted a real key.
     if getattr(old, "connection_mode", "own_key") == "free-trial":
         from backend.apps.subscription.free_trial import has_own_model
         if has_own_model(body):
@@ -398,10 +375,7 @@ async def reset_system_prompt():
     return {"ok": True, "settings": current.model_dump()}
 
 
-# A preferences reset (the iOS "Reset All Settings" analogue): everything back to
-# defaults EXCEPT the things a "reset my preferences" click must never silently
-# sever, your connections (server-owned subscription fields AND your pasted
-# provider credentials) and your identity. Hard-erase is the separate flow.
+# A preferences reset (the iOS "Reset All Settings" analogue): everything back to defaults EXCEPT the things a "reset my preferences" click must never silently sever, your connections (server-owned subscription fields AND your pasted provider credentials) and your identity. Hard-erase is the separate flow.
 P_RESET_PRESERVE_FIELDS = SERVER_OWNED_FIELDS + (
     "anthropic_api_key",
     "openai_api_key",
@@ -451,12 +425,7 @@ def sniff_file_kind(contents: bytes, name: str) -> tuple[str, str | None]:
         return ("image", "image/gif")
     if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
         return ("image", "image/webp")
-    # Other common binary signatures that don't contain a null byte in the
-    # first few bytes (so the null-byte fallback below would miss them):
-    # zip/docx/xlsx/pptx/jar/apk/odt (PK\x03\x04), gzip (\x1f\x8b),
-    # 7z (7z\xbc\xaf), tar (ustar magic at offset 257), rar (Rar!\x1a\x07),
-    # ELF (\x7fELF), Mach-O (\xfe\xed\xfa\xce / \xce\xfa\xed\xfe), Win exe
-    # (MZ), Java class (\xca\xfe\xba\xbe), sqlite (SQLite format 3\x00).
+    # Other common binary signatures that don't contain a null byte in the first few bytes (so the null-byte fallback below would miss them): zip/docx/xlsx/pptx/jar/apk/odt (PK\x03\x04), gzip (\x1f\x8b), 7z (7z\xbc\xaf), tar (ustar magic at offset 257), rar (Rar!\x1a\x07), ELF (\x7fELF), Mach-O (\xfe\xed\xfa\xce / \xce\xfa\xed\xfe), Win exe (MZ), Java class (\xca\xfe\xba\xbe), sqlite (SQLite format 3\x00).
     if (head.startswith(b"PK\x03\x04") or head.startswith(b"PK\x05\x06") or
         head.startswith(b"\x1f\x8b") or head.startswith(b"7z\xbc\xaf\x27\x1c") or
         head.startswith(b"Rar!\x1a\x07") or head.startswith(b"\x7fELF") or
@@ -465,9 +434,7 @@ def sniff_file_kind(contents: bytes, name: str) -> tuple[str, str | None]:
         head.startswith(b"MZ") or head.startswith(b"\xca\xfe\xba\xbe") or
         head.startswith(b"SQLite format 3\x00")):
         return ("binary", None)
-    # Binary heuristic: any null bytes in the first 4KB is a strong "not text" signal.
-    # Falls back gracefully for unusual encodings (UTF-16 has nulls too, but we treat
-    # those as binary for safety since the agent's `open(..., "r")` would misread them).
+    # Binary heuristic: any null bytes in the first 4KB is a strong "not text" signal. Falls back gracefully for unusual encodings (UTF-16 has nulls too, but we treat those as binary for safety since the agent's `open(..., "r")` would misread them).
     if b"\x00" in head:
         return ("binary", None)
     try:
@@ -497,8 +464,7 @@ def estimate_pdf_tokens(contents: bytes) -> int:
     import re as p_re
     by_pages = 0
     try:
-        # Prefer the root catalog's /Pages entry. PDFs can have nested
-        # /Count fields (outlines, sub-pages), so anchor on /Type /Pages.
+        # Prefer the root catalog's /Pages entry. PDFs can have nested /Count fields (outlines, sub-pages), so anchor on /Type /Pages.
         m = p_re.search(rb"/Type\s*/Pages\b[^>]{0,200}?/Count\s+(\d+)", contents, p_re.DOTALL)
         if not m:
             # Fallback: catalog declares /Pages then references /Count via /Kids.
@@ -534,16 +500,11 @@ async def upload_files(files: list[UploadFile] = File(...)):
     results = []
     for f in files:
         safe_name = os.path.basename(f.filename or "untitled")
-        # Strip path separators that survived basename on Windows-typed
-        # uploads where filename arrived with backslashes preserved.
+        # Strip path separators that survived basename on Windows-typed uploads where filename arrived with backslashes preserved.
         safe_name = safe_name.replace("\\", "_").replace("/", "_") or "untitled"
         contents = await f.read()
 
-        # Atomic create-with-collision-retry so two concurrent uploads with
-        # the same filename never overwrite each other. The previous
-        # exists() then open() pattern had a race window: both callers
-        # would observe `dest` free and both would write, with the second
-        # winning. O_EXCL fails the create if anyone else got there first.
+        # Atomic create-with-collision-retry so two concurrent uploads with the same filename never overwrite each other. The previous exists() then open() pattern had a race window: both callers would observe `dest` free and both would write, with the second winning. O_EXCL fails the create if anyone else got there first.
         base, ext = os.path.splitext(safe_name)
         dest = os.path.join(UPLOAD_DIR, safe_name)
         counter = 0
@@ -645,14 +606,7 @@ async def summarize_file(req: p_SummarizeRequest):
             "say so. Aim for roughly the target token budget."
         )
 
-        # Source can be bigger than the aux model's window (Haiku 4.5 is 200K).
-        # Chunk by characters, summarize each, then merge. PDFs and other
-        # binary-ish text tokenize WAY denser than the 4-chars-per-token rule
-        # of thumb implies; a 480K-char PDF blob was hitting 210K tokens and
-        # busting Haiku's 200K window. 200K chars / chunk caps the worst case
-        # at ~100K tokens even for binary garbage, leaving ~100K for system +
-        # output. Char-level cut intentionally; re-summarization tolerates a
-        # mid-sentence split.
+        # Source can be bigger than the aux model's window (Haiku 4.5 is 200K). Chunk by characters, summarize each, then merge. PDFs and other binary-ish text tokenize WAY denser than the 4-chars-per-token rule of thumb implies; a 480K-char PDF blob was hitting 210K tokens and busting Haiku's 200K window. 200K chars / chunk caps the worst case at ~100K tokens even for binary garbage, leaving ~100K for system + output. Char-level cut intentionally; re-summarization tolerates a mid-sentence split.
         CHUNK_CHARS = 200_000
         is_chunked = len(raw) > CHUNK_CHARS
 
@@ -682,11 +636,7 @@ async def summarize_file(req: p_SummarizeRequest):
         else:
             chunks = [raw[i:i + CHUNK_CHARS] for i in range(0, len(raw), CHUNK_CHARS)]
             per_chunk_budget = max(800, req.target_tokens // len(chunks) + 600)
-            # Parallel summarization. Sequential was N chunks * ~60s each
-            # (5+ min wall time for a 4-chunk PDF on Haiku). Aux providers
-            # all handle parallel requests fine; the only ceiling is the
-            # provider's per-key rate limit, and a single user summarizing
-            # one file will never hit that.
+            # Parallel summarization. Sequential was N chunks * ~60s each (5+ min wall time for a 4-chunk PDF on Haiku). Aux providers all handle parallel requests fine; the only ceiling is the provider's per-key rate limit, and a single user summarizing one file will never hit that.
             partials = await asyncio.gather(*[
                 p_summarize_block(ch, per_chunk_budget, f"{os.path.basename(src)} (part {i + 1} of {len(chunks)})")
                 for i, ch in enumerate(chunks)

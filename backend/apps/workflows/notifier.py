@@ -34,9 +34,7 @@ async def notify_run_complete(wf: Workflow, run: WorkflowRun) -> None:
     payload = _base_payload(wf, run)
     await ws_manager.broadcast_global("workflow:notify", payload)
 
-    # Kick off server-side escalation only if there are additional tiers
-    # beyond the default notify. The escalation runner will sleep + call
-    # send_tier per tier.
+    # Kick off server-side escalation only if there are additional tiers beyond the default notify. The escalation runner will sleep + call send_tier per tier.
     escalation.schedule(wf, run)
 
 

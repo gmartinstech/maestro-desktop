@@ -147,12 +147,7 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
         limit=10 * 1024 * 1024,  # 10 MB buffer for large tool lists
     )
 
-    # Drain stderr in the background. Two reasons: (1) the OS pipe buffer is
-    # ~64 KB; if npx prints more than that during a cold-cache install
-    # (which happens when AV scanning slows npm), the child blocks on
-    # write and we'd see what looks like a hang. (2) the rolling tail lets
-    # us include npx's own diagnostic in any error we surface, instead of
-    # the opaque "discovery failed" we used to show.
+    # Drain stderr in the background. Two reasons: (1) the OS pipe buffer is ~64 KB; if npx prints more than that during a cold-cache install (which happens when AV scanning slows npm), the child blocks on write and we'd see what looks like a hang. (2) the rolling tail lets us include npx's own diagnostic in any error we surface, instead of the opaque "discovery failed" we used to show.
     stderr_tail: list[str] = []
 
     async def p_drain_stderr() -> None:
@@ -181,9 +176,7 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
         while True:
             line = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout_s)
             if not line:
-                # stdout EOF = child exited. Wait briefly for the stderr
-                # drain to catch up so we capture the real failure reason
-                # (which often arrives a few ms after stdout closes).
+                # stdout EOF = child exited. Wait briefly for the stderr drain to catch up so we capture the real failure reason (which often arrives a few ms after stdout closes).
                 try:
                     await asyncio.wait_for(asyncio.shield(stderr_task), timeout=1.0)
                 except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
@@ -212,11 +205,7 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
                 "clientInfo": {"name": "self-swarm", "version": "0.1.0"},
             },
         })
-        # First response is the slow one. On Windows with a cold npx cache,
-        # `npx -y <pkg>` has to download the package + transitive deps and
-        # AV-scan every file npm writes; total install time often exceeds
-        # 60 s and occasionally pushes past 90 s. Subsequent reads run
-        # against an already-running server and stay at the default 30 s.
+        # First response is the slow one. On Windows with a cold npx cache, `npx -y <pkg>` has to download the package + transitive deps and AV-scan every file npm writes; total install time often exceeds 60 s and occasionally pushes past 90 s. Subsequent reads run against an already-running server and stay at the default 30 s.
         await p_recv(timeout_s=120.0)
 
         await p_send({"jsonrpc": "2.0", "method": "notifications/initialized"})
@@ -228,17 +217,12 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
         return [{"name": t.get("name", ""), "description": t.get("description", ""), "inputSchema": t.get("inputSchema")} for t in tools_list]
 
     except HTTPException as e:
-        # Heal-on-corrupt-npx-cache still triggers from the EOF branch,
-        # which now includes the full stderr tail in `e.detail`; so the
-        # ERR_MODULE_NOT_FOUND signature is still discoverable here.
+        # Heal-on-corrupt-npx-cache still triggers from the EOF branch, which now includes the full stderr tail in `e.detail`; so the ERR_MODULE_NOT_FOUND signature is still discoverable here.
         if p_attempt == 0 and p_try_heal_npx_cache(str(e.detail) if e.detail is not None else ""):
             return await discover_mcp_tools_stdio(command, args, env, p_attempt=1)
         raise
     except asyncio.TimeoutError:
-        # Most common cause: cold npx cache on Windows. The npm install
-        # persists across attempts, so a retry usually finishes against a
-        # warm cache. Surface npx's own progress line if we have one; it
-        # makes the cause obvious ("downloading X...") instead of opaque.
+        # Most common cause: cold npx cache on Windows. The npm install persists across attempts, so a retry usually finishes against a warm cache. Surface npx's own progress line if we have one; it makes the cause obvious ("downloading X...") instead of opaque.
         tail_text = "".join(stderr_tail[-5:]).strip()
         detail = "MCP discovery timed out; the server may still be downloading on first run"
         if tail_text:

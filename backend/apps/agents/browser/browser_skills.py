@@ -72,14 +72,11 @@ P_MAX_MEM_SKILLS = 200
 P_MAX_DISK_SKILLS = 1000          # bound the on-disk library; evict oldest by mtime
 P_SKILL_FORMAT_VERSION = 1
 
-# Trust state (the verify gate). A skill moves PROBATION -> TRUSTED only by a
-# successful end-to-end replay; an unproven (probation) skill that fails a replay
-# goes to QUARANTINE and is never replayed again (task falls back to pure LLM).
+# Trust state (the verify gate). A skill moves PROBATION -> TRUSTED only by a successful end-to-end replay; an unproven (probation) skill that fails a replay goes to QUARANTINE and is never replayed again (task falls back to pure LLM).
 PROBATION = "probation"
 TRUSTED = "trusted"
 QUARANTINE = "quarantine"
-# A proven skill tolerates this many consecutive transient replay misses before
-# it's demoted back to probation (forced to re-earn trust).
+# A proven skill tolerates this many consecutive transient replay misses before it's demoted back to probation (forced to re-earn trust).
 P_FAIL_DEMOTE_THRESHOLD = 2
 
 # Tools that change page state (worth replaying). Reads/meta are never recorded.
@@ -154,15 +151,7 @@ def normalize_task(task: str) -> str:
     return " ".join(toks)
 
 
-# --- parameterization (reuse one skill for "the same task, different input") ---
-# A quoted value in the task is treated as a SLOT: it's abstracted out of the
-# skill key (so `search "shoes"` and `search "hats"` share one skill) and the
-# value is filled from the LIVE task at replay (so the value is never stored on
-# disk, a redaction win, and the skill generalizes). Quoting is the explicit,
-# high-precision signal that this token is a parameter; we never guess.
-# Lookarounds keep word-internal apostrophes (chen's, don't) from opening a
-# span; without them every possessive made each task wording a unique sig and
-# silently disabled skill matching for those tasks.
+# --- parameterization (reuse one skill for "the same task, different input") --- A quoted value in the task is treated as a SLOT: it's abstracted out of the skill key (so `search "shoes"` and `search "hats"` share one skill) and the value is filled from the LIVE task at replay (so the value is never stored on disk, a redaction win, and the skill generalizes). Quoting is the explicit, high-precision signal that this token is a parameter; we never guess. Lookarounds keep word-internal apostrophes (chen's, don't) from opening a span; without them every possessive made each task wording a unique sig and silently disabled skill matching for those tasks.
 P_QUOTE_RE = re.compile(r'(?<!\w)["“”‘’\']([^"“”‘’\']{1,200})["“”‘’\'](?!\w)')
 P_SLOT_TOKEN = " slotvalue "
 
@@ -355,9 +344,7 @@ def first_unsafe_step(steps: list[dict]) -> tuple[int, str]:
         probe = None
         if tool in ("BrowserClickByName", "BrowserClick"):
             name = p.get("name") or p.get("selector") or ""
-            # Real Send controls have short names ("Send", "Send InMail"); a
-            # 100ch profile-card blob containing "Send a..." is not one, and
-            # flagging it cut a 6-step prefix to 1 (measured, r19).
+            # Real Send controls have short names ("Send", "Send InMail"); a 100ch profile-card blob containing "Send a..." is not one, and flagging it cut a 6-step prefix to 1 (measured, r19).
             if len(name) <= 40:
                 probe = {"action": "click", "name": name}
         elif tool == "BrowserType":
@@ -550,13 +537,7 @@ def p_host_skills(host: str) -> dict[str, dict]:
     return out
 
 
-# --- composition (build on what's already proven) --------------------------
-# When a freshly learned skill's steps OPEN with the full step list of an
-# already-TRUSTED skill on the same host, we record that it "builds on" the
-# sub-skill. The big steps stay inline (the skill is self-contained and robust on
-# its own); the link is provenance + a safety wire: if that foundation is later
-# deprecated or goes stale, every skill built on it is knocked back to probation
-# so it must re-prove instead of silently riding a now-broken sub-sequence.
+# --- composition (build on what's already proven) -------------------------- When a freshly learned skill's steps OPEN with the full step list of an already-TRUSTED skill on the same host, we record that it "builds on" the sub-skill. The big steps stay inline (the skill is self-contained and robust on its own); the link is provenance + a safety wire: if that foundation is later deprecated or goes stale, every skill built on it is knocked back to probation so it must re-prove instead of silently riding a now-broken sub-sequence.
 P_COMPOSE_MIN_SUB_STEPS = 2
 
 
@@ -619,10 +600,7 @@ def record_skill(host: str, task: str, action_log: list[dict]) -> bool:
         existing = SKILLS.get(k) or p_load_from_disk(host, sig)
 
         if existing and steps_equal(existing.get("steps", []), steps):
-            # Same skill re-derived: the replay that triggered this was a transient
-            # miss, not a stale skill. Keep rev + trust; just clear the fail streak.
-            # If it was quarantined (a known-bad distillation), leave it quarantined
-            # so the task keeps running on the pure-LLM baseline, never re-replayed.
+            # Same skill re-derived: the replay that triggered this was a transient miss, not a stale skill. Keep rev + trust; just clear the fail streak. If it was quarantined (a known-bad distillation), leave it quarantined so the task keeps running on the pure-LLM baseline, never re-replayed.
             existing["fails"] = 0
             existing["recorded_at"] = time.time()
             existing["persisted"] = persistable
@@ -684,12 +662,7 @@ def find_skill(host: str, task: str) -> dict | None:
     return hit
 
 
-# --- route hints (advisory reuse when mechanical replay can't run) ---------
-# Replay is exact-key and refuses send-class flows, so a known route often sits
-# unused while the model re-explores it. A route HINT closes that gap: the best
-# similar skill is rendered as advisory text the live agent adapts and verifies,
-# so it generalizes across wordings and stays send-safe (the agent still
-# confirms everything; a stale hint just wastes one glance).
+# --- route hints (advisory reuse when mechanical replay can't run) --------- Replay is exact-key and refuses send-class flows, so a known route often sits unused while the model re-explores it. A route HINT closes that gap: the best similar skill is rendered as advisory text the live agent adapts and verifies, so it generalizes across wordings and stays send-safe (the agent still confirms everything; a stale hint just wastes one glance).
 P_HINT_MIN_OVERLAP = 0.5
 P_HINT_MAX_STEPS = 10
 
@@ -755,8 +728,7 @@ def render_route_hint(skill: dict, task: str, score: float) -> tuple[str, list[t
         return "", []
     from backend.apps.agents.browser import browser_batch_replay
     _, values = template_task(task)
-    # first_unsafe_step is the batching boundary (it stops at composer typing
-    # too); the IRREVERSIBLE flag goes only on genuinely outward-facing clicks
+    # first_unsafe_step is the batching boundary (it stops at composer typing too); the IRREVERSIBLE flag goes only on genuinely outward-facing clicks
     unsafe_i, p_why = first_unsafe_step(steps)
     lines = []
     for i, s in enumerate(steps):

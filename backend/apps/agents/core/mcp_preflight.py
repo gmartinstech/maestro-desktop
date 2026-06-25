@@ -154,8 +154,7 @@ def offer_for_gated_server(server_name: str, settings) -> CuratedEntry | None:
     server is vetted AND inactive AND not dismissed, reusing the same filter as the preflight."""
     if not server_name or not isinstance(server_name, str):
         return None
-    # The hot-path hands us a sanitized slug ("google-workspace"); curated ids are display names
-    # ("Google Workspace"). Match on the slug of both sides so neither form is a load-bearing string.
+    # The hot-path hands us a sanitized slug ("google-workspace"); curated ids are display names ("Google Workspace"). Match on the slug of both sides so neither form is a load-bearing string.
     slug = sanitize_server_name(server_name)
     entry = next(
         (e for e in p_build_available_shortlist(settings) if sanitize_server_name(e["id"]) == slug),

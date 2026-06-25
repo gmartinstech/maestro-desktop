@@ -3,8 +3,7 @@ P_WRITE_PREFIXES = ("create", "write", "delete", "update", "send", "remove", "mo
 
 
 P_SERVICE_RULES: list[tuple[list[str], str, str]] = [
-    # (keywords, service_name, group)
-    # Google Workspace
+    # (keywords, service_name, group) Google Workspace
     (["gmail"], "Gmail", "Google"),
     (["drive"], "Drive", "Google"),
     (["calendar", "event", "freebusy"], "Calendar", "Google"),

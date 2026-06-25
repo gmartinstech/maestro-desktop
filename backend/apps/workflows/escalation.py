@@ -66,9 +66,7 @@ async def _runner(wf: Workflow, run: WorkflowRun, tiers: list[PermissionTier]) -
     from backend.apps.workflows.notifier import send_tier
 
     try:
-        # Tier 0 is the initial notify; we don't re-fire it here. Walk
-        # 1..N, sleeping the tier's delay before sending. If the user acks
-        # via /workflows/runs/{run_id}/ack, the task is cancelled.
+        # Tier 0 is the initial notify; we don't re-fire it here. Walk 1..N, sleeping the tier's delay before sending. If the user acks via /workflows/runs/{run_id}/ack, the task is cancelled.
         for idx in range(1, len(tiers)):
             tier = tiers[idx]
             delay = _tier_delay_seconds(tier)

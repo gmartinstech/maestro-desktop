@@ -236,10 +236,7 @@ def stage_skill_from_zip(raw: bytes, filename: str, warnings: list[str]):
         if target is None:
             raise BundleError("zip has no SKILL.md")
         content = zf.read(target).decode("utf-8", errors="replace")
-        # Carry supporting files (scripts, templates) through as a folder skill,
-        # keyed relative to the SKILL.md's directory so a nested layout flattens
-        # onto the skill folder. Cap count + per-file size so a hostile zip can't
-        # balloon the install.
+        # Carry supporting files (scripts, templates) through as a folder skill, keyed relative to the SKILL.md's directory so a nested layout flattens onto the skill folder. Cap count + per-file size so a hostile zip can't balloon the install.
         base_dir = target.rsplit("/", 1)[0] + "/" if "/" in target else ""
         extra_files: dict[str, bytes] = {}
         for n in zf.namelist():
@@ -265,9 +262,7 @@ def p_synth_single_skill(content: str, name: str, warnings: list[str], extra_fil
     payload = {"slug": slug, "name": name, "description": "", "command": slug, "content": content, "builtin": False}
     with open(os.path.join(edir, "payload.json"), "w", encoding="utf-8") as f:
         json.dump(payload, f)
-    # Supporting files ride the same entities/<bid>/files/<rel> channel the
-    # commit reader (p_read_files) feeds into import_, so a zip-of-SKILL.md
-    # round-trips as a folder skill instead of getting flattened.
+    # Supporting files ride the same entities/<bid>/files/<rel> channel the commit reader (p_read_files) feeds into import_, so a zip-of-SKILL.md round-trips as a folder skill instead of getting flattened.
     for rel, data in (extra_files or {}).items():
         dest = p_safe_join(edir, os.path.join("files", rel))
         os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -381,8 +376,7 @@ def commit(sandbox: str, manifest: Manifest, accept_requirements: list[str]):
             created.setdefault(e.type.value, []).append(new_id)
             trail.append((cls, new_id))
     except Exception as ex:
-        # All-or-nothing: undo whatever already landed so a failed import never
-        # leaves half a dashboard behind.
+        # All-or-nothing: undo whatever already landed so a failed import never leaves half a dashboard behind.
         for cls, nid in reversed(trail):
             rb = getattr(cls, "rollback", None)
             if rb:

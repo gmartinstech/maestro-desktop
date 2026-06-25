@@ -84,9 +84,7 @@ def p_sync_identity_to_service(settings_obj) -> None:
             logger.debug("analytics link_email sync failed: %s", e)
 
 
-# ---------------------------------------------------------------------------
-# POST /api/auth/signin-activate
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- POST /api/auth/signin-activate ---------------------------------------------------------------------------
 
 class SigninActivateRequest(BaseModel):
     token: str
@@ -143,10 +141,7 @@ async def signin_activate(body: SigninActivateRequest):
     settings_obj.user_id = user_id
     settings_obj.user_email = email
     settings_obj.signin_method = method
-    # If the user happens to be a paying customer too (Stripe + sign-in
-    # share a user row by email), surface plan/expires so the chat picker
-    # exposes Pro models. Free-tier signups land here with plan="free"
-    # and expires=null; connection_mode stays own_key.
+    # If the user happens to be a paying customer too (Stripe + sign-in share a user row by email), surface plan/expires so the chat picker exposes Pro models. Free-tier signups land here with plan="free" and expires=null; connection_mode stays own_key.
     if isinstance(plan, str) and plan != "free":
         settings_obj.connection_mode = "openswarm-pro"
         settings_obj.openswarm_bearer_token = body.token
@@ -155,10 +150,7 @@ async def signin_activate(body: SigninActivateRequest):
         if isinstance(expires, str):
             settings_obj.openswarm_subscription_expires = expires
     else:
-        # Free-tier: still store the bearer so future API calls can identify
-        # the user (used by /api/me/profile, /api/auth/signout). Do NOT flip
-        # connection_mode; that's reserved for paid plans only so chat
-        # routing keeps using own_key/BYO.
+        # Free-tier: still store the bearer so future API calls can identify the user (used by /api/me/profile, /api/auth/signout). Do NOT flip connection_mode; that's reserved for paid plans only so chat routing keeps using own_key/BYO.
         settings_obj.openswarm_bearer_token = body.token
         settings_obj.openswarm_proxy_url = proxy
 
@@ -175,9 +167,7 @@ async def signin_activate(body: SigninActivateRequest):
     }
 
 
-# ---------------------------------------------------------------------------
-# POST /api/auth/signout
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- POST /api/auth/signout ---------------------------------------------------------------------------
 
 @auth.router.post("/signout")
 async def signout():
@@ -200,21 +190,10 @@ async def signout():
                     headers={"Authorization": f"Bearer {bearer}"},
                 )
         except httpx.HTTPError as e:
-            # Network failure shouldn't strand the user signed-in locally;
-            # the cloud token is invalidated lazily on next use anyway.
+            # Network failure shouldn't strand the user signed-in locally; the cloud token is invalidated lazily on next use anyway.
             logger.warning("cloud signout failed (clearing local anyway): %s", e)
 
-    # Stop every running agent session AND drop their cached SDK resume
-    # state BEFORE clearing local settings. Two failure modes this prevents:
-    #   1. A 9Router subprocess captured the now-revoked bearer at spawn
-    #      time and would 401 on the next /v1/messages call.
-    #   2. A session has an `sdk_session_id` from a conversation served by
-    #      the previous identity's Claude account; resuming against the new
-    #      bearer would 404 or 401 because the new account has no record
-    #      of that thread. Wiping it forces the SDK to start a fresh thread
-    #      on next send (transcript replay still works; only the SDK's
-    #      server-side resume cache is reset).
-    # Best-effort: failures here shouldn't block the sign-out itself.
+    # Stop every running agent session AND drop their cached SDK resume state BEFORE clearing local settings. Two failure modes this prevents: 1. A 9Router subprocess captured the now-revoked bearer at spawn time and would 401 on the next /v1/messages call. 2. A session has an `sdk_session_id` from a conversation served by the previous identity's Claude account; resuming against the new bearer would 404 or 401 because the new account has no record of that thread. Wiping it forces the SDK to start a fresh thread on next send (transcript replay still works; only the SDK's server-side resume cache is reset). Best-effort: failures here shouldn't block the sign-out itself.
     try:
         from backend.apps.agents.agent_manager import agent_manager
         from backend.apps.agents.manager.session.session_store import save_session
@@ -226,9 +205,7 @@ async def signout():
             except Exception as e:
                 logger.warning("signout: stop_agent(%s) failed: %s", session_id, e)
 
-        # Walk every loaded session (running, stopped, persisted-but-resumed)
-        # and clear the SDK resume id so the next send starts a fresh thread
-        # under whichever identity the user re-signs-in with.
+        # Walk every loaded session (running, stopped, persisted-but-resumed) and clear the SDK resume id so the next send starts a fresh thread under whichever identity the user re-signs-in with.
         for sess in list(agent_manager.sessions.values()):
             if sess.sdk_session_id:
                 sess.sdk_session_id = None

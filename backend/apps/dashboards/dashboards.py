@@ -37,8 +37,7 @@ def load_all() -> list[Dashboard]:
             try:
                 result.append(Dashboard(**data))
             except Exception as e:
-                # Parseable JSON, wrong shape (e.g. an older/newer schema). Skip from the
-                # list but leave the file alone so a later version can still read it.
+                # Parseable JSON, wrong shape (e.g. an older/newer schema). Skip from the list but leave the file alone so a later version can still read it.
                 logger.warning("Skipping invalid dashboard file %s: %s", fname, e)
     return result
 
@@ -90,8 +89,7 @@ def migrate_if_needed():
             if not fname.endswith(".json"):
                 continue
             fpath = os.path.join(SESSIONS_DIR, fname)
-            # Per-file guard: one unreadable session must not halt the migration partway
-            # and orphan the rest (the dashboard is already created above).
+            # Per-file guard: one unreadable session must not halt the migration partway and orphan the rest (the dashboard is already created above).
             session_data = read_json_or_none(fpath)
             if session_data is None:
                 continue
@@ -331,8 +329,7 @@ async def generate_name(dashboard_id: str):
         aux_model, p_aux_base = await resolve_aux_model(global_settings, preferred_tier="haiku")
         client = get_anthropic_client_for_model(global_settings, aux_model)
 
-        # Mirrors generate_title's hardening: the tasks are inert text to LABEL, never answer,
-        # or the aux model happily replies with a markdown essay that becomes the title.
+        # Mirrors generate_title's hardening: the tasks are inert text to LABEL, never answer, or the aux model happily replies with a markdown essay that becomes the title.
         system = (
             "You label tasks with a 2-4 word workspace name. "
             "Examples: 'Travel planning', 'Code review', 'Sales dashboard'. "

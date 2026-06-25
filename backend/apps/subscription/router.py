@@ -98,9 +98,7 @@ def p_sync_subscription_identity(settings_obj) -> None:
         logger.debug("identify sync failed: %s", e)
 
 
-# ---------------------------------------------------------------------------
-# POST /api/subscription/activate
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- POST /api/subscription/activate ---------------------------------------------------------------------------
 
 class ActivateRequest(BaseModel):
     token: str
@@ -142,8 +140,7 @@ async def activate(body: ActivateRequest):
 
     me = r.json()
 
-    # Persist to settings. Prefer cloud-reported values; fall back to the
-    # deep-link's own fields if cloud is sparse.
+    # Persist to settings. Prefer cloud-reported values; fall back to the deep-link's own fields if cloud is sparse.
     settings_obj = load_settings()
     settings_obj.connection_mode = "openswarm-pro"
     settings_obj.openswarm_bearer_token = body.token
@@ -171,9 +168,7 @@ async def activate(body: ActivateRequest):
     return {"ok": True, "plan": settings_obj.openswarm_subscription_plan}
 
 
-# ---------------------------------------------------------------------------
-# GET /api/subscription/status
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- GET /api/subscription/status ---------------------------------------------------------------------------
 
 @subscription.router.get("/status")
 async def status():
@@ -191,9 +186,7 @@ async def status():
             "connection_mode": mode,
         }
 
-    # Best-effort live fetch; surface stale cache if cloud is unreachable.
-    # Network errors leave upstream_code=None so we keep the cached state;
-    # only explicit 401/402 from the cloud trigger a local clear.
+    # Best-effort live fetch; surface stale cache if cloud is unreachable. Network errors leave upstream_code=None so we keep the cached state; only explicit 401/402 from the cloud trigger a local clear.
     live_usage = None
     live_status = None
     upstream_code: Optional[int] = None
@@ -215,10 +208,7 @@ async def status():
     except httpx.HTTPError as e:
         logger.debug("subscription/status live fetch failed: %s", e)
 
-    # Cloud says the bearer is gone (401) or the sub is past its grace
-    # period (402); drop local credentials so the desktop stops routing
-    # through a dead subscription. Settings UI sees connected=False and
-    # falls back to the Subscribe CTA; chat reverts to own_key routing.
+    # Cloud says the bearer is gone (401) or the sub is past its grace period (402); drop local credentials so the desktop stops routing through a dead subscription. Settings UI sees connected=False and falls back to the Subscribe CTA; chat reverts to own_key routing.
     if upstream_code in (401, 402):
         await p_clear_subscription(settings_obj)
         return {
@@ -238,9 +228,7 @@ async def status():
     }
 
 
-# ---------------------------------------------------------------------------
-# POST /api/subscription/sync
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- POST /api/subscription/sync ---------------------------------------------------------------------------
 
 @subscription.router.post("/sync")
 async def sync():
@@ -252,8 +240,7 @@ async def sync():
     No-op when not in openswarm-pro mode. Best-effort: network failures are
     swallowed; the caller still gets a 200 with whatever local state we
     already had."""
-    # Lazy-import the service-sync helper so subscription/router doesn't pay the
-    # cost when analytics are disabled.
+    # Lazy-import the service-sync helper so subscription/router doesn't pay the cost when analytics are disabled.
     from backend.apps.service.client import sync as p_sync
 
     settings_obj = load_settings()
@@ -275,9 +262,7 @@ async def sync():
         p_sync(settings_obj.model_dump())
         return {"ok": True, "synced": False, "reason": "network"}
 
-    # Same 401/402 handling as /status: if Stripe-side reconciliation proves
-    # the bearer is dead or the sub expired, clear local state so the app
-    # reverts to own_key instead of hammering a useless token.
+    # Same 401/402 handling as /status: if Stripe-side reconciliation proves the bearer is dead or the sub expired, clear local state so the app reverts to own_key instead of hammering a useless token.
     if r.status_code in (401, 402):
         await p_clear_subscription(settings_obj)
         reason = "revoked" if r.status_code == 401 else "expired"
@@ -298,8 +283,7 @@ async def sync():
     cloud_plan = data.get("plan")
     period_end_ms = data.get("current_period_end")
 
-    # Only touch local fields the cloud explicitly confirmed; don't paper
-    # over missing keys with defaults that would downgrade an older record.
+    # Only touch local fields the cloud explicitly confirmed; don't paper over missing keys with defaults that would downgrade an older record.
     if cloud_plan:
         settings_obj.openswarm_subscription_plan = cloud_plan
     if isinstance(period_end_ms, (int, float)) and period_end_ms > 0:
@@ -319,9 +303,7 @@ async def sync():
     }
 
 
-# ---------------------------------------------------------------------------
-# POST /api/subscription/portal
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- POST /api/subscription/portal ---------------------------------------------------------------------------
 
 @subscription.router.post("/portal")
 async def portal():
@@ -343,9 +325,7 @@ async def portal():
     return {"url": data.get("url")}
 
 
-# ---------------------------------------------------------------------------
-# Free zero-config trial
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Free zero-config trial ---------------------------------------------------------------------------
 
 @subscription.router.post("/free-trial/mint")
 async def free_trial_mint():
@@ -363,9 +343,7 @@ async def free_trial_status():
     return await refresh_free_trial(load_settings())
 
 
-# ---------------------------------------------------------------------------
-# POST /api/subscription/disconnect
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- POST /api/subscription/disconnect ---------------------------------------------------------------------------
 
 @subscription.router.post("/disconnect")
 async def disconnect():

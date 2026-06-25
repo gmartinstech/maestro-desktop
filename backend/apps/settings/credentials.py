@@ -10,10 +10,7 @@ if TYPE_CHECKING:
 
 OPENSWARM_DEFAULT_PROXY_URL = "https://api.openswarm.com"
 
-# Connection modes that route Claude traffic through our cloud proxy with a
-# bearer instead of a user-held key. Free-trial is openswarm-pro's cheaper
-# sibling: same proxy, but pointed at the /free sub-path the cloud meters and
-# forces to Haiku.
+# Connection modes that route Claude traffic through our cloud proxy with a bearer instead of a user-held key. Free-trial is openswarm-pro's cheaper sibling: same proxy, but pointed at the /free sub-path the cloud meters and forces to Haiku.
 PROXY_CONNECTION_MODES = ("openswarm-pro", "free-trial")
 
 

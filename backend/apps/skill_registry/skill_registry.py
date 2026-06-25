@@ -20,16 +20,11 @@ RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}"
 MANIFEST_URL = f"{RAW_BASE}/.claude-plugin/marketplace.json"
 REFRESH_INTERVAL_S = 3600
 CONCURRENT_FETCHES = 15
-# Retry the startup fetch on this short backoff (capped) until the FIRST success,
-# instead of waiting a full REFRESH_INTERVAL_S after a cold/slow/failed fetch.
-# That 1h gap was the "skills empty until reboot" bug on cold Windows networks.
+# Retry the startup fetch on this short backoff (capped) until the FIRST success, instead of waiting a full REFRESH_INTERVAL_S after a cold/slow/failed fetch. That 1h gap was the "skills empty until reboot" bug on cold Windows networks.
 P_RETRY_BACKOFF_START_S = 2
 P_RETRY_BACKOFF_MAX_S = 60
 
-# Catalog ships in the repo so a brand-new install shows skills with zero network
-# (build snapshot), and every successful live fetch is persisted to the user's
-# cache so subsequent launches are instant + offline-safe. The live fetch always
-# overwrites both once it lands, so neither can go stale at runtime.
+# Catalog ships in the repo so a brand-new install shows skills with zero network (build snapshot), and every successful live fetch is persisted to the user's cache so subsequent launches are instant + offline-safe. The live fetch always overwrites both once it lands, so neither can go stale at runtime.
 BUNDLED_SNAPSHOT = os.path.join(os.path.dirname(__file__), "skills_snapshot.json")
 
 p_cache: dict[str, dict] = {}
@@ -184,9 +179,7 @@ async def p_refresh_loop():
             backoff = P_RETRY_BACKOFF_START_S
             await asyncio.sleep(REFRESH_INTERVAL_S)
         else:
-            # Cold/slow/failed fetch: retry soon (capped) until the first success
-            # so a transient network hiccup doesn't leave the catalog empty for
-            # an hour. The seeded snapshot keeps it non-empty meanwhile.
+            # Cold/slow/failed fetch: retry soon (capped) until the first success so a transient network hiccup doesn't leave the catalog empty for an hour. The seeded snapshot keeps it non-empty meanwhile.
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, P_RETRY_BACKOFF_MAX_S)
 
@@ -194,8 +187,7 @@ async def p_refresh_loop():
 @asynccontextmanager
 async def skill_registry_lifespan():
     global p_refresh_task, p_cache
-    # Seed instantly from disk/bundled snapshot so the very first request never
-    # sees an empty catalog (the live fetch below overwrites it when it lands).
+    # Seed instantly from disk/bundled snapshot so the very first request never sees an empty catalog (the live fetch below overwrites it when it lands).
     if not p_cache:
         p_cache = load_seed_cache()
     p_refresh_task = asyncio.create_task(p_refresh_loop())
@@ -280,14 +272,7 @@ async def registry_detail(skill_name: str):
     return {"skill": sk}
 
 
-# ---------------------------------------------------------------------------
-# Community source: the skills.sh wild registry (~600k+ telemetry-ranked,
-# zero-curation community skills, GitHub-repo backed). The curated source above
-# (anthropics/skills) stays the default; community is opt-in via ?source=community
-# and the UI flags it as unvetted. See .claude/SECURITY.md for the posture: this
-# installs INERT files only (never executes), discloses scripts before commit,
-# and any skill script later runs through the same gated Bash path as anything.
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Community source: the skills.sh wild registry (~600k+ telemetry-ranked, zero-curation community skills, GitHub-repo backed). The curated source above (anthropics/skills) stays the default; community is opt-in via ?source=community and the UI flags it as unvetted. See .claude/SECURITY.md for the posture: this installs INERT files only (never executes), discloses scripts before commit, and any skill script later runs through the same gated Bash path as anything. ---------------------------------------------------------------------------
 
 P_COMMUNITY_SEARCH_URL = "https://skills.sh/api/search"
 P_GH_API = "https://api.github.com"
@@ -401,9 +386,7 @@ async def resolve_community_skill(source: str, skill_id: str) -> dict:
             raise ValueError("SKILL.md could not be fetched")
 
     meta, p_body = p_parse_frontmatter(files["SKILL.md"])
-    # Reuse the .swarm importer's content scan: flag files holding secret-shaped
-    # literals (the author's leaked key, or a sketchy skill) so the user sees it
-    # before installing from an unvetted repo.
+    # Reuse the .swarm importer's content scan: flag files holding secret-shaped literals (the author's leaked key, or a sketchy skill) so the user sees it before installing from an unvetted repo.
     from backend.common.secret_scan import find_secrets_in_files
     secret_findings = find_secrets_in_files({rel: data.encode("utf-8", "ignore") for rel, data in files.items()})
     return {
@@ -484,8 +467,7 @@ async def registry_install(req: p_InstallRequest):
         return {"installed": False, "disclosure": disclosure}
 
     from backend.apps.skills.skills import write_folder_skill, unique_skill_slug
-    # Never clobber an existing local skill that happens to share this slug; a
-    # wild-registry name collision lands as a copy instead of overwriting.
+    # Never clobber an existing local skill that happens to share this slug; a wild-registry name collision lands as a copy instead of overwriting.
     slug = unique_skill_slug(resolved["skill_id"])
     skill = write_folder_skill(
         slug,

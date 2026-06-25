@@ -240,8 +240,7 @@ def read_env_value(env_path: str, key: str) -> Optional[str]:
                 if k.strip() != key:
                     continue
                 v = v.strip()
-                # Strip an inline `# comment`. Naive; bash semantics are
-                # more permissive, but values we write don't contain `#`.
+                # Strip an inline `# comment`. Naive; bash semantics are more permissive, but values we write don't contain `#`.
                 if "#" in v:
                     v = v.split("#", 1)[0].rstrip()
                 if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):

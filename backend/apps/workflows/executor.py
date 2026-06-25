@@ -18,9 +18,7 @@ from backend.apps.workflows import storage
 logger = logging.getLogger(__name__)
 
 
-# In-process map: workflow_id -> currently running run id. Prevents two
-# overlapping fires for the same workflow (e.g. cron tick races a manual
-# Run button) without serializing across the whole executor.
+# In-process map: workflow_id -> currently running run id. Prevents two overlapping fires for the same workflow (e.g. cron tick races a manual Run button) without serializing across the whole executor.
 _running: dict[str, str] = {}
 _running_lock = asyncio.Lock()
 
@@ -34,11 +32,7 @@ def p_ran_late(started_at: datetime, scheduled_for: datetime) -> bool:
     return delta.total_seconds() > 300
 
 
-# run_id -> "stop". Set by the stop endpoint so the executor loop, not the
-# HTTP handler, owns the run's terminal write. Without this the still-running
-# executor task could overwrite a "Stopped by user" failure with success.
-# Pause is NOT in here: it rides the agent session's own "stopped" status,
-# which the step loop waits out (see _await_session_idle).
+# run_id -> "stop". Set by the stop endpoint so the executor loop, not the HTTP handler, owns the run's terminal write. Without this the still-running executor task could overwrite a "Stopped by user" failure with success. Pause is NOT in here: it rides the agent session's own "stopped" status, which the step loop waits out (see _await_session_idle).
 _run_control: dict[str, str] = {}
 _run_pause_override: dict[str, tuple[bool, float]] = {}
 
@@ -187,9 +181,7 @@ async def execute(
         triggered_by=triggered_by,
     )
 
-    # Cost cap pre-check happens before claiming `_running` so a capped
-    # workflow doesn't block its own next fire. We still record the run so
-    # the user sees it in History with a clear reason.
+    # Cost cap pre-check happens before claiming `_running` so a capped workflow doesn't block its own next fire. We still record the run so the user sees it in History with a clear reason.
     if wf.cost_cap_usd_monthly is not None:
         spent = _monthly_spend_so_far(wf)
         if spent >= wf.cost_cap_usd_monthly:
@@ -226,12 +218,7 @@ async def execute(
             "last_run_id": run.id,
         })
 
-        # Announce the run as running the instant it claims execution, not at
-        # the first step. Without this a run that fails fast (e.g. no runnable
-        # steps) or hasn't streamed yet never hits the Home "Ongoing runs" list.
-        # Both this and the persist above sit inside the try whose finally frees
-        # _running, so a persist/broadcast failure can't strand the workflow as
-        # permanently "running" (which would block every future fire).
+        # Announce the run as running the instant it claims execution, not at the first step. Without this a run that fails fast (e.g. no runnable steps) or hasn't streamed yet never hits the Home "Ongoing runs" list. Both this and the persist above sit inside the try whose finally frees _running, so a persist/broadcast failure can't strand the workflow as permanently "running" (which would block every future fire).
         try:
             from backend.apps.agents.core.ws_manager import ws_manager as _wsm_start
             await _wsm_start.broadcast_global("workflow:run", {
@@ -262,11 +249,7 @@ async def execute(
         run.session_id = session.id
         storage.record_run(run)
 
-        # Reuse the user's earlier allow/deny answers so an unattended fire
-        # doesn't park on a permission prompt. Scheduled runs prompt for an
-        # unseen tool only briefly (30s) before failing; manual/test runs are
-        # attended, so keep the roomy window. Sensitive-path prompts are never
-        # remembered (handled by the gate); they keep prompting every run.
+        # Reuse the user's earlier allow/deny answers so an unattended fire doesn't park on a permission prompt. Scheduled runs prompt for an unseen tool only briefly (30s) before failing; manual/test runs are attended, so keep the roomy window. Sensitive-path prompts are never remembered (handled by the gate); they keep prompting every run.
         set_workflow_approval_memory(
             session.id,
             decisions=dict(wf.remembered_approvals),
@@ -275,11 +258,7 @@ async def execute(
             ask_timeout=30.0 if triggered_by == "schedule" else 600.0,
         )
 
-        # Background poller: surface the latest tool-call name as a
-        # live "what's the agent doing" subtitle on the workflow:run
-        # ws event. Cheap enough to run at 1.5s cadence; nothing else
-        # is watching session.messages from here. Cancelled in the
-        # finally block alongside _running cleanup.
+        # Background poller: surface the latest tool-call name as a live "what's the agent doing" subtitle on the workflow:run ws event. Cheap enough to run at 1.5s cadence; nothing else is watching session.messages from here. Cancelled in the finally block alongside _running cleanup.
         async def _watch_tool_calls() -> None:
             last_seen = ""
             last_paused = False
@@ -303,8 +282,7 @@ async def execute(
                         if getattr(m, "role", None) != "tool_call":
                             continue
                         content = getattr(m, "content", None)
-                        # Content can be a string, a dict with "name", or
-                        # a list of blocks. Pick the first tool_use name.
+                        # Content can be a string, a dict with "name", or a list of blocks. Pick the first tool_use name.
                         if isinstance(content, list):
                             for b in content:
                                 if isinstance(b, dict) and b.get("type") == "tool_use":
@@ -338,19 +316,13 @@ async def execute(
 
         watcher_task = asyncio.create_task(_watch_tool_calls())
 
-        # Send each step sequentially. agent_manager.send_message is a no-op
-        # while a prior turn is still streaming, so we await until the
-        # session is idle before posting the next step. Keeps the runner
-        # safe regardless of how long each turn takes.
+        # Send each step sequentially. agent_manager.send_message is a no-op while a prior turn is still streaming, so we await until the session is idle before posting the next step. Keeps the runner safe regardless of how long each turn takes.
         step_error: Optional[str] = None
         for idx, step in enumerate(steps):
             if _run_control.get(run.id) == "stop":
                 step_error = "Stopped by user"
                 break
-            # Broadcast the step bump before sending so RunningView flips
-            # the disc immediately, not after the agent finishes the step.
-            # Advancing means we're not paused; keep the broadcast authoritative
-            # so it never races a stale paused=True from the watcher.
+            # Broadcast the step bump before sending so RunningView flips the disc immediately, not after the agent finishes the step. Advancing means we're not paused; keep the broadcast authoritative so it never races a stale paused=True from the watcher.
             run.active_step_idx = idx
             run.last_tool_label = None
             run.paused = False
@@ -389,8 +361,7 @@ async def execute(
         else:
             run.status = "success"
             wf.last_run_status = "success"
-        # Bump runs_count for scheduled fires that reached a terminal state
-        # other than "skipped". Manual runs don't count against max_runs.
+        # Bump runs_count for scheduled fires that reached a terminal state other than "skipped". Manual runs don't count against max_runs.
         runs_delta = 1 if (triggered_by == "schedule" and run.status in ("success", "ran_late", "failure")) else 0
         storage.record_run(run)
         wf.last_run_at = run.finished_at
@@ -416,17 +387,12 @@ async def execute(
     finally:
         _run_control.pop(run.id, None)
         _run_pause_override.pop(run.id, None)
-        # Cancel the tool-call watcher before we tear the session down so
-        # the next poll doesn't race close_session.
+        # Cancel the tool-call watcher before we tear the session down so the next poll doesn't race close_session.
         try:
             watcher_task.cancel()  # type: ignore[name-defined]
         except Exception:
             pass
-        # Close the workflow's agent session so closed_at is set and the
-        # run shows up in chat history (get_history sorts by closed_at;
-        # sessions with closed_at=None sort to the bottom and fall off
-        # the first page). close_session also drops in-memory state and
-        # persists the final snapshot to disk.
+        # Close the workflow's agent session so closed_at is set and the run shows up in chat history (get_history sorts by closed_at; sessions with closed_at=None sort to the bottom and fall off the first page). close_session also drops in-memory state and persists the final snapshot to disk.
         if session is not None:
             try:
                 p_persist_step_tool_usage(wf.id, get_workflow_step_usage(session.id))
@@ -488,8 +454,7 @@ async def _await_session_idle(session_id: str, run_id: Optional[str] = None, tim
         if status == "stopped":
             if not hold_on_pause:
                 return "stopped"
-            # Paused. Hold, and reset the deadline so paused wall-time
-            # doesn't count against the step timeout.
+            # Paused. Hold, and reset the deadline so paused wall-time doesn't count against the step timeout.
             deadline = asyncio.get_event_loop().time() + timeout_s
             await asyncio.sleep(0.1)
             continue

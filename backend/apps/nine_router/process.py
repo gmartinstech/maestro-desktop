@@ -31,38 +31,10 @@ NINE_ROUTER_URL = f"http://localhost:{NINE_ROUTER_PORT}"
 NINE_ROUTER_API = f"{NINE_ROUTER_URL}/api"
 NINE_ROUTER_V1 = f"{NINE_ROUTER_URL}/v1"
 
-# Pinned 9router npm package version. Prod default stays 0.3.60; set
-# OPENSWARM_ROUTER_VERSION to stage a bump in dev (keys the dev cache by
-# version, so the override pulls a clean install) without shipping it.
-#
-# 0.4.x gates its internal /api/* routes behind auth (the old bump blocker):
-# bare `POST /api/providers` / `/api/oauth/<prov>/device-code` now 401 instead
-# of working. That auth is now PORTED here: see cli_auth_token() / cli_auth_headers()
-# below, which compute the `x-9r-cli-token` 9Router checks and which every
-# /api/* call in this package attaches. The header is empty on 0.3.60 (no
-# machine-id file), so the old auth-free path is untouched.
-#
-# What the bump buys: cc/claude-opus-4-8 and cx/gpt-5.5 on the sub routes
-# (gpt-5.5 404s on 0.3.60), a reworked WebSearch behind /api/v1/search, and
-# 3 months of cross-provider translator robustness.
-#
-# REMAINING gate before flipping the prod default to 0.4.x: re-qualify
-# cross-provider WebSearch. The original 0.3.60 pin reason was that 0.3.60-0.3.96
-# regressed it (a Codex/Gemini primary delegating WebSearch saw
-# "claude-haiku-4-5-20251001 unavailable" or hallucinated output); 0.4.x reworked
-# it but that's unverified here. Also confirmed on 0.4.80: it STILL emits
-# `max_tokens` (not max_completion_tokens) on Anthropic->OpenAI, so our
-# /api/openai-passthrough rename (core/openai_passthrough.py + sync_openai_api_key,
-# routed via an `openai-compatible` node that honors `baseUrl`) STAYS necessary.
+# Pinned 9router npm package version. Prod default stays 0.3.60; set OPENSWARM_ROUTER_VERSION to stage a bump in dev (keys the dev cache by version, so the override pulls a clean install) without shipping it. 0.4.x gates its internal /api/* routes behind auth (the old bump blocker): bare `POST /api/providers` / `/api/oauth/<prov>/device-code` now 401 instead of working. That auth is now PORTED here: see cli_auth_token() / cli_auth_headers() below, which compute the `x-9r-cli-token` 9Router checks and which every /api/* call in this package attaches. The header is empty on 0.3.60 (no machine-id file), so the old auth-free path is untouched. What the bump buys: cc/claude-opus-4-8 and cx/gpt-5.5 on the sub routes (gpt-5.5 404s on 0.3.60), a reworked WebSearch behind /api/v1/search, and 3 months of cross-provider translator robustness. REMAINING gate before flipping the prod default to 0.4.x: re-qualify cross-provider WebSearch. The original 0.3.60 pin reason was that 0.3.60-0.3.96 regressed it (a Codex/Gemini primary delegating WebSearch saw "claude-haiku-4-5-20251001 unavailable" or hallucinated output); 0.4.x reworked it but that's unverified here. Also confirmed on 0.4.80: it STILL emits `max_tokens` (not max_completion_tokens) on Anthropic->OpenAI, so our /api/openai-passthrough rename (core/openai_passthrough.py + sync_openai_api_key, routed via an `openai-compatible` node that honors `baseUrl`) STAYS necessary.
 NINE_ROUTER_NPM_VERSION = os.environ.get("OPENSWARM_ROUTER_VERSION", "0.3.60")
 
-# 9Router (our pinned 0.3.60) appends every request to ~/.9router/request-details.json and
-# reloads the WHOLE file on each write; once it reaches tens of MB the router's node process
-# OOM-aborts and takes the app down, even while idle (verified from crash dumps). Two cheap,
-# pin-safe guards until the real fix (a 9Router bump past 0.4.66, which moved off this file):
-#   1. rotate that log before we spawn 9Router when it gets large, so growth can't run away;
-#   2. give node an explicit, generous heap ceiling for legitimate large multimodal bodies.
-# Neither touches routing, so WebSearch/WebFetch translation and the 0.3.60 pin are unaffected.
+# 9Router (our pinned 0.3.60) appends every request to ~/.9router/request-details.json and reloads the WHOLE file on each write; once it reaches tens of MB the router's node process OOM-aborts and takes the app down, even while idle (verified from crash dumps). Two cheap, pin-safe guards until the real fix (a 9Router bump past 0.4.66, which moved off this file): 1. rotate that log before we spawn 9Router when it gets large, so growth can't run away; 2. give node an explicit, generous heap ceiling for legitimate large multimodal bodies. Neither touches routing, so WebSearch/WebFetch translation and the 0.3.60 pin are unaffected.
 P_REQUEST_LOG_PATH = os.path.expanduser("~/.9router/request-details.json")
 P_REQUEST_LOG_MAX_BYTES = 5 * 1024 * 1024
 P_NODE_HEAP_MB = 4096
@@ -86,18 +58,10 @@ def p_rotate_request_log() -> None:
 
 p_process: subprocess.Popen | None = None
 
-# Serializes ensure_running() so a background auto-start and a concurrent
-# dispatch-time ensure can't both spawn 9Router (double-bind on :20128). Lazily
-# created so module import doesn't require a running event loop.
+# Serializes ensure_running() so a background auto-start and a concurrent dispatch-time ensure can't both spawn 9Router (double-bind on :20128). Lazily created so module import doesn't require a running event loop.
 p_start_lock: "asyncio.Lock | None" = None
 
-# Short TTL cache for positive is_running() results. The probe is a sync
-# httpx.get that blocks the event loop, and under load (9Router busy
-# streaming inference) it can exceed its 2s timeout and return False even
-# though 9Router is fine. Caching a recent True result avoids those false
-# negatives without masking a real crash for more than P_IS_RUNNING_TTL seconds.
-# Negative results are NOT cached so startup detection in ensure_running()
-# remains correct.
+# Short TTL cache for positive is_running() results. The probe is a sync httpx.get that blocks the event loop, and under load (9Router busy streaming inference) it can exceed its 2s timeout and return False even though 9Router is fine. Caching a recent True result avoids those false negatives without masking a real crash for more than P_IS_RUNNING_TTL seconds. Negative results are NOT cached so startup detection in ensure_running() remains correct.
 P_IS_RUNNING_TTL = 10.0
 p_is_running_last_ok: float = 0.0
 
@@ -329,9 +293,7 @@ def p_ensure_router_cached() -> str | None:
             "Installing 9router@%s into %s (one-time, ~30s)...",
             NINE_ROUTER_NPM_VERSION, cache_dir,
         )
-        # Note: we do NOT pass --ignore-scripts. The package's postinstall
-        # rebuilds better-sqlite3 for the host platform; skipping it leaves
-        # the server unable to load its native addon.
+        # Note: we do NOT pass --ignore-scripts. The package's postinstall rebuilds better-sqlite3 for the host platform; skipping it leaves the server unable to load its native addon.
         subprocess.run(
             [npm, "install", f"9router@{NINE_ROUTER_NPM_VERSION}",
              "--no-save", "--no-audit", "--no-fund", "--silent"],
@@ -399,8 +361,7 @@ async def p_ensure_running_impl():
     p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
 
     if is_running():
-        # In dev mode, kill stale standalone servers (from previous builds)
-        # so we can start `next dev` which always uses latest source code
+        # In dev mode, kill stale standalone servers (from previous builds) so we can start `next dev` which always uses latest source code
         if not p_is_packaged:
             import subprocess as p_sp
             try:
@@ -426,10 +387,7 @@ async def p_ensure_running_impl():
     p_patch = p_gpt5_patch_path()
 
     if p_is_packaged:
-        # Packaged: run the pre-built standalone server staged at
-        # <resources>/router/server.js by fetch-router at build time. We do NOT
-        # fall back to the dev npm path here, a user machine has no npm, so that
-        # only ever fails silently; every miss is reported instead.
+        # Packaged: run the pre-built standalone server staged at <resources>/router/server.js by fetch-router at build time. We do NOT fall back to the dev npm path here, a user machine has no npm, so that only ever fails silently; every miss is reported instead.
         if not p_9router_dir:
             p_report_start_failure("router_not_bundled")
             return
@@ -450,9 +408,7 @@ async def p_ensure_running_impl():
         if node == os.environ.get("OPENSWARM_ELECTRON_PATH"):
             env["ELECTRON_RUN_AS_NODE"] = "1"
     else:
-        # Dev: install the pinned npm package into a local cache once, then spawn
-        # `node app/server.js` directly (bypasses the package cli.js tray icon
-        # users confusingly quit, its update-check spinner, and the TUI).
+        # Dev: install the pinned npm package into a local cache once, then spawn `node app/server.js` directly (bypasses the package cli.js tray icon users confusingly quit, its update-check spinner, and the TUI).
         cached_server = p_ensure_router_cached()
         if not cached_server:
             return
@@ -468,11 +424,7 @@ async def p_ensure_running_impl():
         cwd = os.path.dirname(cached_server)
         env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
 
-    # Capture stdout+stderr so a failed start can tell us WHY (the old DEVNULL
-    # default made every "router never came up" a silent mystery, which is the
-    # whole reason #90 was un-diagnosable). Packaged prod (NODE_ENV=production
-    # standalone) is quiet, so one fixed temp file, truncated each start attempt,
-    # won't grow; dev keeps its chatty-Next.js DEVNULL unless debug is set.
+    # Capture stdout+stderr so a failed start can tell us WHY (the old DEVNULL default made every "router never came up" a silent mystery, which is the whole reason #90 was un-diagnosable). Packaged prod (NODE_ENV=production standalone) is quiet, so one fixed temp file, truncated each start attempt, won't grow; dev keeps its chatty-Next.js DEVNULL unless debug is set.
     p_cap_path = os.path.join(tempfile.gettempdir(), "openswarm-9router-start.log")
     p_cap_file = None
     if p_is_packaged:
@@ -502,8 +454,7 @@ async def p_ensure_running_impl():
             if is_running():
                 logger.info("9Router started successfully")
                 return
-        # Verify-at-boot: it never answered. Report with the captured tail + the
-        # exit code (non-None = it crashed; None = wedged or just slow).
+        # Verify-at-boot: it never answered. Report with the captured tail + the exit code (non-None = it crashed; None = wedged or just slow).
         p_report_start_failure(
             "not_ready_in_time",
             detail=p_read_capture_tail(p_cap_path) if p_is_packaged else "",

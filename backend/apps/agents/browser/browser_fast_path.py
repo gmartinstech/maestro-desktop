@@ -23,8 +23,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Zero-cost smell test: only prompts that mention the web at all are worth a
-# classifier call. False negatives just take the normal path.
+# Zero-cost smell test: only prompts that mention the web at all are worth a classifier call. False negatives just take the normal path.
 P_BROWSY_RE = re.compile(
     r"https?://|www\.|\b[a-z0-9-]+\.(com|org|net|io|co|ai|dev|app)\b"
     r"|\b(browse|browser|website|web ?page|webpage|site|url|tab)\b"

@@ -16,9 +16,7 @@ from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
 from backend.apps.swarm.models import EntityType, Requirement, RequirementKind
 
 P_BUILTIN_MODES = {"agent", "ask", "plan", "view-builder", "skill-builder"}
-# Transcript fields ride along so the shared agent keeps its history; ids inside
-# (message ids, branch ids, their parent/fork refs) are self-consistent within
-# the one session file, so they carry verbatim with no remap.
+# Transcript fields ride along so the shared agent keeps its history; ids inside (message ids, branch ids, their parent/fork refs) are self-consistent within the one session file, so they carry verbatim with no remap.
 P_KEEP = (
     "name", "provider", "model", "mode", "system_prompt", "allowed_tools",
     "max_turns", "thinking_level",
@@ -36,10 +34,7 @@ class SessionExportable:
 
     @classmethod
     def load(cls, local_id: str) -> "SessionExportable | None":
-        # Memory first, disk fallback, the same order duplicate_session uses.
-        # The live session holds the freshest transcript; a disk-only read would
-        # ship a stale one (missing the latest turns) or drop a just-created
-        # agent that hasn't flushed yet, so its card vanishes from the bundle.
+        # Memory first, disk fallback, the same order duplicate_session uses. The live session holds the freshest transcript; a disk-only read would ship a stale one (missing the latest turns) or drop a just-created agent that hasn't flushed yet, so its card vanishes from the bundle.
         from backend.apps.agents.agent_manager import agent_manager
         sess = agent_manager.sessions.get(local_id)
         if sess is not None:
@@ -88,8 +83,7 @@ class SessionExportable:
         from backend.apps.agents.manager.session.session_store import save_session
         sid = uuid4().hex
         now = datetime.now(timezone.utc).isoformat()
-        # Older bundles (made before transcripts were carried) have no messages;
-        # fall back to a single empty main branch so the imported agent is valid.
+        # Older bundles (made before transcripts were carried) have no messages; fall back to a single empty main branch so the imported agent is valid.
         branches = payload.get("branches") or {
             "main": {"id": "main", "parent_branch_id": None, "fork_point_message_id": None, "created_at": now}
         }

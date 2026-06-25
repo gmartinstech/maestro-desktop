@@ -463,14 +463,11 @@ def handle_edit_step(args: dict) -> dict:
     cur = _call("GET", f"/{wid}")
     if "_error" in cur:
         return _err(cur["_error"])
-    # Edit against the pending draft when one exists (Edit-Agent flow); else
-    # the live steps (main-agent direct edit).
+    # Edit against the pending draft when one exists (Edit-Agent flow); else the live steps (main-agent direct edit).
     steps = cur.get("draft_steps") or cur.get("steps") or []
     if idx < 0 or idx >= len(steps):
         return _err(f"step_idx {idx} out of range (workflow has {len(steps)} steps).")
-    # Refresh the at-a-glance label so the card reflects the edit; a preserved
-    # stale label left the step looking unchanged. Agent-supplied label wins,
-    # else clear it so the card falls back to the new text's first words.
+    # Refresh the at-a-glance label so the card reflects the edit; a preserved stale label left the step looking unchanged. Agent-supplied label wins, else clear it so the card falls back to the new text's first words.
     new_label = (args.get("new_label") or "").strip()
     new_steps = list(steps)
     new_steps[idx] = {**new_steps[idx], "text": new_text, "label": new_label}

@@ -14,8 +14,7 @@ P_DENY_SUBSTRINGS = (
     "session_token", "auth_token", "private_key",
 )
 
-# Exact field names that are sensitive or per-install identity (the substring
-# pass alone would miss these).
+# Exact field names that are sensitive or per-install identity (the substring pass alone would miss these).
 P_DENY_EXACT = {
     "token", "installation_id", "user_id", "free_trial_token",
     "free_trial_remaining", "free_trial_runs_limit", "openswarm_bearer_token",
@@ -23,8 +22,7 @@ P_DENY_EXACT = {
     "credentials", "sdk_session_id",
 }
 
-# The secret-shape scanner moved to backend.common so skills + settings reuse it
-# without reaching into swarm; re-exported here so ziputil/closure keep their API.
+# The secret-shape scanner moved to backend.common so skills + settings reuse it without reaching into swarm; re-exported here so ziputil/closure keep their API.
 from backend.common.secret_scan import (  # noqa: E402
     REDACTED,
     find_secrets_in_files,
@@ -73,5 +71,4 @@ def find_denied_keys(value: Any, p_path: str = "") -> list[str]:
     return found
 
 
-# _looks_secret + find_secrets_in_files now come from backend.common.secret_scan
-# (imported at the top); kept re-exported so ziputil's audit import is unchanged.
+# _looks_secret + find_secrets_in_files now come from backend.common.secret_scan (imported at the top); kept re-exported so ziputil's audit import is unchanged.

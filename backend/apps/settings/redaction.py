@@ -20,8 +20,7 @@ from typing import Any
 from backend.common.secret_scan import looks_secret
 
 P_SECRET_NAME_SUFFIXES = ("_key", "_token", "_secret")
-# Not a credential and doesn't match the suffix rule, but a stable hardware-ish
-# fingerprint used for cohorting/abuse; keep it out of the agent's eyes too.
+# Not a credential and doesn't match the suffix rule, but a stable hardware-ish fingerprint used for cohorting/abuse; keep it out of the agent's eyes too.
 P_SECRET_EXTRA_FIELDS = frozenset({"installation_id"})
 
 

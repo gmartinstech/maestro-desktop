@@ -49,8 +49,7 @@ def p_coerce_settings(raw: dict) -> AppSettings:
         try:
             return AppSettings(**cleaned)
         except ValidationError:
-            # Still invalid after dropping the flagged fields (nested shape we
-            # can't surgically repair); fall back to all defaults rather than crash.
+            # Still invalid after dropping the flagged fields (nested shape we can't surgically repair); fall back to all defaults rather than crash.
             logger.warning("settings.json still invalid after dropping bad fields; using defaults")
             return AppSettings()
 
@@ -66,10 +65,7 @@ def p_preserve_corrupt_settings() -> None:
         pass
 
 
-# In-memory mirror of SETTINGS_FILE, revalidated by stat (mtime+size) on every load
-# so even a hand-edited file or an unexpected writer is picked up immediately. A stat
-# skips the open+parse+validate that Defender turns into 5-50ms on Windows. Copies on
-# both sides keep handler isolation: callers mutate their copy, never the cache.
+# In-memory mirror of SETTINGS_FILE, revalidated by stat (mtime+size) on every load so even a hand-edited file or an unexpected writer is picked up immediately. A stat skips the open+parse+validate that Defender turns into 5-50ms on Windows. Copies on both sides keep handler isolation: callers mutate their copy, never the cache.
 p_cached_settings: AppSettings | None = None
 p_cached_sig: tuple[int, int] | None = None
 

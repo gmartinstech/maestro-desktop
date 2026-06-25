@@ -3,10 +3,7 @@ from typing import Optional
 
 from typeguard import typechecked
 
-# Secret shapes that must never ride along when we ship a stderr tail or an
-# error string to telemetry. own_key mode means the subprocess stderr can echo
-# the user's OWN provider key, so this scrub is the wall between a diagnostic
-# and a key leak; over-redacting is fine, leaking is not.
+# Secret shapes that must never ride along when we ship a stderr tail or an error string to telemetry. own_key mode means the subprocess stderr can echo the user's OWN provider key, so this scrub is the wall between a diagnostic and a key leak; over-redacting is fine, leaking is not.
 P_TELEMETRY_SECRET_PATTERNS = (
     re.compile(r"sk-ant-[A-Za-z0-9_\-]{12,}"),
     re.compile(r"sk-[A-Za-z0-9_\-]{16,}"),
@@ -28,9 +25,7 @@ def redact_for_telemetry(text: str, *, limit: int = 2000) -> str:
     return text[-limit:]
 
 
-# Patterns that indicate an upstream transient problem (overload / rate limit /
-# infra blip), safe to silently retry with backoff. Checked against the
-# stringified exception from claude_agent_sdk / Claude CLI.
+# Patterns that indicate an upstream transient problem (overload / rate limit / infra blip), safe to silently retry with backoff. Checked against the stringified exception from claude_agent_sdk / Claude CLI.
 TRANSIENT_CAPACITY_PATTERNS = re.compile(
     r"(?:\b(?:429|500|502|503|504|529)\b"
     r"|overloaded"
@@ -45,12 +40,7 @@ TRANSIENT_CAPACITY_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# A first message ships the full tool schema; 9Router rewrites Anthropic
-# tools[].input_schema into Gemini function_declarations / OpenAI params, and a
-# construct it can't translate makes the provider 400 (INVALID_ARGUMENT) with
-# zero tokens. That is NOT auth, reconnecting won't help, the request shape is
-# wrong, so we classify it apart and stop the catch-all from showing a
-# "reconnect your subscription" card for a tool-schema 400.
+# A first message ships the full tool schema; 9Router rewrites Anthropic tools[].input_schema into Gemini function_declarations / OpenAI params, and a construct it can't translate makes the provider 400 (INVALID_ARGUMENT) with zero tokens. That is NOT auth, reconnecting won't help, the request shape is wrong, so we classify it apart and stop the catch-all from showing a "reconnect your subscription" card for a tool-schema 400.
 P_TRANSLATION_ERROR_PATTERNS = re.compile(
     r"(?:function_declarations"
     r"|invalid_argument"
@@ -64,12 +54,7 @@ P_TRANSLATION_ERROR_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# Patterns that look rate-limit-ish but are actually non-transient (user quota,
-# auth, context-window tier gate). Must NOT retry, upgrading, reauthing, or
-# trimming context is required. The long-context-required variant is what
-# Anthropic returns when an OAuth Pro/Max account ships a request whose input
-# exceeds the 200K standard tier and would need the "extra usage" tier; the
-# user can't recover by waiting, so we surface it instead of looping.
+# Patterns that look rate-limit-ish but are actually non-transient (user quota, auth, context-window tier gate). Must NOT retry, upgrading, reauthing, or trimming context is required. The long-context-required variant is what Anthropic returns when an OAuth Pro/Max account ships a request whose input exceeds the 200K standard tier and would need the "extra usage" tier; the user can't recover by waiting, so we surface it instead of looping.
 NON_TRANSIENT_PATTERNS = re.compile(
     r"(?:usage\s+cap\s+exceeded"
     r"|reached\s+your\s+OpenSwarm.*plan\s+limit"
@@ -143,8 +128,7 @@ def is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     combined = f"{exc!s}\n{extra_text}".strip()
     if not combined:
         return False
-    # A tool-schema translation 400 can carry provider/connection wording that
-    # trips the auth regex below; it isn't auth, so don't claim it is.
+    # A tool-schema translation 400 can carry provider/connection wording that trips the auth regex below; it isn't auth, so don't claim it is.
     if is_translation_error(exc, extra_text):
         return False
     return bool(re.search(
@@ -201,13 +185,7 @@ def parse_retry_after(exc: BaseException, extra_text: str = "") -> int | None:
 
 @typechecked
 def is_transient_capacity_error(exc: BaseException, extra_text: str = "") -> bool:
-    # The Claude CLI's underlying ProcessError stringifies to a generic
-    # "Command failed with exit code 1 / Check stderr output for details";
-    # the real cause (rate_limit_error / No pool capacity available / 429
-    # / overloaded) only surfaces in the subprocess's stderr stream, which
-    # we capture via the SDK's `stderr` callback and pass in as extra_text.
-    # Classify against both so we catch capacity errors regardless of which
-    # channel carried the message.
+    # The Claude CLI's underlying ProcessError stringifies to a generic "Command failed with exit code 1 / Check stderr output for details"; the real cause (rate_limit_error / No pool capacity available / 429 / overloaded) only surfaces in the subprocess's stderr stream, which we capture via the SDK's `stderr` callback and pass in as extra_text. Classify against both so we catch capacity errors regardless of which channel carried the message.
     combined = f"{exc!s}\n{extra_text}".strip()
     if not combined:
         return False
@@ -215,15 +193,13 @@ def is_transient_capacity_error(exc: BaseException, extra_text: str = "") -> boo
         return False
     if TRANSIENT_CAPACITY_PATTERNS.search(combined):
         return True
-    # Pool-exhaustion copy from the OpenSwarm proxy ("No pool capacity
-    # available. Try again shortly."), matches the capacity family too.
+    # Pool-exhaustion copy from the OpenSwarm proxy ("No pool capacity available. Try again shortly."), matches the capacity family too.
     if re.search(r"no\s+pool\s+capacity", combined, re.IGNORECASE):
         return True
     return False
 
 
-# Exponential-ish backoff schedule (seconds) for silently retrying a transient upstream
-# capacity error before giving up and surfacing the rate-limit pill.
+# Exponential-ish backoff schedule (seconds) for silently retrying a transient upstream capacity error before giving up and surfacing the rate-limit pill.
 CAPACITY_BACKOFFS = [5, 15, 45, 90, 180]
 
 

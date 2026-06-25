@@ -7,11 +7,7 @@ from backend.apps.agents.core.seq_log import TERMINAL_STATUSES, seq_log
 
 logger = logging.getLogger(__name__)
 
-# Per-action browser-command timeouts (seconds). A hung tab makes EVERY command
-# block to its timeout, so these bound how fast a freeze surfaces. Reads/clicks
-# operate on an already-loaded page and should be quick; navigation legitimately
-# loads the network so it gets a longer leash. Was a flat 30s, which let one
-# wedged page spin for ~20 minutes across retries.
+# Per-action browser-command timeouts (seconds). A hung tab makes EVERY command block to its timeout, so these bound how fast a freeze surfaces. Reads/clicks operate on an already-loaded page and should be quick; navigation legitimately loads the network so it gets a longer leash. Was a flat 30s, which let one wedged page spin for ~20 minutes across retries.
 BROWSER_CMD_TIMEOUT_DEFAULT = 15.0   # modest load headroom; still "short" so a wedged tab fails fast
 BROWSER_CMD_TIMEOUTS = {
     "navigate": 25.0,     # a real page load can be slow (more leash under load)
@@ -19,11 +15,7 @@ BROWSER_CMD_TIMEOUTS = {
     "wait": 12.0,         # smart-wait already caps itself well under this
 }
 BROWSER_CMD_REBROADCAST_S = 3.0
-# A CPU-starved renderer can briefly drop its WS (a missed heartbeat) and the
-# frontend auto-reconnects a beat later; bridge that gap instead of hard-failing
-# a live run into it. Short enough that a genuinely-closed window still fails
-# quickly (and no LLM turns are ever burned waiting); long enough to ride out a
-# reconnect even on a loaded machine.
+# A CPU-starved renderer can briefly drop its WS (a missed heartbeat) and the frontend auto-reconnects a beat later; bridge that gap instead of hard-failing a live run into it. Short enough that a genuinely-closed window still fails quickly (and no LLM turns are ever burned waiting); long enough to ride out a reconnect even on a loaded machine.
 P_WS_RECONNECT_WAIT_S = 8.0
 
 
@@ -128,21 +120,7 @@ class ConnectionManager:
             }
 
         if events:
-            # Drop already-resolved approval requests from the replay. The
-            # ring buffer holds every event we ever stamped, including the
-            # original `agent:approval_request`. Without this filter, a
-            # client that reconnects (e.g. after navigating away and back,
-            # which re-mounts AgentChat with last_seq=0) re-fires every
-            # past approval as if it were live, but the backing future was
-            # popped from pending_futures the moment the user answered, so
-            # the resurrected card is a dead no-op. Lifecycle is simple:
-            # send_approval_request() inserts into pending_futures BEFORE
-            # the event is stamped, and resolve_approval()/timeout/cancel
-            # all pop it; so "in pending_futures" is the authoritative
-            # is-still-live signal for the request_id. A process restart
-            # wipes pending_futures, which is correct because
-            # reconcile_on_startup also marks waiting_approval sessions as
-            # stopped so there's nothing to answer anyway.
+            # Drop already-resolved approval requests from the replay. The ring buffer holds every event we ever stamped, including the original `agent:approval_request`. Without this filter, a client that reconnects (e.g. after navigating away and back, which re-mounts AgentChat with last_seq=0) re-fires every past approval as if it were live, but the backing future was popped from pending_futures the moment the user answered, so the resurrected card is a dead no-op. Lifecycle is simple: send_approval_request() inserts into pending_futures BEFORE the event is stamped, and resolve_approval()/timeout/cancel all pop it; so "in pending_futures" is the authoritative is-still-live signal for the request_id. A process restart wipes pending_futures, which is correct because reconcile_on_startup also marks waiting_approval sessions as stopped so there's nothing to answer anyway.
             events = self.p_filter_stale_approvals(events)
             events = self.p_strip_replayed_closes(events)
             for s in events:
@@ -284,18 +262,10 @@ class ConnectionManager:
         }
 
         try:
-            # Bound each command so a wedged tab can't block for 30s (the cost
-            # that turned one hung LinkedIn page into a 20-minute spin). Navigation
-            # legitimately takes longer than reads/clicks on an already-loaded page,
-            # so it gets a longer leash; everything else fails fast. A one-off slow
-            # command just times out and the next success resets the agent's streak,
-            # so only a SUSTAINED hang trips the fast-fail abort.
+            # Bound each command so a wedged tab can't block for 30s (the cost that turned one hung LinkedIn page into a 20-minute spin). Navigation legitimately takes longer than reads/clicks on an already-loaded page, so it gets a longer leash; everything else fails fast. A one-off slow command just times out and the next success resets the agent's streak, so only a SUSTAINED hang trips the fast-fail abort.
             timeout = BROWSER_CMD_TIMEOUTS.get(action, BROWSER_CMD_TIMEOUT_DEFAULT)
             deadline = loop.time() + timeout
-            # Re-broadcast until a client answers: a silently-dead dashboard
-            # socket takes up to ~35s of heartbeat to notice, and a command
-            # sent into that gap is lost forever (broadcast skips seq_log).
-            # The renderer dedupes by request_id so re-sends can't double-act.
+            # Re-broadcast until a client answers: a silently-dead dashboard socket takes up to ~35s of heartbeat to notice, and a command sent into that gap is lost forever (broadcast skips seq_log). The renderer dedupes by request_id so re-sends can't double-act.
             while True:
                 await self.broadcast_global("browser:command", payload)
                 remaining = deadline - loop.time()

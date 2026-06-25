@@ -22,10 +22,7 @@ ALLOWED_GUILDS = set(
 )
 
 
-# -- MCP tool definitions (exposed to the agent) ---------------------------
-# Names match the original mcp-discord surface so prompts that referenced
-# `discord_send` etc. keep working. inputSchema deliberately matches what
-# the original package documented.
+# -- MCP tool definitions (exposed to the agent) --------------------------- Names match the original mcp-discord surface so prompts that referenced `discord_send` etc. keep working. inputSchema deliberately matches what the original package documented.
 
 TOOLS = [
     {
@@ -378,8 +375,7 @@ def handle_tool_call(name: str, args: dict) -> dict:
         if (e := p_check_guild(gid)): return p_err(e)
         status, body = p_call("GET", f"/guilds/{gid}/channels")
         if status != 200: return p_err(f"HTTP {status}: {body}")
-        # Filter to type 15 (forum). Discord channel types reference:
-        #   GUILD_FORUM = 15
+        # Filter to type 15 (forum). Discord channel types reference: GUILD_FORUM = 15
         forums = [ch for ch in (body or []) if isinstance(ch, dict) and ch.get("type") == 15]
         return p_ok(forums)
 

@@ -47,8 +47,7 @@ P_MIN_TURNS_TO_LEARN = 4   # a 1-3 turn run taught nothing worth a durable bulle
 # In-memory hot cache: host -> list[str] bullets.
 CACHE: dict[str, list[str]] = {}
 
-# Same sensitivity guard the skill layer uses: a strategy bullet must never carry
-# a secret (email/token/etc.). We scrub bullets through this before persisting.
+# Same sensitivity guard the skill layer uses: a strategy bullet must never carry a secret (email/token/etc.). We scrub bullets through this before persisting.
 P_SECRET_RE = re.compile(
     r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"      # email
     r"|\b(sk-|ghp_|gho_|pk_|xox[bap]-|AIza|eyJ)[A-Za-z0-9._-]+"  # token prefixes
@@ -290,8 +289,7 @@ async def distill_and_store(host, task, working_memory, summary,
             return False
         stored = p_store(host, new_bullets)
         changed = stored != existing
-        # Fold any site-agnostic lessons into the cross-site meta-playbook (no extra
-        # LLM call, they rode along in this same reply). Best-effort, never fatal.
+        # Fold any site-agnostic lessons into the cross-site meta-playbook (no extra LLM call, they rode along in this same reply). Best-effort, never fatal.
         try:
             from backend.apps.agents.browser import browser_meta_playbook
             browser_meta_playbook.absorb(p_parse_universal(text))

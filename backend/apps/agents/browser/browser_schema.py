@@ -6,10 +6,7 @@ prompt, and the turn/report invariants. Exceeds the 300-LOC soft ceiling on
 purpose because it is one cohesive data blob, not multiple responsibilities.
 """
 
-# Two prompt levers that A/B-proved out and now ship unconditionally. THINK_SHORTER
-# (no prose beside action tools; ReportProgress IS the thinking) cut per-turn output
-# ~28% and roughly halved narration turns. MERGE_VERIFY (a confirmed `expect` is the
-# proof, skip the re-check) drops a wasted round-trip at the end.
+# Two prompt levers that A/B-proved out and now ship unconditionally. THINK_SHORTER (no prose beside action tools; ReportProgress IS the thinking) cut per-turn output ~28% and roughly halved narration turns. MERGE_VERIFY (a confirmed `expect` is the proof, skip the re-check) drops a wasted round-trip at the end.
 P_THINK_SHORTER = (
     "Do NOT write a free-text sentence next to your action tools: your ReportProgress "
     "fields ARE your thinking, and a separate prose explanation just repeats them and slows "
@@ -32,9 +29,7 @@ MODEL_MAP = {
     "haiku": "claude-haiku-4-5-20251001",
 }
 
-# The change an action should cause, declared by the agent and CONFIRMED after the
-# action runs (success is observed, never assumed). A hit returns fast; a miss tells
-# the agent it may not have worked instead of letting it claim a false success.
+# The change an action should cause, declared by the agent and CONFIRMED after the action runs (success is observed, never assumed). A hit returns fast; a miss tells the agent it may not have worked instead of letting it claim a false success.
 P_EXPECT_DESC = {
     "type": "string",
     "description": (
@@ -648,11 +643,7 @@ BROWSER_TOOLS_SCHEMA = [
     },
 ]
 
-# Schema-forced batching: the model ignored every prompt-level batching
-# invitation (0 adoptions across 8 measured runs), so the single-step mutating
-# tools are not offered to it at all; acting means a BrowserBatch array, and
-# the one deliberate solo path is BrowserClickIndex (irreversible step with
-# expect, or a text-box fill). Executors and replay still support everything.
+# Schema-forced batching: the model ignored every prompt-level batching invitation (0 adoptions across 8 measured runs), so the single-step mutating tools are not offered to it at all; acting means a BrowserBatch array, and the one deliberate solo path is BrowserClickIndex (irreversible step with expect, or a text-box fill). Executors and replay still support everything.
 P_SOLO_MUTATORS_HIDDEN = {"BrowserNavigate", "BrowserClick", "BrowserType", "BrowserScroll", "BrowserPressKey"}
 MODEL_VISIBLE_TOOLS = [t for t in BROWSER_TOOLS_SCHEMA if t["name"] not in P_SOLO_MUTATORS_HIDDEN]
 
@@ -674,8 +665,7 @@ ACTION_MAP = {
     "BrowserDetectWebMCP": "detect_webmcp",
     "BrowserListRoutes": "list_routes",
     "BrowserReplayRoute": "replay_route",
-    # Internal replay primitive (skill replay calls it directly; not in the
-    # LLM-facing schema). Re-resolves a click target by role+name.
+    # Internal replay primitive (skill replay calls it directly; not in the LLM-facing schema). Re-resolves a click target by role+name.
     "BrowserClickByName": "click_by_name",
 }
 
@@ -905,9 +895,7 @@ SYSTEM_PROMPT = (
 
 MAX_TURNS = 40
 
-# Tools that count as "action tools"; calling any of these in a turn requires
-# the model to also call ReportProgress in the same turn (after the first
-# turn). Read-only tools and meta tools are exempt.
+# Tools that count as "action tools"; calling any of these in a turn requires the model to also call ReportProgress in the same turn (after the first turn). Read-only tools and meta tools are exempt.
 ACTION_TOOLS_REQUIRING_REPORT = {
     "BrowserClick",
     "BrowserType",

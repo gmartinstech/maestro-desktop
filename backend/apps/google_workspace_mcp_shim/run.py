@@ -48,10 +48,5 @@ from google_workspace_mcp.app import mcp  # noqa: E402
 
 
 if __name__ == "__main__":
-    # Upstream google_workspace_mcp.__main__.main() wraps a synchronous
-    # mcp.run() in asyncio.run() which throws "a coroutine was expected,
-    # got None" against current FastMCP. Skip it and invoke FastMCP's
-    # stdio loop directly. The `_gw_main` import above is what actually
-    # registers every tool/prompt/resource module against the shared
-    # `mcp` instance via its top-level imports.
+    # Upstream google_workspace_mcp.__main__.main() wraps a synchronous mcp.run() in asyncio.run() which throws "a coroutine was expected, got None" against current FastMCP. Skip it and invoke FastMCP's stdio loop directly. The `_gw_main` import above is what actually registers every tool/prompt/resource module against the shared `mcp` instance via its top-level imports.
     mcp.run("stdio")

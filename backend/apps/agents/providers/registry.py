@@ -33,19 +33,13 @@ logger = logging.getLogger(__name__)
 # Full set of model-id prefixes that force routing through 9Router.
 NINEROUTER_MODEL_PREFIXES = ("cc/", "cx/", "gc/", "ag/", "gemini/", "openrouter/")
 
-# Entry fields: value, label, context_window, model_id, router_model_id, api,
-# subscription_only, reasoning, route ("cc"|"api"|"openrouter"|None).
-# 9Router prefixes: cc/ Claude sub (dashes), cx/ Codex sub (dots), gc/ Gemini CLI.
+# Entry fields: value, label, context_window, model_id, router_model_id, api, subscription_only, reasoning, route ("cc"|"api"|"openrouter"|None). 9Router prefixes: cc/ Claude sub (dashes), cx/ Codex sub (dots), gc/ Gemini CLI.
 BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
     "Anthropic": [
-        # Opus 4.8 (released 2026-05-28): Anthropic's flagship, recommended for the
-        # most complex work. Adaptive thinking (not extended), effort param defaults
-        # to high. 1M ctx, 128k max output, $5/$25. Verified live on the cc sub route
-        # (this app runs on it) and the API.
+        # Opus 4.8 (released 2026-05-28): Anthropic's flagship, recommended for the most complex work. Adaptive thinking (not extended), effort param defaults to high. 1M ctx, 128k max output, $5/$25. Verified live on the cc sub route (this app runs on it) and the API.
         {"value": "opus-4-8", "label": "Claude Opus 4.8", "context_window": 1_000_000,
          "model_id": "claude-opus-4-8", "router_model_id": "cc/claude-opus-4-8", "api": "anthropic", "reasoning": True},
-        # Opus 4.7: SDK currently strips plaintext thinking deltas (encrypted only)
-        # so the live "Thought for Ns" pill loses mid-turn text. Final answer + tokens fine.
+        # Opus 4.7: SDK currently strips plaintext thinking deltas (encrypted only) so the live "Thought for Ns" pill loses mid-turn text. Final answer + tokens fine.
         {"value": "opus-4-7", "label": "Claude Opus 4.7", "context_window": 1_000_000,
          "model_id": "claude-opus-4-7", "router_model_id": "cc/claude-opus-4-7", "api": "anthropic", "reasoning": True},
         {"value": "sonnet", "label": "Claude Sonnet 4.6", "context_window": 1_000_000,
@@ -66,8 +60,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "haiku-cc", "label": "Claude Haiku 4.5", "context_window": 200_000,
          "model_id": "claude-haiku-4-5", "router_model_id": "cc/claude-haiku-4-5-20251001", "api": "anthropic", "reasoning": True, "route": "cc"},
 
-        # Fable 5 pulled: the model got banned, so both its cc/ sub and api-key
-        # rows are gone. Don't re-add without confirming access is restored.
+        # Fable 5 pulled: the model got banned, so both its cc/ sub and api-key rows are gone. Don't re-add without confirming access is restored.
         {"value": "opus-4-8-api", "label": "Claude Opus 4.8 (API key)", "context_window": 1_000_000,
          "model_id": "claude-opus-4-8", "router_model_id": "claude-opus-4-8", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "opus-4-7-api", "label": "Claude Opus 4.7 (API key)", "context_window": 1_000_000,
@@ -91,16 +84,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gpt-5.4-mini", "label": "GPT-5.4 Mini",
          "context_window": 400_000, "router_model_id": "cx/gpt-5.4-mini",
          "api": "codex", "subscription_only": True, "reasoning": True},
-        # gpt-5.3-codex (+ high/xhigh) removed: superseded by GPT-5.5 as OpenAI's
-        # recommended Codex model, and high/xhigh were never separate models (just
-        # reasoning-effort variants), so they were redundant clutter.
-        # API-key entries: route through 9Router's `cp-openai` provider-node
-        # (registered by sync_openai_api_key) so 9Router's translator
-        # dispatches to our local openai-passthrough proxy. The passthrough
-        # renames `max_tokens` → `max_completion_tokens` before forwarding
-        # to api.openai.com, fixing OpenAI's GPT-5 family 400. The bare
-        # router_model_id (e.g. "gpt-5.5") still appears in the request
-        # body; only the routing prefix changes.
+        # gpt-5.3-codex (+ high/xhigh) removed: superseded by GPT-5.5 as OpenAI's recommended Codex model, and high/xhigh were never separate models (just reasoning-effort variants), so they were redundant clutter. API-key entries: route through 9Router's `cp-openai` provider-node (registered by sync_openai_api_key) so 9Router's translator dispatches to our local openai-passthrough proxy. The passthrough renames `max_tokens` → `max_completion_tokens` before forwarding to api.openai.com, fixing OpenAI's GPT-5 family 400. The bare router_model_id (e.g. "gpt-5.5") still appears in the request body; only the routing prefix changes.
         {"value": "gpt-5.5-api", "label": "GPT-5.5 (API key)",
          "context_window": 1_000_000, "router_model_id": "cp-openai/gpt-5.5", "model_id": "gpt-5.5",
          "api": "openai", "reasoning": True, "route": "api"},
@@ -111,26 +95,13 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
          "context_window": 400_000, "router_model_id": "cp-openai/gpt-5.4-mini", "model_id": "gpt-5.4-mini",
          "api": "openai", "reasoning": True, "route": "api"},
     ],
-    # Google: Gemini 3.x thoughtSignature continuity is bypassed via 9Router's
-    # skip_thought_signature_validator (model can't build on prior reasoning,
-    # but tools and thinking work). 3-pro / 3-flash route via Antigravity when
-    # the AG OAuth lane is active; gc/ otherwise.
+    # Google: Gemini 3.x thoughtSignature continuity is bypassed via 9Router's skip_thought_signature_validator (model can't build on prior reasoning, but tools and thinking work). 3-pro / 3-flash route via Antigravity when the AG OAuth lane is active; gc/ otherwise.
     "Google": [
-        # Gemini 3.5 Flash (GA 2026-05-19) is offered on the API-key route ONLY (see
-        # the api entry below). Its gc/ subscription entry was pulled because the
-        # pinned 9Router 0.3.60 registry has no gemini-3.5-flash and the gc/ route
-        # allowlists (every other shipped Gemini sub model IS in 0.3.60), so gc/
-        # gemini-3.5-flash would 404. Re-add the gc/ entry once 9Router is bumped
-        # past 0.3.60 (gated by the WebSearch-translation regression; see CLAUDE.md).
-        # gemini-3.1-pro pulled (both sub + api-key rows): Antigravity can't serve
-        # it (its -high variant 400s) and the AI Studio key 429s pro-preview hard,
-        # so it had no working lane and only sold a dead option.
+        # Gemini 3.5 Flash (GA 2026-05-19) is offered on the API-key route ONLY (see the api entry below). Its gc/ subscription entry was pulled because the pinned 9Router 0.3.60 registry has no gemini-3.5-flash and the gc/ route allowlists (every other shipped Gemini sub model IS in 0.3.60), so gc/ gemini-3.5-flash would 404. Re-add the gc/ entry once 9Router is bumped past 0.3.60 (gated by the WebSearch-translation regression; see CLAUDE.md). gemini-3.1-pro pulled (both sub + api-key rows): Antigravity can't serve it (its -high variant 400s) and the AI Studio key 429s pro-preview hard, so it had no working lane and only sold a dead option.
         {"value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-flash-lite-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
-        # gemini-3-pro removed: gemini-3-pro-preview was shut down 2026-03-09 (dead on
-        # both the direct API and the Gemini CLI backend). gemini-3-flash kept: it's
-        # superseded on the direct API but still serves on the CLI subscription route.
+        # gemini-3-pro removed: gemini-3-pro-preview was shut down 2026-03-09 (dead on both the direct API and the Gemini CLI backend). gemini-3-flash kept: it's superseded on the direct API but still serves on the CLI subscription route.
         {"value": "gemini-3-flash", "label": "Gemini 3 Flash",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3-flash-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
@@ -148,9 +119,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Model resolution (used by the live claude_agent_sdk path)
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Model resolution (used by the live claude_agent_sdk path) ---------------------------------------------------------------------------
 
 CUSTOM_VALUE_PREFIX = "custom/"
 
@@ -206,8 +175,7 @@ def find_builtin_model(short_name: str) -> dict | None:
         rest = short_name[len(CUSTOM_VALUE_PREFIX):]
         slug, p_sep, bare_model = rest.partition("/")
         if slug and bare_model:
-            # Routing string `cp-<slug>/<model>` matches the prefix we use
-            # when sync_custom_providers registers the provider node.
+            # Routing string `cp-<slug>/<model>` matches the prefix we use when sync_custom_providers registers the provider node.
             routed = f"cp-{slug}/{bare_model}"
             return {
                 "value": short_name,
@@ -255,37 +223,21 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     if entry.get("route") == "cc":
         return entry.get("router_model_id", entry.get("model_id", short_name))
     if entry.get("route") == "api":
-        # OpenAI own-key still rides 9Router (the cp-openai node fixes max_tokens
-        # + translates Anthropic->OpenAI), so it MUST keep its cp-openai/ routing
-        # prefix or 9Router has no node to dispatch to. Anthropic own-key goes
-        # straight to api.anthropic.com and Gemini own-key via the local proxy,
-        # both on the bare id.
+        # OpenAI own-key still rides 9Router (the cp-openai node fixes max_tokens + translates Anthropic->OpenAI), so it MUST keep its cp-openai/ routing prefix or 9Router has no node to dispatch to. Anthropic own-key goes straight to api.anthropic.com and Gemini own-key via the local proxy, both on the bare id.
         if entry.get("api") == "openai":
             return entry.get("router_model_id", entry.get("model_id", short_name))
         return entry.get("model_id", short_name)
     if entry.get("route") == "openrouter":
         return entry.get("router_model_id", short_name)
     if entry.get("api") == "anthropic":
-        # openswarm-pro AND free-trial both proxy-route, so resolve to the bare
-        # id (the proxy serves it) instead of the cc/-prefixed id that 401s when
-        # no Claude subscription is connected. This is the line that otherwise
-        # turns a free-trial user's first run into "No AI provider connected".
+        # openswarm-pro AND free-trial both proxy-route, so resolve to the bare id (the proxy serves it) instead of the cc/-prefixed id that 401s when no Claude subscription is connected. This is the line that otherwise turns a free-trial user's first run into "No AI provider connected".
         if getattr(settings, "connection_mode", "own_key") in ("openswarm-pro", "free-trial"):
             return entry.get("model_id", short_name)
         if getattr(settings, "anthropic_api_key", None):
             return entry.get("model_id", short_name)
-    # Gemini lane order: Antigravity OAuth (for the models it serves), then AI
-    # Studio apikey, then Gemini CLI. AG bypasses the thoughtSignature validator
-    # that breaks multi-step Gemini turns AND supports real reasoning, so a
-    # connected AG sub is preferred over the AI Studio key, which otherwise
-    # silently shadowed it. The map is AG's allowlist; pro variants 404/400 on
-    # AG and are deliberately absent, so they fall through to the key.
+    # Gemini lane order: Antigravity OAuth (for the models it serves), then AI Studio apikey, then Gemini CLI. AG bypasses the thoughtSignature validator that breaks multi-step Gemini turns AND supports real reasoning, so a connected AG sub is preferred over the AI Studio key, which otherwise silently shadowed it. The map is AG's allowlist; pro variants 404/400 on AG and are deliberately absent, so they fall through to the key.
     P_ANTIGRAVITY_MAP = {
-        # gemini-3-pro-preview disabled: AG returns 404 even with active conn.
-        # gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant
-        #   400s every request with "invalid argument" (the `-high` thinking-
-        #   budget alias on AG requires a thinking_config the CLI doesn't emit).
-        #   Falls through to the AI Studio key / gc/ instead.
+        # gemini-3-pro-preview disabled: AG returns 404 even with active conn. gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant 400s every request with "invalid argument" (the `-high` thinking- budget alias on AG requires a thinking_config the CLI doesn't emit). Falls through to the AI Studio key / gc/ instead.
         "gemini-3-flash-preview": "gemini-3-flash",
         "gemini-3.1-flash-lite-preview": "gemini-3-flash",
     }
@@ -312,8 +264,7 @@ async def resolve_aux_model(
     paying for (Codex chat → Codex aux, OR chat → OR aux, etc.).
     Returns (model_id, base_url); base_url=None means default Anthropic.
     """
-    # Must track the canonical Anthropic entries in BUILTIN_MODELS (sonnet/haiku); a stale id here
-    # 404s every aux call (sonnet was pinned to the long-dead 4.0 "20250514" and silently broke).
+    # Must track the canonical Anthropic entries in BUILTIN_MODELS (sonnet/haiku); a stale id here 404s every aux call (sonnet was pinned to the long-dead 4.0 "20250514" and silently broke).
     haiku_bare = "claude-haiku-4-5-20251001"
     sonnet_bare = "claude-sonnet-4-6"
     or_haiku = "openrouter/anthropic/claude-haiku-4.5"
@@ -385,9 +336,7 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
             if m["value"] == model:
                 return m.get("context_window", 128_000)
 
-    # Check custom providers; picker values are `custom/<slug>/<bare_model>`;
-    # cp.models[].value stores the bare model id the user typed. Match the
-    # bare-model tail against any custom provider's models list.
+    # Check custom providers; picker values are `custom/<slug>/<bare_model>`; cp.models[].value stores the bare model id the user typed. Match the bare-model tail against any custom provider's models list.
     if settings:
         bare_model = model
         if isinstance(model, str) and model.startswith(CUSTOM_VALUE_PREFIX):
@@ -403,18 +352,10 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
     return 128_000  # safe default
 
 
-# ---------------------------------------------------------------------------
-# Cost tracking
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Cost tracking ---------------------------------------------------------------------------
 
 COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
-    # (provider, model): (input_cost_per_1M, output_cost_per_1M)
-    # NOTE: real cost numbers come from 9Router's usage stats. These entries
-    # are kept so the table matches BUILTIN_MODELS and can
-    # be used by any future native-loop path. Subscription-routed models
-    # are zero-cost to the user, but API rates are recorded here for
-    # reference where they exist.
-    # Anthropic (direct API rates).
+    # (provider, model): (input_cost_per_1M, output_cost_per_1M) NOTE: real cost numbers come from 9Router's usage stats. These entries are kept so the table matches BUILTIN_MODELS and can be used by any future native-loop path. Subscription-routed models are zero-cost to the user, but API rates are recorded here for reference where they exist. Anthropic (direct API rates).
     ("Anthropic", "sonnet"): (3.0, 15.0),
     ("Anthropic", "opus"): (5.0, 25.0),
     ("Anthropic", "opus-4-7"): (5.0, 25.0),

@@ -52,8 +52,7 @@ class ModeExportable:
             from backend.apps.swarm.ziputil import BundleError
             raise BundleError("can't import this mode on this build")
         mid = payload.get("id") or (payload.get("name") or "mode").lower().replace(" ", "-")
-        # Reuse a same-slug mode (incl. built-ins) instead of overwriting it;
-        # sessions point at modes by this slug.
+        # Reuse a same-slug mode (incl. built-ins) instead of overwriting it; sessions point at modes by this slug.
         if store.load_mode(mid) is not None:
             return mid
         data = {k: v for k, v in payload.items() if k != "is_builtin"}

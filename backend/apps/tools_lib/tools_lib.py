@@ -16,8 +16,7 @@ from backend.config.Apps import SubApp
 from backend.apps.tools_lib.models import ToolDefinition, ToolCreate, ToolUpdate, BUILTIN_TOOLS
 from backend.config.paths import DATA_ROOT, TOOLS_DIR as DATA_DIR, BUILTIN_PERMISSIONS_PATH as BUILTIN_PERMS_PATH, TRUSTED_SENSITIVE_PATHS_PATH
 
-# oauth_config runs the dotenv load (leaf) so OPENSWARM_OAUTH_BASE_URL is set
-# before anything reads it; re-exported here for the route handlers below.
+# oauth_config runs the dotenv load (leaf) so OPENSWARM_OAUTH_BASE_URL is set before anything reads it; re-exported here for the route handlers below.
 from backend.apps.tools_lib.oauth_config import OPENSWARM_OAUTH_BASE_URL
 # sanitize_server_name + derive_mcp_config re-exported for agent_manager/main.
 from backend.apps.tools_lib.mcp_config import sanitize_server_name, derive_mcp_config
@@ -52,12 +51,7 @@ async def tools_lib_lifespan():
 tools_lib = SubApp("tools", tools_lib_lifespan)
 
 
-# Every built-in seeds to always_allow for a frictionless run. The agent's
-# runtime guards in agent_manager (catastrophic-command match, OS-scheduling,
-# sensitive-path gate) STILL force a prompt for the dangerous shapes even on
-# always_allow, so the poisoned-MCP-output -> destructive-command case is
-# still caught. Must match agent_manager._DEFAULTS (empty -> always_allow) so
-# the Settings UI and the agent agree on what "no policy set" means.
+# Every built-in seeds to always_allow for a frictionless run. The agent's runtime guards in agent_manager (catastrophic-command match, OS-scheduling, sensitive-path gate) STILL force a prompt for the dangerous shapes even on always_allow, so the poisoned-MCP-output -> destructive-command case is still caught. Must match agent_manager._DEFAULTS (empty -> always_allow) so the Settings UI and the agent agree on what "no policy set" means.
 P_DEFAULT_BUILTIN_POLICIES: dict[str, str] = {}
 
 # One-time marker: older installs seeded Bash="ask"; we lift them once.
@@ -78,9 +72,7 @@ def p_ensure_default_permissions() -> None:
         for t in BUILTIN_TOOLS
     }
     merged = {**desired, **existing}
-    # One-time lift: installs seeded under the old default carry Bash="ask";
-    # raise them to always_allow once so shell commands stop prompting. The
-    # marker means a deliberate "ask" set afterward sticks (never re-flipped).
+    # One-time lift: installs seeded under the old default carry Bash="ask"; raise them to always_allow once so shell commands stop prompting. The marker means a deliberate "ask" set afterward sticks (never re-flipped).
     if not os.path.exists(P_BASH_AUTOALLOW_MARKER):
         if merged.get("Bash") == "ask":
             merged["Bash"] = "always_allow"
@@ -125,16 +117,11 @@ def p_reclassify_existing_tools() -> None:
         except Exception:
             pass
 
-# All providers go through the Fly cloud-proxy claim handoff. The
-# v1.0.28 local Google callback was retired in v1.0.29 once the prod
-# Google OAuth client added the cloud's redirect URI.
+# All providers go through the Fly cloud-proxy claim handoff. The v1.0.28 local Google callback was retired in v1.0.29 once the prod Google OAuth client added the cloud's redirect URI.
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
-# Tool JSONs total ~1.5MB and load_all_tools runs on every dispatch, prompt build, and
-# MCPSearch keystroke; the cache skips re-parsing, revalidated by a per-file stat
-# signature so any write (ours or external) invalidates instantly. Callers treat
-# the returned ToolDefinitions as immutable; mutate via load(tool_id) + save.
+# Tool JSONs total ~1.5MB and load_all_tools runs on every dispatch, prompt build, and MCPSearch keystroke; the cache skips re-parsing, revalidated by a per-file stat signature so any write (ours or external) invalidates instantly. Callers treat the returned ToolDefinitions as immutable; mutate via load(tool_id) + save.
 p_tools_cache: list[ToolDefinition] | None = None
 p_tools_cache_sig: tuple | None = None
 
@@ -182,9 +169,7 @@ def load(tool_id: str) -> ToolDefinition:
         raise HTTPException(status_code=404, detail="Tool not found")
     with open(path) as f:
         tool = ToolDefinition(**json.load(f))
-    # Migrate Discord tool configs from the old npx-based spawn (which
-    # broke whenever the npx cache was partially populated) to the local
-    # Python shim. Idempotent; if it's already on the shim, no-op.
+    # Migrate Discord tool configs from the old npx-based spawn (which broke whenever the npx cache was partially populated) to the local Python shim. Idempotent; if it's already on the shim, no-op.
     if (
         tool.name.lower() == "discord"
         and tool.mcp_config
@@ -434,8 +419,7 @@ async def discover_tools(tool_id: str):
 
     tool_names = [t["name"] for t in raw_tools]
     services, service_groups, all_read, all_write = classify_services(tool_names, tool.name)
-    # Read-only actions auto-allow by default (no prompt for safe, scoped reads);
-    # writes still default to "ask". Any choice the user already made is kept.
+    # Read-only actions auto-allow by default (no prompt for safe, scoped reads); writes still default to "ask". Any choice the user already made is kept.
     permissions: dict[str, Any] = {
         n: tool.tool_permissions.get(n, "always_allow" if n in all_read else "ask")
         for n in tool_names
@@ -452,9 +436,7 @@ async def discover_tools(tool_id: str):
     return {"ok": True, "tool": tool.model_dump()}
 
 
-# ---------------------------------------------------------------------------
-# Microsoft 365 device-code login (runs in the backend, not the MCP server)
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Microsoft 365 device-code login (runs in the backend, not the MCP server) ---------------------------------------------------------------------------
 
 p_m365_login_processes: dict[str, dict] = {}  # tool_id -> {proc, device_code, status, email}
 
@@ -473,9 +455,7 @@ async def m365_device_login(tool_id: str):
     if not os.path.isfile(script):
         raise HTTPException(status_code=500, detail="M365 MCP server not installed")
 
-    # Same priority as MCP-bundle / 9Router paths: bundled real node first
-    # (clean, no Dock flicker, fast cold-start), then system node, then
-    # Electron-as-Node as last resort.
+    # Same priority as MCP-bundle / 9Router paths: bundled real node first (clean, no Dock flicker, fast cold-start), then system node, then Electron-as-Node as last resort.
     bundled = os.environ.get("OPENSWARM_NODE_PATH")
     node = shutil.which("node")
     electron = os.environ.get("OPENSWARM_ELECTRON_PATH")
@@ -705,9 +685,7 @@ async def oauth_cloud_claim(
     data = resp.json()
     tokens = data.get("tokens", {}) or {}
     tool = load(tool_id)
-    # Google's token endpoint doesn't include the user's email; fetch it
-    # from userinfo so the UI can show "you connected you@gmail.com"
-    # rather than the generic "Google account" placeholder.
+    # Google's token endpoint doesn't include the user's email; fetch it from userinfo so the UI can show "you connected you@gmail.com" rather than the generic "Google account" placeholder.
     if tool.name.lower().startswith("google") and tokens.get("access_token") and not tokens.get("email"):
         try:
             async with httpx.AsyncClient(timeout=10.0) as info_client:

@@ -35,12 +35,9 @@ from backend.apps.workflows import storage, executor
 
 logger = logging.getLogger(__name__)
 
-# How many recent missed fires we keep reviewable per workflow. Older ones
-# collapse into a single summarizing "skipped" run so a 15-minute schedule
-# that was off for days doesn't flood the card or the run history.
+# How many recent missed fires we keep reviewable per workflow. Older ones collapse into a single summarizing "skipped" run so a 15-minute schedule that was off for days doesn't flood the card or the run history.
 PER_WORKFLOW_MISSED_CAP = 20
-# Bound on the per-workflow enumeration walk at startup. 480 covers ~5 days of
-# a 15-minute schedule; past that the exact count stops mattering.
+# Bound on the per-workflow enumeration walk at startup. 480 covers ~5 days of a 15-minute schedule; past that the exact count stops mattering.
 MISSED_ENUM_CAP = 480
 
 
@@ -131,9 +128,7 @@ def _next_fire_after(
     tz = _resolve_tz(sched.timezone)
     ref_local = ref_utc.astimezone(tz)
     base = ref_local.replace(second=0, microsecond=0)
-    # Anchor recurring phases to a fixed origin (the workflow's creation), so a
-    # recompute (tick, kick, startup reconcile) lands on the same grid instead
-    # of re-phasing to "now" and sliding the cadence. Falls back to ref.
+    # Anchor recurring phases to a fixed origin (the workflow's creation), so a recompute (tick, kick, startup reconcile) lands on the same grid instead of re-phasing to "now" and sliding the cadence. Falls back to ref.
     anchor_local = (anchor_utc or ref_utc).astimezone(tz)
 
     if sched.repeat_unit == "minute":
@@ -328,9 +323,7 @@ async def _fire(wf: Workflow, scheduled_for: Optional[datetime]) -> None:
 
 
 def _seconds_until_next() -> float:
-    # While globally paused, _tick no-ops and never rolls next_run_at forward,
-    # so an overdue slot would otherwise spin this loop at the 1s floor. Resume
-    # calls kick(), so idling the full interval here costs nothing.
+    # While globally paused, _tick no-ops and never rolls next_run_at forward, so an overdue slot would otherwise spin this loop at the 1s floor. Resume calls kick(), so idling the full interval here costs nothing.
     if storage.get_paused():
         return 60.0
     now_utc = datetime.now(timezone.utc)
@@ -380,9 +373,7 @@ def _mark_stuck_runs_failed() -> None:
                     error="Interrupted: OpenSwarm or your computer shut down before this run finished.",
                     finished_at=now,
                 )
-                # The run row is fixed, but the workflow still summarizes this
-                # dead run as 'running' (that's what the detail header reads), so
-                # heal the summary too when this was the latest run.
+                # The run row is fixed, but the workflow still summarizes this dead run as 'running' (that's what the detail header reads), so heal the summary too when this was the latest run.
                 if wf.last_run_id == r.id and wf.last_run_status == "running":
                     executor._persist_run_fields(wf, {
                         "last_run_status": "failure",

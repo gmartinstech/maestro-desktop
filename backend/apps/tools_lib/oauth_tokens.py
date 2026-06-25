@@ -18,18 +18,14 @@ def save(tool: ToolDefinition) -> None:
         json.dump(tool.model_dump(), f, indent=2)
 
 
-# Tool name → provider key for the OAuth helper service. All providers go
-# through the Fly cloud-proxy so client_secret values never ship inside the
-# desktop binary. v1.0.28 was the last release that used a local Google
-# callback with the client_secret in backend/.env.
+# Tool name → provider key for the OAuth helper service. All providers go through the Fly cloud-proxy so client_secret values never ship inside the desktop binary. v1.0.28 was the last release that used a local Google callback with the client_secret in backend/.env.
 P_TOOL_NAME_TO_PROVIDER = {
     "airtable": "airtable",
     "hubspot": "hubspot",
     "discord": "discord",
     "notion": "notion",
     "github": "github",
-    # Built-in Google tool's name is "Google Workspace"; accept the bare
-    # "google" alias too for forward compatibility.
+    # Built-in Google tool's name is "Google Workspace"; accept the bare "google" alias too for forward compatibility.
     "google workspace": "google",
     "google": "google",
 }
@@ -63,8 +59,7 @@ def persist_cloud_tokens(tool: ToolDefinition, tokens: dict) -> None:
         tool.oauth_tokens = {"access_token": tokens.get("access_token", "")}
         tool.connected_account_email = tokens.get("workspace_name", "Notion workspace")
     elif name == "github":
-        # GitHub OAuth-App tokens don't expire and carry no refresh_token, so
-        # store the bare token; the cloud callback enriches `login` for the label.
+        # GitHub OAuth-App tokens don't expire and carry no refresh_token, so store the bare token; the cloud callback enriches `login` for the label.
         tool.oauth_tokens = {"access_token": tokens.get("access_token", "")}
         login = tokens.get("login")
         tool.connected_account_email = f"@{login}" if login else ""
@@ -105,8 +100,7 @@ async def p_refresh_via_proxy(provider: str, tool: ToolDefinition, default_expir
                 json={"refresh_token": refresh_token},
             )
         if resp.status_code == 401:
-            # Provider rejected; user revoked at the provider's side. Mark
-            # as needing re-auth so the UI prompts a Reconnect.
+            # Provider rejected; user revoked at the provider's side. Mark as needing re-auth so the UI prompts a Reconnect.
             tool.auth_status = "expired"
             save(tool)
             logger.warning(f"{provider} refresh rejected (user revoked); marking tool as expired")
@@ -122,8 +116,7 @@ async def p_refresh_via_proxy(provider: str, tool: ToolDefinition, default_expir
         tool.oauth_tokens["access_token"] = new_token
         tool.oauth_tokens["token_expiry"] = time.time() + (data.get("expires_in") or default_expiry)
         if data.get("refresh_token"):
-            # Some providers (HubSpot, Airtable) rotate refresh_tokens on every
-            # refresh. Persist the new one or future refreshes will fail.
+            # Some providers (HubSpot, Airtable) rotate refresh_tokens on every refresh. Persist the new one or future refreshes will fail.
             tool.oauth_tokens["refresh_token"] = data["refresh_token"]
         # Backfill identity label on first successful refresh after upgrade.
         if not tool.connected_account_email and data.get("email"):
@@ -171,9 +164,7 @@ def m365_server_script() -> str:
     )
     if os.path.isfile(bundle):
         return bundle
-    # Fallback for any user still on a v1.0.25 install whose backend/ folder
-    # was left over from before the bundle migration. Will return the legacy
-    # path; if that doesn't exist either, the caller raises a clear error.
+    # Fallback for any user still on a v1.0.25 install whose backend/ folder was left over from before the bundle migration. Will return the legacy path; if that doesn't exist either, the caller raises a clear error.
     return os.path.join(
         p_backend, "npm-servers", "softeria-ms-365-mcp-server",
         "node_modules", "@softeria", "ms-365-mcp-server", "dist", "index.js",
