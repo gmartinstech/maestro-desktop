@@ -10,7 +10,9 @@
     "endpoints": false,
     "classes": false,
     "no-underscore-names": true,
-    "p-private": true
+    "p-private": true,
+    "ruff": true,
+    "pyright": true
   },
   "_notes": {
     "no-nested-imports": "Off on purpose: this codebase uses function-level/lazy imports to break import cycles (400+ sites). Flagging them all is wrong for us.",
@@ -19,6 +21,7 @@
     "max-file-lines-exceptions": "Grandfather list of pre-existing >300-line files (existing debt, not new). Paths updated after the folder-tree restructure moved several of them. The two manager/prompt/* entries are from the agent_manager decomposition: prompt_context.py aggregates the system-prompt context builders and attachments.py is one cohesive 230-line attachment resolver; both are single-responsibility and a few lines over, not splittable without an artificial seam.",
     "max-folder-items-exceptions": "Exact-path allow for folders intentionally over the cap. The rule trips at >7 (7 items is fine, the 8th tips it), so only genuinely 8+ folders are listed. backend/ and backend/apps are FastAPI feature-package registries (each child is an app mounted in main.py); agents/ aggregates agent subsystems; agents/manager/ is the agent_manager god-object decomposition (cohesive AgentManager mixins + standalone run helpers + the streaming/permissions/prompt/session subtrees), conventionally flat like agents/ and core/ since its standalone helpers are heterogeneous and don't group cleanly; agents/manager/streaming and agents/manager/session are flat peer collections of one-module-per-concern handlers; core/, tools_lib/, tests/ are conventionally flat. Frontend: app/pages is the page registry, AgentChat/ChatInput/Settings-sections/Onboarding are organizational parents, and shared/state (Redux slices) plus hooks/steps/mcp-cards/Views are flat peer collections. scripts/, electron/, linter/checks/ are flat tool dirs. These replaced blanket .lintignore-max-folder-items sentinels (backend, frontend, scripts, electron, linter/checks) so the rule still catches NEW unplanned bloat everywhere else. Kept as whole-subtree sentinels on purpose: debugger/ (self-contained injected sub-tool with its own Vite GUI), webapp_template (Vite scaffold payload), and vendored mcp-bundles.",
     "import-cycles": "Flags RUNTIME circular imports only (SCC>1). Skips type-only imports (import type / export type) and dynamic import() since neither runs at module init, which is why the idiomatic Redux store<->hooks type cycle is not flagged. Frontend alias resolution comes from import-cycle-aliases. Zero cycles today; the check keeps it that way.",
+    "ruff + pyright": "Ported from Haik's linter (haik/feat/ingest). ruff is narrowed to F401/F811/F841 (unused imports/redefs/locals) and intentionally DROPS Haik's ARG001/ARG002 (unused args): our SDK-callback signatures require unused params (can_use_tool/pre_tool_hook take a `context` they don't use) and we ban the `_unused` prefix, so ARG is noise here. pyright runs Haik's existence-only config (typeCheckingMode off) but DISABLES reportAttributeAccessIssue: our AgentManager is decomposed into mixins that read attributes defined on the composed class (self.sessions etc.), which that rule can't see without a typed mixin base — 82 false positives. Kept reportUndefinedVariable + reportMissingImports, which caught a real dangling `_conns` ref in configure_provider_env. Re-enabling attribute-access cleanly needs a typed mixin contract (future). Both grandfather pre-existing debt by file; the refactor surface is clean. Requires `ruff` + `pyright` on PATH (added to requirements-dev.txt); pyright's config expects the venv at backend/.venv.",
     "no-underscore-names + p-private": "Convention checks ported verbatim from Haik's linter (haik/feat/ingest): no-underscore-names bans leading-underscore names (a dead-code-tooling blind spot; use p_ for private), p-private enforces that p_-prefixed names are accessed only inside their owning file/class (cross-file/class use means the name should be public). Backend Python only. The exception lists grandfather pre-existing debt that landed with the workflows/analytics forward-ports (eric's 'don't mass-migrate untouched files' rule); the agent_manager refactor surface is clean. NOTE: Haik's full linter (his branch also adds pyright + ruff and runs a different enabled set) should eventually supersede this; these two were lifted to enforce the p_ conventions on eric/dev now."
   },
   "rules": {
@@ -28,7 +31,8 @@
     "vulture-min-confidence": 1,
     "vulture-error-threshold": 1,
     "no-nested-imports": true,
-    "endpoint-ignore-routes": ["*/callback", "*/callback/*"]
+    "endpoint-ignore-routes": ["*/callback", "*/callback/*"],
+    "ruff-select": "F401,F811,F841"
   },
   "include_extensions": [".py", ".ts", ".tsx", ".js", ".jsx"],
   "exclude": [
@@ -196,6 +200,59 @@
       "backend/tests/test_ssrf_guard.py",
       "backend/tests/test_workflows_semantics.py",
       "backend/tests/test_workflows_storage.py"
+    ],
+    "ruff": [
+      "backend/apps/agents/agents.py",
+      "backend/apps/agents/browser/browser_agent.py",
+      "backend/apps/agents/providers/registry.py",
+      "backend/apps/agents/proxy/anthropic_proxy.py",
+      "backend/apps/agents/proxy/anthropic_to_openai.py",
+      "backend/apps/agents/tools/web.py",
+      "backend/apps/dashboards/dashboards.py",
+      "backend/apps/health/health.py",
+      "backend/apps/modes/modes.py",
+      "backend/apps/nine_router/process.py",
+      "backend/apps/outputs/outputs.py",
+      "backend/apps/service/buffer.py",
+      "backend/apps/service/service.py",
+      "backend/apps/settings/settings.py",
+      "backend/apps/subscription/router.py",
+      "backend/apps/swarm/redact.py",
+      "backend/apps/tools_lib/tools_lib.py",
+      "backend/apps/web/web.py",
+      "backend/apps/workflows/models.py",
+      "backend/apps/workflows/workflows.py",
+      "backend/auth.py",
+      "backend/main.py",
+      "backend/tests/conftest.py",
+      "backend/tests/test_browser_agent_loop.py",
+      "backend/tests/test_browser_meta_playbook.py",
+      "backend/tests/test_browser_orchestrator_routing.py",
+      "backend/tests/test_bundled_extracted_modules.py",
+      "backend/tests/test_disconnect_resilience.py",
+      "backend/tests/test_disk_caches.py",
+      "backend/tests/test_effective_tools.py",
+      "backend/tests/test_outputs_runtime_cleanup.py",
+      "backend/tests/test_phase1_stress.py",
+      "backend/tests/test_schedule_e2e.py",
+      "backend/tests/test_schedule_recurrence.py",
+      "backend/tests/test_service_legacy.py",
+      "backend/tests/test_settings_meta_guard.py",
+      "backend/tests/test_skills_folders.py",
+      "backend/tests/test_swarm_bundle.py",
+      "backend/tests/test_system_prompt.py",
+      "backend/tests/test_v2_invariants.py",
+      "backend/tests/test_v2_label_logic.py",
+      "backend/tests/test_web_mcp_decision.py",
+      "backend/tests/test_workflows_semantics.py",
+      "backend/tests/test_ws_integration.py"
+    ],
+    "pyright": [
+      "backend/apps/google_workspace_mcp_shim/run.py",
+      "backend/apps/health/health.py",
+      "backend/apps/settings/settings.py",
+      "backend/apps/web/web.py",
+      "backend/config/Apps.py"
     ]
   }
 }

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from checks import is_excluded, is_excepted, is_lintignored, collect_lintignores
+from checks import CheckError, is_excluded, is_excepted, is_lintignored, collect_lintignores
 from checks.structural import check_file_lines, check_folder_items, check_nested_imports
 from checks.vulture import run_vulture
 from checks.eslint import run_eslint
@@ -20,6 +20,8 @@ from checks.classes import run_class_check
 from checks.cycles import run_cycle_check
 from checks.no_underscore_names import run_underscore_check
 from checks.p_private import run_p_private_check
+from checks.ruff import run_ruff
+from checks.pyright import run_pyright
 from watchfiles import watch, DefaultFilter
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -31,7 +33,7 @@ def load_config() -> dict[str, Any]:
         return json.load(f)
 
 
-def run_checks(root: Path) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str], list[str], list[str], list[str]]:
+def run_checks(root: Path) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str], list[str], list[str], list[str], list[str], list[str]]:
     config = load_config()
     enabled: dict[str, bool] = config.get("enabled", {})
     rules: dict[str, int] = config["rules"]
@@ -112,7 +114,23 @@ def run_checks(root: Path) -> tuple[list[str], list[str], list[str], list[str], 
     underscore_errors = run_underscore_check(root, exceptions, excludes, ignores) if enabled.get("no-underscore-names", False) else []
     p_private_errors = run_p_private_check(root, exceptions, excludes, ignores) if enabled.get("p-private", False) else []
 
-    return sorted(structural_errors), sorted(vulture_errors), sorted(eslint_errors), sorted(knip_errors), sorted(endpoint_errors), sorted(class_errors), sorted(cycle_errors), sorted(underscore_errors), sorted(p_private_errors)
+    # ruff (scoped dead-code codes) + pyright (existence errors), also from Haik's
+    # linter. Both shell out to a tool, so a missing tool / timeout raises CheckError
+    # and is surfaced as a loud error rather than a silently-clean empty result.
+    ruff_errors: list[str] = []
+    if enabled.get("ruff", False):
+        try:
+            ruff_errors = run_ruff(root, rules.get("ruff-select", "F401,F811,F841,ARG001,ARG002"), exceptions, ignores)
+        except CheckError as e:
+            ruff_errors = [f"ruff: check could not run: {e.reason}"]
+    pyright_errors: list[str] = []
+    if enabled.get("pyright", False):
+        try:
+            pyright_errors = run_pyright(root, exceptions, ignores)
+        except CheckError as e:
+            pyright_errors = [f"pyright: check could not run: {e.reason}"]
+
+    return sorted(structural_errors), sorted(vulture_errors), sorted(eslint_errors), sorted(knip_errors), sorted(endpoint_errors), sorted(class_errors), sorted(cycle_errors), sorted(underscore_errors), sorted(p_private_errors), sorted(ruff_errors), sorted(pyright_errors)
 
 
 def _print_section(name: str, errors: list[str]) -> None:
@@ -127,7 +145,8 @@ def print_results(
     eslint_errors: list[str], knip_errors: list[str],
     endpoint_errors: list[str], class_errors: list[str],
     cycle_errors: list[str], underscore_errors: list[str],
-    p_private_errors: list[str],
+    p_private_errors: list[str], ruff_errors: list[str],
+    pyright_errors: list[str],
 ) -> None:
     _print_section("structural", structural_errors)
     _print_section("vulture", vulture_errors)
@@ -138,6 +157,8 @@ def print_results(
     _print_section("import-cycles", cycle_errors)
     _print_section("no-underscore-names", underscore_errors)
     _print_section("p-private", p_private_errors)
+    _print_section("ruff", ruff_errors)
+    _print_section("pyright", pyright_errors)
 
 
 def watch_loop(root: Path) -> None:
