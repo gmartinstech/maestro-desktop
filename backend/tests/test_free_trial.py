@@ -12,7 +12,7 @@ from backend.apps.agents.core.error_classify import (
 )
 from backend.apps.agents.providers.registry import resolve_model_id_for_sdk
 from backend.apps.subscription import free_trial as ft
-from backend.apps.subscription.free_trial import _has_own_model, arm_free_trial, clear_free_trial
+from backend.apps.subscription.free_trial import has_own_model, arm_free_trial, clear_free_trial
 
 
 def test_proxy_auth_for_each_mode():
@@ -62,11 +62,11 @@ def test_generic_cli_failure_uses_sdk_system_events_for_rate_limits():
     )
 
 
-def test_has_own_model_never_shadows_a_real_provider():
-    assert not _has_own_model(AppSettings(connection_mode="free-trial", free_trial_token="x"))
-    assert not _has_own_model(AppSettings())
-    assert _has_own_model(AppSettings(anthropic_api_key="sk-ant-x"))
-    assert _has_own_model(
+def testhas_own_model_never_shadows_a_real_provider():
+    assert not has_own_model(AppSettings(connection_mode="free-trial", free_trial_token="x"))
+    assert not has_own_model(AppSettings())
+    assert has_own_model(AppSettings(anthropic_api_key="sk-ant-x"))
+    assert has_own_model(
         AppSettings(connection_mode="openswarm-pro", openswarm_bearer_token="b")
     )
 
@@ -78,7 +78,7 @@ async def test_arm_waits_for_9router_before_shadowing_a_background_started_sub(m
     visible) BEFORE deciding, instead of arming the free trial over it."""
     saved: list = []
     monkeypatch.setattr(ft, "save_settings_async", _record(saved))
-    monkeypatch.setattr(ft, "_sync_routing", _noop)
+    monkeypatch.setattr(ft, "p_sync_routing", _noop)
 
     started = {"called": False}
 
@@ -91,7 +91,7 @@ async def test_arm_waits_for_9router_before_shadowing_a_background_started_sub(m
 
     import backend.apps.nine_router as nr
     monkeypatch.setattr(nr, "ensure_running", fake_ensure_running)
-    monkeypatch.setattr(ft, "_has_connected_subscription", sub_visible_after_start)
+    monkeypatch.setattr(ft, "p_has_connected_subscription", sub_visible_after_start)
 
     s = AppSettings()  # no key, own_key mode: a subscription-only user
     out = await arm_free_trial(s)
@@ -107,7 +107,7 @@ async def test_arm_tolerates_provider_load_lag(monkeypatch):
     """9Router's /api/providers can lag is_running on a cold start. arm must re-check
     a few times so a sub that loads a beat late is still caught, not shadowed."""
     monkeypatch.setattr(ft, "save_settings_async", _noop)
-    monkeypatch.setattr(ft, "_sync_routing", _noop)
+    monkeypatch.setattr(ft, "p_sync_routing", _noop)
 
     async def fake_ensure_running():
         return None
@@ -119,7 +119,7 @@ async def test_arm_tolerates_provider_load_lag(monkeypatch):
 
     import backend.apps.nine_router as nr
     monkeypatch.setattr(nr, "ensure_running", fake_ensure_running)
-    monkeypatch.setattr(ft, "_has_connected_subscription", lagging_sub)
+    monkeypatch.setattr(ft, "p_has_connected_subscription", lagging_sub)
 
     s = AppSettings()
     res = await ft.arm_free_trial(s)
@@ -140,10 +140,10 @@ async def test_arm_with_no_sub_is_bounded_and_falls_through_to_arm(monkeypatch):
     import time
     import backend.apps.nine_router as nr
     monkeypatch.setattr(nr, "ensure_running", fake_ensure_running)
-    monkeypatch.setattr(ft, "_has_connected_subscription", never_sub)
+    monkeypatch.setattr(ft, "p_has_connected_subscription", never_sub)
     # Short-circuit before the cloud mint so the test stays offline + deterministic;
     # reaching this branch proves arm did NOT falsely conclude has_model.
-    monkeypatch.setattr(ft, "_fingerprint", lambda _s: None)
+    monkeypatch.setattr(ft, "p_fingerprint", lambda _s: None)
 
     s = AppSettings()
     t = time.monotonic()
@@ -156,7 +156,7 @@ async def test_arm_with_no_sub_is_bounded_and_falls_through_to_arm(monkeypatch):
 @pytest.mark.asyncio
 async def test_clear_reverts_forced_haiku_so_it_doesnt_outlive_the_trial(monkeypatch):
     monkeypatch.setattr(ft, "save_settings_async", _noop)
-    monkeypatch.setattr(ft, "_sync_routing", _noop)
+    monkeypatch.setattr(ft, "p_sync_routing", _noop)
 
     s = AppSettings(connection_mode="free-trial", free_trial_token="ftk", default_model="haiku")
     await clear_free_trial(s)

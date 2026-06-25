@@ -15,7 +15,7 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.settings import load_settings
 from backend.apps.agents.manager.permissions import path_gate
-from backend.apps.agents.manager.permissions.decision import effective_policy, request_user_approval
+from backend.apps.agents.manager.permissions.decision import effective_policy
 from backend.apps.agents.manager.prompt.tool_catalog import gated_mcp_server_names
 from backend.apps.agents.manager.prompt.prompt_context import (
     TOOLSEARCH_LOOP_THRESHOLD,

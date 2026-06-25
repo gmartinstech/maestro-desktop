@@ -8,7 +8,7 @@ comprehension-gap probe against this module.
 
 import pytest
 
-from apps.agents.tools.ssrf_guard import SSRFBlocked, _is_forbidden_ip, assert_safe_url
+from backend.apps.agents.tools.ssrf_guard import SSRFBlocked, p_is_forbidden_ip, assert_safe_url
 
 
 @pytest.mark.parametrize(
@@ -31,8 +31,8 @@ from apps.agents.tools.ssrf_guard import SSRFBlocked, _is_forbidden_ip, assert_s
         ("::ffff:8.8.8.8", False),            # v4-mapped public stays allowed
     ],
 )
-def test_is_forbidden_ip(ip_str, forbidden):
-    assert _is_forbidden_ip(ip_str) is forbidden
+def testp_is_forbidden_ip(ip_str, forbidden):
+    assert p_is_forbidden_ip(ip_str) is forbidden
 
 
 @pytest.mark.asyncio

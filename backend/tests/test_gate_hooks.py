@@ -46,7 +46,7 @@ async def test_can_use_tool_deny_returns_deny():
 async def test_can_use_tool_ask_routes_through_approval():
     ctx = p_ctx()
     with patch.object(gate_hooks.path_gate, "maybe_override_policy", return_value=("ask", None)), \
-         patch.object(gate_hooks, "request_user_approval", new=AsyncMock(return_value=ApprovalDecision(behavior="allow"))):
+         patch.object(gate_hooks, "p_resolve_ask", new=AsyncMock(return_value=ApprovalDecision(behavior="allow"))):
         result = await gate_hooks.can_use_tool(ctx, "Write", {"file_path": "/x"}, None)
     assert isinstance(result, PermissionResultAllow)
 
