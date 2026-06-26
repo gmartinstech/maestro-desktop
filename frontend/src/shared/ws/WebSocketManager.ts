@@ -777,7 +777,7 @@ class WebSocketManager {
               if (parentCard) {
                 pos = placeBesideCard(layoutState, parentCard, browserCard.width, browserCard.height, undefined, exclude);
               } else if (sess?.workflow_run_id && layoutState.workflowsMonitorCard) {
-                pos = placeBesideCard(layoutState, layoutState.workflowsMonitorCard, browserCard.width, browserCard.height, undefined, exclude, WORKFLOW_CARD_GAP);
+                pos = placeBesideCard(layoutState, layoutState.workflowsMonitorCard, browserCard.width, browserCard.height, undefined, exclude, WORKFLOW_CARD_GAP, true);
               } else if (sess?.workflow_edit_id && layoutState.workflowsHub) {
                 pos = placeBelowCard(layoutState, layoutState.workflowsHub, browserCard.width, browserCard.height, undefined, exclude);
                 glowLabel = 'Browser';

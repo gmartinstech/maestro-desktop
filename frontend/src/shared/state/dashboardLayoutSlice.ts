@@ -391,6 +391,7 @@ export function placeBesideCard(
   expandedSessionIds?: string[],
   exclude?: CardPlacementExclusion,
   gap: number = GRID_GAP * 12,
+  exact: boolean = false,
 ): { x: number; y: number } {
   const rects = collectOccupiedRects(state, expandedSessionIds, exclude);
   const targetX = anchor.x + anchor.width + gap;
@@ -406,6 +407,10 @@ export function placeBesideCard(
     ? Math.max(...columnCards.map((c) => c.y + c.height)) + GRID_GAP
     : anchor.y;
 
+  // exact keeps the precise gap (so the card mirrors however its anchor was placed, e.g. a run browser matching the hub->monitor gap); grid-snapping would knock that gap off. Fall back to the snapped search only if the exact spot is taken.
+  if (exact && !rects.some((r) => rectsOverlap({ x: targetX, y: targetY, w: newW, h: newH }, r))) {
+    return { x: targetX, y: targetY };
+  }
   return findOpenSpotNear(targetX, targetY, rects, newW, newH);
 }
 
