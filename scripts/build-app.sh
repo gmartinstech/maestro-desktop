@@ -330,11 +330,18 @@ download_node_for_arch() {
     local tmp; tmp=$(mktemp -d)
     curl -fsSL --progress-bar -o "$tmp/node.tar.gz" "$url"
     tar xzf "$tmp/node.tar.gz" -C "$tmp"
-    # Ship just the `node` binary. We don't need npm/npx/corepack at runtime —
-    # all router + MCP code is pre-bundled. ~50 MB per arch -> ~25 MB after
-    # gzip/dmg compression.
     cp "$tmp/node-${NODE_VERSION}-darwin-${arch}/bin/node" "$out_dir/bin/node"
     chmod +x "$out_dir/bin/node"
+    # Bundle npm too so packaged apps with custom deps can `npm install` them (the bare node can't).
+    mkdir -p "$out_dir/lib/node_modules"
+    cp -R "$tmp/node-${NODE_VERSION}-darwin-${arch}/lib/node_modules/npm" "$out_dir/lib/node_modules/npm"
+    # An explicit wrapper, not the dist's bin/npm symlink (packaging may not preserve symlinks): always runs our bundled node + npm-cli.js, no PATH/system-node reliance. run.sh picks it up as $NODE_DIR/npm.
+    cat > "$out_dir/bin/npm" <<'NPMSH'
+#!/bin/sh
+here="$(cd "$(dirname "$0")" && pwd)"
+exec "$here/node" "$here/../lib/node_modules/npm/bin/npm-cli.js" "$@"
+NPMSH
+    chmod +x "$out_dir/bin/npm"
     rm -rf "$tmp"
     echo "[3b] Node $NODE_VERSION ($arch) staged ($(du -h "$out_dir/bin/node" | cut -f1))"
 }

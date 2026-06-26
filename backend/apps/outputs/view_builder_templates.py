@@ -23,18 +23,17 @@ def p_resolve_npm() -> list[str] | None:
     node_path = os.environ.get("OPENSWARM_NODE_PATH")
     if node_path and os.path.exists(node_path):
         node_dir = os.path.dirname(node_path)
+        # Prefer invoking npm-cli.js through our bundled node so this doesn't depend on a system node for the shim's shebang. Second entry is the canonical Mac-dist layout (lib/node_modules/npm); first is the Windows layout (node_modules/npm beside node.exe).
+        for cli in (
+            os.path.join(node_dir, "node_modules", "npm", "bin", "npm-cli.js"),
+            os.path.join(os.path.dirname(node_dir), "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+        ):
+            if os.path.exists(cli):
+                return [node_path, cli]
         for shim in ("npm.cmd", "npm"):
             cand = os.path.join(node_dir, shim)
             if os.path.exists(cand):
                 return [cand]
-        # node.exe with no sibling npm: invoke npm-cli.js directly via node.
-        for rel in (
-            os.path.join("node_modules", "npm", "bin", "npm-cli.js"),
-            os.path.join(node_dir, "node_modules", "npm", "bin", "npm-cli.js"),
-        ):
-            cli = rel if os.path.isabs(rel) else os.path.join(node_dir, rel)
-            if os.path.exists(cli):
-                return [node_path, cli]
     for name in ("npm.cmd", "npm") if sys.platform == "win32" else ("npm",):
         found = shutil.which(name)
         if found:

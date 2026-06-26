@@ -322,11 +322,13 @@ try {
     Write-Host "[3b] Downloading $NodeUrl..."
     Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeZip -UseBasicParsing
     Expand-Archive -Path $NodeZip -DestinationPath $NodeExtract -Force
-    # Ship just node.exe — npm/npx are unused at runtime (router + MCP
-    # bundles are pre-built). Saves ~70 MB from the installer.
-    $SrcNode = Join-Path $NodeExtract "node-$NodeVersion-win-x64\node.exe"
+    $SrcRoot = Join-Path $NodeExtract "node-$NodeVersion-win-x64"
+    $SrcNode = Join-Path $SrcRoot 'node.exe'
     if (-not (Test-Path $SrcNode)) { throw "node.exe not found at $SrcNode after extract" }
     Copy-Item -Force $SrcNode (Join-Path $NodeStageDir 'node.exe')
+    # Bundle npm too so packaged apps with custom deps can `npm install` them. npm.cmd + node_modules\npm sit next to node.exe in the win dist; p_resolve_npm finds node_dir\npm.cmd.
+    Copy-Item -Force (Join-Path $SrcRoot 'npm.cmd') (Join-Path $NodeStageDir 'npm.cmd')
+    Copy-Item -Recurse -Force (Join-Path $SrcRoot 'node_modules') (Join-Path $NodeStageDir 'node_modules')
     $Size = (Get-Item (Join-Path $NodeStageDir 'node.exe')).Length / 1MB
     Write-Host ("[3b] Node {0} (x64) staged ({1:N1} MB)" -f $NodeVersion, $Size)
 } finally {
