@@ -1,4 +1,4 @@
-const { app, components, BrowserWindow, ipcMain, shell, session, dialog, crashReporter, powerMonitor } = require('electron');
+const { app, components, BrowserWindow, ipcMain, shell, session, dialog, crashReporter, powerMonitor, Menu, clipboard } = require('electron');
 
 // Browser cards live in their own persistent partition so cookies/localStorage/IndexedDB survive reload + quit (Discord etc. stay logged in) and site data stays isolated from the app's defaultSession. The "clear browsing data" wipe nukes only this partition. MUST match BROWSER_PARTITION in frontend BrowserCard.tsx.
 const BROWSER_PARTITION = 'persist:openswarm-browser';
@@ -1209,6 +1209,8 @@ function createWindow() {
   mainWindow.webContents.on('will-attach-webview', (_event, webPreferences, params) => {
     webPreferences.plugins = true;
     webPreferences.enableBlinkFeatures = 'EncryptedMedia';
+    // Spellcheck the page's editable fields so the right-click menu can offer corrections.
+    webPreferences.spellcheck = true;
     // Block autoplay in agent webviews. A profile page full of autoplaying video
     // (the repeated video.js logs) saturates the renderer's main thread and is a
     // prime reason the tab goes unresponsive and every command then times out. The
@@ -1724,6 +1726,17 @@ app.whenReady().then(async () => {
 
   // Same permission grants + iframe header-strip on BOTH the app's defaultSession and the browser-card partition. A named partition is a separate session, so without re-applying these, browser cards lose camera/mic prompts and the ability to embed sites that send X-Frame-Options.
   const configureBrowsingSession = (ses) => {
+    // Spellcheck for editable fields in browser webviews (the context menu reads its suggestions). macOS uses the always-on system checker and ignores the language list; Windows/Linux Hunspell needs the dictionary, so seed it from the OS locale, falling back to en-US.
+    try {
+      if (typeof ses.setSpellCheckerEnabled === 'function') ses.setSpellCheckerEnabled(true);
+      if (typeof ses.setSpellCheckerLanguages === 'function') {
+        const avail = ses.availableSpellCheckerLanguages || [];
+        const sys = app.getLocale() || 'en-US';
+        const pick = avail.includes(sys) ? sys : (avail.includes('en-US') ? 'en-US' : null);
+        if (pick) ses.setSpellCheckerLanguages([pick]);
+      }
+    } catch (_) {}
+
     ses.setPermissionRequestHandler((_wc, permission, callback) => {
       const allowed = [
         'media', 'mediaKeySystem', 'protected-media-identifier',
@@ -2012,6 +2025,72 @@ function routeBrowserShortcut(event, input, webContentsId) {
   } catch (_) {}
 }
 
+function openInNewBrowserTab(url, webContentsId) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('webview-new-window', url, webContentsId, 'background-tab'); } catch (_) {}
+  }
+}
+
+// Native right-click menu for browser webviews. Electron shows none by default, so most sites had no menu
+// at all (Notion etc. only worked because they draw their own in-page one). Built fresh per click from the
+// hit-test params: spelling fixes on a misspelled word, link/image actions, edit roles, then nav.
+function buildBrowserContextMenu(contents, params, webContentsId) {
+  const template = [];
+  const sep = () => template.push({ type: 'separator' });
+
+  if (params.misspelledWord) {
+    const suggestions = params.dictionarySuggestions || [];
+    if (suggestions.length) {
+      for (const s of suggestions) template.push({ label: s, click: () => { try { contents.replaceMisspelling(s); } catch (_) {} } });
+    } else {
+      template.push({ label: 'No spelling suggestions', enabled: false });
+    }
+    template.push({ label: 'Add to Dictionary', click: () => { try { contents.session.addWordToSpellCheckerDictionary(params.misspelledWord); } catch (_) {} } });
+    sep();
+  }
+
+  if (params.linkURL) {
+    template.push({ label: 'Open Link in New Tab', click: () => openInNewBrowserTab(params.linkURL, webContentsId) });
+    template.push({ label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) });
+    sep();
+  }
+
+  if (params.mediaType === 'image' && params.srcURL) {
+    template.push({ label: 'Open Image in New Tab', click: () => openInNewBrowserTab(params.srcURL, webContentsId) });
+    template.push({ label: 'Copy Image', click: () => { try { contents.copyImageAt(params.x, params.y); } catch (_) {} } });
+    template.push({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) });
+    sep();
+  }
+
+  const flags = params.editFlags || {};
+  if (params.isEditable) {
+    template.push({ role: 'cut', enabled: flags.canCut !== false });
+    template.push({ role: 'copy', enabled: flags.canCopy !== false });
+    template.push({ role: 'paste', enabled: flags.canPaste !== false });
+    template.push({ role: 'selectAll' });
+    sep();
+  } else if (params.selectionText) {
+    template.push({ role: 'copy' });
+    sep();
+  }
+
+  const nav = contents.navigationHistory;
+  const canBack = nav ? nav.canGoBack() : contents.canGoBack();
+  const canFwd = nav ? nav.canGoForward() : contents.canGoForward();
+  template.push({ label: 'Back', enabled: canBack, click: () => { try { nav ? nav.goBack() : contents.goBack(); } catch (_) {} } });
+  template.push({ label: 'Forward', enabled: canFwd, click: () => { try { nav ? nav.goForward() : contents.goForward(); } catch (_) {} } });
+  template.push({ label: 'Reload', click: () => { try { contents.reload(); } catch (_) {} } });
+
+  if (isDev) {
+    sep();
+    template.push({ label: 'Inspect Element', click: () => { try { contents.inspectElement(params.x, params.y); } catch (_) {} } });
+  }
+
+  try {
+    Menu.buildFromTemplate(template).popup({ window: mainWindow || undefined });
+  } catch (_) {}
+}
+
 app.on('web-contents-created', (_event, contents) => {
   // Block Cmd+W from closing the main window, whether the window chrome or one of
   // its embedded webviews has focus. OAuth popups (their own 'window' contents,
@@ -2024,6 +2103,7 @@ app.on('web-contents-created', (_event, contents) => {
   if (contents.getType() === 'webview') {
     const wcId = contents.id;
     contents.on('before-input-event', (event, input) => routeBrowserShortcut(event, input, wcId));
+    contents.on('context-menu', (_e, params) => buildBrowserContextMenu(contents, params, wcId));
   }
 
   // Override the user-agent on popup BrowserWindows (i.e. anything created
