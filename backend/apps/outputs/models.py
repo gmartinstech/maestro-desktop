@@ -1,7 +1,11 @@
-from pydantic import BaseModel, Field, model_validator
+import os
+
+from pydantic import BaseModel, Field, computed_field, model_validator
 from typing import Literal, Optional, Any
 from uuid import uuid4
 from datetime import datetime
+
+from backend.config.paths import OUTPUTS_WORKSPACE_DIR
 
 
 class Output(BaseModel):
@@ -48,6 +52,14 @@ class Output(BaseModel):
             data.pop("frontend_code", None)
             data.pop("backend_code", None)
         return data
+
+    @computed_field
+    @property
+    def workspace_path(self) -> str:
+        """Absolute on-disk folder for this app, resolved from workspace_id. API-only (excluded from the saved JSON since it's machine-specific and re-derivable); lets the frontend show the real edit path when an App card is selected."""
+        if not self.workspace_id:
+            return ""
+        return os.path.abspath(os.path.join(OUTPUTS_WORKSPACE_DIR, self.workspace_id))
 
     @property
     def frontend_code(self) -> str:

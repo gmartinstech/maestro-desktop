@@ -20,6 +20,8 @@ export interface Output {
   /** Linkage so reopening App Builder reattaches to the in-progress session and workspace. */
   session_id?: string | null;
   workspace_id?: string | null;
+  /** Backend-resolved absolute on-disk folder for this app; API-only, empty when no workspace_id. */
+  workspace_path?: string;
   created_at: string;
   updated_at: string;
   /** App publishing to {slug}.openswarm.host. Server-managed; mirrored here after a publish/unpublish. */

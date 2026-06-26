@@ -79,13 +79,23 @@ export function appendSelectedElements(trimmed: string, selectedEls: SelectedEle
       lines.push(`   browser_id: ${el.semanticData.selectId}`);
       if (url) lines.push(`   URL: ${url}`);
       lines.push(`   (Use BrowserAgent with this browser_id to interact with it, or CreateBrowserAgent for a new browser)`);
+    } else if (el.semanticType === 'view-card') {
+      const appName = typeof el.semanticData?.name === 'string' ? el.semanticData.name : (el.semanticLabel || 'Untitled App');
+      const appPath = typeof el.semanticData?.path === 'string' ? el.semanticData.path : '';
+      lines.push(`${i + 1}. [App Card] ${appName}`);
+      if (appPath) {
+        lines.push(`   Workspace path: ${appPath}`);
+        lines.push(`   (Edit this app's files in place at the path above. Don't recreate it or write files elsewhere.)`);
+      } else {
+        // No resolved path means the app's folder is gone or unsaved; tell the agent rather than emit a confusing opaque id.
+        lines.push(`   (This app has no on-disk workspace yet; ask the user to save or reopen it before editing.)`);
+      }
     } else if (el.semanticType && el.semanticData) {
       const typeLabel = {
         'agent-card': 'Agent Card',
         'message': 'Message',
         'tool-call': 'Tool Call',
         'tool-group': 'Tool Group',
-        'view-card': 'App Card',
         'browser-card': 'Browser Card',
         'workflow-card': 'Workflow Card',
         'workflows-hub-card': 'Workflows Hub',

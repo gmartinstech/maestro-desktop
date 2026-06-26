@@ -342,7 +342,7 @@ const DashboardViewCard: React.FC<Props> = ({
     <Box
       data-select-type="view-card"
       data-select-id={output.id}
-      data-select-meta={JSON.stringify({ name: output.name, description: output.description })}
+      data-select-meta={JSON.stringify({ name: output.name, description: output.description, path: output.workspace_path })}
       onPointerDownCapture={() => onBringToFront?.(output.id, 'view')}
       onClick={(e: React.MouseEvent) => {
         if (justDraggedRef.current) return;

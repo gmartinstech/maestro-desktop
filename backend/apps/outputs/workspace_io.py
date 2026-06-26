@@ -30,7 +30,7 @@ def load_all() -> list[Output]:
 
 
 def save(output: Output):
-    atomic_write_json(os.path.join(DATA_DIR, f"{output.id}.json"), output.model_dump())
+    atomic_write_json(os.path.join(DATA_DIR, f"{output.id}.json"), output.model_dump(exclude={"workspace_path"}))
 
 
 def load(output_id: str) -> Output:
