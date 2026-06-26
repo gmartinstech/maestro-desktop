@@ -23,18 +23,17 @@ def p_resolve_npm() -> list[str] | None:
     node_path = os.environ.get("OPENSWARM_NODE_PATH")
     if node_path and os.path.exists(node_path):
         node_dir = os.path.dirname(node_path)
+        # Prefer invoking npm-cli.js through our bundled node so this doesn't depend on a system node for the shim's shebang. Second entry is the canonical Mac-dist layout (lib/node_modules/npm); first is the Windows layout (node_modules/npm beside node.exe).
+        for cli in (
+            os.path.join(node_dir, "node_modules", "npm", "bin", "npm-cli.js"),
+            os.path.join(os.path.dirname(node_dir), "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+        ):
+            if os.path.exists(cli):
+                return [node_path, cli]
         for shim in ("npm.cmd", "npm"):
             cand = os.path.join(node_dir, shim)
             if os.path.exists(cand):
                 return [cand]
-        # node.exe with no sibling npm: invoke npm-cli.js directly via node.
-        for rel in (
-            os.path.join("node_modules", "npm", "bin", "npm-cli.js"),
-            os.path.join(node_dir, "node_modules", "npm", "bin", "npm-cli.js"),
-        ):
-            cli = rel if os.path.isabs(rel) else os.path.join(node_dir, rel)
-            if os.path.exists(cli):
-                return [node_path, cli]
     for name in ("npm.cmd", "npm") if sys.platform == "win32" else ("npm",):
         found = shutil.which(name)
         if found:
@@ -304,7 +303,7 @@ def ensure_warm_cache() -> str | None:
             tmpl_pkg = os.path.join(WEBAPP_TEMPLATE_DIR, "frontend", "package.json")
             tmpl_lock = os.path.join(WEBAPP_TEMPLATE_DIR, "frontend", "package-lock.json")
             shutil.copyfile(tmpl_pkg, os.path.join(cache_dir, "package.json"))
-            base_flags = ["--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error"]
+            base_flags = ["--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error", "--ignore-scripts"]
             npm = p_resolve_npm()
             if npm is None:
                 logger.info("webapp-template: no npm available; skipping warm cache (workspace will install on first run)")
@@ -374,12 +373,20 @@ def p_try_link_dir(src: str, target: str) -> bool:
         return False
 
 
-def p_link_node_modules(workspace_dir: str) -> None:
+def link_node_modules(workspace_dir: str) -> None:
     """After copytree, point the workspace's frontend/node_modules at
     the warm-cache directory. Safe fallback; if the cache isn't ready,
     the workspace's run.sh will fall through to its own install path."""
     cache_modules = ensure_warm_cache()
     if not cache_modules:
+        return
+    # The warm cache holds the TEMPLATE's deps; only link it when this workspace's package.json matches, else run.sh sees vite present, skips install, and the app's custom deps are missing. On mismatch (a customized import) leave node_modules absent so run.sh installs the app's real deps.
+    pkg_path = os.path.join(workspace_dir, "frontend", "package.json")
+    try:
+        with open(pkg_path, "rb") as fh:
+            if hashlib.sha256(fh.read()).hexdigest()[:12] != warm_cache_digest():
+                return
+    except OSError:
         return
     target = os.path.join(workspace_dir, "frontend", "node_modules")
     if os.path.islink(target):
@@ -570,7 +577,7 @@ def seed_webapp_template_workspace(workspace_dir: str, frontend_port: int) -> No
         dirs_exist_ok=True,
     )
     # Symlink the workspace's frontend/node_modules at the warm cache so `npm install` can be skipped entirely by the workspace run.sh.
-    p_link_node_modules(workspace_dir)
+    link_node_modules(workspace_dir)
     env_path = os.path.join(workspace_dir, ".env")
     env_example_path = os.path.join(workspace_dir, ".env.example")
     src_example = os.path.join(WEBAPP_TEMPLATE_DIR, ".env.example")

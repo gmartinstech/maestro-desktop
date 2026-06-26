@@ -33,6 +33,7 @@ import {
   updateBrowserTabTitle,
   updateBrowserTabFavicon,
   reorderBrowserTab,
+  recordClosedCard,
   type BrowserTab,
 } from '@/shared/state/dashboardLayoutSlice';
 import { removeBrowserCardCleanly } from '@/shared/browserTeardown';
@@ -46,6 +47,8 @@ import {
   setActiveTab as setRegistryActiveTab,
   type BrowserWebview,
 } from '@/shared/browserRegistry';
+import { setLastInteractedBrowser } from '@/shared/browserFocus';
+import BrowserFindBar from './BrowserFindBar';
 import { useBrowserActivity } from '@/shared/useBrowserActivity';
 import { getActionLabel } from '@/shared/browserCommandHandler';
 import { resolveInput, isGoogleSearch } from '@/shared/resolveUrl';
@@ -120,8 +123,11 @@ const isWindows = navigator.userAgent.includes('Windows');
 const isElectron = navigator.userAgent.includes('Electron') && (!isWindows || windowsWebviewEnabled());
 
 const chromeUserAgent = navigator.userAgent
-  .replace(/\s*Electron\/\S+/, '')
-  .replace(/\s*OpenSwarm\/\S+/, '');
+  .replace(/\s*Electron\/\S+/i, '')
+  .replace(/\s*openswarm\/\S+/i, '');
+
+// Persistent partition so browser-card logins/cookies/localStorage outlive a reload or quit. MUST match BROWSER_PARTITION in electron/main.js, which configures permissions + iframe header-strip on this exact partition.
+const BROWSER_PARTITION = 'persist:openswarm-browser';
 
 // Sync exposure set at preload boot; async API fallback for older builds.
 const webviewPreloadPath: string | undefined = isElectron
@@ -153,6 +159,8 @@ interface Props {
   isSelected?: boolean;
   isHighlighted?: boolean;
   multiDragDelta?: { dx: number; dy: number } | null;
+  // Belongs to a non-active dashboard but kept mounted-hidden so its webContents + sessionStorage survive the switch.
+  keepAliveHidden?: boolean;
   onCardSelect?: (id: string, type: 'agent' | 'view' | 'browser', shiftKey: boolean) => void;
   onDragStart?: (id: string, type: 'agent' | 'view' | 'browser') => void;
   onDragMove?: (dx: number, dy: number, mouseX?: number, mouseY?: number) => void;
@@ -165,7 +173,7 @@ interface Props {
 
 const BrowserCard: React.FC<Props> = ({
   browserId, tabs, activeTabId, cardX, cardY, cardWidth, cardHeight, zoom = 1, panX = 0, panY = 0, cmdHeld = false,
-  isSelected = false, isHighlighted = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
+  isSelected = false, isHighlighted = false, keepAliveHidden = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
   cardZOrder = 0, onDoubleClick, onBringToFront,
 }) => {
   const c = useClaudeTokens();
@@ -210,6 +218,9 @@ const BrowserCard: React.FC<Props> = ({
   // Electron webviews can't trigger OS platform auth; preload sends "passkey-detected" and we explain via modal.
   const [passkeyDialogOpen, setPasskeyDialogOpen] = useState(false);
   const [crashedTabs, setCrashedTabs] = useState<Set<string>>(new Set());
+  // Ctrl/Cmd+F find bar; focusSignal re-focuses the input each time Ctrl+F fires while it's already open.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findFocusSignal, setFindFocusSignal] = useState(0);
   const updateTabLocal = useCallback((tabId: string, update: Partial<TabLocalState>) => {
     setTabLocalStates((prev) => {
       const existing = prev[tabId] ?? { loading: false, canGoBack: false, canGoForward: false };
@@ -237,6 +248,17 @@ const BrowserCard: React.FC<Props> = ({
   useEffect(() => {
     setRegistryActiveTab(browserId, activeTabId);
   }, [browserId, activeTabId]);
+
+  // Open the find bar when AppShell routes a Ctrl/Cmd+F to this browser; re-trigger re-focuses the input.
+  useEffect(() => {
+    const onFind = (e: Event) => {
+      if ((e as CustomEvent).detail?.browserId !== browserId) return;
+      setFindOpen(true);
+      setFindFocusSignal((n) => n + 1);
+    };
+    window.addEventListener('openswarm:browser-find', onFind as EventListener);
+    return () => window.removeEventListener('openswarm:browser-find', onFind as EventListener);
+  }, [browserId]);
 
   // A resumed webview remounts at about:blank; dropping the init markers lets doLoad re-fire.
   useEffect(() => {
@@ -322,6 +344,9 @@ const BrowserCard: React.FC<Props> = ({
               },
             }),
           );
+        } else if (e?.channel === 'app-clicked') {
+          // First in-guest mousedown: a page click never reaches the host document, so this IPC is how a webview-content click marks this browser as last-interacted (drives Ctrl+R/zoom/tab targeting).
+          setLastInteractedBrowser(browserId);
         }
       };
 
@@ -431,6 +456,7 @@ const BrowserCard: React.FC<Props> = ({
 
   const handleRemove = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    dispatch(recordClosedCard({ kind: 'browser', id: browserId }));
     removeBrowserCardCleanly(browserId, dispatch);
   }, [dispatch, browserId]);
 
@@ -441,8 +467,11 @@ const BrowserCard: React.FC<Props> = ({
 
   const handleCloseTab = useCallback((tabId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    // Closing the last tab destroys the whole card, so record it as a browser-card close (reopen brings the card back), not a tab close.
+    if (tabs.length <= 1) dispatch(recordClosedCard({ kind: 'browser', id: browserId }));
+    else dispatch(recordClosedCard({ kind: 'tab', id: tabId, browserId }));
     dispatch(removeBrowserTab({ browserId, tabId }));
-  }, [dispatch, browserId]);
+  }, [dispatch, browserId, tabs.length]);
 
   const handleSwitchTab = useCallback((tabId: string) => {
     dispatch(setActiveBrowserTab({ browserId, tabId }));
@@ -720,6 +749,8 @@ const BrowserCard: React.FC<Props> = ({
       data-select-type="browser-card"
       data-select-id={browserId}
       data-select-meta={JSON.stringify({ name: activeTitle || 'Browser', url: activeUrl })}
+      // Marks a kept-alive card parked off-screen (it belongs to another dashboard); fit-to-view must skip it or it pans the canvas to chase it and the card bleeds onto the dashboard you're viewing.
+      data-keepalive-hidden={keepAliveHidden ? '1' : undefined}
       onPointerDownCapture={() => onBringToFront?.(browserId, 'browser')}
       onClick={(e: React.MouseEvent) => {
         if (justDraggedRef.current) return;
@@ -731,11 +762,13 @@ const BrowserCard: React.FC<Props> = ({
       }}
       sx={{
         position: 'absolute',
+        // Kept-alive card from another dashboard: parked far off-screen so its webview surface can't bleed onto the dashboard you're viewing; click-through, webContents stays mounted.
+        pointerEvents: keepAliveHidden ? 'none' : undefined,
         // contain: webview repaints don't shake neighbor cards.
         contain: 'layout style',
         // Own compositor layer so hover/paint invalidations stay contained to this card. See AgentCard for full rationale.
         willChange: 'transform',
-        left: displayX,
+        left: keepAliveHidden ? -100000 : displayX,
         top: displayY,
         width: displayW,
         height: displayH,
@@ -1084,6 +1117,9 @@ const BrowserCard: React.FC<Props> = ({
 
       {/* Browser body: stacked webviews */}
       <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {findOpen && !suspendedSnap && (
+          <BrowserFindBar browserId={browserId} focusSignal={findFocusSignal} onClose={() => setFindOpen(false)} />
+        )}
         {isElementSelectMode && (
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'none' }} />
         )}
@@ -1136,6 +1172,7 @@ const BrowserCard: React.FC<Props> = ({
                   else webviewMap.current.delete(tab.id);
                 }}
                 data-tab-id={tab.id}
+                partition={BROWSER_PARTITION}
                 src="about:blank"
                 {...({ allowpopups: 'true' } as any) /* React drops boolean-valued unknown attrs, so string it stays; @types/react wrongly says boolean */}
                 useragent={chromeUserAgent}
@@ -1468,6 +1505,7 @@ const BrowserCard: React.FC<Props> = ({
           }}
         />
       ))}
+
     </Box>
   );
 };

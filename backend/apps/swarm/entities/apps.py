@@ -12,7 +12,7 @@ import socket
 from uuid import uuid4
 
 from backend.apps.outputs.models import Output
-from backend.apps.outputs.workspace_io import WALK_SKIP_DIRS, save, load_output
+from backend.apps.outputs.workspace_io import WALK_SKIP_DIRS, WALK_SKIP_FILES, save, load_output
 from backend.config.paths import OUTPUTS_DIR, OUTPUTS_WORKSPACE_DIR
 
 from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
@@ -56,6 +56,8 @@ class AppExportable:
             for fn in fnames:
                 # .env is install-specific (absolute paths + port); .env.example travels instead.
                 if fn == ".env":
+                    continue
+                if fn in WALK_SKIP_FILES:
                     continue
                 full = os.path.join(root, fn)
                 if os.path.islink(full):
@@ -146,6 +148,7 @@ def p_localize_env(folder: str) -> None:
         from backend.apps.outputs.view_builder_templates import (
             DEBUGGER_PATH,
             TEMPLATE_BACKEND_PATH,
+            link_node_modules,
             patch_env_port,
             warm_venv_dir,
         )
@@ -156,5 +159,10 @@ def p_localize_env(folder: str) -> None:
     patch_env_port(env_path, "OPENSWARM_DEBUGGER_PATH", DEBUGGER_PATH)
     try:
         patch_env_port(env_path, "OPENSWARM_BACKEND_VENV_CACHE", warm_venv_dir())
+    except Exception:
+        pass
+    # Imported apps arrive WITHOUT node_modules (export drops the warm-cache symlink), so relink it here like seed does; without it the first runtime boot npm-installs while the preview races onto a not-yet-bound port, so the app stays blank until a full restart.
+    try:
+        link_node_modules(folder)
     except Exception:
         pass

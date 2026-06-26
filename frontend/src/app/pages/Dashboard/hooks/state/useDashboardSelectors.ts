@@ -19,6 +19,14 @@ export function useDashboardSelectors(dashboardId: string) {
     }
     return out;
   }, [allBrowserCards, dashboardId]);
+  // Browser cards from OTHER dashboards stay mounted (so their webContents + session survive a switch, no Discord logout) but get rendered parked far off-screen by the card layer; that off-screen park reliably hides even a heavy live page (Discord), CDP-verified. Kept OUT of `browserCards` so save/bounds/keyboard-nav only ever see THIS dashboard's cards (no cross-dashboard leak), and tagging every card's home dashboard is what stops the real bleed (an untagged card renders as home everywhere).
+  const keepAliveBrowserCards = useMemo(() => {
+    const out: typeof allBrowserCards = {};
+    for (const [id, bc] of Object.entries(allBrowserCards)) {
+      if (bc.dashboard_id && bc.dashboard_id !== dashboardId) out[id] = bc;
+    }
+    return out;
+  }, [allBrowserCards, dashboardId]);
   const workflowCards = useAppSelector((state) => state.dashboardLayout.workflowCards);
   const workflowsHub = useAppSelector((state) => state.dashboardLayout.workflowsHub);
   const pendingFocusWorkflowId = useAppSelector((state) => state.dashboardLayout.pendingFocusWorkflowId);
@@ -46,6 +54,7 @@ export function useDashboardSelectors(dashboardId: string) {
     cards,
     viewCards,
     browserCards,
+    keepAliveBrowserCards,
     workflowCards,
     workflowItems,
     workflowOpenCards,

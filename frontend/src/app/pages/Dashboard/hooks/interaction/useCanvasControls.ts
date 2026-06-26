@@ -1,5 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo, RefObject } from 'react';
 import { setCanvasInteractionActive } from '@/shared/canvasInteractionState';
+import { getLastInteractedBrowser } from '@/shared/browserFocus';
+import { getWebview } from '@/shared/browserRegistry';
+import { applyBrowserZoom } from '@/shared/browserZoom';
 
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 3.0;
@@ -497,15 +500,21 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
         setCmdHeld(true);
       }
       if (e.ctrlKey || e.metaKey) {
+        // If the last thing you touched was a browser card, +/-/0 zooms THAT page (like a real browser); otherwise it zooms the dashboard canvas.
+        const focusedBrowser = getLastInteractedBrowser();
+        const browserWv = focusedBrowser ? getWebview(focusedBrowser) : undefined;
         if (e.key === '0') {
           e.preventDefault();
-          resetZoomRef.current();
+          if (browserWv) applyBrowserZoom(focusedBrowser as string, 0);
+          else resetZoomRef.current();
         } else if (e.key === '=' || e.key === '+') {
           e.preventDefault();
-          zoomInRef.current();
+          if (browserWv) applyBrowserZoom(focusedBrowser as string, 1);
+          else zoomInRef.current();
         } else if (e.key === '-') {
           e.preventDefault();
-          zoomOutRef.current();
+          if (browserWv) applyBrowserZoom(focusedBrowser as string, -1);
+          else zoomOutRef.current();
         }
       }
     };
@@ -543,6 +552,9 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     const prev = stateRef.current;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (let i = 0; i < children.length; i++) {
+      const child = children[i] as HTMLElement;
+      // Skip a kept-alive browser card from another dashboard (parked off-screen): fitting to it pans the canvas right onto it, which is the cross-dashboard bleed. On an empty dashboard this leaves nothing to fit, so the !isFinite reset below restores an identity transform and the off-screen card stays off-screen.
+      if (child.getAttribute?.('data-keepalive-hidden') === '1' || child.querySelector?.('[data-keepalive-hidden="1"]')) continue;
       const r = children[i].getBoundingClientRect();
       if (r.width === 0 && r.height === 0) continue;
       const sx = (r.left - vRect.left - prev.panX) / prev.zoom;

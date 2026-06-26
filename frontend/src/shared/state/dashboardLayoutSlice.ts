@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction, createAction } from '@reduxjs/toolkit';
-import { launchAndSendFirstMessage } from './agentsSlice';
+import { launchAndSendFirstMessage, resumeSession } from './agentsSlice';
 import { API_BASE } from '@/shared/config';
+import { getLastDashboardId } from '@/shared/lastDashboardId';
 
 // fetchSession 404/410 strips the layout card to stop AgentChat remount-loop. Matched by string to avoid circular import.
 const fetchSessionRejectedAction = createAction<
@@ -111,6 +112,19 @@ export interface NotePosition {
 export const DEFAULT_NOTE_W = 240;
 export const DEFAULT_NOTE_H = 200;
 
+// One entry in the Ctrl/Cmd+Shift+T "reopen last closed" stack: a full snapshot for browser/view/workflow/note/tab, just the session id for an agent (its session is brought back via resumeSession).
+export type ClosedCard =
+  | { uid: string; kind: 'browser'; closedAt: number; card: BrowserCardPosition }
+  | { uid: string; kind: 'view'; closedAt: number; card: ViewCardPosition }
+  | { uid: string; kind: 'workflow'; closedAt: number; card: WorkflowCardPosition }
+  | { uid: string; kind: 'note'; closedAt: number; note: NotePosition }
+  | { uid: string; kind: 'tab'; closedAt: number; browserId: string; index: number; tab: BrowserTab }
+  | { uid: string; kind: 'agent'; closedAt: number; sessionId: string; position: CardPosition | null };
+
+export type ClosedCardKind = ClosedCard['kind'];
+
+const RECENTLY_CLOSED_CAP = 25;
+
 export interface DashboardLayoutState {
   cards: Record<string, CardPosition>;
   viewCards: Record<string, ViewCardPosition>;
@@ -119,6 +133,8 @@ export interface DashboardLayoutState {
   workflowsHub: WorkflowsHubPosition | null;
   notes: Record<string, NotePosition>;
   closedCardPositions: Record<string, CardPosition>;
+  /** Session-global LIFO undo stack for Ctrl/Cmd+Shift+T; survives dashboard switches (resetLayout leaves it alone). */
+  recentlyClosed: ClosedCard[];
   glowingBrowserCards: Record<string, { sourceId: string; fading: boolean; label?: string }>;
   glowingAgentCards: Record<string, { sourceId: string; fading: boolean; sourceYRatio?: number; label?: string }>;
   persistedExpandedSessionIds: string[];
@@ -165,6 +181,7 @@ const initialState: DashboardLayoutState = {
   workflowsHub: null,
   notes: {},
   closedCardPositions: {},
+  recentlyClosed: [],
   glowingBrowserCards: {},
   glowingAgentCards: {},
   persistedExpandedSessionIds: [],
@@ -740,6 +757,8 @@ const dashboardLayoutSlice = createSlice({
         width: DEFAULT_BROWSER_CARD_W,
         height: DEFAULT_BROWSER_CARD_H,
         zOrder: state.nextZOrder++,
+        // Born onto the current dashboard so it shows there and only there, never bleeding onto every dashboard while it waits for the first layout save to tag it.
+        dashboard_id: getLastDashboardId() ?? undefined,
       };
       state.pendingFocusBrowserId = id;
     },
@@ -763,6 +782,8 @@ const dashboardLayoutSlice = createSlice({
         width: w,
         height: h,
         zOrder: card.zOrder || state.nextZOrder++,
+        // An agent-spawned card must carry its home dashboard or it renders on EVERY dashboard; trust the backend's tag, fall back to the current dashboard so an old/untagged payload can't bleed.
+        dashboard_id: card.dashboard_id ?? getLastDashboardId() ?? undefined,
       };
     },
 
@@ -1056,6 +1077,8 @@ const dashboardLayoutSlice = createSlice({
         width: width || DEFAULT_BROWSER_CARD_W,
         height: height || DEFAULT_BROWSER_CARD_H,
         zOrder: state.nextZOrder++,
+        // Pasted onto the dashboard the user is looking at, else it bleeds onto every dashboard.
+        dashboard_id: getLastDashboardId() ?? undefined,
       };
     },
 
@@ -1117,6 +1140,21 @@ const dashboardLayoutSlice = createSlice({
         card.activeTabId = tab.id;
         card.url = tab.url;
       }
+    },
+
+    // Ctrl+Tab / Ctrl+Shift+Tab: move to the next/previous tab, wrapping around. dir 1 = forward.
+    cycleBrowserTab(
+      state,
+      action: PayloadAction<{ browserId: string; dir: 1 | -1 }>
+    ) {
+      const card = state.browserCards[action.payload.browserId];
+      if (!card || card.tabs.length < 2) return;
+      const idx = card.tabs.findIndex((t) => t.id === card.activeTabId);
+      if (idx === -1) return;
+      const n = card.tabs.length;
+      const next = card.tabs[(idx + action.payload.dir + n) % n];
+      card.activeTabId = next.id;
+      card.url = next.url;
     },
 
     updateBrowserTabUrl(
@@ -1274,6 +1312,75 @@ const dashboardLayoutSlice = createSlice({
       state.pendingFocusNoteId = null;
     },
 
+    // Snapshot a card onto the reopen stack RIGHT BEFORE it's closed (the data must still be in state). Dispatch only from genuine user closes, not programmatic teardown.
+    recordClosedCard(
+      state,
+      action: PayloadAction<{ kind: ClosedCardKind; id: string; browserId?: string }>
+    ) {
+      const { kind, id, browserId } = action.payload;
+      const closedAt = Date.now();
+      const uid = `${kind}-${id}-${closedAt}`;
+      let entry: ClosedCard | null = null;
+      if (kind === 'browser' && state.browserCards[id]) {
+        entry = { uid, kind, closedAt, card: { ...state.browserCards[id], tabs: state.browserCards[id].tabs.map((t) => ({ ...t })) } };
+      } else if (kind === 'view' && state.viewCards[id]) {
+        entry = { uid, kind, closedAt, card: { ...state.viewCards[id] } };
+      } else if (kind === 'workflow' && state.workflowCards[id]) {
+        entry = { uid, kind, closedAt, card: { ...state.workflowCards[id] } };
+      } else if (kind === 'note' && state.notes[id]) {
+        entry = { uid, kind, closedAt, note: { ...state.notes[id] } };
+      } else if (kind === 'agent') {
+        entry = { uid, kind, closedAt, sessionId: id, position: state.cards[id] ? { ...state.cards[id] } : null };
+      } else if (kind === 'tab' && browserId && state.browserCards[browserId]) {
+        const card = state.browserCards[browserId];
+        const index = card.tabs.findIndex((t) => t.id === id);
+        // Last tab closing tears the whole card down; that's recorded as a 'browser' close instead, so skip.
+        if (index >= 0 && card.tabs.length > 1) entry = { uid, kind, closedAt, browserId, index, tab: { ...card.tabs[index] } };
+      }
+      if (!entry) return;
+      state.recentlyClosed.push(entry);
+      if (state.recentlyClosed.length > RECENTLY_CLOSED_CAP) state.recentlyClosed.shift();
+    },
+
+    // Re-insert a non-agent closed card (agents come back via resumeSession in the reopenLastClosed thunk). Lands on the current dashboard.
+    restoreClosedCard(
+      state,
+      action: PayloadAction<{ entry: ClosedCard; dashboardId?: string }>
+    ) {
+      const { entry, dashboardId } = action.payload;
+      const zOrder = state.nextZOrder++;
+      if (entry.kind === 'browser') {
+        state.browserCards[entry.card.browser_id] = { ...entry.card, zOrder, dashboard_id: dashboardId ?? entry.card.dashboard_id };
+      } else if (entry.kind === 'view') {
+        state.viewCards[entry.card.output_id] = { ...entry.card, zOrder };
+      } else if (entry.kind === 'workflow') {
+        state.workflowCards[entry.card.workflow_id] = { ...entry.card, zOrder };
+      } else if (entry.kind === 'note') {
+        state.notes[entry.note.note_id] = { ...entry.note, zOrder };
+      } else if (entry.kind === 'tab') {
+        const card = state.browserCards[entry.browserId];
+        if (card) {
+          // Fresh id: reusing the old one makes BrowserCard think the tab is already initialized, so its webview never reloads the URL and sits at about:blank.
+          const tab = { ...entry.tab, id: generateTabId() };
+          card.tabs.splice(Math.min(entry.index, card.tabs.length), 0, tab);
+          card.activeTabId = tab.id;
+          card.url = tab.url;
+        }
+      }
+    },
+
+    popClosedCard(state, action: PayloadAction<string>) {
+      state.recentlyClosed = state.recentlyClosed.filter((e) => e.uid !== action.payload);
+    },
+
+    // Pre-seed a resumed agent's old position so reconcileSessions drops its card back where it was, not in a fresh grid cell.
+    seedClosedAgentPosition(
+      state,
+      action: PayloadAction<{ sessionId: string; position: CardPosition }>
+    ) {
+      state.closedCardPositions[action.payload.sessionId] = action.payload.position;
+    },
+
     replaceDraftId(
       state,
       action: PayloadAction<{ oldId: string; newId: string }>
@@ -1328,10 +1435,18 @@ const dashboardLayoutSlice = createSlice({
       delete state.glowingAgentCards[action.payload];
     },
 
-    resetLayout(state) {
+    resetLayout(state, action: PayloadAction<{ keepBrowserIds?: string[] } | undefined>) {
+      // Keep the recently-used (keep-alive) browser cards mounted across a dashboard switch so their webContents + sessionStorage survive (logged-in sites stay logged in); everything else is wiped for the fresh load. Their suspend entry rides along so a parked one isn't silently dropped.
+      const keep = new Set(action.payload?.keepBrowserIds || []);
+      const keptBrowsers: typeof state.browserCards = {};
+      const keptSuspended: typeof state.suspendedBrowserCards = {};
+      for (const id of keep) {
+        if (state.browserCards[id]) keptBrowsers[id] = state.browserCards[id];
+        if (state.suspendedBrowserCards[id]) keptSuspended[id] = state.suspendedBrowserCards[id];
+      }
       state.cards = {};
       state.viewCards = {};
-      state.browserCards = {};
+      state.browserCards = keptBrowsers;
       state.workflowCards = {};
       state.workflowsHub = null;
       state.notes = {};
@@ -1342,7 +1457,7 @@ const dashboardLayoutSlice = createSlice({
       state.nextZOrder = 1;
       state.initialized = false;
       state.pendingFocusNoteId = null;
-      state.suspendedBrowserCards = {};
+      state.suspendedBrowserCards = keptSuspended;
       state.endingBrowserCards = {};
       state.pendingFocusWorkflowId = null;
     },
@@ -1362,18 +1477,21 @@ const dashboardLayoutSlice = createSlice({
         if (!isReconnectRefetch) {
           state.cards = action.payload.cards;
           state.viewCards = action.payload.viewCards;
-          state.browserCards = action.payload.browserCards;
-          for (const card of Object.values(state.browserCards)) {
-            card.dashboard_id = ownerDashboardId;
+          // Merge, don't replace: the keep-alive browser cards resetLayout preserved are ALREADY in state.browserCards with their webContents live. Keep them and add this dashboard's saved cards on top; on overlap (switching back to their own dashboard) the live data wins so the mounted webview isn't disturbed.
+          const keptAlive = state.browserCards;
+          const incoming = action.payload.browserCards;
+          // Default a missing home to the dashboard we're loading (legacy/untagged cards), but DON'T overwrite a real persisted home: a card saved here yet owned elsewhere is leftover from the old untagged-shows-everywhere bug, leaving its true home lets it park off-screen and get cleaned on the next save instead of bleeding.
+          for (const card of Object.values(incoming)) {
+            if (!card.dashboard_id) card.dashboard_id = ownerDashboardId;
           }
+          // New cards boot parked (no guest process, title placeholder); the suspend hook wakes viewport-sized and agent-driven ones on its first pass. NEVER re-park a live keep-alive card, that snapshot-swap would kill its session.
+          for (const id of Object.keys(incoming)) {
+            if (keptAlive[id] === undefined) state.suspendedBrowserCards[id] = { dataUrl: '', capturedAt: 0 };
+          }
+          state.browserCards = { ...incoming, ...keptAlive };
           state.workflowCards = action.payload.workflowCards || {};
           state.workflowsHub = action.payload.workflowsHub || null;
           state.notes = action.payload.notes || {};
-          // Cards boot parked (no guest process, title placeholder); the suspend hook wakes viewport-sized and agent-driven ones on its first pass. Beats mounting 100 webviews just to suspend 92 of them.
-          state.suspendedBrowserCards = {};
-          for (const id of Object.keys(action.payload.browserCards)) {
-            state.suspendedBrowserCards[id] = { dataUrl: '', capturedAt: 0 };
-          }
         } else {
           const occupied = collectOccupiedRects(state, action.payload.expandedSessionIds);
           addMissingCards(state.cards, action.payload.cards, occupied);
@@ -1468,6 +1586,7 @@ export const {
   addBrowserTab,
   removeBrowserTab,
   setActiveBrowserTab,
+  cycleBrowserTab,
   updateBrowserTabUrl,
   updateBrowserTabTitle,
   updateBrowserTabFavicon,
@@ -1507,7 +1626,30 @@ export const {
   setNoteColor,
   removeNote,
   clearPendingFocusNoteId,
+  recordClosedCard,
+  restoreClosedCard,
+  popClosedCard,
+  seedClosedAgentPosition,
   resetLayout,
 } = dashboardLayoutSlice.actions;
+
+// Ctrl/Cmd+Shift+T: bring back the most recently closed card on the current dashboard. Agents resume from history (async); everything else is a synchronous re-insert. Best-effort: the entry is consumed even if an agent resume fails, so a dead session can't wedge the stack.
+export const reopenLastClosed = createAsyncThunk(
+  'dashboardLayout/reopenLastClosed',
+  async (_: void, { getState, dispatch }) => {
+    const state = getState() as { dashboardLayout: DashboardLayoutState };
+    const stack = state.dashboardLayout.recentlyClosed;
+    if (stack.length === 0) return;
+    const entry = stack[stack.length - 1];
+    const dashboardId = getLastDashboardId() ?? undefined;
+    if (entry.kind === 'agent') {
+      if (entry.position) dispatch(seedClosedAgentPosition({ sessionId: entry.sessionId, position: entry.position }));
+      await dispatch(resumeSession({ sessionId: entry.sessionId }));
+    } else {
+      dispatch(restoreClosedCard({ entry, dashboardId }));
+    }
+    dispatch(popClosedCard(entry.uid));
+  }
+);
 
 export default dashboardLayoutSlice.reducer;

@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('openswarm', {
   getInstallState: () => ipcRenderer.invoke('get-install-state'),
   // Factory reset: wipes the data dir and relaunches. Never resolves on success (the app exits first).
   hardReset: () => ipcRenderer.invoke('hard-reset'),
+  // Clears cookies/cache/localStorage for the browser-card partition only (never the app's defaultSession). Logs you out of sites opened in browser cards.
+  clearBrowserData: () => ipcRenderer.invoke('browser:clear-data'),
   connectSlack: () => ipcRenderer.invoke('connect-slack'),
   sendCdpCommand: (wcId, method, params, sessionId) => ipcRenderer.invoke('send-cdp-command', wcId, method, params, sessionId),
   cdpDetachClean: (wcId) => ipcRenderer.invoke('cdp-detach-clean', wcId),
@@ -101,9 +103,23 @@ contextBridge.exposeInMainWorld('openswarm', {
   },
 
   onWebviewNewWindow: (cb) => {
-    const listener = (_event, url, webContentsId) => cb(url, webContentsId);
+    const listener = (_event, url, webContentsId, disposition) => cb(url, webContentsId, disposition);
     ipcRenderer.on('webview-new-window', listener);
     return () => ipcRenderer.removeListener('webview-new-window', listener);
+  },
+
+  // Cmd/Ctrl+R, intercepted in main (kills the default-menu reload), so the renderer can reload the focused browser instead of the whole app.
+  onReloadShortcut: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('openswarm:reload-shortcut', listener);
+    return () => ipcRenderer.removeListener('openswarm:reload-shortcut', listener);
+  },
+
+  // In-page browser shortcuts (zoom/find/tab-cycle) from a focused guest webview, carrying the guest's webContents id so the renderer targets that exact browser.
+  onBrowserShortcut: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on('openswarm:browser-shortcut', listener);
+    return () => ipcRenderer.removeListener('openswarm:browser-shortcut', listener);
   },
 
   // Deep-link callback: fires when the OS opens the app with an

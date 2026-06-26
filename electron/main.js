@@ -1,5 +1,8 @@
 const { app, components, BrowserWindow, ipcMain, shell, session, dialog, crashReporter, powerMonitor } = require('electron');
 
+// Browser cards live in their own persistent partition so cookies/localStorage/IndexedDB survive reload + quit (Discord etc. stay logged in) and site data stays isolated from the app's defaultSession. The "clear browsing data" wipe nukes only this partition. MUST match BROWSER_PARTITION in frontend BrowserCard.tsx.
+const BROWSER_PARTITION = 'persist:openswarm-browser';
+
 // E2E flag: when OPENSWARM_E2E=1, append a Chromium command-line switch the
 // renderer reads at startup to set window.__OPENSWARM_E2E__ = true BEFORE any
 // page script parses, so the production-build store-on-window gate fires
@@ -1719,43 +1722,68 @@ app.whenReady().then(async () => {
     try { app.dock.setIcon(iconPath); } catch (_) {}
   }
 
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    const allowed = [
-      'media', 'mediaKeySystem', 'protected-media-identifier',
-      'geolocation', 'notifications', 'midi', 'midiSysex',
-      'clipboard-read', 'clipboard-sanitized-write',
-      'pointerLock', 'fullscreen', 'idle-detection',
-    ];
-    console.log('Permission request:', permission, '->', allowed.includes(permission) ? 'granted' : 'denied');
-    callback(allowed.includes(permission));
-  });
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
-    const allowed = [
-      'media', 'mediaKeySystem', 'protected-media-identifier',
-      'clipboard-read', 'clipboard-sanitized-write',
-      'pointerLock', 'fullscreen', 'idle-detection',
-    ];
-    return allowed.includes(permission);
-  });
+  // Same permission grants + iframe header-strip on BOTH the app's defaultSession and the browser-card partition. A named partition is a separate session, so without re-applying these, browser cards lose camera/mic prompts and the ability to embed sites that send X-Frame-Options.
+  const configureBrowsingSession = (ses) => {
+    ses.setPermissionRequestHandler((_wc, permission, callback) => {
+      const allowed = [
+        'media', 'mediaKeySystem', 'protected-media-identifier',
+        'geolocation', 'notifications', 'midi', 'midiSysex',
+        'clipboard-read', 'clipboard-sanitized-write',
+        'pointerLock', 'fullscreen', 'idle-detection',
+      ];
+      console.log('Permission request:', permission, '->', allowed.includes(permission) ? 'granted' : 'denied');
+      callback(allowed.includes(permission));
+    });
+    ses.setPermissionCheckHandler((_wc, permission) => {
+      const allowed = [
+        'media', 'mediaKeySystem', 'protected-media-identifier',
+        'clipboard-read', 'clipboard-sanitized-write',
+        'pointerLock', 'fullscreen', 'idle-detection',
+      ];
+      return allowed.includes(permission);
+    });
 
-  // Strip X-Frame-Options and CSP frame-ancestors directives on iframe subframe loads so the Windows BrowserCard iframe fallback (used because <webview> tag commit segfaults on Chromium 144 + this Electron 40 CastLabs build) can render sites that normally refuse to be embedded. Scoped to types:['sub_frame'] so OAuth popups, the main app frame, deep-link redirects, and DRM license fetches keep their security headers intact. urls filter limits to http/https so file:// loads of the bundled frontend are untouched.
-  session.defaultSession.webRequest.onHeadersReceived(
-    // Electron's webRequest type name for iframes is 'subFrame' (camelCase), not the Chrome-extension 'sub_frame' — passing the wrong name throws "Invalid type sub_frame" synchronously which becomes an unhandledRejection and prevents the app from booting.
-    { urls: ['http://*/*', 'https://*/*'], types: ['subFrame'] },
+    // Strip X-Frame-Options and CSP frame-ancestors directives on iframe subframe loads so the Windows BrowserCard iframe fallback (used because <webview> tag commit segfaults on Chromium 144 + this Electron 40 CastLabs build) can render sites that normally refuse to be embedded. Scoped to types:['sub_frame'] so OAuth popups, the main app frame, deep-link redirects, and DRM license fetches keep their security headers intact. urls filter limits to http/https so file:// loads of the bundled frontend are untouched.
+    ses.webRequest.onHeadersReceived(
+      // Electron's webRequest type name for iframes is 'subFrame' (camelCase), not the Chrome-extension 'sub_frame' — passing the wrong name throws "Invalid type sub_frame" synchronously which becomes an unhandledRejection and prevents the app from booting.
+      { urls: ['http://*/*', 'https://*/*'], types: ['subFrame'] },
+      (details, callback) => {
+        const headers = { ...(details.responseHeaders || {}) };
+        for (const k of Object.keys(headers)) {
+          const lk = k.toLowerCase();
+          if (lk === 'x-frame-options') {
+            delete headers[k];
+          } else if (lk === 'content-security-policy' || lk === 'content-security-policy-report-only') {
+            const cleaned = (headers[k] || [])
+              .map((v) => v.split(';').filter((d) => !/^\s*frame-ancestors\b/i.test(d)).join(';').trim())
+              .filter(Boolean);
+            if (cleaned.length) headers[k] = cleaned; else delete headers[k];
+          }
+        }
+        callback({ responseHeaders: headers });
+      },
+    );
+  };
+  configureBrowsingSession(session.defaultSession);
+  configureBrowsingSession(session.fromPartition(BROWSER_PARTITION));
+
+  // Add a "Google Chrome" brand to the browser partition's sec-ch-ua request hints so they match the navigator.userAgentData patch injected on dom-ready and the spoofed Chrome UA string; a Chrome UA paired with Chromium-only hints is the embedded-app tell aggressive anti-bot (Cloudflare) flags on a real human. Scoped to the browser partition, the app's own file:// + localhost traffic is untouched.
+  const addGoogleChromeBrand = (value) => {
+    if (typeof value !== 'string' || value.includes('"Google Chrome"')) return value;
+    const m = value.match(/"Chromium";v="([^"]+)"/);
+    return m ? `${value}, "Google Chrome";v="${m[1]}"` : value;
+  };
+  session.fromPartition(BROWSER_PARTITION).webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*'] },
     (details, callback) => {
-      const headers = { ...(details.responseHeaders || {}) };
+      const headers = { ...(details.requestHeaders || {}) };
       for (const k of Object.keys(headers)) {
         const lk = k.toLowerCase();
-        if (lk === 'x-frame-options') {
-          delete headers[k];
-        } else if (lk === 'content-security-policy' || lk === 'content-security-policy-report-only') {
-          const cleaned = (headers[k] || [])
-            .map((v) => v.split(';').filter((d) => !/^\s*frame-ancestors\b/i.test(d)).join(';').trim())
-            .filter(Boolean);
-          if (cleaned.length) headers[k] = cleaned; else delete headers[k];
+        if (lk === 'sec-ch-ua' || lk === 'sec-ch-ua-full-version-list') {
+          headers[k] = addGoogleChromeBrand(headers[k]);
         }
       }
-      callback({ responseHeaders: headers });
+      callback({ requestHeaders: headers });
     },
   );
 
@@ -1951,6 +1979,39 @@ function swallowCloseWindowShortcut(event, input) {
   }
 }
 
+// Cmd/Ctrl+R: the default menu's Reload accelerator reloads the WHOLE app even when a browser webview is focused (the "Ctrl+R reloads OpenSwarm, not the browser" complaint). preventDefault kills that accelerator (same electron#19279 path as Cmd+W, dispatched against whichever webContents is focused, hence both main window AND guests); the renderer then reloads the last-interacted browser, or the app if none. Shift+R (force reload) is left alone.
+function routeReloadShortcut(event, input) {
+  if (input.type !== 'keyDown') return;
+  if (!(input.meta || input.control) || input.shift || input.alt) return;
+  if ((input.key || '').toLowerCase() !== 'r') return;
+  event.preventDefault();
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openswarm:reload-shortcut');
+  } catch (_) {}
+}
+
+// In-page browser shortcuts (zoom, find, tab-cycle) for a focused <webview> guest. Keydowns inside a
+// guest never reach the host renderer, so we catch them here and forward the intent + the guest's
+// webContents id so the renderer can target that exact browser. Attached to guests ONLY: on the host
+// the renderer's own keydown handles canvas-vs-browser, and intercepting there would eat canvas zoom.
+function routeBrowserShortcut(event, input, webContentsId) {
+  if (input.type !== 'keyDown' || input.alt) return;
+  const mod = input.meta || input.control;
+  const key = (input.key || '').toLowerCase();
+  let action = null;
+  if (mod && !input.shift && (key === '=' || key === '+')) action = 'zoom-in';
+  else if (mod && !input.shift && key === '-') action = 'zoom-out';
+  else if (mod && !input.shift && key === '0') action = 'zoom-reset';
+  else if (mod && !input.shift && key === 'f') action = 'find';
+  else if (mod && input.shift && key === 't') action = 'reopen-closed';
+  else if (input.control && !input.meta && key === 'tab') action = input.shift ? 'tab-prev' : 'tab-next';
+  if (!action) return;
+  event.preventDefault();
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openswarm:browser-shortcut', { action, webContentsId });
+  } catch (_) {}
+}
+
 app.on('web-contents-created', (_event, contents) => {
   // Block Cmd+W from closing the main window, whether the window chrome or one of
   // its embedded webviews has focus. OAuth popups (their own 'window' contents,
@@ -1958,6 +2019,11 @@ app.on('web-contents-created', (_event, contents) => {
   // still Cmd+W them shut.
   if (isCreatingMainWindow || contents.getType() === 'webview') {
     contents.on('before-input-event', swallowCloseWindowShortcut);
+    contents.on('before-input-event', routeReloadShortcut);
+  }
+  if (contents.getType() === 'webview') {
+    const wcId = contents.id;
+    contents.on('before-input-event', (event, input) => routeBrowserShortcut(event, input, wcId));
   }
 
   // Override the user-agent on popup BrowserWindows (i.e. anything created
@@ -1993,7 +2059,7 @@ app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(({ url, disposition }) => {
     if (disposition === 'foreground-tab' || disposition === 'background-tab') {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('webview-new-window', url, contents.id);
+        mainWindow.webContents.send('webview-new-window', url, contents.id, disposition);
       }
       return { action: 'deny' };
     }
@@ -2141,6 +2207,54 @@ app.on('web-contents-created', (_event, contents) => {
       lastRecoveryReloadAt = now;
       console.log(`[webview] renderer unresponsive on wcId ${contents.id}; reloading to recover`);
       try { contents.reload(); } catch { /* nothing more we can do from here */ }
+    });
+
+    // Match navigator.userAgentData to the spoofed Chrome UA + the browser-partition sec-ch-ua header rewrite so the page world agrees with the headers; contextIsolation hides the preload, so this page-world patch is injected here. A Chrome UA with Chromium-only hints is the embedded-app tell that aggressive anti-bot (Cloudflare) flags on a real human.
+    contents.on('dom-ready', () => {
+      contents.executeJavaScript(`
+        (function(){
+          try {
+            var orig = navigator.userAgentData;
+            if (!orig || !Array.isArray(orig.brands) || orig.brands.some(function(b){ return b.brand === 'Google Chrome'; })) return;
+            var addChrome = function(list){
+              if (!Array.isArray(list) || list.some(function(b){ return b.brand === 'Google Chrome'; })) return list;
+              var ch = list.find(function(b){ return b.brand === 'Chromium'; });
+              return ch ? list.concat([{ brand: 'Google Chrome', version: ch.version }]) : list;
+            };
+            var brands = addChrome(orig.brands);
+            var patched = {
+              brands: brands,
+              mobile: orig.mobile,
+              platform: orig.platform,
+              getHighEntropyValues: function(h){ return orig.getHighEntropyValues(h).then(function(v){ if (v && Array.isArray(v.fullVersionList)) v.fullVersionList = addChrome(v.fullVersionList); return v; }); },
+              toJSON: function(){ return { brands: brands, mobile: orig.mobile, platform: orig.platform }; },
+            };
+            Object.defineProperty(navigator, 'userAgentData', { get: function(){ return patched; }, configurable: true });
+          } catch (e) {}
+        })();
+      `).catch(() => {});
+    });
+
+    // Force the guest's PAGE WORLD to always report visible/foregrounded. When a kept-alive browser card sits on another dashboard it's parked off-screen; the page-visibility API then reads hidden, so a real-time app (Discord) backgrounds itself, drops its gateway socket, and on return can't resume the session -> "please log in again". The webview-preload patches this too but only in the isolated world (contextIsolation), so the page's OWN code never sees it; injecting here in the main world is what actually keeps Discord logged in while hidden. document.hasFocus is forced true for the same reason; visibilitychange/freeze/pagehide are swallowed so nothing downstream reacts to a backgrounding that, to us, never happens.
+    contents.on('dom-ready', () => {
+      contents.executeJavaScript(`
+        (function(){
+          try {
+            if (window.__openswarm_vis__) return; window.__openswarm_vis__ = true;
+            var def = function(o, k, v){ try { Object.defineProperty(o, k, { get: function(){ return v; }, configurable: true }); } catch(e){} };
+            def(document, 'hidden', false);
+            def(document, 'visibilityState', 'visible');
+            def(document, 'webkitHidden', false);
+            def(document, 'webkitVisibilityState', 'visible');
+            try { document.hasFocus = function(){ return true; }; } catch(e){}
+            var swallow = function(e){ e.stopImmediatePropagation(); };
+            ['visibilitychange','webkitvisibilitychange','freeze','pagehide'].forEach(function(t){
+              window.addEventListener(t, swallow, true);
+              document.addEventListener(t, swallow, true);
+            });
+          } catch (e) {}
+        })();
+      `).catch(() => {});
     });
 
     // WebAuthn/passkey shim. Injected on every dom-ready in the main world
@@ -2438,6 +2552,14 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 ipcMain.handle('get-build-info', () => getBuildInfo());
 ipcMain.handle('get-webview-preload-path', () => {
   return `file://${path.join(__dirname, 'webview-preload.js')}`;
+});
+
+// Wipe ONLY the browser-card partition (cookies/cache/localStorage/IndexedDB), never the app's defaultSession. Surfaced as Settings -> Data & Privacy -> Clear browsing data.
+ipcMain.handle('browser:clear-data', async () => {
+  const ses = session.fromPartition(BROWSER_PARTITION);
+  await ses.clearStorageData();
+  await ses.clearCache();
+  return { ok: true };
 });
 
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);

@@ -75,6 +75,12 @@ WALK_SKIP_DIRS = frozenset({
     ".ruff_cache",
 })
 
+# OS/editor junk files that ride along in a workspace but are noise in an export.
+WALK_SKIP_FILES = frozenset({
+    ".DS_Store",
+    "Thumbs.db",
+})
+
 # Poll-payload guard, NOT an editor limit: the endpoint re-serializes the whole tree every 2 s, so a multi-MB bundle would peg the backend; 2 MB clears real hand-authored apps but traps minified bundles/sourcemaps, which are reported out-of-band (the `truncated` map) and NEVER stubbed, so a placeholder can't round-trip back into storage and destroy the real source.
 P_WALK_MAX_FILE_BYTES = 2 * 1024 * 1024
 
@@ -93,6 +99,8 @@ def walk_directory(folder: str) -> tuple[dict[str, str], dict[str, int]]:
         # Mutate `dirs` in place; that's how os.walk skips a subtree. Doing it here means we never even stat the children, so a 10k-file `.venv/` costs ~one stat (on the dir itself) instead of 10k.
         dirs[:] = [d for d in dirs if d not in WALK_SKIP_DIRS]
         for fname in filenames:
+            if fname in WALK_SKIP_FILES:
+                continue
             full_path = os.path.join(root, fname)
             # Normalize to forward-slash keys so the frontend's `path.split('/')` and `.startsWith(prefix)` checks work the same on Windows (where os.sep is '\\') as on macOS. Without this, every workspace file came back as `backend\\app.py` on Windows and the file tree silently mis-parsed.
             rel_path = os.path.relpath(full_path, folder).replace(os.sep, "/")

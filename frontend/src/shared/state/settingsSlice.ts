@@ -114,25 +114,28 @@ interface SettingsState {
   freeTrialArmSettled: boolean;
 }
 
+/** Baseline for every required settings field. Spread under any backend payload so an older saved shape that predates a newer field (e.g. new_agent_shortcut) can't surface as undefined and crash a consumer. */
+export const DEFAULT_SETTINGS: AppSettings = {
+  default_system_prompt: DEFAULT_SYSTEM_PROMPT,
+  default_folder: null,
+  default_model: 'sonnet',
+  default_mode: 'agent',
+  default_max_turns: null,
+  default_thinking_level: 'auto',
+  zoom_sensitivity: 50,
+  theme: 'dark',
+  new_agent_shortcut: 'Meta+l',
+  anthropic_api_key: null,
+  browser_homepage: 'https://duckduckgo.com',
+  auto_select_mode_on_new_agent: false,
+  expand_new_chats_in_dashboard: true,
+  auto_reveal_sub_agents: true,
+  dev_mode: false,
+  allow_experimental_updates: false,
+};
+
 const initialState: SettingsState = {
-  data: {
-    default_system_prompt: DEFAULT_SYSTEM_PROMPT,
-    default_folder: null,
-    default_model: 'sonnet',
-    default_mode: 'agent',
-    default_max_turns: null,
-    default_thinking_level: 'auto',
-    zoom_sensitivity: 50,
-    theme: 'dark',
-    new_agent_shortcut: 'Meta+l',
-    anthropic_api_key: null,
-    browser_homepage: 'https://duckduckgo.com',
-    auto_select_mode_on_new_agent: false,
-    expand_new_chats_in_dashboard: true,
-    auto_reveal_sub_agents: true,
-    dev_mode: false,
-    allow_experimental_updates: false,
-  },
+  data: DEFAULT_SETTINGS,
   loading: false,
   loaded: false,
   modalOpen: false,
@@ -289,11 +292,13 @@ const settingsSlice = createSlice({
         state.loaded = true;
         // Drop a stale response: on boot three fetches race (initial, sub-sync, free-trial mint); if the pre-mint one resolves last it would wipe the armed trial. Newest wins.
         if (state.latestWriteId && action.meta.requestId !== state.latestWriteId) return;
+        // Fill any field an older backend shape omitted so no consumer reads undefined; the payload still wins for everything it does send.
+        const merged = { ...DEFAULT_SETTINGS, ...action.payload };
         // Skip ref-assignment when byte-identical; keeps background refetch polls from re-firing every effect.
-        const next = JSON.stringify(action.payload);
+        const next = JSON.stringify(merged);
         const prev = JSON.stringify(state.data);
         if (next !== prev) {
-          state.data = action.payload;
+          state.data = merged;
         }
       })
       .addCase(fetchSettings.rejected, (state) => {
@@ -303,19 +308,19 @@ const settingsSlice = createSlice({
       .addCase(updateSettingsPatch.fulfilled, (state, action) => {
         // A user save is authoritative; claim newest so an in-flight GET can't overwrite it, and consume the draft so reopening shows the saved state.
         state.latestWriteId = action.meta.requestId;
-        state.data = action.payload;
+        state.data = { ...DEFAULT_SETTINGS, ...action.payload };
         state.draft = null;
         state.draftTab = null;
       })
       .addCase(resetSystemPrompt.fulfilled, (state, action) => {
         state.latestWriteId = action.meta.requestId;
-        state.data = action.payload;
+        state.data = { ...DEFAULT_SETTINGS, ...action.payload };
         state.draft = null;
         state.draftTab = null;
       })
       .addCase(dismissMcpSuggestion.fulfilled, (state, action) => {
         state.latestWriteId = action.meta.requestId;
-        state.data = action.payload;
+        state.data = { ...DEFAULT_SETTINGS, ...action.payload };
       });
   },
 });

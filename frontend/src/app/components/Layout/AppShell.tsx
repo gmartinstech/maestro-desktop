@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, startTransition, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
+import { getLastInteractedBrowser, getKeepAliveBrowserIds, setLastInteractedBrowser, clearLastInteractedBrowser } from '@/shared/browserFocus';
+import { getWebview } from '@/shared/browserRegistry';
+import { applyBrowserZoom } from '@/shared/browserZoom';
 import Box from '@mui/material/Box';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
@@ -41,7 +44,7 @@ import { shallowEqual } from 'react-redux';
 import { fetchDashboards, createDashboard, renameDashboard } from '@/shared/state/dashboardsSlice';
 import { Typewriter } from '@/app/components/feedback/Animated';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
-import { addBrowserCard, addBrowserTab } from '@/shared/state/dashboardLayoutSlice';
+import { addBrowserCard, addBrowserTab, cycleBrowserTab, reopenLastClosed } from '@/shared/state/dashboardLayoutSlice';
 import { setPendingBrowserUrl } from '@/shared/state/tempStateSlice';
 import { fetchOutputs } from '@/shared/state/outputsSlice';
 import { setInstalling } from '@/shared/state/updateSlice';
@@ -254,13 +257,14 @@ const AppShell: React.FC = () => {
     };
   }, []);
 
-  const openUrlInBrowser = useCallback((url: string, webContentsId?: number) => {
+  const openUrlInBrowser = useCallback((url: string, webContentsId?: number, background?: boolean) => {
     const dashMatch = location.pathname.match(/^\/dashboard\/(.+)/);
     if (dashMatch) {
       if (webContentsId != null) {
         const browserId = findBrowserByWebContentsId(webContentsId);
         if (browserId) {
-          dispatch(addBrowserTab({ browserId, url, makeActive: true }));
+          // Middle-click / background-tab disposition: add the tab but don't steal focus from the current one, like a real browser.
+          dispatch(addBrowserTab({ browserId, url, makeActive: !background }));
           return;
         }
       }
@@ -314,14 +318,78 @@ const AppShell: React.FC = () => {
     if (!w.openswarm?.onWebviewNewWindow) return;
     let lastUrl = '';
     let lastTime = 0;
-    return w.openswarm.onWebviewNewWindow((url: string, webContentsId: number) => {
+    return w.openswarm.onWebviewNewWindow((url: string, webContentsId: number, disposition?: string) => {
       const now = Date.now();
       if (url === lastUrl && now - lastTime < 1000) return;
       lastUrl = url;
       lastTime = now;
-      openUrlInBrowser(url, webContentsId);
+      openUrlInBrowser(url, webContentsId, disposition === 'background-tab');
     });
   }, [openUrlInBrowser]);
+
+  // Track the browser card the user last touched. Chrome clicks land on this document; a webview PAGE click can't reach it, so BrowserCard reports those via the app-clicked IPC. Clearing on any non-browser-card click is what makes Ctrl+R fall back to reloading the app.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const card = (e.target as HTMLElement | null)?.closest?.('[data-select-type="browser-card"]') as HTMLElement | null;
+      if (card) setLastInteractedBrowser(card.getAttribute('data-select-id') || '');
+      else clearLastInteractedBrowser();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
+
+  // Cmd/Ctrl+R: main neutralizes the default-menu reload and hands us the decision. Reload the browser you're in or last used IN PLACE (keeps its login); only when no browser is open at all fall back to a full app reload, since reloading the renderer destroys every webview and wipes its session. To deliberately reload OpenSwarm itself, use View > Reload.
+  useEffect(() => {
+    const w = window as any;
+    if (!w.openswarm?.onReloadShortcut) return;
+    return w.openswarm.onReloadShortcut(() => {
+      for (const id of [getLastInteractedBrowser(), ...getKeepAliveBrowserIds()]) {
+        const wv = id ? getWebview(id) : undefined;
+        if (wv) { try { wv.reload(); return; } catch (_e) { /* torn-down webview; try the next */ } }
+      }
+      window.location.reload();
+    });
+  }, []);
+
+  // Zoom / find / tab-cycle from a focused browser GUEST (keydowns inside a webview can't reach this document, so main forwards them with the guest's id). Targets that exact browser; the host-focused counterparts live in the keydown below + useCanvasControls (zoom).
+  useEffect(() => {
+    const w = window as any;
+    if (!w.openswarm?.onBrowserShortcut) return;
+    return w.openswarm.onBrowserShortcut((payload: { action: string; webContentsId: number }) => {
+      // Reopen-last-closed is global (no target browser), so handle it before the per-browser id guard.
+      if (payload.action === 'reopen-closed') { dispatch(reopenLastClosed()); return; }
+      const id = findBrowserByWebContentsId(payload.webContentsId) ?? getLastInteractedBrowser();
+      if (!id) return;
+      switch (payload.action) {
+        case 'zoom-in': applyBrowserZoom(id, 1); break;
+        case 'zoom-out': applyBrowserZoom(id, -1); break;
+        case 'zoom-reset': applyBrowserZoom(id, 0); break;
+        case 'find': window.dispatchEvent(new CustomEvent('openswarm:browser-find', { detail: { browserId: id } })); break;
+        case 'tab-next': dispatch(cycleBrowserTab({ browserId: id, dir: 1 })); break;
+        case 'tab-prev': dispatch(cycleBrowserTab({ browserId: id, dir: -1 })); break;
+      }
+    });
+  }, [dispatch]);
+
+  // Host-focused Ctrl/Cmd+F (find) and Ctrl+Tab (cycle) when a browser is the last thing you touched. Zoom keys aren't here: they share the +/-/0 keys with canvas zoom, so useCanvasControls owns that branch.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const id = getLastInteractedBrowser();
+      // Require a LIVE webview: a stale id (its card was closed) means no browser is focused, so let the canvas shortcuts (e.g. card-search Cmd+F) handle the key instead.
+      if (!id || !getWebview(id)) return;
+      const t = e.target as HTMLElement | null;
+      const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || !!t?.isContentEditable;
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key || '').toLowerCase() === 'f' && !typing) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('openswarm:browser-find', { detail: { browserId: id } }));
+      } else if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Tab') {
+        e.preventDefault();
+        dispatch(cycleBrowserTab({ browserId: id, dir: e.shiftKey ? -1 : 1 }));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dispatch]);
 
   useEffect(() => {
     try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); } catch {}
