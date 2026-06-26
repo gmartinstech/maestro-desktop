@@ -152,24 +152,46 @@ async def test_arm_with_no_sub_is_bounded_and_falls_through_to_arm(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_clear_reverts_forced_haiku_so_it_doesnt_outlive_the_trial(monkeypatch):
+async def test_clear_keeps_haiku_as_trial_face_unless_a_real_model_is_connected(monkeypatch):
     monkeypatch.setattr(ft, "save_settings_async", _noop)
     monkeypatch.setattr(ft, "p_sync_routing", _noop)
 
+    # No key + no sub: hand back the wheel but KEEP haiku as the (send-gated) trial face. Flipping to sonnet here would show a model the user can't use either; the out-of-runs UI does the gating.
+    monkeypatch.setattr(ft, "p_has_connected_subscription", _false)
     s = AppSettings(connection_mode="free-trial", free_trial_token="ftk", default_model="haiku")
     await clear_free_trial(s)
     assert s.connection_mode == "own_key"
-    assert s.default_model == "sonnet"  # forced free-run pick handed back, not left on Haiku
+    assert s.default_model == "haiku"
     assert s.free_trial_token is None
 
-    # A user who deliberately picked haiku OUTSIDE free-trial mode is left alone.
-    s2 = AppSettings(connection_mode="own_key", default_model="haiku")
+    # A real API key connected: hand forced haiku back to sonnet so a payer is never pinned to Haiku.
+    s2 = AppSettings(connection_mode="free-trial", free_trial_token="ftk",
+                     default_model="haiku", anthropic_api_key="sk-ant-real")
     await clear_free_trial(s2)
-    assert s2.default_model == "haiku"
+    assert s2.default_model == "sonnet"
+
+    # A connected 9Router subscription (invisible in settings) also frees haiku -> sonnet.
+    monkeypatch.setattr(ft, "p_has_connected_subscription", _true)
+    s3 = AppSettings(connection_mode="free-trial", free_trial_token="ftk", default_model="haiku")
+    await clear_free_trial(s3)
+    assert s3.default_model == "sonnet"
+
+    # A user who deliberately picked haiku OUTSIDE free-trial mode is left alone.
+    s4 = AppSettings(connection_mode="own_key", default_model="haiku")
+    await clear_free_trial(s4)
+    assert s4.default_model == "haiku"
 
 
 async def _noop(*_a, **_k):
     return None
+
+
+async def _false(*_a, **_k):
+    return False
+
+
+async def _true(*_a, **_k):
+    return True
 
 
 def _record(bucket):
