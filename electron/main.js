@@ -2209,6 +2209,28 @@ app.on('web-contents-created', (_event, contents) => {
       `).catch(() => {});
     });
 
+    // Force the guest's PAGE WORLD to always report visible/foregrounded. When a kept-alive browser card sits on another dashboard it's parked off-screen; the page-visibility API then reads hidden, so a real-time app (Discord) backgrounds itself, drops its gateway socket, and on return can't resume the session -> "please log in again". The webview-preload patches this too but only in the isolated world (contextIsolation), so the page's OWN code never sees it; injecting here in the main world is what actually keeps Discord logged in while hidden. document.hasFocus is forced true for the same reason; visibilitychange/freeze/pagehide are swallowed so nothing downstream reacts to a backgrounding that, to us, never happens.
+    contents.on('dom-ready', () => {
+      contents.executeJavaScript(`
+        (function(){
+          try {
+            if (window.__openswarm_vis__) return; window.__openswarm_vis__ = true;
+            var def = function(o, k, v){ try { Object.defineProperty(o, k, { get: function(){ return v; }, configurable: true }); } catch(e){} };
+            def(document, 'hidden', false);
+            def(document, 'visibilityState', 'visible');
+            def(document, 'webkitHidden', false);
+            def(document, 'webkitVisibilityState', 'visible');
+            try { document.hasFocus = function(){ return true; }; } catch(e){}
+            var swallow = function(e){ e.stopImmediatePropagation(); };
+            ['visibilitychange','webkitvisibilitychange','freeze','pagehide'].forEach(function(t){
+              window.addEventListener(t, swallow, true);
+              document.addEventListener(t, swallow, true);
+            });
+          } catch (e) {}
+        })();
+      `).catch(() => {});
+    });
+
     // WebAuthn/passkey shim. Injected on every dom-ready in the main world
     // via executeJavaScript (which uses V8's direct evaluation path and
     // bypasses Trusted Types CSP — inline <script> injection from the
