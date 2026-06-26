@@ -1344,8 +1344,9 @@ const dashboardLayoutSlice = createSlice({
           // Merge, don't replace: the keep-alive browser cards resetLayout preserved are ALREADY in state.browserCards with their webContents live. Keep them and add this dashboard's saved cards on top; on overlap (switching back to their own dashboard) the live data wins so the mounted webview isn't disturbed.
           const keptAlive = state.browserCards;
           const incoming = action.payload.browserCards;
+          // Default a missing home to the dashboard we're loading (legacy/untagged cards), but DON'T overwrite a real persisted home: a card saved here yet owned elsewhere is leftover from the old untagged-shows-everywhere bug, leaving its true home lets it park off-screen and get cleaned on the next save instead of bleeding.
           for (const card of Object.values(incoming)) {
-            card.dashboard_id = ownerDashboardId;
+            if (!card.dashboard_id) card.dashboard_id = ownerDashboardId;
           }
           // New cards boot parked (no guest process, title placeholder); the suspend hook wakes viewport-sized and agent-driven ones on its first pass. NEVER re-park a live keep-alive card, that snapshot-swap would kill its session.
           for (const id of Object.keys(incoming)) {

@@ -40,6 +40,8 @@ class BrowserCardPosition(BaseModel):
     spawned_by: Optional[str] = None
     # When the agent leaves the deliverable on the page (a video playing, a page to read), it sets this so the frontend's auto-close on parent finish skips the card and the browser stays put.
     keep_open: bool = False
+    # The dashboard this card calls home. Persisted so the home survives a save; without it the card reloads untagged and renders on EVERY dashboard (the cross-dashboard bleed).
+    dashboard_id: Optional[str] = None
 
 
 class NotePosition(BaseModel):
