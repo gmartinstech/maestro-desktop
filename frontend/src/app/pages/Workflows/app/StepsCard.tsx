@@ -24,9 +24,11 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
   const [draft, setDraft] = useState('');
   const [pendingDelete, setPendingDelete] = useState<LocalStep | null>(null);
 
-  // Agent-proposed step changes apply silently (no Apply/Discard popup): commit any staged draft as soon as it lands so the steps just update live. Guarded on real content, the edit session snapshots an empty draft on open and committing that 400s.
+  // Agent-proposed step changes apply silently (no Apply/Discard popup): commit any staged draft as soon as it lands so the steps just update live. Still skip a draft that's all blank-text steps (agent mid-build), but DO commit an empty draft so removing the last step actually sticks.
   useEffect(() => {
-    if (workflow.has_draft && (workflow.draft_steps || []).some((s) => s.text && s.text.trim())) {
+    const draftSteps = workflow.draft_steps || [];
+    const draftReady = draftSteps.length === 0 || draftSteps.some((s) => s.text && s.text.trim());
+    if (workflow.has_draft && draftReady) {
       dispatch(commitDraft({ id: workflow.id, keep_session: true }));
     }
   }, [workflow.has_draft, workflow.draft_steps, workflow.id, dispatch]);
@@ -112,7 +114,7 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
               <div onClick={() => update(s.id, { open: !s.open })} style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.muted, flex: 'none' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ transform: s.open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><path d="M6 9l6 6 6-6" /></svg>
               </div>
-              <div onClick={() => onDelete(s.id)} style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.faint, flex: 'none' }} aria-label="Delete step">
+              <div onClick={() => onDelete(s.id)} title="Remove step" style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.faint, flex: 'none' }} aria-label="Delete step">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14" /></svg>
               </div>
             </div>
