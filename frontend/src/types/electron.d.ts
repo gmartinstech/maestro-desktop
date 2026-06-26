@@ -47,6 +47,7 @@ declare global {
     onUpdateDownloaded: (cb: (info: OpenSwarmUpdateInfo) => void) => () => void;
     onUpdateError: (cb: (message: string) => void) => () => void;
     onWebviewNewWindow: (cb: (url: string, webContentsId: number) => void) => () => void;
+    onReloadShortcut?: (cb: () => void) => () => void;
     openExternal: (url: string) => Promise<void>;
     hardReset?: () => Promise<void>;
     clearBrowserData?: () => Promise<{ ok: boolean }>;

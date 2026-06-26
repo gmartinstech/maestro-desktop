@@ -1959,6 +1959,17 @@ function swallowCloseWindowShortcut(event, input) {
   }
 }
 
+// Cmd/Ctrl+R: the default menu's Reload accelerator reloads the WHOLE app even when a browser webview is focused (the "Ctrl+R reloads OpenSwarm, not the browser" complaint). preventDefault kills that accelerator (same electron#19279 path as Cmd+W, dispatched against whichever webContents is focused, hence both main window AND guests); the renderer then reloads the last-interacted browser, or the app if none. Shift+R (force reload) is left alone.
+function routeReloadShortcut(event, input) {
+  if (input.type !== 'keyDown') return;
+  if (!(input.meta || input.control) || input.shift || input.alt) return;
+  if ((input.key || '').toLowerCase() !== 'r') return;
+  event.preventDefault();
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openswarm:reload-shortcut');
+  } catch (_) {}
+}
+
 app.on('web-contents-created', (_event, contents) => {
   // Block Cmd+W from closing the main window, whether the window chrome or one of
   // its embedded webviews has focus. OAuth popups (their own 'window' contents,
@@ -1966,6 +1977,7 @@ app.on('web-contents-created', (_event, contents) => {
   // still Cmd+W them shut.
   if (isCreatingMainWindow || contents.getType() === 'webview') {
     contents.on('before-input-event', swallowCloseWindowShortcut);
+    contents.on('before-input-event', routeReloadShortcut);
   }
 
   // Override the user-agent on popup BrowserWindows (i.e. anything created

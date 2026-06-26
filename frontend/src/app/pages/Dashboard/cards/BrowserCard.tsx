@@ -46,6 +46,7 @@ import {
   setActiveTab as setRegistryActiveTab,
   type BrowserWebview,
 } from '@/shared/browserRegistry';
+import { setLastInteractedBrowser } from '@/shared/browserFocus';
 import { useBrowserActivity } from '@/shared/useBrowserActivity';
 import { getActionLabel } from '@/shared/browserCommandHandler';
 import { resolveInput, isGoogleSearch } from '@/shared/resolveUrl';
@@ -325,6 +326,9 @@ const BrowserCard: React.FC<Props> = ({
               },
             }),
           );
+        } else if (e?.channel === 'app-clicked') {
+          // First in-guest mousedown: a page click never reaches the host document, so this IPC is how a webview-content click marks this browser as last-interacted (drives Ctrl+R/zoom/tab targeting).
+          setLastInteractedBrowser(browserId);
         }
       };
 

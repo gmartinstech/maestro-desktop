@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, startTransition, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
+import { getLastInteractedBrowser, setLastInteractedBrowser, clearLastInteractedBrowser } from '@/shared/browserFocus';
+import { getWebview } from '@/shared/browserRegistry';
 import Box from '@mui/material/Box';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
@@ -322,6 +324,29 @@ const AppShell: React.FC = () => {
       openUrlInBrowser(url, webContentsId);
     });
   }, [openUrlInBrowser]);
+
+  // Track the browser card the user last touched. Chrome clicks land on this document; a webview PAGE click can't reach it, so BrowserCard reports those via the app-clicked IPC. Clearing on any non-browser-card click is what makes Ctrl+R fall back to reloading the app.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const card = (e.target as HTMLElement | null)?.closest?.('[data-select-type="browser-card"]') as HTMLElement | null;
+      if (card) setLastInteractedBrowser(card.getAttribute('data-select-id') || '');
+      else clearLastInteractedBrowser();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
+
+  // Cmd/Ctrl+R: main neutralizes the default-menu reload (which would always reload the whole app) and hands us the decision. Reload the browser you last interacted with; if that wasn't a live browser, reload the app, exactly as before.
+  useEffect(() => {
+    const w = window as any;
+    if (!w.openswarm?.onReloadShortcut) return;
+    return w.openswarm.onReloadShortcut(() => {
+      const id = getLastInteractedBrowser();
+      const wv = id ? getWebview(id) : undefined;
+      if (wv) { try { wv.reload(); return; } catch (_e) { /* torn-down webview; fall through to app reload */ } }
+      window.location.reload();
+    });
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); } catch {}

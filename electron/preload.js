@@ -108,6 +108,13 @@ contextBridge.exposeInMainWorld('openswarm', {
     return () => ipcRenderer.removeListener('webview-new-window', listener);
   },
 
+  // Cmd/Ctrl+R, intercepted in main (kills the default-menu reload), so the renderer can reload the focused browser instead of the whole app.
+  onReloadShortcut: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('openswarm:reload-shortcut', listener);
+    return () => ipcRenderer.removeListener('openswarm:reload-shortcut', listener);
+  },
+
   // Deep-link callback: fires when the OS opens the app with an
   // openswarm://auth?token=... URL (after Stripe-hosted checkout).
   onAuthUrl: (cb) => {
