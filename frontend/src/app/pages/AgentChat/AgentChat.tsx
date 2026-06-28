@@ -473,7 +473,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (wasActive && isTerminal) {
       if (id) {
         dispatch(fadeGlowingBrowserCards(id));
-        setTimeout(() => dispatch(clearGlowingBrowserCards(id)), 2800);
+        setTimeout(() => dispatch(clearGlowingBrowserCards(id)), 600);
       }
 
       const nextQueued = messageQueueRef.current.shift();

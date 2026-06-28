@@ -716,9 +716,10 @@ const BrowserCard: React.FC<Props> = ({
   const accentColor = c.accent.primary;
 
   const glowingBrowserCards = useAppSelector((s) => s.dashboardLayout.glowingBrowserCards);
-  const isGlowingFromRedux = !!glowingBrowserCards[browserId];
+  const browserGlow = glowingBrowserCards[browserId];
 
-  const showGlow = isGlowingFromRedux;
+  // Drop the glow the moment the agent's done (fading) so it eases off via the 0.4s box-shadow transition, instead of holding full until the entry clears. The tether arrow already keyed off `fading`; the card never did.
+  const showGlow = !!browserGlow && !browserGlow.fading;
 
   const agentBorder = isHighlighted
     ? `2px solid ${c.accent.primary}`
