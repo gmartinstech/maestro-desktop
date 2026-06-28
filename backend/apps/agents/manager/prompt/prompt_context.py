@@ -118,6 +118,14 @@ def build_browser_context(dashboard_id: Optional[str], selected_browser_ids: Opt
                     lines.append(f"  Title: {title}")
                 if url:
                     lines.append(f"  URL: {url}")
+            if len(visible_cards) > 1:
+                lines.append("")
+                lines.append(
+                    "The user pre-selected these specific cards, so each is a target they chose, not a "
+                    "list of inputs to fold onto one: if the request fits every card (e.g. open the same "
+                    "page in all of them), run it on ALL of them in parallel via BrowserAgents (one task "
+                    "per browser_id), don't satisfy a multi-card selection by touching just one."
+                )
 
     lines.append("</browser_agent_instructions>")
     return "\n".join(lines)
