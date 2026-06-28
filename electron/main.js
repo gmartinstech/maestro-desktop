@@ -930,8 +930,8 @@ async function startBackend() {
     // app_version="unknown". The path-based fallback stays in place so this
     // change is purely additive.
     OPENSWARM_APP_VERSION: app.getVersion(),
-    // Packaged builds route analytics through the cloud edge; dev leaves it unset so the backend hits the local ingest.
-    ...(isPackaged ? { OPENSWARM_ANALYTICS_URL: 'https://api.openswarm.com' } : {}),
+    // Packaged builds send analytics straight to its own public edge (analytics.openswarm.com), bypassing the billing/account core; dev leaves it unset so the backend hits the local ingest. Older shipped builds still point at api.openswarm.com, whose /public/* relay stays in place for them.
+    ...(isPackaged ? { OPENSWARM_ANALYTICS_URL: 'https://analytics.openswarm.com' } : {}),
     // Inject the user's BCP 47 locale + IANA timezone. The Python backend
     // doesn't have reliable APIs for either: locale.getdefaultlocale() is
     // deprecated and inconsistent across OSes, and Python's local-tz string
