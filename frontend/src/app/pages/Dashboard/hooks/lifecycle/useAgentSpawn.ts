@@ -25,14 +25,18 @@ import {
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
 import type { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import type { CanvasActions } from '../interaction/useCanvasControls';
+import type { useDashboardSelection } from '../state/useDashboardSelection';
+import { useSpawnPlacement } from './useSpawnPlacement';
 
 type SpawnOrigin = { x: number; y: number; type?: 'branch' };
+type Selection = ReturnType<typeof useDashboardSelection>;
 
 interface UseAgentSpawnArgs {
   cards: Record<string, CardPosition>;
   expandedSessionIds: string[];
   dashboardId: string;
   expandNewChats: boolean;
+  selection: Selection;
   canvasActions: CanvasActions;
   viewportRef: RefObject<HTMLDivElement | null>;
   toolbarRef: RefObject<HTMLDivElement | null>;
@@ -52,6 +56,7 @@ export function useAgentSpawn({
   expandedSessionIds,
   dashboardId,
   expandNewChats,
+  selection,
   canvasActions,
   viewportRef,
   toolbarRef,
@@ -65,6 +70,7 @@ export function useAgentSpawn({
   onWelcomeNewAgent,
 }: UseAgentSpawnArgs) {
   const dispatch = useAppDispatch();
+  const getSpawnPlacement = useSpawnPlacement({ selection, viewportRef, canvasStateRef, expandedSessionIds });
 
   const handleBranchFromCard = useCallback(
     (sourceSessionId: string, newSessionId: string) => {
@@ -138,6 +144,8 @@ export function useAgentSpawn({
 
       // Toolbar position in canvas coords drives the spawn-from-toolbar grow animation.
       let origin: SpawnOrigin | null = null;
+      // Where the chat lands: beside the selected card, else in front of the viewport. Feeds the optimistic placement below, replacing the legacy toolbar-position anchor.
+      const spawnPos = getSpawnPlacement(DEFAULT_CARD_W, DEFAULT_CARD_H);
       const toolbarEl = toolbarRef.current;
       const vpEl = viewportRef.current;
       if (toolbarEl && vpEl) {
@@ -165,8 +173,8 @@ export function useAgentSpawn({
       if (origin) spawnOriginsRef.current![draftId] = origin;
 
       const cardHeight = expandNewChats ? EXPANDED_CARD_MIN_H : DEFAULT_CARD_H;
-      const anchorX = browserAnchor ? browserAnchor.x - DEFAULT_CARD_W - GRID_GAP * 12 : origin?.x ?? 0;
-      const anchorY = browserAnchor ? browserAnchor.y : origin?.y ?? 0;
+      const anchorX = browserAnchor ? browserAnchor.x - DEFAULT_CARD_W - GRID_GAP * 12 : spawnPos.x;
+      const anchorY = browserAnchor ? browserAnchor.y : spawnPos.y;
       dispatch(placeCard({ sessionId: draftId, x: anchorX, y: anchorY, width: DEFAULT_CARD_W, height: cardHeight, expandedSessionIds }));
       if (expandNewChats) {
         dispatch(expandSession(draftId));
@@ -212,7 +220,7 @@ export function useAgentSpawn({
         if (launchAndSendFirstMessage.fulfilled.match(action)) {
           const realId = action.payload.session.id;
           dispatch(generateTitle({ sessionId: realId, prompt }));
-          // Re-point focus/selection at the rekeyed real card; the draft id is gone after the in-place swap. The browser tether rekeys with the card in the dashboardLayout extraReducer.
+          // Re-point focus/selection at the rekeyed real card; the draft id is gone after the in-place swap. The browser tether rekeys with the card in the dashboardLayout extraReducer. Placement already happened optimistically at spawn (spawnPos / browserAnchor), so there's nothing to re-place here.
           if (expandNewChats) setAutoFocusSessionId(realId);
           else setPendingSelectSessionId(realId);
 
@@ -240,7 +248,7 @@ export function useAgentSpawn({
         }
       });
     },
-    [viewportRef, canvasActions, dispatch, dashboardId, expandNewChats, expandedSessionIds, handleHighlightCard, setToolbarOpen, setAutoFocusSessionId, setPendingSelectSessionId, toolbarRef, canvasStateRef, spawnOriginsRef],
+    [viewportRef, canvasActions, dispatch, dashboardId, expandNewChats, expandedSessionIds, getSpawnPlacement, handleHighlightCard, setToolbarOpen, setAutoFocusSessionId, setPendingSelectSessionId, toolbarRef, canvasStateRef, spawnOriginsRef],
   );
 
   return {
