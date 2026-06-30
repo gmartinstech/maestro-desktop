@@ -44,7 +44,7 @@ def atomic_write_json(path: str, payload, *, indent: int = 2) -> None:
             for attempt in range(3):
                 try:
                     os.replace(tmp, path)
-                    _fsync_dir(directory)
+                    p_fsync_dir(directory)
                     return
                 except PermissionError:
                     if attempt == 2:
@@ -58,7 +58,7 @@ def atomic_write_json(path: str, payload, *, indent: int = 2) -> None:
             raise
 
 
-def _fsync_dir(directory: str) -> None:
+def p_fsync_dir(directory: str) -> None:
     # Best-effort fsync of the parent dir so the rename itself sticks
     # across a crash. POSIX needs this (ext4/xfs/btrfs); Windows doesn't
     # let you open a directory for fsync, so we just skip there. Failing
