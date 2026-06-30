@@ -25,10 +25,11 @@ export const INTEGRATIONS: Integration[] = [
   {
     id: 'reddit',
     name: 'Reddit',
-    description: 'Browse subreddits, search posts, get post details, analyze users. No API keys required.',
-    mcp_config: { type: 'stdio', command: 'npx', args: ['-y', 'reddit-mcp-buddy'] },
+    description: 'Browse, search, post, comment, vote, save, subscribe, and DM, all from your own logged-in Reddit session. No API key.',
+    mcp_config: { type: 'stdio', command: 'python', args: ['-m', 'backend.apps.reddit_mcp_shim'] },
     color: '#FF4500',
-    website: 'https://www.npmjs.com/package/reddit-mcp-buddy',
+    website: 'https://www.reddit.com',
+    connectInstructions: 'Uses your own Reddit account: open reddit.com in an OpenSwarm browser card and sign in once. Nothing is stored, the integration borrows your live session per request and paces itself to stay within human limits.',
     icon: (
       <svg viewBox="0 0 24 24" width="22" height="22">
         <circle cx="12" cy="12" r="12" fill="#FF4500"/>

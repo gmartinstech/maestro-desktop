@@ -2776,6 +2776,27 @@ ipcMain.handle('browser:clear-data', async () => {
   return { ok: true };
 });
 
+// Hand the user's own logged-in cookies for a vetted social platform to its session-backed MCP shim (Reddit/X/TikTok). Reads from the browser partition's main-process cookie store, so httpOnly auth cookies (e.g. reddit_session) are included, which document.cookie can't see. Allowlisted domains ONLY, so this can never become a general cookie-theft surface; the backend re-checks the same allowlist before it ever calls this.
+const SESSION_COOKIE_DOMAINS = ['reddit.com', 'x.com', 'twitter.com', 'tiktok.com'];
+ipcMain.handle('get-partition-cookies', async (_e, domain) => {
+  const d = String(domain || '').toLowerCase().trim().replace(/^\./, '');
+  if (!SESSION_COOKIE_DOMAINS.includes(d)) {
+    return { cookies: [], userAgent: '', error: `domain not allowed: ${d || '(empty)'}` };
+  }
+  try {
+    const ses = session.fromPartition(BROWSER_PARTITION);
+    const raw = await ses.cookies.get({ domain: d });
+    const cookies = raw.map((c) => ({ name: c.name, value: c.value }));
+    // Match the partition's spoofed Chrome UA so the shim's requests are byte-identical to the webview's.
+    const userAgent = process.platform === 'win32'
+      ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+    return { cookies, userAgent };
+  } catch (err) {
+    return { cookies: [], userAgent: '', error: `cookie read failed: ${err && err.message}` };
+  }
+});
+
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);
 
 // One-shot recovery info: if the crash-watchdog relaunched us, returns the

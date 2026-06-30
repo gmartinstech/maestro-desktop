@@ -64,7 +64,7 @@ CURATED_SHORTLIST: list[CuratedEntry] = [
     {
         "id": "Reddit",
         "title": "Reddit",
-        "description": "Browse subreddits, search posts, analyze users; when the task involves public Reddit content.",
+        "description": "Browse, search, post, comment, vote, save, subscribe, and DM on Reddit from the user's own logged-in session; for reading or acting on Reddit.",
     },
     {
         "id": "YouTube",

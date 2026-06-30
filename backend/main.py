@@ -495,6 +495,28 @@ async def browser_agent_run(request: Request):
     return JSONResponse({"results": results})
 
 
+# Allowlisted social platforms whose own-session MCP shims may borrow partition cookies. The allowlist is the real scope: even an authenticated localhost caller can only ever read these sites' cookies, never an arbitrary domain, so this can't become a general cookie-theft oracle.
+P_SESSION_COOKIE_DOMAINS = {"reddit.com", "x.com", "twitter.com", "tiktok.com"}
+
+
+@app.get("/api/browser-session/cookies")
+async def browser_session_cookies(domain: str = ""):
+    """Hand a vetted platform's live partition cookies + UA to its own-session MCP shim.
+
+    Auth is the standard localhost token (middleware). Cookies are read live from
+    Electron's persist:openswarm-browser partition via the dashboard bridge and are
+    never persisted server-side; the shim talks to the site as the user's browser.
+    """
+    d = (domain or "").lower().strip().lstrip(".")
+    if d not in P_SESSION_COOKIE_DOMAINS:
+        return JSONResponse({"error": f"domain not allowed: {d or '(empty)'}", "cookies": []}, status_code=400)
+    rid = uuid4().hex
+    result = await ws_manager.send_browser_command(rid, "get_session_cookies", "", {"domain": d})
+    if result.get("error"):
+        return JSONResponse({"error": result["error"], "cookies": []})
+    return JSONResponse({"cookies": result.get("cookies", []), "userAgent": result.get("userAgent", "")})
+
+
 @app.post("/api/mcp-meta/{action}")
 async def mcp_meta(action: str, request: Request):
     """Back the openswarm-mcp-meta stdio MCP server.

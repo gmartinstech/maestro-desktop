@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld('openswarm', {
   // Clears cookies/cache/localStorage for the browser-card partition only (never the app's defaultSession). Logs you out of sites opened in browser cards.
   clearBrowserData: () => ipcRenderer.invoke('browser:clear-data'),
   connectSlack: () => ipcRenderer.invoke('connect-slack'),
+  // Hands a vetted social platform's partition cookies to its session-backed MCP shim (allowlisted domains only, gated again in the main process).
+  getPartitionCookies: (domain) => ipcRenderer.invoke('get-partition-cookies', domain),
   sendCdpCommand: (wcId, method, params, sessionId) => ipcRenderer.invoke('send-cdp-command', wcId, method, params, sessionId),
   cdpDetachClean: (wcId) => ipcRenderer.invoke('cdp-detach-clean', wcId),
   cdpCacheSet: (wcId, indexMap) => ipcRenderer.invoke('cdp-cache-set', wcId, indexMap),

@@ -1396,10 +1396,28 @@ async function handleBrowserCommand(data: Record<string, any>) {
   }
 }
 
+// Hand a vetted social platform's partition cookies to its session-backed MCP shim. No webview needed: it reads the main-process cookie store directly, so it runs before the webview lookup.
+async function handleSessionCookies(params: Record<string, any>): Promise<Record<string, any>> {
+  const bridge = (window as any).openswarm?.getPartitionCookies as
+    | ((domain: string) => Promise<{ cookies: { name: string; value: string }[]; userAgent: string; error?: string }>)
+    | undefined;
+  if (!bridge) return { error: 'Cookie bridge unavailable (desktop app only)', cookies: [] };
+  try {
+    return await bridge(String(params.domain || ''));
+  } catch (err: any) {
+    return { error: `Cookie bridge failed: ${err?.message || String(err)}`, cookies: [] };
+  }
+}
+
 async function runBrowserCommand(
   request_id: string, action: string, browser_id: string, tab_id: string | undefined,
   params: Record<string, any>,
 ) {
+  if (action === 'get_session_cookies') {
+    const result = await handleSessionCookies(params);
+    dashboardWs.send('browser:result', { request_id, ...result });
+    return;
+  }
   const wv = await awaitWebview(browser_id, tab_id || undefined);
   if (!wv) {
     dashboardWs.send('browser:result', {

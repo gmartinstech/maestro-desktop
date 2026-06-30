@@ -151,6 +151,16 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
         env["PYTHONPATH"] = (p_project_root + os.pathsep + existing_pp) if existing_pp else p_project_root
 
+    # Reddit MCP runs as a Python shim (backend.apps.reddit_mcp_shim) that borrows the user's live browser session via the backend's cookie bridge, so it needs the localhost port + auth token, plus PYTHONPATH to import itself.
+    if tool.name.lower() == "reddit" and config.get("type") == "stdio":
+        from backend.auth import get_auth_token
+        env = config.setdefault("env", {})
+        env["OPENSWARM_PORT"] = os.environ.get("OPENSWARM_PORT", "8324")
+        env["OPENSWARM_AUTH_TOKEN"] = get_auth_token()
+        p_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (p_project_root + os.pathsep + existing_pp) if existing_pp else p_project_root
+
     # Microsoft 365 MCP: use a stable token cache path shared across process spawns
     if tool.name.lower() == "microsoft 365" and config.get("type") == "stdio":
         env = config.setdefault("env", {})
