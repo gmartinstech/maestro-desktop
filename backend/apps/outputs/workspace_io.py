@@ -73,6 +73,7 @@ WALK_SKIP_DIRS = frozenset({
     ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
+    ".openswarm",
 })
 
 # OS/editor junk files that ride along in a workspace but are noise in an export.

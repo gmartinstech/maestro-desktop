@@ -8,6 +8,7 @@ import { getAuthToken, ensureAuthToken } from '@/shared/config';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { registerViewWebview, unregisterViewWebview, type ViewWebview } from '@/shared/viewWebviewRegistry';
 import RunInDesktopMessage from '@/app/components/RunInDesktopMessage';
+import { registerWebview, unregisterWebview, setActiveTab, type BrowserWebview } from '@/shared/browserRegistry';
 
 // In Electron use <webview> to escape iframe restrictions (popups, mic/camera, WebAuthn, cookied fetch); a srcdoc app still uses an iframe (data:text/html breaks webview same-origin); outside Electron we show a launch-correctly message.
 const isElectron = navigator.userAgent.includes('Electron');
@@ -61,7 +62,12 @@ interface Props {
   onAppClicked?: () => void;
   /** Dashboard card's output id. When set, the live webview registers under it so the delete path can quiesce its GPU surface before unmount. Omitted in the App Builder (no card teardown). */
   registryId?: string;
+  /** When set (webview mode only), registers this preview's webview in browserRegistry under this id so an app agent can drive it via the browser command pipeline. */
+  agentBrowserId?: string;
 }
+
+// Single tab per app preview; the browser command pipeline keys on browserId:tabId.
+const APP_TAB_ID = 'main';
 
 function buildSrcdoc(
   frontendCode: string,
@@ -101,6 +107,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
   interactive = false,
   onAppClicked,
   registryId,
+  agentBrowserId,
 }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const webviewRef = useRef<any>(null);
@@ -344,6 +351,23 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
       } catch (_e) {}
     };
   }, [useWebview, handleNavigationLoad]);
+
+  // Register the live webview so an app agent can drive it through the same
+  // browser command pipeline that drives browser cards. Webview-only: the iframe
+  // fallback has no executeJavaScript channel from the host.
+  useEffect(() => {
+    if (!useWebview || !agentBrowserId) return;
+    const wv = webviewRef.current as BrowserWebview | null;
+    if (!wv) return;
+    registerWebview(agentBrowserId, APP_TAB_ID, wv);
+    setActiveTab(agentBrowserId, APP_TAB_ID);
+    return () => {
+      try { unregisterWebview(agentBrowserId, APP_TAB_ID); } catch (_e) {}
+    };
+    // Keyed on useWebview (flips true when the webview mounts), not iframeSrc:
+    // the webview element has a stable key and survives src/data changes, so
+    // re-registering on every data update would just thrash the registry.
+  }, [useWebview, agentBrowserId]);
 
   const hasContent = !!(serveUrl || frontendCode?.trim());
 
