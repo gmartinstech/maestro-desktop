@@ -73,6 +73,9 @@ export interface AppSettings {
   user_id?: string | null;
   user_email?: string | null;
   signin_method?: 'google' | 'email' | 'stripe' | null;
+  /** Self-reported onboarding persona + name (backend model already carries these); drive payoff personalization. */
+  user_name?: string | null;
+  user_use_case?: string | null;
   /** Anonymous device id (first-run generated); stitches anon to authed PostHog Persons. */
   installation_id?: string | null;
 }
