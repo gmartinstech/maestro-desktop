@@ -69,35 +69,32 @@ export const Payoff: React.FC<{
             marginTop: 16,
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 12,
-            color: S.muted,
-            fontSize: 13,
             borderTop: `1px solid ${S.border}`,
             paddingTop: 14,
           }}
         >
-          <span>+</span>
-          <span>Cowork</span>
-          <span style={{ marginLeft: 8 }}>Opus 4.8</span>
+          <span style={{ fontSize: 13, color: S.muted }}>a real agent goes and does this, live</span>
           <span
             onClick={onRun}
             style={{
-              marginLeft: 'auto',
               background: S.ctaBg,
               color: S.ctaText,
               borderRadius: 9,
-              padding: '7px 15px',
+              padding: '8px 18px',
               fontWeight: 600,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
             }}
           >
-            Run
+            Do it &rarr;
           </span>
         </div>
       </div>
 
       <div style={{ marginTop: 24, width: '100%', maxWidth: 600, textAlign: 'left' }}>
-        <div style={{ fontSize: 13, color: S.muted, marginBottom: 8 }}>Ideas for you</div>
+        <div style={{ fontSize: 13, color: S.muted, marginBottom: 8 }}>Or put me on one of these</div>
         {ideas.map((idea) => (
           <IdeaRow key={idea.id} idea={idea} onPick={() => onPickIdea(idea)} />
         ))}

@@ -1,15 +1,15 @@
-// D3: the personalize consent. The line reveals word-by-word (smooth, layout-stable, no jumpy
-// caret), then a single Yes. "Yes" authorizes the (later) background profiling read; copy says so.
+// D3: the personalize consent. Short question reveals word-by-word, then a small explainer + Yes.
+// "Yes" authorizes the (later) background profiling read; the sub-line says exactly what that means.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useReducedMotion } from '@/shared/hooks/useReducedMotion';
 import { useOnboardingSkin } from '../onboardingSkin';
 import { PrimaryButton, GhostLink } from '../OnboardingAtoms';
 
-const LINE =
-  "Want me to actually get you? Say yes and I'll take a quick look at whatever you connect, so everything I show is aimed at your world, not a generic demo.";
+const LINE = 'Want me to make this yours?';
+const SUB = "I'll take a quick look at what you connect, nothing else.";
 
-const WORD_STAGGER_S = 0.055;
+const WORD_STAGGER_S = 0.06;
 const WORD_DUR_S = 0.5;
 
 export const PersonalizeConsent: React.FC<{ onConsent: (yes: boolean) => void }> = ({ onConsent }) => {
@@ -28,7 +28,7 @@ export const PersonalizeConsent: React.FC<{ onConsent: (yes: boolean) => void }>
 
   return (
     <>
-      <div style={{ fontFamily: S.serif, fontWeight: 500, fontSize: 29, lineHeight: 1.4, maxWidth: 620, color: S.text }}>
+      <div style={{ fontFamily: S.serif, fontWeight: 500, fontSize: 33, lineHeight: 1.25, color: S.text }}>
         {words.map((w, i) => (
           <React.Fragment key={i}>
             <span
@@ -45,9 +45,22 @@ export const PersonalizeConsent: React.FC<{ onConsent: (yes: boolean) => void }>
           </React.Fragment>
         ))}
       </div>
+
       <div
         style={{
-          marginTop: 34,
+          marginTop: 14,
+          fontSize: 15,
+          color: S.muted,
+          opacity: done ? 1 : 0,
+          transition: 'opacity .5s ease',
+        }}
+      >
+        {SUB}
+      </div>
+
+      <div
+        style={{
+          marginTop: 30,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
