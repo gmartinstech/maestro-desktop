@@ -24,6 +24,9 @@ from backend.apps.settings.settings import load_settings
 logger = logging.getLogger(__name__)
 
 SUGGEST_TIMEOUT_S = 20.0
+# aux_max_tokens_for is tuned for tiny labels (~100); this JSON (insight + task + 4 options) needs
+# real room or it truncates mid-object and the parse fails. Floor at 900, keep the GPT-5 bump.
+SUGGEST_MAX_TOKENS = 900
 
 SYSTEM_PROMPT = (
     "You set up the first screen a brand-new OpenSwarm user sees. OpenSwarm is NOT a chatbot: its AI "
@@ -31,7 +34,8 @@ SYSTEM_PROMPT = (
     "watch things and ping you. Given who the user is, write their landing content.\n"
     "RULES: plain language a non-dev instantly gets; NEVER invent specific facts about them (no 'your "
     "launch next week' you cannot know, keep the insight general and true); everything is an ACTION an "
-    "agent DOES (go, build, watch, chase, clean up, find), never 'ask me' or 'let's chat'.\n"
+    "agent DOES (go, build, watch, chase, clean up, find), never 'ask me' or 'let's chat'; no bracketed "
+    "placeholders like [framework]; never use em-dashes or en-dashes, use commas or periods.\n"
     "Return ONLY this JSON, nothing else:\n"
     '{"insight": "<one short, warm, TRUE line about the kind of things someone like them deals with>", '
     '"task": "<the single most useful thing an agent could DO for them right now, a concrete instruction, '
@@ -108,7 +112,7 @@ async def suggest_payoff(persona: str, name: str) -> Optional[PayoffSuggestion]:
         async def run() -> None:
             async with client.messages.stream(
                 model=aux_model,
-                max_tokens=aux_max_tokens_for(aux_model),
+                max_tokens=max(SUGGEST_MAX_TOKENS, aux_max_tokens_for(aux_model)),
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_turn}],
                 extra_headers={"X-Openswarm-Task-Id": uuid4().hex},
