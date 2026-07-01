@@ -18,13 +18,6 @@ export interface PersonaOption {
 
 export type FlowStepId = 'help' | 'name' | 'consent' | 'connect' | 'payoff';
 
-export interface ConnectorOption {
-  id: string;
-  name: string;
-  description: string;
-  icon: IconName;
-}
-
 export interface PayoffIdea {
   id: string;
   icon: IconName;

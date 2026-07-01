@@ -6,7 +6,7 @@ import LinkIcon from '@mui/icons-material/Link';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { ToolDefinition } from '@/shared/state/toolsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { Integration } from '../integrations';
+import { Integration } from '@/shared/integrations/catalog';
 
 interface CustomToolConnectProps {
   tool: ToolDefinition;

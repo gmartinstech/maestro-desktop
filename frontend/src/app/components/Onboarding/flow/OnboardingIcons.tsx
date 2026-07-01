@@ -34,25 +34,3 @@ export const LineIcon: React.FC<{ name: IconName; size?: number; strokeWidth?: n
     {ICON_INNER[name]}
   </svg>
 );
-
-// The 12-ray coral burst; drawn, not a font glyph, so it's crisp at any size.
-export const Spark: React.FC<{ size?: number; color?: string }> = ({ size = 20, color = '#D97757' }) => {
-  const rays = [];
-  for (let i = 0; i < 12; i++) {
-    const a = (i * 30 * Math.PI) / 180;
-    rays.push(
-      <line
-        key={i}
-        x1={12 + 3.1 * Math.cos(a)}
-        y1={12 + 3.1 * Math.sin(a)}
-        x2={12 + 9.3 * Math.cos(a)}
-        y2={12 + 9.3 * Math.sin(a)}
-      />,
-    );
-  }
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" stroke={color} strokeWidth={1.7} strokeLinecap="round" aria-hidden>
-      {rays}
-    </svg>
-  );
-};

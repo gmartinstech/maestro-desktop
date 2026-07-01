@@ -11,7 +11,7 @@ import {
 } from '@/shared/state/toolsSlice';
 import { McpServer } from '@/shared/state/mcpRegistrySlice';
 import { ToolForm, emptyForm } from '../toolsHelpers';
-import { Integration } from '../integrations';
+import { Integration } from '@/shared/integrations/catalog';
 import { useToolConnections } from './useToolConnections';
 import { useRegistryBrowser } from './useRegistryBrowser';
 

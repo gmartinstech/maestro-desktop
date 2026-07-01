@@ -29,7 +29,7 @@ import {
 import { Skeleton } from '@/app/components/feedback/Loading';
 
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { Integration, INTEGRATIONS } from './integrations';
+import { Integration, INTEGRATIONS } from '@/shared/integrations/catalog';
 import { CATEGORY_ORDER } from './toolsHelpers';
 import ToolSection from './cards/ToolSection';
 import BrowserPermissionCard from './cards/BrowserPermissionCard';

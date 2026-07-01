@@ -30,7 +30,6 @@ export const OnboardingFlow: React.FC<{ onExit: () => void }> = ({ onExit }) => 
   const [persona, setPersona] = useState<PersonaId | null>(null);
   const [name, setName] = useState('');
   const [consent, setConsent] = useState(false);
-  const [connectedIds, setConnectedIds] = useState<string[]>([]);
 
   const floor = useMemo(() => demoPayoff(persona), [persona]);
   // Background read-only profiling (only if they consented); upgrades the payoff in place when it lands.
@@ -77,14 +76,7 @@ export const OnboardingFlow: React.FC<{ onExit: () => void }> = ({ onExit }) => 
       case 'consent':
         return <PersonalizeConsent onConsent={(yes) => { setConsent(yes); setStep(yes ? 'connect' : 'payoff'); }} />;
       case 'connect':
-        return (
-          <ConnectApps
-            connectedIds={connectedIds}
-            onConnect={(id) => setConnectedIds((ids) => (ids.includes(id) ? ids : [...ids, id]))}
-            onContinue={() => setStep('payoff')}
-            onSkip={() => setStep('payoff')}
-          />
-        );
+        return <ConnectApps onContinue={() => setStep('payoff')} onSkip={() => setStep('payoff')} />;
       case 'payoff':
         return (
           <Payoff

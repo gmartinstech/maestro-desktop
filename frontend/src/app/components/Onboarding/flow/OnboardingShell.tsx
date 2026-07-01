@@ -7,7 +7,6 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/shared/hooks/useReducedMotion';
 import { useOnboardingSkin, ONBOARDING_EASE } from './onboardingSkin';
-import { Spark } from './OnboardingIcons';
 
 interface Props {
   children: React.ReactNode;
@@ -34,9 +33,7 @@ export const OnboardingShell: React.FC<Props> = ({ children, stepKey }) => {
       }}
     >
       <div style={{ position: 'fixed', top: 34, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 9 }}>
-        <span style={{ lineHeight: 0 }}>
-          <Spark size={20} color={S.accent} />
-        </span>
+        <img src="./logo.png" alt="OpenSwarm" style={{ width: 22, height: 22, borderRadius: 2, opacity: 0.9 }} />
         <span style={{ fontFamily: S.serif, fontSize: 25, fontWeight: 500, letterSpacing: 0.2 }}>OpenSwarm</span>
       </div>
 
