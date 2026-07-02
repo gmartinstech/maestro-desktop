@@ -94,16 +94,16 @@ def handle_tool_call(tool_name: str, arguments: dict) -> dict:
         })
         if "error" in result:
             return {"content": [{"type": "text", "text": f"Error: {result['error']}"}], "isError": True}
+        path = result.get("path")
+        # Point at SKILL.md instead of inlining the ~6.5k-token reference: it's written to the workspace at seed time, so a one-time Read keeps it out of the transcript (where an inline copy would rot for the rest of the session). Read it BEFORE building.
         lines = [
             f"App '{name}' created and its live preview card is now on the user's dashboard.",
-            f"- workspace: {result.get('path')}",
+            f"- workspace: {path}",
             f"- output_id: {result.get('output_id')}",
             "",
-            "Build it by writing files under the workspace path; the preview hot-reloads on save.",
+            f"NEXT: read {path}/SKILL.md now — it's the full App Builder reference (stack, layout, rules); follow it.",
+            "Then build by writing files under the workspace path; the preview hot-reloads on save.",
             "Housekeeping: write meta.json (name/description) first; `bash restart.sh` restarts the runtime; `.openswarm/terminal.log` is the live terminal (check it before declaring done).",
-            "The full App Builder reference follows — FOLLOW IT (it also lives at SKILL.md in the workspace):",
-            "",
-            str(result.get("skill") or ""),
         ]
         return {"content": [{"type": "text", "text": "\n".join(lines)}]}
 

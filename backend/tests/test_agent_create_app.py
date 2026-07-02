@@ -34,7 +34,11 @@ async def test_agent_create_registers_named_output_and_broadcasts(tmp_path, monk
     ))
     assert res["ok"] is True
     assert os.path.isfile(os.path.join(res["path"], "run.sh"))
-    assert "App Builder" in res["skill"] or len(res["skill"]) > 500
+    # The reference is NOT inlined in the response (context-rot fix) — it's on disk as SKILL.md for the agent to read on demand.
+    assert "skill" not in res
+    skill_path = os.path.join(res["path"], "SKILL.md")
+    assert os.path.isfile(skill_path)
+    assert len(open(skill_path, encoding="utf-8").read()) > 500
 
     output = load_output(res["output_id"])
     assert output.name == "Pomodoro Timer"

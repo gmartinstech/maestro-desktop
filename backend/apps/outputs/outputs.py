@@ -274,11 +274,11 @@ async def agent_create_app(body: AgentCreateAppRequest):
         })
     except Exception:
         logger.exception("agent-create output_upserted broadcast failed")
+    # The reference isn't returned here: it's written to <folder>/SKILL.md at seed time and the agent reads it on demand, keeping the ~6.5k-token blob out of both this response and the agent transcript.
     return {
         "ok": True,
         "output_id": output_id,
         "path": os.path.abspath(folder),
-        "skill": load_app_builder_skill(),
     }
 
 
