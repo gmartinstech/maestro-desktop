@@ -11,7 +11,7 @@ from backend.auth import get_auth_token
 from backend.config.Apps import SubApp
 from backend.apps.outputs.models import (
     Output, OutputCreate, OutputUpdate, OutputExecute, OutputExecuteResult,
-    VibeCodeRequest, WorkspaceSeedRequest,
+    VibeCodeRequest, WorkspaceSeedRequest, AgentCreateAppRequest,
     PublishPreflightRequest, PublishRequest, PublishPreflightResponse,
     PublishResult, PublishReview,
 )
@@ -239,6 +239,47 @@ def ensure_webapp_workspace_seeded_and_registered(
     except Exception:
         logger.exception("ensure_webapp_workspace_seeded_and_registered failed for %s", workspace_id)
         return None
+
+
+@outputs.router.post("/agent-create")
+async def agent_create_app(body: AgentCreateAppRequest):
+    """The CreateApp MCP tool's backend: seed a webapp-template workspace, register
+    the Output linked to the calling agent session, name it, and broadcast so the
+    dashboard drops a live card next to the agent. Any agent, any mode."""
+    from uuid import uuid4
+    workspace_id = uuid4().hex
+    folder = os.path.join(WORKSPACE_DIR, workspace_id)
+    output_id = ensure_webapp_workspace_seeded_and_registered(
+        workspace_id=workspace_id,
+        folder=folder,
+        session_id=body.parent_session_id or None,
+    )
+    if not output_id:
+        raise HTTPException(status_code=500, detail="workspace seed/registration failed")
+    output = load(output_id)
+    output.name = body.name.strip() or "Untitled App"
+    output.description = body.description.strip()
+    output.updated_at = datetime.now().isoformat()
+    save(output)
+    # Keep meta.json in agreement so the agent's own naming pass and the sidebar read the same values.
+    try:
+        with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": output.name, "description": output.description}, f, indent=2)
+    except OSError:
+        logger.exception("agent-create meta.json write failed for %s", workspace_id)
+    from backend.apps.agents.core.ws_manager import ws_manager
+    try:
+        await ws_manager.broadcast_global("agent:output_upserted", {
+            "output": output.model_dump(mode="json"),
+        })
+    except Exception:
+        logger.exception("agent-create output_upserted broadcast failed")
+    return {
+        "ok": True,
+        "output_id": output_id,
+        "path": os.path.abspath(folder),
+        "skill": load_app_builder_skill(),
+    }
 
 
 @outputs.router.post("/workspace/seed")

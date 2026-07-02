@@ -30,7 +30,6 @@ import { setPanelMode, disableOnboardingAfterCrash } from '@/shared/state/onboar
 const Skills = React.lazy(() => import('./pages/Skills/Skills'));
 const Tools = React.lazy(() => import('./pages/Tools/Tools'));
 const Modes = React.lazy(() => import('./pages/Modes/Modes'));
-const Views = React.lazy(() => import('./pages/Views/Views'));
 const Customization = React.lazy(() => import('./pages/Customization/Customization'));
 const Analytics = React.lazy(() => import('./pages/Analytics/Analytics'));
 const OnboardingRoot = React.lazy(() =>
@@ -60,13 +59,11 @@ if (typeof window !== 'undefined') {
       case '/tools': void import('./pages/Tools/Tools'); return;
       case '/modes': void import('./pages/Modes/Modes'); return;
       case '/views':
-      case '/apps': void import('./pages/Views/Views'); return;
       case '/customization': void import('./pages/Customization/Customization'); return;
       case '/analytics': void import('./pages/Analytics/Analytics'); return;
     }
   };
   const prefetchAll = () => {
-    void import('./pages/Views/Views');
     void import('./pages/Skills/Skills');
     void import('./pages/Tools/Tools');
     void import('./pages/Modes/Modes');
@@ -535,8 +532,6 @@ const ThemedApp: React.FC = () => {
                         <Route path="/skills" element={<Skills />} />
                         <Route path="/actions" element={<Tools />} />
                         <Route path="/modes" element={<Modes />} />
-                        <Route path="/apps" element={<Views />} />
-                        <Route path="/apps/:id" element={<Views />} />
                         <Route path="/analytics" element={<Analytics />} />
                       </Route>
                     </Routes>

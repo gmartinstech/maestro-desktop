@@ -12,6 +12,7 @@ import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { Output, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { setViewCardPosition, setViewCardSize, setActiveViewCardId, recordClosedCard } from '@/shared/state/dashboardLayoutSlice';
 import { removeViewCardCleanly } from '@/shared/viewTeardown';
@@ -21,6 +22,8 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ViewPreview, { ViewPreviewHandle } from '@/app/pages/Views/ViewPreview';
 import TerminalPanel, { TerminalLine } from '@/app/pages/Views/TerminalPanel';
 import AppCodePanel from '@/app/pages/Views/AppCodePanel';
+import HistoryPanel from '@/app/pages/Views/HistoryPanel';
+import ShareButton from '@/app/components/share/ShareButton';
 import { getDefault } from '@/shared/inputSchemaDefaults';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
 import {
@@ -30,7 +33,7 @@ import {
 } from '@/shared/hooks/useRuntimePreviewUrl';
 import { postAppConsoleLine, terminalLineFromStream } from '@/shared/appTerminal';
 
-type AppCardView = 'preview' | 'code' | 'terminal';
+type AppCardView = 'preview' | 'code' | 'terminal' | 'history';
 
 const TERMINAL_BUFFER_CAP = 5000;
 
@@ -504,6 +507,7 @@ const DashboardViewCard: React.FC<Props> = ({
               { view: 'preview' as const, label: 'Preview', Icon: VisibilityRoundedIcon },
               { view: 'code' as const, label: 'Code', Icon: CodeRoundedIcon },
               { view: 'terminal' as const, label: 'Terminal', Icon: TerminalRoundedIcon },
+              { view: 'history' as const, label: 'History', Icon: HistoryRoundedIcon },
             ]).map(({ view, label, Icon }) => (
               <Tooltip key={view} title={label} placement="top">
                 <IconButton
@@ -523,6 +527,10 @@ const DashboardViewCard: React.FC<Props> = ({
             ))}
           </Box>
         )}
+
+        <Box onPointerDown={(e) => e.stopPropagation()} sx={{ display: 'flex', flexShrink: 0 }}>
+          <ShareButton target={{ kind: 'app', id: output.id, name: output.name }} size="small" iconFontSize={15} />
+        </Box>
 
         <Tooltip
           title={activeView === 'terminal' ? 'Hard reload (restart runtime + reload app)' : 'Reload preview; right-click for Hard Reload'}
@@ -577,6 +585,14 @@ const DashboardViewCard: React.FC<Props> = ({
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 13, bgcolor: c.bg.surface }}>
             {activeView === 'terminal' ? (
               <TerminalPanel lines={terminalLines} />
+            ) : activeView === 'history' ? (
+              <Box sx={{ height: '100%', overflow: 'auto' }}>
+                <HistoryPanel
+                  outputId={output.id}
+                  isAgentActive={showBuildingOverlay}
+                  onRestored={() => previewRef.current?.reload()}
+                />
+              </Box>
             ) : (
               <AppCodePanel workspaceId={output.workspace_id} onFileSaved={() => previewRef.current?.reload()} />
             )}

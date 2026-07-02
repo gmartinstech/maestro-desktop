@@ -150,6 +150,8 @@ export interface DashboardLayoutState {
   initialized: boolean;
   /** Transient: new browser card id; Dashboard pans/zooms to it then clears via clearPendingFocusBrowserId. */
   pendingFocusBrowserId: string | null;
+  // Set when a view card is opened from outside the canvas (sidebar app click / toolbar picker) so the dashboard fits+highlights it on arrival; holds the card key.
+  pendingFocusViewCardId: string | null;
   pendingFocusNoteId: string | null;
   /** Transient: snapshot stand-ins for off-screen webviews; never rides the layout PUT. */
   suspendedBrowserCards: Record<string, { dataUrl: string; capturedAt: number }>;
@@ -196,6 +198,7 @@ const initialState: DashboardLayoutState = {
   loading: false,
   initialized: false,
   pendingFocusBrowserId: null,
+  pendingFocusViewCardId: null,
   pendingFocusNoteId: null,
   suspendedBrowserCards: {},
   endingBrowserCards: {},
@@ -715,7 +718,8 @@ const dashboardLayoutSlice = createSlice({
           posY = pos.y;
         }
       }
-      state.viewCards[viewCardKey(outputId, instance)] = {
+      const cardKey = viewCardKey(outputId, instance);
+      state.viewCards[cardKey] = {
         output_id: outputId,
         instance,
         x: posX,
@@ -725,6 +729,11 @@ const dashboardLayoutSlice = createSlice({
         zOrder: state.nextZOrder++,
         parent_session_id: parentSessionId || null,
       };
+      state.pendingFocusViewCardId = cardKey;
+    },
+
+    clearPendingFocusViewCardId(state) {
+      state.pendingFocusViewCardId = null;
     },
 
     setViewCardPosition(
@@ -1665,6 +1674,7 @@ export const {
   fadeGlowingAgentCard,
   clearGlowingAgentCard,
   clearPendingFocusBrowserId,
+  clearPendingFocusViewCardId,
   addWorkflowCard,
   setWorkflowCardPosition,
   setWorkflowCardSize,
