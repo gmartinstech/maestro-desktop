@@ -38,7 +38,7 @@ if [[ -d ./backend ]]; then
 fi
 
 # Resolve master template backend/ path. OPENSWARM_TEMPLATE_BACKEND_PATH
-# is written into .env at seed time; OPENSWARM_DEBUGGER_PATH the same.
+# is written into .env at seed time.
 if [[ -z "${OPENSWARM_TEMPLATE_BACKEND_PATH:-}" ]]; then
     echo "ERROR: OPENSWARM_TEMPLATE_BACKEND_PATH not set in .env. This" >&2
     echo "       workspace was seeded by an older OpenSwarm; ask the" >&2

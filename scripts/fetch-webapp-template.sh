@@ -3,13 +3,11 @@
 #
 # Idempotent — wipes the existing vendored dir and re-clones at the pinned ref.
 # Strips files we don't want shipped (LICENSE, README.md, .gitignore — we
-# author our own minimal .gitignore inside the snapshot). Applies our two
-# patches:
-#   1. backend/run.sh: pip-install $OPENSWARM_DEBUGGER_PATH if set, before
-#      the existing `pip install -e .` — resolves the `swarm-debug` dep
-#      from OpenSwarm's bundled debugger/ package instead of PyPI (where
-#      it doesn't exist).
-#   2. Add our own backend_init.sh at the snapshot root.
+# author our own minimal .gitignore inside the snapshot). Applies our
+# patches (swarm-debug toggle-on at boot, vite config pinning, .gitignore,
+# backend_init.sh). The template's `swarm-debug` dependency now resolves
+# from PyPI like any other dep; the old local-debugger injection patches
+# (editable-install of the bundled debugger/) are gone.
 #
 # Update REF to bump the pinned snapshot. CI / a future test could compare
 # `git rev-parse HEAD` of a fresh clone against REF and fail on drift.
@@ -36,38 +34,25 @@ mkdir -p "$DEST"
 ( cd "$TMP/clone" && rm -rf .git LICENSE README.md .gitignore )
 cp -R "$TMP/clone/." "$DEST/"
 
-# Patch 1: backend/run.sh installs OpenSwarm's local debugger/ before the
-# template's own `pip install -e .` so `from swarm_debug import debug` in
-# the template's backend code resolves to our bundled package (the PyPI
-# `swarm-debug` doesn't exist — our local package registers as `debug`
-# and exposes both `debug` and `swarm_debug` module names via setup.py
-# py_modules).
+# Patch 1: backend/run.sh forces all swarm-debug per-file toggles ON at
+# every boot (they default OFF, including files the agent creates later),
+# so `debug()` output actually lands in the App Builder Terminal. Runs
+# from the workspace root because that's uvicorn's cwd = the package's
+# per-project data-dir key.
 RUN_SH="$DEST/backend/run.sh"
-if ! grep -q "OPENSWARM_DEBUGGER_PATH" "$RUN_SH"; then
-    # Insert the install line just before `pip install -e .`. macOS sed
-    # vs GNU sed: use a portable awk inline rewrite.
+if ! grep -q "swarm-debug gates output" "$RUN_SH"; then
     awk '
-        /pip install -e \./ && !inserted {
-            print "if [[ -n \"${OPENSWARM_DEBUGGER_PATH:-}\" && -d \"$OPENSWARM_DEBUGGER_PATH\" ]]; then"
-            print "    echo \"Installing OpenSwarm debugger (swarm_debug) from $OPENSWARM_DEBUGGER_PATH\""
-            print "    pip install -e \"$OPENSWARM_DEBUGGER_PATH\""
-            print "fi"
+        /^echo "Starting backend server/ && !inserted {
+            print "# swarm-debug gates output on per-file toggles that default OFF; force all ON each boot so agent-added files show in the Terminal."
+            print "if [[ \"$IS_WIN\" == \"1\" ]]; then SWARM_DEBUG_BIN=\"$VENV_DIR/Scripts/swarm-debug.exe\"; else SWARM_DEBUG_BIN=\"$VENV_DIR/bin/swarm-debug\"; fi"
+            print "( cd \"$BACKEND_DIR_ABSPATH/..\" && \"$SWARM_DEBUG_BIN\" toggle on --all >/dev/null 2>&1 ) || true"
+            print ""
             inserted = 1
         }
         { print }
     ' "$RUN_SH" > "$RUN_SH.tmp" && mv "$RUN_SH.tmp" "$RUN_SH"
     chmod +x "$RUN_SH"
 fi
-
-# Patch 1b: drop `"swarm-debug"` from the template's backend/pyproject.toml
-# dependencies. The OpenSwarm debugger gets installed separately via Patch
-# 1's `pip install -e $OPENSWARM_DEBUGGER_PATH`. Leaving the dep listed
-# would make pip 404 against PyPI (no such package).
-PYPROJECT="$DEST/backend/pyproject.toml"
-awk '
-    /^[[:space:]]*"swarm-debug",?[[:space:]]*$/ { next }
-    { print }
-' "$PYPROJECT" > "$PYPROJECT.tmp" && mv "$PYPROJECT.tmp" "$PYPROJECT"
 
 # Patch 1c: vite.config.ts — pin host to 127.0.0.1 (so our IPv4-only
 # bind poller in runtime.py:_await_frontend_bind() actually sees the
@@ -161,7 +146,7 @@ if [[ -d ./backend ]]; then
 fi
 
 # Resolve master template backend/ path. OPENSWARM_TEMPLATE_BACKEND_PATH
-# is written into .env at seed time; OPENSWARM_DEBUGGER_PATH the same.
+# is written into .env at seed time.
 if [[ -z "${OPENSWARM_TEMPLATE_BACKEND_PATH:-}" ]]; then
     echo "ERROR: OPENSWARM_TEMPLATE_BACKEND_PATH not set in .env. This" >&2
     echo "       workspace was seeded by an older OpenSwarm; ask the" >&2

@@ -211,7 +211,7 @@ class AppRuntime:
             self.port = None
 
         env = self.p_spawn_env_base()
-        # bash run.sh reads .env itself; we don't need to set FRONTEND_PORT / BACKEND_PORT here. We DO export the install paths so the template's `backend/run.sh` can find our debugger to satisfy its `from swarm_debug import debug`. (Also written into .env at seed time, but env-var path is the more reliable read site for subshells.) NOTE: keep these in sync with seed_webapp_template_workspace.
+        # bash run.sh reads .env itself; we don't need to set FRONTEND_PORT / BACKEND_PORT here. We DO export the install paths as env vars (the more reliable read site for subshells). OPENSWARM_DEBUGGER_PATH is legacy-only: workspaces seeded before the PyPI swap have a run.sh that editable-installs the bundled debugger from it; new templates resolve `swarm-debug` from PyPI via pyproject.
         from backend.apps.outputs.view_builder_templates import (
             DEBUGGER_PATH,
             TEMPLATE_BACKEND_PATH,
