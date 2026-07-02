@@ -16,12 +16,14 @@ const MAX_LINES_PER_FLUSH = 50;
 
 interface PendingConsoleLine { level: string; text: string }
 
+// Queues keyed by `${workspaceId}:${instance}` so two cards of the same app don't cross their console streams.
 const pendingByWorkspace = new Map<string, PendingConsoleLine[]>();
 const flushTimers = new Map<string, number>();
 
-function flushConsoleLines(workspaceId: string): void {
-  flushTimers.delete(workspaceId);
-  const queue = pendingByWorkspace.get(workspaceId);
+function flushConsoleLines(workspaceId: string, instance: number): void {
+  const qKey = `${workspaceId}:${instance}`;
+  flushTimers.delete(qKey);
+  const queue = pendingByWorkspace.get(qKey);
   if (!queue || queue.length === 0) return;
   const batch = queue.splice(0, MAX_LINES_PER_FLUSH);
   if (queue.length > 0) {
@@ -31,23 +33,24 @@ function flushConsoleLines(workspaceId: string): void {
   const tok = getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (tok) headers.Authorization = `Bearer ${tok}`;
-  fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/console-log`, {
+  fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/console-log?instance=${instance}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ lines: batch }),
   }).catch(() => {});
 }
 
-export function postAppConsoleLine(workspaceId: string, level: string, text: string): void {
+export function postAppConsoleLine(workspaceId: string, level: string, text: string, instance: number = 1): void {
   if (!workspaceId || !text) return;
-  let queue = pendingByWorkspace.get(workspaceId);
+  const qKey = `${workspaceId}:${instance}`;
+  let queue = pendingByWorkspace.get(qKey);
   if (!queue) {
     queue = [];
-    pendingByWorkspace.set(workspaceId, queue);
+    pendingByWorkspace.set(qKey, queue);
   }
   queue.push({ level, text });
-  if (!flushTimers.has(workspaceId)) {
-    flushTimers.set(workspaceId, window.setTimeout(() => flushConsoleLines(workspaceId), FLUSH_MS));
+  if (!flushTimers.has(qKey)) {
+    flushTimers.set(qKey, window.setTimeout(() => flushConsoleLines(workspaceId, instance), FLUSH_MS));
   }
 }
 

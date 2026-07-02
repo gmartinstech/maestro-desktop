@@ -73,6 +73,11 @@ TERMINAL_LOG_PREFIXES = {
 LogSubscriber = Callable[[LogLine], None]
 
 
+def runtime_key(workspace_id: str, instance: int) -> str:
+    """Registry key for a workspace instance. Instance 1 keeps the bare workspace_id so every existing get()/attach() caller keeps addressing the primary."""
+    return workspace_id if instance <= 1 else f"{workspace_id}#{instance}"
+
+
 class AppRuntime:
     """Manages one workspace's backend.py subprocess.
 
@@ -85,9 +90,11 @@ class AppRuntime:
     - `log_buffer` is the replay source for new subscribers.
     """
 
-    def __init__(self, workspace_id: str, workspace_path: str):
+    def __init__(self, workspace_id: str, workspace_path: str, instance: int = 1):
         self.workspace_id = workspace_id
         self.workspace_path = workspace_path
+        # Instance 1 is the primary (uses the .env-pinned ports); >1 are extra dashboard cards of the same app, fully independent processes on fresh ports that must never rewrite the shared .env.
+        self.instance = max(1, instance)
         # Old-mode: `port` is the backend.py port. New-mode: `port` is the workspace's optional FastAPI backend (only set if BACKEND_PORT!=NONE) and `frontend_port` is the Vite dev server port. Both Nones until start() decides what's there.
         self.port: Optional[int] = None
         self.frontend_port: Optional[int] = None
@@ -97,8 +104,9 @@ class AppRuntime:
         self.p_suspended: bool = False
         self.process: Optional[asyncio.subprocess.Process] = None
         self.log_buffer: deque[LogLine] = deque(maxlen=LOG_BUFFER_LINES)
-        # On-disk tee of the ring buffer so the App Builder agent can inspect terminal output itself (Read/grep); reset on every start().
-        self.p_terminal_log_path = os.path.join(workspace_path, ".openswarm", "terminal.log")
+        # On-disk tee of the ring buffer so the App Builder agent can inspect terminal output itself (Read/grep); reset on every start(). Secondary instances get a suffixed file so they don't clobber the primary's.
+        log_name = "terminal.log" if self.instance <= 1 else f"terminal-{self.instance}.log"
+        self.p_terminal_log_path = os.path.join(workspace_path, ".openswarm", log_name)
         self.p_terminal_log_bytes = 0
         self.p_subscribers: set[LogSubscriber] = set()
         # Recent build/runtime errors scraped from stderr; drained by the agent's post-tool hook after Write/Edit so the agent sees vite/babel/uvicorn errors in its next turn and can self-fix instead of leaving the user with a red iframe overlay.
@@ -196,39 +204,49 @@ class AppRuntime:
         env_path = os.path.join(self.workspace_path, ".env")
         fp_raw = read_env_value(env_path, "FRONTEND_PORT")
         bp_raw = read_env_value(env_path, "BACKEND_PORT")
-        # FRONTEND_PORT is allocated by seed_workspace; should always be a number. If missing, fall back to a fresh allocation (rare edge case: workspace seeded by an older OpenSwarm).
-        try:
-            self.frontend_port = int(fp_raw) if fp_raw else find_free_port()
-        except ValueError:
+        if self.instance > 1:
+            # Secondary instance: fresh ports always (the primary owns the .env-pinned ones), and NEVER rewrite the shared .env. .env is read only to learn whether the app has a backend at all.
             self.frontend_port = find_free_port()
-        # Port-collision safety net: if a ghost subprocess from a prior OpenSwarm run is still bound to the persisted port (force-quit, crash, OS killed the parent before stop_all could reap), Vite would EADDRINUSE silently. Re-probe and reallocate, then rewrite .env so the bash run.sh subprocess reads the new port.
-        if self.frontend_port and not is_port_free(self.frontend_port):
-            new_port = find_free_port()
-            self.p_broadcast(LogLine(
-                "runtime",
-                f"[runtime] persisted FRONTEND_PORT {self.frontend_port} is in use; reallocating to {new_port}",
-            ))
-            self.frontend_port = new_port
-            write_env_value(env_path, "FRONTEND_PORT", str(new_port))
-        # BACKEND_PORT may be the literal string "NONE" (frontend-only app; the common case) or a number once `backend_init.sh` has run. Only populate self.port when there's a real backend.
-        if bp_raw and bp_raw != "NONE":
+            self.port = find_free_port() if (bp_raw and bp_raw != "NONE") else None
+        else:
+            # FRONTEND_PORT is allocated by seed_workspace; should always be a number. If missing, fall back to a fresh allocation (rare edge case: workspace seeded by an older OpenSwarm).
             try:
-                self.port = int(bp_raw)
+                self.frontend_port = int(fp_raw) if fp_raw else find_free_port()
             except ValueError:
-                self.port = None
-            # Same collision check for the backend port; a leaked uvicorn from a prior session would otherwise block the new spawn.
-            if self.port and not is_port_free(self.port):
+                self.frontend_port = find_free_port()
+            # Port-collision safety net: if a ghost subprocess from a prior OpenSwarm run is still bound to the persisted port (force-quit, crash, OS killed the parent before stop_all could reap), Vite would EADDRINUSE silently. Re-probe and reallocate, then rewrite .env so the bash run.sh subprocess reads the new port.
+            if self.frontend_port and not is_port_free(self.frontend_port):
                 new_port = find_free_port()
                 self.p_broadcast(LogLine(
                     "runtime",
-                    f"[runtime] persisted BACKEND_PORT {self.port} is in use; reallocating to {new_port}",
+                    f"[runtime] persisted FRONTEND_PORT {self.frontend_port} is in use; reallocating to {new_port}",
                 ))
-                self.port = new_port
-                write_env_value(env_path, "BACKEND_PORT", str(new_port))
-        else:
-            self.port = None
+                self.frontend_port = new_port
+                write_env_value(env_path, "FRONTEND_PORT", str(new_port))
+            # BACKEND_PORT may be the literal string "NONE" (frontend-only app; the common case) or a number once `backend_init.sh` has run. Only populate self.port when there's a real backend.
+            if bp_raw and bp_raw != "NONE":
+                try:
+                    self.port = int(bp_raw)
+                except ValueError:
+                    self.port = None
+                # Same collision check for the backend port; a leaked uvicorn from a prior session would otherwise block the new spawn.
+                if self.port and not is_port_free(self.port):
+                    new_port = find_free_port()
+                    self.p_broadcast(LogLine(
+                        "runtime",
+                        f"[runtime] persisted BACKEND_PORT {self.port} is in use; reallocating to {new_port}",
+                    ))
+                    self.port = new_port
+                    write_env_value(env_path, "BACKEND_PORT", str(new_port))
+            else:
+                self.port = None
 
         env = self.p_spawn_env_base()
+        if self.instance > 1:
+            # run.sh applies these AFTER sourcing .env, so the secondary boots on its own ports. Older workspaces (pre-override run.sh) ignore them; their secondary instance EADDRINUSEs visibly in the Terminal instead of silently sharing the primary.
+            env["OPENSWARM_FORCE_FRONTEND_PORT"] = str(self.frontend_port)
+            if self.port:
+                env["OPENSWARM_FORCE_BACKEND_PORT"] = str(self.port)
         # bash run.sh reads .env itself; we don't need to set FRONTEND_PORT / BACKEND_PORT here. We DO export the install paths as env vars (the more reliable read site for subshells). OPENSWARM_DEBUGGER_PATH is legacy-only: workspaces seeded before the PyPI swap have a run.sh that editable-installs the bundled debugger from it; new templates resolve `swarm-debug` from PyPI via pyproject.
         from backend.apps.outputs.view_builder_templates import (
             DEBUGGER_PATH,
@@ -539,19 +557,20 @@ class AppRuntimeManager:
         self.idle_lru: "OrderedDict[str, AppRuntime]" = OrderedDict()
         self.p_lock = asyncio.Lock()
 
-    async def attach(self, workspace_id: str, workspace_path: str) -> AppRuntime:
+    async def attach(self, workspace_id: str, workspace_path: str, instance: int = 1) -> AppRuntime:
+        key = runtime_key(workspace_id, instance)
         revived = False
         # Defined here so every code path below leaves it bound; the revive-idle branch used to skip the assignment, leaving the post-lock `if dead is not None:` check throwing UnboundLocalError.
         dead: Optional[AppRuntime] = None
         async with self.p_lock:
-            rt = self.runtimes.get(workspace_id)
+            rt = self.runtimes.get(key)
             if rt is None:
                 # Maybe the runtime is sitting idle in the LRU; revive it without paying the spawn cost again.
-                idle_rt = self.idle_lru.pop(workspace_id, None)
+                idle_rt = self.idle_lru.pop(key, None)
                 if idle_rt is not None and idle_rt.running:
                     rt = idle_rt
                     rt.workspace_path = workspace_path
-                    self.runtimes[workspace_id] = rt
+                    self.runtimes[key] = rt
                     revived = True
                     # SIGCONT the process tree if A2 had it paused while idle. Pair with the SIGSTOP in detach() below.
                     resume_process_tree(rt.process)
@@ -560,12 +579,12 @@ class AppRuntimeManager:
                     if idle_rt is not None:
                         # Stale idle entry; process died while idling. Drop and spawn a fresh one below; old one gets stopped outside the lock.
                         dead = idle_rt
-                    rt = AppRuntime(workspace_id, workspace_path)
-                    self.runtimes[workspace_id] = rt
+                    rt = AppRuntime(workspace_id, workspace_path, instance)
+                    self.runtimes[key] = rt
             else:
                 # Workspace paths shouldn't change for a given id, but if somehow they did (e.g. the user moved the workspace folder), trust the latest caller; they have the current truth.
                 rt.workspace_path = workspace_path
-            self.p_attached[workspace_id] = self.p_attached.get(workspace_id, 0) + 1
+            self.p_attached[key] = self.p_attached.get(key, 0) + 1
         if not revived and not rt.running:
             await rt.start()
         # Stop any dead idle runtime outside the lock to avoid blocking.
@@ -573,27 +592,28 @@ class AppRuntimeManager:
             try:
                 await dead.stop()
             except Exception:
-                logger.exception("failed to reap dead idle runtime %s", workspace_id)
+                logger.exception("failed to reap dead idle runtime %s", key)
         return rt
 
-    async def detach(self, workspace_id: str) -> None:
+    async def detach(self, workspace_id: str, instance: int = 1) -> None:
+        key = runtime_key(workspace_id, instance)
         to_idle: Optional[AppRuntime] = None
         to_reap: list[AppRuntime] = []
         async with self.p_lock:
-            count = self.p_attached.get(workspace_id, 0) - 1
+            count = self.p_attached.get(key, 0) - 1
             if count > 0:
-                self.p_attached[workspace_id] = count
+                self.p_attached[key] = count
                 return
-            self.p_attached.pop(workspace_id, None)
-            rt = self.runtimes.pop(workspace_id, None)
+            self.p_attached.pop(key, None)
+            rt = self.runtimes.pop(key, None)
             if rt is None:
                 return
             # If the process is already dead, no point keeping it around; just clean up. Otherwise move to the LRU AND SIGSTOP the process tree so it consumes 0% CPU while idle. The matching SIGCONT lives in attach() above.
             if not rt.running:
                 to_reap.append(rt)
             else:
-                self.idle_lru[workspace_id] = rt
-                self.idle_lru.move_to_end(workspace_id)
+                self.idle_lru[key] = rt
+                self.idle_lru.move_to_end(key)
                 suspend_process_tree(rt.process)
                 rt.p_suspended = True
                 while len(self.idle_lru) > MAX_IDLE_RUNTIMES:
@@ -608,16 +628,17 @@ class AppRuntimeManager:
             try:
                 await old.stop()
             except Exception:
-                logger.exception("failed to reap idle runtime %s", workspace_id)
+                logger.exception("failed to reap idle runtime %s", key)
         if to_idle is not None:
-            logger.debug("workspace %s idled (LRU size now %d)", workspace_id, len(self.idle_lru))
+            logger.debug("workspace %s idled (LRU size now %d)", key, len(self.idle_lru))
 
-    def get(self, workspace_id: str) -> Optional[AppRuntime]:
+    def get(self, workspace_id: str, instance: int = 1) -> Optional[AppRuntime]:
+        key = runtime_key(workspace_id, instance)
         # Active subscribers see the live runtime; idle-pool members are also accessible so a status probe between detach and the next attach still works.
-        rt = self.runtimes.get(workspace_id)
+        rt = self.runtimes.get(key)
         if rt is not None:
             return rt
-        return self.idle_lru.get(workspace_id)
+        return self.idle_lru.get(key)
 
     def drain_errors_for_path(self, file_path: str) -> list[str]:
         """If `file_path` falls under one of the live workspace
@@ -632,15 +653,16 @@ class AppRuntimeManager:
             abs_path = os.path.abspath(file_path)
         except Exception:
             return []
-        # Walk both active and idle runtimes; the user might have navigated away from the workspace mid-build, but the agent could still be editing files; the LRU keeps the runtime alive for ~3 idle slots.
+        # Walk both active and idle runtimes; the user might have navigated away from the workspace mid-build, but the agent could still be editing files; the LRU keeps the runtime alive for ~3 idle slots. Aggregate across instances: with two cards of the same app open, either instance's build errors matter to the agent.
+        drained: list[str] = []
         for rt in (*self.runtimes.values(), *self.idle_lru.values()):
             try:
                 ws_root = os.path.abspath(rt.workspace_path)
             except Exception:
                 continue
             if abs_path == ws_root or abs_path.startswith(ws_root + os.sep):
-                return rt.drain_errors()
-        return []
+                drained.extend(rt.drain_errors())
+        return drained
 
     def get_render_state_for_workspace(self, workspace_id: str) -> tuple[Optional[str], str]:
         rt = self.runtimes.get(workspace_id) or self.idle_lru.get(workspace_id)
@@ -653,8 +675,9 @@ class AppRuntimeManager:
         if rt is not None:
             rt.reset_render_state()
 
-    async def restart(self, workspace_id: str, workspace_path: Optional[str] = None) -> Optional[AppRuntime]:
-        rt = self.runtimes.get(workspace_id) or self.idle_lru.get(workspace_id)
+    async def restart(self, workspace_id: str, workspace_path: Optional[str] = None, instance: int = 1) -> Optional[AppRuntime]:
+        key = runtime_key(workspace_id, instance)
+        rt = self.runtimes.get(key) or self.idle_lru.get(key)
         if rt is None:
             return None
         if workspace_path:

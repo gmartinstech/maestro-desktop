@@ -258,7 +258,8 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       .map((el) => el.semanticData!.selectId as string);
     const appIds = selectedEls
       .filter((el) => el.semanticType === 'view-card' && el.semanticData?.selectId)
-      .map((el) => el.semanticData!.selectId as string);
+      // Strip a multi-instance card-key suffix (`output_id#N`): the backend AppAgent gate wants bare output ids.
+      .map((el) => (el.semanticData!.selectId as string).split('#')[0]);
     const settingIds = selectedEls
       .filter((el) => el.semanticType === 'settings-option' && el.semanticData?.selectId)
       .map((el) => el.semanticData!.selectId as string);

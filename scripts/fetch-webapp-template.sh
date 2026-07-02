@@ -34,6 +34,32 @@ mkdir -p "$DEST"
 ( cd "$TMP/clone" && rm -rf .git LICENSE README.md .gitignore )
 cp -R "$TMP/clone/." "$DEST/"
 
+# Patch 1a: root run.sh honors per-instance port overrides. OpenSwarm passes
+# OPENSWARM_FORCE_FRONTEND_PORT / OPENSWARM_FORCE_BACKEND_PORT when the user
+# opens a SECOND instance of an app; without this the `source .env` above
+# them pins every instance to the same ports.
+ROOT_RUN_SH="$DEST/run.sh"
+if ! grep -q "OPENSWARM_FORCE_FRONTEND_PORT" "$ROOT_RUN_SH"; then
+    awk '
+        inserted != 1 && sourced && /^fi$/ {
+            print
+            print ""
+            print "# Per-instance port overrides: OpenSwarm passes these when the user opens a SECOND instance of the app, so it boots on fresh ports instead of colliding with the primary'\''s .env-pinned ones."
+            print "if [[ -n \"${OPENSWARM_FORCE_FRONTEND_PORT:-}\" ]]; then"
+            print "    export FRONTEND_PORT=\"$OPENSWARM_FORCE_FRONTEND_PORT\""
+            print "fi"
+            print "if [[ -n \"${OPENSWARM_FORCE_BACKEND_PORT:-}\" ]]; then"
+            print "    export BACKEND_PORT=\"$OPENSWARM_FORCE_BACKEND_PORT\""
+            print "fi"
+            inserted = 1
+            next
+        }
+        /source "\$ROOT_DIR\/.env"/ { sourced = 1 }
+        { print }
+    ' "$ROOT_RUN_SH" > "$ROOT_RUN_SH.tmp" && mv "$ROOT_RUN_SH.tmp" "$ROOT_RUN_SH"
+    chmod +x "$ROOT_RUN_SH"
+fi
+
 # Patch 1: backend/run.sh forces all swarm-debug per-file toggles ON at
 # every boot (they default OFF, including files the agent creates later),
 # so `debug()` output actually lands in the App Builder Terminal. Runs

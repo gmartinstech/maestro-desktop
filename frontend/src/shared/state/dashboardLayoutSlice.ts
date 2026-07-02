@@ -44,12 +44,19 @@ export interface CardPosition {
 
 export interface ViewCardPosition {
   output_id: string;
+  // Which instance of the app this card is (1 = primary, absent on pre-instance layouts). Each instance is a fully independent runtime on its own ports.
+  instance?: number;
   x: number;
   y: number;
   width: number;
   height: number;
   zOrder: number;
   parent_session_id?: string | null;
+}
+
+// Record key + card identity for a view card. The primary keeps the bare output_id so persisted layouts and every existing by-output lookup stay valid; secondaries append #N.
+export function viewCardKey(outputId: string, instance?: number): string {
+  return (instance ?? 1) > 1 ? `${outputId}#${instance}` : outputId;
 }
 
 export interface BrowserTab {
@@ -632,7 +639,7 @@ const dashboardLayoutSlice = createSlice({
 
       const allItems = [
         ...agentCards.map((c) => ({ kind: 'agent' as const, id: c.session_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
-        ...viewCards.map((c) => ({ kind: 'view' as const, id: c.output_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
+        ...viewCards.map((c) => ({ kind: 'view' as const, id: viewCardKey(c.output_id, c.instance), x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
         ...bCards.map((c) => ({ kind: 'browser' as const, id: c.browser_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
         ...wCards.map((c) => ({ kind: 'workflow' as const, id: c.workflow_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
         ...(hub ? [{ kind: 'workflows-hub' as const, id: 'workflows-hub', x: hub.x, y: hub.y, storedW: hub.width, storedH: hub.height }] : []),
@@ -679,9 +686,16 @@ const dashboardLayoutSlice = createSlice({
       outputId: string; expandedSessionIds?: string[];
       parentSessionId?: string | null;
       x?: number; y?: number; width?: number; height?: number;
+      // Open ANOTHER independent instance of an already-open app instead of no-op'ing.
+      newInstance?: boolean;
     }>) {
-      const { outputId, expandedSessionIds, parentSessionId, x, y, width, height } = action.payload;
-      if (state.viewCards[outputId]) return;
+      const { outputId, expandedSessionIds, parentSessionId, x, y, width, height, newInstance } = action.payload;
+      let instance = 1;
+      if (state.viewCards[outputId]) {
+        if (!newInstance) return;
+        instance = 2;
+        while (state.viewCards[viewCardKey(outputId, instance)]) instance++;
+      }
       const w = width || DEFAULT_VIEW_CARD_W;
       const h = height || DEFAULT_VIEW_CARD_H;
       let posX: number, posY: number;
@@ -701,8 +715,9 @@ const dashboardLayoutSlice = createSlice({
           posY = pos.y;
         }
       }
-      state.viewCards[outputId] = {
+      state.viewCards[viewCardKey(outputId, instance)] = {
         output_id: outputId,
+        instance,
         x: posX,
         y: posY,
         width: w,
@@ -1352,7 +1367,7 @@ const dashboardLayoutSlice = createSlice({
       if (entry.kind === 'browser') {
         state.browserCards[entry.card.browser_id] = { ...entry.card, zOrder, dashboard_id: dashboardId ?? entry.card.dashboard_id };
       } else if (entry.kind === 'view') {
-        state.viewCards[entry.card.output_id] = { ...entry.card, zOrder };
+        state.viewCards[viewCardKey(entry.card.output_id, entry.card.instance)] = { ...entry.card, zOrder };
       } else if (entry.kind === 'workflow') {
         state.workflowCards[entry.card.workflow_id] = { ...entry.card, zOrder };
       } else if (entry.kind === 'note') {

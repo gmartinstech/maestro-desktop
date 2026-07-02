@@ -357,10 +357,10 @@ async def seed_workspace(body: WorkspaceSeedRequest):
 # --------------------------------------------------------------------------- Persistent app-backend runtime control. backend.py runs as a long-lived subprocess for the lifetime of the App being open; auto-allocated port, log streaming via WebSocket. See runtime.py for the manager. ---------------------------------------------------------------------------
 
 
-def runtime_status_payload(workspace_id: str) -> dict:
+def runtime_status_payload(workspace_id: str, instance: int = 1) -> dict:
     from backend.apps.outputs.runtime import manager as runtime_manager
     from backend.apps.outputs.runtime import is_new_mode
-    rt = runtime_manager.get(workspace_id)
+    rt = runtime_manager.get(workspace_id, instance)
     if not rt:
         # Even without a live runtime, the editor needs is_new_mode to decide whether the preview pane should fall back to the legacy /serve/index.html URL (old-mode flat workspaces) or show the "starting preview…" placeholder (new-mode webapp_template). Compute from disk so a failed runtime/start still gives the client the right hint instead of dumping it onto a 404.
         folder = os.path.join(WORKSPACE_DIR, workspace_id)
@@ -388,44 +388,44 @@ def runtime_status_payload(workspace_id: str) -> dict:
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/start")
-async def runtime_start(workspace_id: str):
+async def runtime_start(workspace_id: str, instance: int = 1):
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
     from backend.apps.outputs.runtime import manager as runtime_manager
-    await runtime_manager.attach(workspace_id, os.path.abspath(folder))
-    return runtime_status_payload(workspace_id)
+    await runtime_manager.attach(workspace_id, os.path.abspath(folder), instance)
+    return runtime_status_payload(workspace_id, instance)
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/stop")
-async def runtime_stop(workspace_id: str):
+async def runtime_stop(workspace_id: str, instance: int = 1):
     from backend.apps.outputs.runtime import manager as runtime_manager
-    await runtime_manager.detach(workspace_id)
-    return runtime_status_payload(workspace_id)
+    await runtime_manager.detach(workspace_id, instance)
+    return runtime_status_payload(workspace_id, instance)
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/restart")
-async def runtime_restart(workspace_id: str):
+async def runtime_restart(workspace_id: str, instance: int = 1):
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
     from backend.apps.outputs.runtime import manager as runtime_manager
     # Restart only if something's attached; otherwise this is a no-op silently (a hard-reload click while the runtime was already torn down; we'd rather not silently respawn an orphan).
-    rt = runtime_manager.get(workspace_id)
+    rt = runtime_manager.get(workspace_id, instance)
     if rt:
-        await runtime_manager.restart(workspace_id, os.path.abspath(folder))
-    return runtime_status_payload(workspace_id)
+        await runtime_manager.restart(workspace_id, os.path.abspath(folder), instance)
+    return runtime_status_payload(workspace_id, instance)
 
 
 @outputs.router.get("/workspace/{workspace_id}/runtime/status")
-async def runtime_get_status(workspace_id: str):
-    return runtime_status_payload(workspace_id)
+async def runtime_get_status(workspace_id: str, instance: int = 1):
+    return runtime_status_payload(workspace_id, instance)
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/report-error")
-async def runtime_report_error(workspace_id: str, body: dict):
+async def runtime_report_error(workspace_id: str, body: dict, instance: int = 1):
     from backend.apps.outputs.runtime import manager as runtime_manager
-    rt = runtime_manager.get(workspace_id)
+    rt = runtime_manager.get(workspace_id, instance)
     if rt is None:
         return {"ok": False, "recorded": 0}
     message = (body.get("message") or "").strip()
@@ -440,10 +440,10 @@ async def runtime_report_error(workspace_id: str, body: dict):
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/console-log")
-async def runtime_console_log(workspace_id: str, body: dict):
+async def runtime_console_log(workspace_id: str, body: dict, instance: int = 1):
     """Fold webview console lines into the runtime's terminal stream so they reach the Terminal panes AND the agent-readable .openswarm/terminal.log. Renderer batches; body is {lines: [{level, text}, ...]}."""
     from backend.apps.outputs.runtime import manager as runtime_manager
-    rt = runtime_manager.get(workspace_id)
+    rt = runtime_manager.get(workspace_id, instance)
     if rt is None:
         return {"ok": False, "recorded": 0}
     lines = body.get("lines") or []
@@ -458,9 +458,9 @@ async def runtime_console_log(workspace_id: str, body: dict):
 
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/report-ready")
-async def runtime_report_ready(workspace_id: str):
+async def runtime_report_ready(workspace_id: str, instance: int = 1):
     from backend.apps.outputs.runtime import manager as runtime_manager
-    rt = runtime_manager.get(workspace_id)
+    rt = runtime_manager.get(workspace_id, instance)
     if rt is None:
         return {"ok": False}
     rt.set_render_ok()

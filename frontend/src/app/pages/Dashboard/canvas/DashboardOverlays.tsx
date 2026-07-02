@@ -39,7 +39,7 @@ interface DashboardOverlaysProps {
   onNewAgent: () => void;
   onToolbarCancel: () => void;
   onToolbarSend: (...args: any[]) => void;
-  onAddView: (outputId: string) => void;
+  onAddView: (outputId: string, opts?: { newInstance?: boolean }) => void;
   onHistoryResume: (sessionId: string) => void;
   onAddBrowser: () => void;
   onAddNote: () => void;

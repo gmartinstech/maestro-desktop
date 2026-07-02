@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, RefObject } from 'react';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition, NotePosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
+import { viewCardKey } from '@/shared/state/dashboardLayoutSlice';
 
 export type { CardType } from '@/shared/state/dashboardLayoutSlice';
 import type { CardType } from '@/shared/state/dashboardLayoutSlice';
@@ -75,7 +76,7 @@ export function useDashboardSelection(
   const selectAll = useCallback(() => {
     const next = new Map<string, CardType>();
     for (const card of Object.values(cards)) next.set(card.session_id, 'agent');
-    for (const vc of Object.values(viewCards)) next.set(vc.output_id, 'view');
+    for (const vc of Object.values(viewCards)) next.set(viewCardKey(vc.output_id, vc.instance), 'view');
     for (const bc of Object.values(browserCards)) next.set(bc.browser_id, 'browser');
     for (const n of Object.values(notes)) next.set(n.note_id, 'note');
     for (const wc of Object.values(workflowCards)) next.set(wc.workflow_id, 'workflow');
@@ -134,7 +135,7 @@ export function useDashboardSelection(
             height: vc.height,
           })
         ) {
-          intersecting.set(vc.output_id, 'view');
+          intersecting.set(viewCardKey(vc.output_id, vc.instance), 'view');
         }
       }
 
