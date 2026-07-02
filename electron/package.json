@@ -33,6 +33,7 @@
     "productName": "OpenSwarm",
     "afterPack": "./build/after-pack.js",
     "electronLanguages": [
+      "en",
       "en-US"
     ],
     "electronDownload": {
