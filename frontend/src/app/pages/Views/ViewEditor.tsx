@@ -15,19 +15,10 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import HtmlIcon from '@mui/icons-material/Code';
-import PythonIcon from '@mui/icons-material/Terminal';
-import SchemaIcon from '@mui/icons-material/DataObject';
-import JsIcon from '@mui/icons-material/Javascript';
-import CssIcon from '@mui/icons-material/Style';
-import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
-import FolderIcon from '@mui/icons-material/Folder';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import Collapse from '@mui/material/Collapse';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { FileTreeItem, buildFileTree, getEditorLanguage, isHiddenWorkspacePath } from './AppFileTree';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { store } from '@/shared/state/store';
 import { createDraftSession, removeDraftSession, fetchSession } from '@/shared/state/agentsSlice';
@@ -44,6 +35,7 @@ import { getDefault } from '@/shared/inputSchemaDefaults';
 import CodeEditor from './CodeEditor';
 import { ElementSelectionProvider } from '@/app/components/editor/ElementSelectionContext';
 import { API_BASE, getAuthToken } from '@/shared/config';
+import { postAppConsoleLine, terminalLineFromStream } from '@/shared/appTerminal';
 import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 
 const WORKSPACE_API = `${API_BASE}/outputs/workspace`;
@@ -96,17 +88,6 @@ const InstallPlaceholder: React.FC = () => {
   );
 };
 
-// File-tree noise: filtered by basename anywhere in the path; `showHidden` bypasses.
-const HIDDEN_PATH_SEGMENTS = new Set<string>([
-  'node_modules',
-  '.vite-cache',
-  '.vite',
-  '.git',
-  'dist',
-  '.next',
-  '__pycache__',
-  '.venv',
-]);
 // Poll fast while agent is writing; slow while idle. A one-shot poll fires on active->idle transition to catch the last write.
 const POLL_INTERVAL_ACTIVE_MS = 2000;
 const POLL_INTERVAL_IDLE_MS = 15000;
@@ -124,164 +105,6 @@ function previewRenderKey(files: Record<string, string>): string {
     .map((k) => `${k}:${files[k]}`)
     .join('\n');
 }
-
-function getFileIcon(filename: string): React.ReactNode {
-  const ext = filename.split('.').pop()?.toLowerCase();
-  const size = 15;
-  switch (ext) {
-    case 'html': case 'htm': return <HtmlIcon sx={{ fontSize: size }} />;
-    case 'py': return <PythonIcon sx={{ fontSize: size }} />;
-    case 'json': return <SchemaIcon sx={{ fontSize: size }} />;
-    case 'js': case 'jsx': case 'ts': case 'tsx': return <JsIcon sx={{ fontSize: size }} />;
-    case 'css': case 'scss': case 'less': return <CssIcon sx={{ fontSize: size }} />;
-    default: return <InsertDriveFileIcon sx={{ fontSize: size }} />;
-  }
-}
-
-function getEditorLanguage(filename: string): 'html' | 'python' | 'json' {
-  const ext = filename.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'py': return 'python';
-    case 'json': return 'json';
-    default: return 'html';
-  }
-}
-
-interface FileTreeNode {
-  name: string;
-  path: string;
-  isDir: boolean;
-  children?: FileTreeNode[];
-}
-
-function buildFileTree(filePaths: string[]): FileTreeNode[] {
-  const root: FileTreeNode[] = [];
-  const sorted = [...filePaths].sort();
-
-  for (const fp of sorted) {
-    const parts = fp.split('/');
-    let current = root;
-    let pathSoFar = '';
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
-      const isLast = i === parts.length - 1;
-
-      let existing = current.find(n => n.name === part && n.isDir === !isLast);
-      if (!existing) {
-        if (isLast) {
-          existing = { name: part, path: fp, isDir: false };
-        } else {
-          existing = { name: part, path: pathSoFar, isDir: true, children: [] };
-        }
-        current.push(existing);
-      }
-      if (!isLast) {
-        current = existing.children!;
-      }
-    }
-  }
-
-  return root;
-}
-
-interface FileTreeItemProps {
-  node: FileTreeNode;
-  depth: number;
-  activeFile: string;
-  onSelect: (path: string) => void;
-  onDelete?: (path: string) => void;
-  c: ReturnType<typeof useClaudeTokens>;
-}
-
-const PROTECTED_FILES = new Set(['index.html', 'schema.json', 'meta.json', 'SKILL.md']);
-
-const FileTreeItem: React.FC<FileTreeItemProps> = ({ node, depth, activeFile, onSelect, onDelete, c }) => {
-  const [open, setOpen] = useState(true);
-
-  if (node.isDir) {
-    return (
-      <>
-        <Box
-          onClick={() => setOpen(!open)}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            pl: 1.5 + depth * 1,
-            pr: 1,
-            py: 0.5,
-            cursor: 'pointer',
-            '&:hover': { bgcolor: c.bg.surface },
-          }}
-        >
-          <ExpandMoreIcon sx={{ fontSize: 12, color: c.text.ghost, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: '0.15s' }} />
-          <FolderIcon sx={{ fontSize: 14, color: c.text.muted }} />
-          <Typography sx={{ fontSize: '0.74rem', color: c.text.secondary, fontFamily: c.font.mono }}>
-            {node.name}
-          </Typography>
-        </Box>
-        <Collapse in={open}>
-          {node.children?.map((child) => (
-            <FileTreeItem key={child.path} node={child} depth={depth + 1} activeFile={activeFile} onSelect={onSelect} onDelete={onDelete} c={c} />
-          ))}
-        </Collapse>
-      </>
-    );
-  }
-
-  const isActive = activeFile === node.path;
-  const canDelete = onDelete && !PROTECTED_FILES.has(node.path);
-
-  return (
-    <Box
-      onClick={() => onSelect(node.path)}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.75,
-        pl: 1.5 + depth * 1 + 1.25,
-        pr: 0.5,
-        py: 0.5,
-        cursor: 'pointer',
-        bgcolor: isActive ? c.bg.elevated : 'transparent',
-        borderLeft: isActive ? `2px solid ${c.accent.primary}` : '2px solid transparent',
-        '&:hover': { bgcolor: isActive ? c.bg.elevated : c.bg.surface },
-        '&:hover .delete-btn': { opacity: 1 },
-        transition: 'background-color 0.1s',
-      }}
-    >
-      <Box sx={{ color: isActive ? c.accent.primary : c.text.muted, display: 'flex', flexShrink: 0 }}>
-        {getFileIcon(node.name)}
-      </Box>
-      <Typography
-        sx={{
-          fontSize: '0.74rem',
-          fontFamily: c.font.mono,
-          color: isActive ? c.text.primary : c.text.secondary,
-          fontWeight: isActive ? 500 : 400,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          flex: 1,
-        }}
-      >
-        {node.name}
-      </Typography>
-      {canDelete && (
-        <IconButton
-          className="delete-btn"
-          size="small"
-          onClick={(e) => { e.stopPropagation(); onDelete(node.path); }}
-          sx={{ opacity: 0, p: 0.25, color: c.text.ghost, '&:hover': { color: '#ef4444' }, transition: 'opacity 0.15s, color 0.15s' }}
-        >
-          <DeleteOutlineIcon sx={{ fontSize: 14 }} />
-        </IconButton>
-      )}
-    </Box>
-  );
-};
 
 interface Props {
   output: Output | null;
@@ -868,6 +691,12 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   }, []);
 
   const handleWebviewConsole = useCallback((level: string, text: string) => {
+    // Workspace apps: beacon the line into the backend runtime stream (agent-readable terminal.log); it echoes back over the logs WS, so no local append or we'd double-print. Legacy flat apps have no runtime, so append locally.
+    const wsId = workspaceIdRef.current;
+    if (wsId) {
+      postAppConsoleLine(wsId, level, text);
+      return;
+    }
     appendTerminalLine('frontend', level, text);
   }, [appendTerminalLine]);
 
@@ -936,11 +765,8 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
             } else if (msg.event === 'runtime:log') {
               const stream = msg.data?.stream || 'stdout';
               const text = msg.data?.text || '';
-              if (stream === 'runtime') {
-                appendTerminalLine('runtime', 'info', text);
-              } else {
-                appendTerminalLine('backend', stream, text);
-              }
+              const fields = terminalLineFromStream(stream, text);
+              appendTerminalLine(fields.source, fields.level, fields.text);
             }
           } catch (_) {}
         };
@@ -1008,11 +834,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   // VSCode-style files.exclude predicate; single source of truth for list/tree/open-file routing.
   const isHiddenPath = useCallback((p: string): boolean => {
     if (showHidden) return false;
-    const segments = p.split('/');
-    for (const seg of segments) {
-      if (HIDDEN_PATH_SEGMENTS.has(seg)) return true;
-    }
-    return false;
+    return isHiddenWorkspacePath(p);
   }, [showHidden]);
 
   const filePaths = useMemo(
@@ -1299,11 +1121,12 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
             <Tab disableRipple label="Terminal" value={TAB_TERMINAL} />
             <Tab disableRipple label="History" value={TAB_HISTORY} />
           </Tabs>
-          {activeTab === TAB_PREVIEW && (
-            <Tooltip title="Reload preview; right-click for Hard Reload">
+          {(activeTab === TAB_PREVIEW || activeTab === TAB_TERMINAL) && (
+            <Tooltip title={activeTab === TAB_TERMINAL ? 'Hard reload (restart runtime + reload preview)' : 'Reload preview; right-click for Hard Reload'}>
               <IconButton
                 size="small"
-                onClick={() => previewRef.current?.reload()}
+                // In Terminal view a soft webview reload is invisible, so the button always hard-reloads there.
+                onClick={() => { if (activeTab === TAB_TERMINAL) { void handleHardReload(); } else { previewRef.current?.reload(); } }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setReloadMenuAnchor(e.currentTarget as HTMLElement);

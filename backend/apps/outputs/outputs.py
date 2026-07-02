@@ -439,6 +439,24 @@ async def runtime_report_error(workspace_id: str, body: dict):
     return {"ok": True, "recorded": 1}
 
 
+@outputs.router.post("/workspace/{workspace_id}/runtime/console-log")
+async def runtime_console_log(workspace_id: str, body: dict):
+    """Fold webview console lines into the runtime's terminal stream so they reach the Terminal panes AND the agent-readable .openswarm/terminal.log. Renderer batches; body is {lines: [{level, text}, ...]}."""
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    rt = runtime_manager.get(workspace_id)
+    if rt is None:
+        return {"ok": False, "recorded": 0}
+    lines = body.get("lines") or []
+    recorded = 0
+    for entry in lines[:200]:
+        text = str(entry.get("text") or "").strip()
+        if not text:
+            continue
+        rt.record_frontend_log(str(entry.get("level") or "log"), text)
+        recorded += 1
+    return {"ok": True, "recorded": recorded}
+
+
 @outputs.router.post("/workspace/{workspace_id}/runtime/report-ready")
 async def runtime_report_ready(workspace_id: str):
     from backend.apps.outputs.runtime import manager as runtime_manager

@@ -182,6 +182,10 @@ pane in real time. Frontend `console.log` calls in the running app land in
 the same Terminal pane prefixed `[FRONTEND]`. Use this to correlate cause
 and effect across the two halves of your stack.
 
+The same stream is tee'd to **`.openswarm/terminal.log`** at the workspace
+root (reset on every app start), so you can read your own `debug()` output
+directly: `tail -100 .openswarm/terminal.log`.
+
 ---
 
 ## Quick reference

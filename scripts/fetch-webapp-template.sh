@@ -99,6 +99,7 @@ __pycache__/
 *.pyc
 dist/
 build/
+.openswarm/
 EOF
 
 # Patch 3: backend_init.sh — copied verbatim into every new workspace.

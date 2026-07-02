@@ -52,8 +52,22 @@ p_vite_boot_lock = asyncio.Lock()
 
 @dataclass
 class LogLine:
-    stream: str  # "stdout" | "stderr" | "runtime" (internal status lines)
+    stream: str  # "stdout" | "stderr" | "runtime" (internal) | "frontend[-warn|-error]" (webview console via the console-log beacon)
     text: str
+
+
+# Byte cap for the on-disk terminal tee; past this we rewrite the file from the ring buffer so an HMR-spammy session can't grow it unbounded.
+TERMINAL_LOG_MAX_BYTES = 4 * 1024 * 1024
+
+# Human/agent-facing prefixes for the terminal.log tee; mirrors the Terminal pane's labels so skill docs describe both with one vocabulary.
+TERMINAL_LOG_PREFIXES = {
+    "stdout": "[BACKEND]",
+    "stderr": "[BACKEND:stderr]",
+    "runtime": "[RUNTIME]",
+    "frontend": "[FRONTEND]",
+    "frontend-warn": "[FRONTEND:warn]",
+    "frontend-error": "[FRONTEND:error]",
+}
 
 
 LogSubscriber = Callable[[LogLine], None]
@@ -83,6 +97,9 @@ class AppRuntime:
         self.p_suspended: bool = False
         self.process: Optional[asyncio.subprocess.Process] = None
         self.log_buffer: deque[LogLine] = deque(maxlen=LOG_BUFFER_LINES)
+        # On-disk tee of the ring buffer so the App Builder agent can inspect terminal output itself (Read/grep); reset on every start().
+        self.p_terminal_log_path = os.path.join(workspace_path, ".openswarm", "terminal.log")
+        self.p_terminal_log_bytes = 0
         self.p_subscribers: set[LogSubscriber] = set()
         # Recent build/runtime errors scraped from stderr; drained by the agent's post-tool hook after Write/Edit so the agent sees vite/babel/uvicorn errors in its next turn and can self-fix instead of leaving the user with a red iframe overlay.
         self.recent_errors: deque[str] = deque(maxlen=RECENT_ERRORS_MAX)
@@ -160,6 +177,7 @@ class AppRuntime:
             if self.running:
                 return True
 
+            self.p_reset_terminal_log()
             if self.is_new_mode:
                 # Acquire the module-level boot lock BEFORE the spawn so only one new-mode workspace is mid-bundle at a time. The lock is released by the bind-poll task the moment vite emits "frontend ready" (or its 180s timeout fires), which is the moment the next workspace can start its own vite without competing for the same CPU. See `p_await_frontend_bind` for the release.
                 await p_vite_boot_lock.acquire()
@@ -426,12 +444,45 @@ class AppRuntime:
 
     def p_broadcast(self, line: LogLine) -> None:
         self.log_buffer.append(line)
+        self.p_append_terminal_log(line)
         # Snapshot subscribers; they can self-remove during dispatch.
         for cb in list(self.p_subscribers):
             try:
                 cb(line)
             except Exception:
                 pass
+
+    def record_frontend_log(self, level: str, text: str) -> None:
+        """Fold a webview console line into the terminal stream (ring buffer, WS subscribers, terminal.log). Called by the console-log beacon endpoint."""
+        stream = {"warn": "frontend-warn", "error": "frontend-error"}.get(level, "frontend")
+        self.p_broadcast(LogLine(stream, text))
+
+    def p_reset_terminal_log(self) -> None:
+        try:
+            os.makedirs(os.path.dirname(self.p_terminal_log_path), exist_ok=True)
+            with open(self.p_terminal_log_path, "w", encoding="utf-8") as f:
+                f.write("# App terminal output (backend stdout/stderr, runtime events, frontend console). Reset on every app start.\n")
+            self.p_terminal_log_bytes = 0
+        except Exception:
+            logger.exception("terminal.log reset failed for %s", self.workspace_id)
+
+    def p_append_terminal_log(self, line: LogLine) -> None:
+        # Failures must never break the log pipeline; the file is a convenience tee.
+        try:
+            prefix = TERMINAL_LOG_PREFIXES.get(line.stream, f"[{line.stream}]")
+            rendered = f"{prefix} {line.text}\n"
+            if self.p_terminal_log_bytes > TERMINAL_LOG_MAX_BYTES:
+                # Rewrite from the ring buffer so the file self-heals to the last LOG_BUFFER_LINES lines instead of growing unbounded.
+                with open(self.p_terminal_log_path, "w", encoding="utf-8") as f:
+                    for old in list(self.log_buffer):
+                        f.write(f"{TERMINAL_LOG_PREFIXES.get(old.stream, f'[{old.stream}]')} {old.text}\n")
+                self.p_terminal_log_bytes = os.path.getsize(self.p_terminal_log_path)
+                return
+            with open(self.p_terminal_log_path, "a", encoding="utf-8") as f:
+                f.write(rendered)
+            self.p_terminal_log_bytes += len(rendered.encode("utf-8", errors="replace"))
+        except Exception:
+            pass
 
     def p_maybe_capture_error(self, text: str) -> None:
         if ERROR_PATTERNS.search(text):

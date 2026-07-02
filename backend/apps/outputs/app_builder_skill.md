@@ -466,6 +466,14 @@ Frontend `console.log/warn/error` calls land in the Terminal pane under
 stream as `[BACKEND]` lines, so you can correlate cause and effect across
 the two halves of your stack.
 
+**Read the terminal yourself: `.openswarm/terminal.log`** at the workspace
+root is a live tee of everything the Terminal pane shows — `[BACKEND]` /
+`[BACKEND:stderr]` stdout+stderr, `[RUNTIME]` events, and `[FRONTEND]` /
+`[FRONTEND:warn]` / `[FRONTEND:error]` console lines from the running app.
+It resets on every app (re)start. When something misbehaves, don't guess —
+`tail -100 .openswarm/terminal.log` (or grep it for `error`) and look at
+what actually happened.
+
 ---
 
 ## Adding npm packages
@@ -514,8 +522,8 @@ runtime errors as a visible red error card AND mirrors the error into
 the Terminal pane as a `[FRONTEND]` line tagged `[openswarm:app-error]`.
 After substantial edits — especially anything that touches imports,
 hooks, or React state — **always check the most recent `[FRONTEND]`
-lines in your Terminal output before saying "done"**. If you see one,
-fix it before claiming the app is ready.
+lines before saying "done"** (`tail -50 .openswarm/terminal.log`).
+If you see one, fix it before claiming the app is ready.
 
 The three most common ways agent edits crash a React preview:
 
