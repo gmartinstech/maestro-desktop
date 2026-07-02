@@ -42,6 +42,9 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         # Opus 4.7: SDK currently strips plaintext thinking deltas (encrypted only) so the live "Thought for Ns" pill loses mid-turn text. Final answer + tokens fine.
         {"value": "opus-4-7", "label": "Claude Opus 4.7", "context_window": 1_000_000,
          "model_id": "claude-opus-4-7", "router_model_id": "cc/claude-opus-4-7", "api": "anthropic", "reasoning": True},
+        # Sonnet 5 (2026-06-30): cheaper near-Opus-4.8 agentic model. cc/ route assumed to pass through like opus-4-8 did; needs a live sub-route check.
+        {"value": "sonnet-5", "label": "Claude Sonnet 5", "context_window": 1_000_000,
+         "model_id": "claude-sonnet-5", "router_model_id": "cc/claude-sonnet-5", "api": "anthropic", "reasoning": True},
         {"value": "sonnet", "label": "Claude Sonnet 4.6", "context_window": 1_000_000,
          "model_id": "claude-sonnet-4-6", "router_model_id": "cc/claude-sonnet-4-6", "api": "anthropic", "reasoning": True},
         {"value": "opus", "label": "Claude Opus 4.6", "context_window": 1_000_000,
@@ -53,6 +56,8 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
          "model_id": "claude-opus-4-8", "router_model_id": "cc/claude-opus-4-8", "api": "anthropic", "reasoning": True, "route": "cc"},
         {"value": "opus-4-7-cc", "label": "Claude Opus 4.7", "context_window": 1_000_000,
          "model_id": "claude-opus-4-7", "router_model_id": "cc/claude-opus-4-7", "api": "anthropic", "reasoning": True, "route": "cc"},
+        {"value": "sonnet-5-cc", "label": "Claude Sonnet 5", "context_window": 1_000_000,
+         "model_id": "claude-sonnet-5", "router_model_id": "cc/claude-sonnet-5", "api": "anthropic", "reasoning": True, "route": "cc"},
         {"value": "sonnet-cc", "label": "Claude Sonnet 4.6", "context_window": 1_000_000,
          "model_id": "claude-sonnet-4-6", "router_model_id": "cc/claude-sonnet-4-6", "api": "anthropic", "reasoning": True, "route": "cc"},
         {"value": "opus-cc", "label": "Claude Opus 4.6", "context_window": 1_000_000,
@@ -65,6 +70,8 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
          "model_id": "claude-opus-4-8", "router_model_id": "claude-opus-4-8", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "opus-4-7-api", "label": "Claude Opus 4.7 (API key)", "context_window": 1_000_000,
          "model_id": "claude-opus-4-7", "router_model_id": "claude-opus-4-7", "api": "anthropic", "reasoning": True, "route": "api"},
+        {"value": "sonnet-5-api", "label": "Claude Sonnet 5 (API key)", "context_window": 1_000_000,
+         "model_id": "claude-sonnet-5", "router_model_id": "claude-sonnet-5", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "sonnet-api", "label": "Claude Sonnet 4.6 (API key)", "context_window": 1_000_000,
          "model_id": "claude-sonnet-4-6", "router_model_id": "claude-sonnet-4-6", "api": "anthropic", "reasoning": True, "route": "api"},
         {"value": "opus-api", "label": "Claude Opus 4.6 (API key)", "context_window": 1_000_000,
@@ -360,6 +367,7 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
 COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     # (provider, model): (input_cost_per_1M, output_cost_per_1M) NOTE: real cost numbers come from 9Router's usage stats. These entries are kept so the table matches BUILTIN_MODELS and can be used by any future native-loop path. Subscription-routed models are zero-cost to the user, but API rates are recorded here for reference where they exist. Anthropic (direct API rates).
     ("Anthropic", "sonnet"): (3.0, 15.0),
+    ("Anthropic", "sonnet-5"): (3.0, 15.0),
     ("Anthropic", "opus"): (5.0, 25.0),
     ("Anthropic", "opus-4-7"): (5.0, 25.0),
     ("Anthropic", "opus-4-8"): (5.0, 25.0),
