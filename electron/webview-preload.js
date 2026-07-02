@@ -192,7 +192,7 @@ try {
   };
 
   const onWheelCapture = (e) => {
-    if (isInteractive) return;
+    // Canvas zoom is a dashboard-level gesture: forward cmd/ctrl+wheel even in interact mode, matching browser cards (which never set interactive and always zoom the canvas).
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
@@ -208,6 +208,7 @@ try {
       } catch (_) {}
       return;
     }
+    if (isInteractive) return;
     // Vertical-dominant scroll stays with the page.
     if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     // Horizontal-dominant: defer to the page if anything inside can absorb

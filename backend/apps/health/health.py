@@ -2,14 +2,11 @@ from backend.config.Apps import SubApp
 from contextlib import asynccontextmanager
 from fastapi.responses import PlainTextResponse
 from typeguard import typechecked
-import debug
 from fastapi import status, HTTPException
 
 @asynccontextmanager
 async def health_lifespan():
-    debug("START")
     yield
-    debug("END")
 
 health = SubApp("health", health_lifespan)
 

@@ -117,7 +117,8 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
 
   const skills = useAppSelector((state) => state.skills.items);
   const modesMap = useAppSelector((state) => state.modes.items);
-  const modesArr = useMemo(() => Object.values(modesMap), [modesMap]);
+  // 'view-builder' (App Builder) is folded into normal agents now (any agent builds apps via CreateApp), so it's hidden from the picker. The mode still exists for back-compat with sessions created before the fold-in.
+  const modesArr = useMemo(() => Object.values(modesMap).filter((m) => m.id !== 'view-builder'), [modesMap]);
   const sessionFrameworkOverhead = useAppSelector((state) =>
     sessionId ? (state.agents.sessions[sessionId]?.framework_overhead_tokens ?? 0) : 0,
   );
@@ -258,7 +259,8 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
       .map((el) => el.semanticData!.selectId as string);
     const appIds = selectedEls
       .filter((el) => el.semanticType === 'view-card' && el.semanticData?.selectId)
-      .map((el) => el.semanticData!.selectId as string);
+      // Strip a multi-instance card-key suffix (`output_id#N`): the backend AppAgent gate wants bare output ids.
+      .map((el) => (el.semanticData!.selectId as string).split('#')[0]);
     const settingIds = selectedEls
       .filter((el) => el.semanticType === 'settings-option' && el.semanticData?.selectId)
       .map((el) => el.semanticData!.selectId as string);

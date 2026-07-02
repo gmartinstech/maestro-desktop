@@ -44,12 +44,19 @@ export interface CardPosition {
 
 export interface ViewCardPosition {
   output_id: string;
+  // Which instance of the app this card is (1 = primary, absent on pre-instance layouts). Each instance is a fully independent runtime on its own ports.
+  instance?: number;
   x: number;
   y: number;
   width: number;
   height: number;
   zOrder: number;
   parent_session_id?: string | null;
+}
+
+// Record key + card identity for a view card. The primary keeps the bare output_id so persisted layouts and every existing by-output lookup stay valid; secondaries append #N.
+export function viewCardKey(outputId: string, instance?: number): string {
+  return (instance ?? 1) > 1 ? `${outputId}#${instance}` : outputId;
 }
 
 export interface BrowserTab {
@@ -143,6 +150,8 @@ export interface DashboardLayoutState {
   initialized: boolean;
   /** Transient: new browser card id; Dashboard pans/zooms to it then clears via clearPendingFocusBrowserId. */
   pendingFocusBrowserId: string | null;
+  // Set when a view card is opened from outside the canvas (sidebar app click / toolbar picker) so the dashboard fits+highlights it on arrival; holds the card key.
+  pendingFocusViewCardId: string | null;
   pendingFocusNoteId: string | null;
   /** Transient: snapshot stand-ins for off-screen webviews; never rides the layout PUT. */
   suspendedBrowserCards: Record<string, { dataUrl: string; capturedAt: number }>;
@@ -189,6 +198,7 @@ const initialState: DashboardLayoutState = {
   loading: false,
   initialized: false,
   pendingFocusBrowserId: null,
+  pendingFocusViewCardId: null,
   pendingFocusNoteId: null,
   suspendedBrowserCards: {},
   endingBrowserCards: {},
@@ -632,7 +642,7 @@ const dashboardLayoutSlice = createSlice({
 
       const allItems = [
         ...agentCards.map((c) => ({ kind: 'agent' as const, id: c.session_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
-        ...viewCards.map((c) => ({ kind: 'view' as const, id: c.output_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
+        ...viewCards.map((c) => ({ kind: 'view' as const, id: viewCardKey(c.output_id, c.instance), x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
         ...bCards.map((c) => ({ kind: 'browser' as const, id: c.browser_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
         ...wCards.map((c) => ({ kind: 'workflow' as const, id: c.workflow_id, x: c.x, y: c.y, storedW: c.width, storedH: c.height })),
         ...(hub ? [{ kind: 'workflows-hub' as const, id: 'workflows-hub', x: hub.x, y: hub.y, storedW: hub.width, storedH: hub.height }] : []),
@@ -679,9 +689,16 @@ const dashboardLayoutSlice = createSlice({
       outputId: string; expandedSessionIds?: string[];
       parentSessionId?: string | null;
       x?: number; y?: number; width?: number; height?: number;
+      // Open ANOTHER independent instance of an already-open app instead of no-op'ing.
+      newInstance?: boolean;
     }>) {
-      const { outputId, expandedSessionIds, parentSessionId, x, y, width, height } = action.payload;
-      if (state.viewCards[outputId]) return;
+      const { outputId, expandedSessionIds, parentSessionId, x, y, width, height, newInstance } = action.payload;
+      let instance = 1;
+      if (state.viewCards[outputId]) {
+        if (!newInstance) return;
+        instance = 2;
+        while (state.viewCards[viewCardKey(outputId, instance)]) instance++;
+      }
       const w = width || DEFAULT_VIEW_CARD_W;
       const h = height || DEFAULT_VIEW_CARD_H;
       let posX: number, posY: number;
@@ -701,8 +718,10 @@ const dashboardLayoutSlice = createSlice({
           posY = pos.y;
         }
       }
-      state.viewCards[outputId] = {
+      const cardKey = viewCardKey(outputId, instance);
+      state.viewCards[cardKey] = {
         output_id: outputId,
+        instance,
         x: posX,
         y: posY,
         width: w,
@@ -710,6 +729,11 @@ const dashboardLayoutSlice = createSlice({
         zOrder: state.nextZOrder++,
         parent_session_id: parentSessionId || null,
       };
+      state.pendingFocusViewCardId = cardKey;
+    },
+
+    clearPendingFocusViewCardId(state) {
+      state.pendingFocusViewCardId = null;
     },
 
     setViewCardPosition(
@@ -1204,6 +1228,51 @@ const dashboardLayoutSlice = createSlice({
       card.tabs.splice(Math.max(0, Math.min(action.payload.toIndex, card.tabs.length)), 0, tab);
     },
 
+    // Drag a tab OUT of a browser card: into another card (absorbed, appended + activated) or onto empty canvas (spins off a new card at the drop point). Moving the last tab dissolves the source card, Chrome-style.
+    moveBrowserTab(
+      state,
+      action: PayloadAction<{ fromBrowserId: string; tabId: string; toBrowserId?: string; x?: number; y?: number }>
+    ) {
+      const { fromBrowserId, tabId, toBrowserId, x, y } = action.payload;
+      if (toBrowserId === fromBrowserId) return;
+      const source = state.browserCards[fromBrowserId];
+      if (!source) return;
+      const idx = source.tabs.findIndex((t) => t.id === tabId);
+      if (idx === -1) return;
+      const target = toBrowserId ? state.browserCards[toBrowserId] : undefined;
+      if (toBrowserId && !target) return;
+      const [moved] = source.tabs.splice(idx, 1);
+      // Fresh id: reusing the old one makes the receiving BrowserCard think the tab is already initialized, so its webview never loads the URL and sits at about:blank.
+      const tab = { ...moved, id: generateTabId() };
+      if (source.tabs.length === 0) {
+        delete state.browserCards[fromBrowserId];
+      } else if (source.activeTabId === tabId) {
+        const nextActive = source.tabs[Math.min(idx, source.tabs.length - 1)];
+        source.activeTabId = nextActive.id;
+        source.url = nextActive.url;
+      }
+      if (target) {
+        target.tabs.push(tab);
+        target.activeTabId = tab.id;
+        target.url = tab.url;
+        target.zOrder = state.nextZOrder++;
+      } else {
+        const id = `browser-${Date.now().toString(36)}`;
+        state.browserCards[id] = {
+          browser_id: id,
+          url: tab.url,
+          tabs: [tab],
+          activeTabId: tab.id,
+          x: x ?? source.x + 60,
+          y: y ?? source.y + 60,
+          width: source.width,
+          height: source.height,
+          zOrder: state.nextZOrder++,
+          dashboard_id: source.dashboard_id,
+        };
+      }
+    },
+
     moveCards(
       state,
       action: PayloadAction<{
@@ -1352,7 +1421,7 @@ const dashboardLayoutSlice = createSlice({
       if (entry.kind === 'browser') {
         state.browserCards[entry.card.browser_id] = { ...entry.card, zOrder, dashboard_id: dashboardId ?? entry.card.dashboard_id };
       } else if (entry.kind === 'view') {
-        state.viewCards[entry.card.output_id] = { ...entry.card, zOrder };
+        state.viewCards[viewCardKey(entry.card.output_id, entry.card.instance)] = { ...entry.card, zOrder };
       } else if (entry.kind === 'workflow') {
         state.workflowCards[entry.card.workflow_id] = { ...entry.card, zOrder };
       } else if (entry.kind === 'note') {
@@ -1595,6 +1664,7 @@ export const {
   updateBrowserTabTitle,
   updateBrowserTabFavicon,
   reorderBrowserTab,
+  moveBrowserTab,
   moveCards,
   setGlowingBrowserCards,
   fadeGlowingBrowserCards,
@@ -1604,6 +1674,7 @@ export const {
   fadeGlowingAgentCard,
   clearGlowingAgentCard,
   clearPendingFocusBrowserId,
+  clearPendingFocusViewCardId,
   addWorkflowCard,
   setWorkflowCardPosition,
   setWorkflowCardSize,

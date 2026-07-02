@@ -39,13 +39,21 @@ export function useDashboardCardActions({
 }: UseDashboardCardActionsArgs) {
   const dispatch = useAppDispatch();
 
-  const handleAddView = useCallback((outputId: string) => {
-    dispatch(addViewCard({ outputId, expandedSessionIds }));
+  const handleAddView = useCallback((outputId: string, opts?: { newInstance?: boolean }) => {
+    dispatch(addViewCard({ outputId, expandedSessionIds, newInstance: opts?.newInstance }));
     setTimeout(() => {
-      const card = store.getState().dashboardLayout.viewCards[outputId];
+      // Focus whichever card the dispatch produced: with newInstance that's the highest-numbered instance of this output, else the primary.
+      const viewCards = store.getState().dashboardLayout.viewCards;
+      let focusKey = outputId;
+      if (opts?.newInstance) {
+        for (const [key, vc] of Object.entries(viewCards)) {
+          if (vc.output_id === outputId && (vc.instance ?? 1) >= (viewCards[focusKey]?.instance ?? 1)) focusKey = key;
+        }
+      }
+      const card = viewCards[focusKey];
       if (card) {
         canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true);
-        handleHighlightCard(outputId);
+        handleHighlightCard(focusKey);
       }
     }, 200);
   }, [dispatch, expandedSessionIds, canvasActions, handleHighlightCard]);

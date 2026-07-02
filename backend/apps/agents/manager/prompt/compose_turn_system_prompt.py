@@ -73,6 +73,17 @@ def compose_turn_system_prompt(
         from backend.apps.outputs.view_builder_templates import load_app_builder_skill
         skill_block = f"<app_builder_reference>\n{load_app_builder_skill()}\n</app_builder_reference>"
         composed_prompt = f"{composed_prompt}\n\n{skill_block}" if composed_prompt else skill_block
+    else:
+        # Every other mode gets one line of discovery instead of the whole reference: CreateApp's result carries the reference when actually used, so the base prompt stays cheap.
+        apps_note = (
+            "<apps_capability>\n"
+            "You can build real web apps for the user: when they ask for an app, tool, game, or dashboard, "
+            "call the CreateApp tool — it seeds a workspace and puts a live preview card on their dashboard, "
+            "then you write the code. To change an existing app, have the user select its card (or use the "
+            "workspace path in your context) and edit the files directly.\n"
+            "</apps_capability>"
+        )
+        composed_prompt = f"{composed_prompt}\n\n{apps_note}" if composed_prompt else apps_note
 
     # App cards the user picked via the dashboard element picker: give the agent each app's on-disk path + meta + SKILL.md pointer so it can edit them in place (the dashboard card's runtime live-reloads). Additive and independent of view-builder mode above.
     app_ctx = build_selected_app_context(selected_app_output_ids)

@@ -16,6 +16,7 @@ import {
   resetLayout,
   removeViewCard,
   clearPendingFocusBrowserId,
+  clearPendingFocusViewCardId,
   clearPendingFocusWorkflowId,
   clearPendingFocusWorkflowsHub,
   type ViewCardPosition,
@@ -71,6 +72,7 @@ export function useDashboardLifecycle({
   const pendingBrowserUrl = useAppSelector((state) => state.tempState.pendingBrowserUrl);
   const pendingFocusAgentId = useAppSelector((state) => state.tempState.pendingFocusAgentId);
   const pendingFocusBrowserId = useAppSelector((state) => state.dashboardLayout.pendingFocusBrowserId);
+  const pendingFocusViewCardId = useAppSelector((state) => state.dashboardLayout.pendingFocusViewCardId);
   const pendingFocusWorkflowId = useAppSelector((state) => state.dashboardLayout.pendingFocusWorkflowId);
   const pendingFocusWorkflowsHub = useAppSelector((state) => state.dashboardLayout.pendingFocusWorkflowsHub);
 
@@ -231,6 +233,22 @@ export function useDashboardLifecycle({
     }, 200);
   }, [isActive, pendingFocusBrowserId, layoutInitialized, dispatch, canvasActions, handleHighlightCard]);
 
+  // Auto-focus a view card opened from OUTSIDE the canvas (sidebar app click, toolbar picker). addViewCard sets pendingFocusViewCardId; fit + highlight it, then clear. Mirrors the browser path above so reopening a closed app lands you looking right at it.
+  useEffect(() => {
+    if (!isActive) return;
+    if (!pendingFocusViewCardId || !layoutInitialized) return;
+    const cardKey = pendingFocusViewCardId;
+    dispatch(clearPendingFocusViewCardId());
+    hasFittedRef.current = true;
+    setTimeout(() => {
+      const card = store.getState().dashboardLayout.viewCards[cardKey];
+      if (card) {
+        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true);
+        handleHighlightCard(cardKey);
+      }
+    }, 200);
+  }, [isActive, pendingFocusViewCardId, layoutInitialized, dispatch, canvasActions, handleHighlightCard]);
+
   // Same pan/highlight choreography for newly-spawned workflow cards.
   useEffect(() => {
     if (!isActive) return;
@@ -310,8 +328,9 @@ export function useDashboardLifecycle({
       if (autoOpenedOutputsRef.current.has(output.id)) continue;
       const sid = output.session_id;
       if (!sid) continue;
+      // Any mode: apps are born from normal agents via CreateApp now, not just view-builder sessions.
       const sess = sessions[sid];
-      if (!sess || sess.mode !== 'view-builder') continue;
+      if (!sess) continue;
       if (sess.dashboard_id !== dashboardId) continue;
       autoOpenedOutputsRef.current.add(output.id);
       if (viewCards[output.id]) continue;

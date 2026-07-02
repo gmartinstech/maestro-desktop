@@ -9,6 +9,10 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import CloseIcon from '@mui/icons-material/Close';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
+import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { Output, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { setViewCardPosition, setViewCardSize, setActiveViewCardId, recordClosedCard } from '@/shared/state/dashboardLayoutSlice';
 import { removeViewCardCleanly } from '@/shared/viewTeardown';
@@ -16,12 +20,22 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ViewPreview, { ViewPreviewHandle } from '@/app/pages/Views/ViewPreview';
+import TerminalPanel, { TerminalLine } from '@/app/pages/Views/TerminalPanel';
+import AppCodePanel from '@/app/pages/Views/AppCodePanel';
+import HistoryPanel from '@/app/pages/Views/HistoryPanel';
+import ShareButton from '@/app/components/share/ShareButton';
 import { getDefault } from '@/shared/inputSchemaDefaults';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
 import {
   useRuntimePreviewUrl,
   pickPreviewUrl,
+  RuntimeLogLine,
 } from '@/shared/hooks/useRuntimePreviewUrl';
+import { postAppConsoleLine, terminalLineFromStream } from '@/shared/appTerminal';
+
+type AppCardView = 'preview' | 'code' | 'terminal' | 'history';
+
+const TERMINAL_BUFFER_CAP = 5000;
 
 type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -48,6 +62,10 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
 
 interface Props {
   output: Output;
+  // Record key in dashboardLayout.viewCards (output.id for the primary, `${output.id}#N` for extras); every layout/selection dispatch keys by this.
+  cardKey?: string;
+  // Which independent instance of the app this card runs; each instance gets its own runtime + ports.
+  instance?: number;
   cardX: number;
   cardY: number;
   cardWidth: number;
@@ -104,16 +122,17 @@ const BootingBody: React.FC = () => {
 };
 
 const DashboardViewCard: React.FC<Props> = ({
-  output, cardX, cardY, cardWidth, cardHeight, zoom = 1, panX = 0, panY = 0, cmdHeld = false,
+  output, cardKey: cardKeyProp, instance = 1, cardX, cardY, cardWidth, cardHeight, zoom = 1, panX = 0, panY = 0, cmdHeld = false,
   isSelected = false, isHighlighted = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
   cardZOrder = 0, onDoubleClick, onBringToFront,
 }) => {
+  const cardKey = cardKeyProp ?? output.id;
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
   const previewRef = useRef<ViewPreviewHandle>(null);
   const activeViewCardId = useAppSelector((s) => s.dashboardLayout.activeViewCardId);
-  const interactive = activeViewCardId === output.id;
+  const interactive = activeViewCardId === cardKey;
 
   // Deselecting the card exits interact mode (click anywhere else on canvas).
   useEffect(() => {
@@ -132,6 +151,20 @@ const DashboardViewCard: React.FC<Props> = ({
 
   const [inputData] = useState<Record<string, any>>(() => getDefault(output.input_schema));
   const [backendResult] = useState<Record<string, any> | null>(null);
+
+  // Preview/Code/Terminal switcher; only new-mode (workspace-backed) apps have code + terminal to show.
+  const [activeView, setActiveView] = useState<AppCardView>('preview');
+  const hasWorkspace = !!output.workspace_id;
+  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
+  const terminalLineIdRef = useRef(0);
+  // Fed by the runtime logs WS (which replays its ring buffer on connect); frontend console lines arrive on the same socket via the console-log beacon echo.
+  const handleRuntimeLog = useCallback((line: RuntimeLogLine) => {
+    const fields = terminalLineFromStream(line.stream, line.text);
+    setTerminalLines((prev) => {
+      const next = prev.concat({ id: ++terminalLineIdRef.current, ...fields });
+      return next.length > TERMINAL_BUFFER_CAP ? next.slice(next.length - TERMINAL_BUFFER_CAP) : next;
+    });
+  }, []);
 
   // Reload the preview when the session finishes a turn: React holds the ErrorBoundary's snag page until a reload, so without this the user keeps seeing the old error even after the agent fixed it. The overlay lingers through the reload (finishing) so the stale page never flashes.
   const linkedStatus = useAppSelector(
@@ -178,8 +211,8 @@ const DashboardViewCard: React.FC<Props> = ({
     didDrag.current = false;
     setIsDragging(true);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    onDragStart?.(output.id, 'view');
-  }, [cardX, cardY, onDragStart, output.id]);
+    onDragStart?.(cardKey, 'view');
+  }, [cardX, cardY, onDragStart, cardKey]);
 
   const recomputeDragPos = useCallback(() => {
     const ds = dragState.current;
@@ -226,7 +259,7 @@ const DashboardViewCard: React.FC<Props> = ({
         finalY = Math.round(finalY / 24) * 24;
       }
       dispatch(setViewCardPosition({
-        outputId: output.id,
+        outputId: cardKey,
         x: finalX,
         y: finalY,
       }));
@@ -239,7 +272,7 @@ const DashboardViewCard: React.FC<Props> = ({
     setLocalDragPos(null);
     setIsDragging(false);
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-  }, [dispatch, output.id, onDragEnd]);
+  }, [dispatch, cardKey, onDragEnd]);
 
   const resizeRef = useRef<{
     dir: ResizeDir; startX: number; startY: number;
@@ -293,24 +326,19 @@ const DashboardViewCard: React.FC<Props> = ({
     if (!resizeRef.current) return;
     const result = computeResize(e);
     if (result) {
-      dispatch(setViewCardPosition({ outputId: output.id, x: result.x, y: result.y }));
-      dispatch(setViewCardSize({ outputId: output.id, width: result.w, height: result.h }));
+      dispatch(setViewCardPosition({ outputId: cardKey, x: result.x, y: result.y }));
+      dispatch(setViewCardSize({ outputId: cardKey, width: result.w, height: result.h }));
     }
     resizeRef.current = null;
     setLocalResize(null);
     setIsResizing(false);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-  }, [computeResize, dispatch, output.id]);
+  }, [computeResize, dispatch, cardKey]);
 
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
-    dispatch(recordClosedCard({ kind: 'view', id: output.id }));
-    void removeViewCardCleanly(output.id, dispatch);
-  };
-
-  const handleRefresh = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    previewRef.current?.reload();
+    dispatch(recordClosedCard({ kind: 'view', id: cardKey }));
+    void removeViewCardCleanly(cardKey, dispatch);
   };
 
   const [reloadMenuRect, setReloadMenuRect] = useState<DOMRect | null>(null);
@@ -323,14 +351,24 @@ const DashboardViewCard: React.FC<Props> = ({
         const tok = getAuthToken();
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (tok) headers.Authorization = `Bearer ${tok}`;
-        await fetch(`${API_BASE}/outputs/workspace/${wsId}/runtime/restart`, {
+        await fetch(`${API_BASE}/outputs/workspace/${wsId}/runtime/restart?instance=${instance}`, {
           method: 'POST',
           headers,
         });
       } catch { /* failures surface via the runtime log WS */ }
     }
     previewRef.current?.reload();
-  }, [output.workspace_id]);
+  }, [output.workspace_id, instance]);
+
+  // In Terminal view a soft webview reload is invisible (the terminal is what you're looking at), so the refresh button always hard-reloads there.
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (activeView === 'terminal' && output.workspace_id) {
+      void handleHardReload(e);
+      return;
+    }
+    previewRef.current?.reload();
+  };
 
   const mdDx = (!isDragging && isSelected && multiDragDelta) ? multiDragDelta.dx : 0;
   const mdDy = (!isDragging && isSelected && multiDragDelta) ? multiDragDelta.dy : 0;
@@ -343,16 +381,16 @@ const DashboardViewCard: React.FC<Props> = ({
   return (
     <Box
       data-select-type="view-card"
-      data-select-id={output.id}
+      data-select-id={cardKey}
       data-select-meta={JSON.stringify({ name: output.name, description: output.description, path: output.workspace_path })}
-      onPointerDownCapture={() => onBringToFront?.(output.id, 'view')}
+      onPointerDownCapture={() => onBringToFront?.(cardKey, 'view')}
       onClick={(e: React.MouseEvent) => {
         if (justDraggedRef.current) return;
-        onCardSelect?.(output.id, 'view', e.shiftKey);
+        onCardSelect?.(cardKey, 'view', e.shiftKey);
       }}
       onDoubleClick={(e: React.MouseEvent) => {
         e.stopPropagation();
-        onDoubleClick?.(output.id, 'view');
+        onDoubleClick?.(cardKey, 'view');
       }}
       sx={{
         position: 'absolute',
@@ -446,8 +484,58 @@ const DashboardViewCard: React.FC<Props> = ({
         >
           {output.name}
         </Typography>
+        {instance > 1 && (
+          <Typography sx={{ fontSize: '0.66rem', fontWeight: 700, color: c.text.ghost, bgcolor: c.bg.page, borderRadius: 999, px: 0.75, py: 0.1, flexShrink: 0 }}>
+            #{instance}
+          </Typography>
+        )}
 
-        <Tooltip title="Reload preview; right-click for Hard Reload" placement="top">
+        {hasWorkspace && (
+          <Box
+            onPointerDown={(e) => e.stopPropagation()}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.25,
+              bgcolor: c.bg.page,
+              borderRadius: 999,
+              p: 0.25,
+              flexShrink: 0,
+            }}
+          >
+            {([
+              { view: 'preview' as const, label: 'Preview', Icon: VisibilityRoundedIcon },
+              { view: 'code' as const, label: 'Code', Icon: CodeRoundedIcon },
+              { view: 'terminal' as const, label: 'Terminal', Icon: TerminalRoundedIcon },
+              { view: 'history' as const, label: 'History', Icon: HistoryRoundedIcon },
+            ]).map(({ view, label, Icon }) => (
+              <Tooltip key={view} title={label} placement="top">
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); setActiveView(view); }}
+                  sx={{
+                    p: 0.5,
+                    borderRadius: 999,
+                    color: activeView === view ? c.text.primary : c.text.ghost,
+                    bgcolor: activeView === view ? c.bg.elevated : 'transparent',
+                    '&:hover': { color: c.text.primary, bgcolor: activeView === view ? c.bg.elevated : `${c.text.primary}0a` },
+                  }}
+                >
+                  <Icon sx={{ fontSize: 14 }} />
+                </IconButton>
+              </Tooltip>
+            ))}
+          </Box>
+        )}
+
+        <Box onPointerDown={(e) => e.stopPropagation()} sx={{ display: 'flex', flexShrink: 0 }}>
+          <ShareButton target={{ kind: 'app', id: output.id, name: output.name }} size="small" iconFontSize={15} />
+        </Box>
+
+        <Tooltip
+          title={activeView === 'terminal' ? 'Hard reload (restart runtime + reload app)' : 'Reload preview; right-click for Hard Reload'}
+          placement="top"
+        >
           <IconButton
             size="small"
             onClick={handleRefresh}
@@ -484,12 +572,33 @@ const DashboardViewCard: React.FC<Props> = ({
         <DashboardOutputPreview
           previewRef={previewRef}
           output={output}
+          cardKey={cardKey}
+          instance={instance}
           inputData={inputData}
           backendResult={backendResult}
           interactive={interactive}
-          onAppClicked={() => dispatch(setActiveViewCardId(output.id))}
+          onAppClicked={() => dispatch(setActiveViewCardId(cardKey))}
+          onRuntimeLog={handleRuntimeLog}
         />
-        <BuildingOverlay show={showBuildingOverlay} />
+        {/* Code/Terminal overlay the always-mounted preview instead of replacing it: unmounting the webview kills the app's live state and forces a reload on switch-back. */}
+        {output.workspace_id && activeView !== 'preview' && (
+          <Box sx={{ position: 'absolute', inset: 0, zIndex: 13, bgcolor: c.bg.surface }}>
+            {activeView === 'terminal' ? (
+              <TerminalPanel lines={terminalLines} />
+            ) : activeView === 'history' ? (
+              <Box sx={{ height: '100%', overflow: 'auto' }}>
+                <HistoryPanel
+                  outputId={output.id}
+                  isAgentActive={showBuildingOverlay}
+                  onRestored={() => previewRef.current?.reload()}
+                />
+              </Box>
+            ) : (
+              <AppCodePanel workspaceId={output.workspace_id} onFileSaved={() => previewRef.current?.reload()} />
+            )}
+          </Box>
+        )}
+        <BuildingOverlay show={showBuildingOverlay && activeView === 'preview'} />
       </Box>
 
       {/* Resize handles */}
@@ -608,17 +717,22 @@ const BuildingOverlay: React.FC<{ show: boolean }> = ({ show }) => {
 const DashboardOutputPreview: React.FC<{
   previewRef: React.Ref<ViewPreviewHandle>;
   output: Output;
+  cardKey?: string;
+  instance?: number;
   inputData: Record<string, any>;
   backendResult: any;
   interactive: boolean;
   onAppClicked: () => void;
-}> = ({ previewRef, output, inputData, backendResult, interactive, onAppClicked }) => {
+  onRuntimeLog?: (line: RuntimeLogLine) => void;
+}> = ({ previewRef, output, cardKey, instance = 1, inputData, backendResult, interactive, onAppClicked, onRuntimeLog }) => {
   const tokens = useClaudeTokens();
   const dispatch = useAppDispatch();
   const workspaceId = output.workspace_id ?? null;
   const { frontendUrl, isNewMode, isHydrating } = useRuntimePreviewUrl({
     workspaceId,
     enabled: !!workspaceId,
+    onLog: onRuntimeLog,
+    instance,
   });
   const { url, isBooting } = pickPreviewUrl({
     workspaceId,
@@ -634,23 +748,25 @@ const DashboardOutputPreview: React.FC<{
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (tok) headers.Authorization = `Bearer ${tok}`;
     if (text.includes('[openswarm:app-ready]')) {
-      fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/report-ready`, {
+      fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/report-ready?instance=${instance}`, {
         method: 'POST', headers,
       }).catch(() => {});
       return;
     }
+    // Fold console output into the runtime terminal stream (card Terminal view + agent-readable terminal.log).
+    postAppConsoleLine(workspaceId, level, text, instance);
     if (level !== 'error' || !text.includes('[openswarm:app-error]')) return;
     const idx = text.indexOf('[openswarm:app-error]');
     const tail = text.slice(idx + '[openswarm:app-error]'.length).trim();
     const firstNewline = tail.indexOf('\n');
     const message = firstNewline >= 0 ? tail.slice(0, firstNewline).trim() : tail;
     const componentStack = firstNewline >= 0 ? tail.slice(firstNewline + 1).trim() : '';
-    fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/report-error`, {
+    fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/report-error?instance=${instance}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ message, componentStack }),
     }).catch(() => {});
-  }, [workspaceId]);
+  }, [workspaceId, instance]);
 
   // An orphaned record (files deleted on disk) used to render the raw 404 JSON inside the card, or spin on "Starting preview" forever; probe once instead.
   const [filesMissing, setFilesMissing] = useState(false);
@@ -688,7 +804,7 @@ const DashboardOutputPreview: React.FC<{
           This app's files are missing.
         </Typography>
         <Typography
-          onClick={() => void removeViewCardCleanly(output.id, dispatch)}
+          onClick={() => void removeViewCardCleanly(cardKey ?? output.id, dispatch)}
           sx={{
             color: tokens.accent.primary,
             fontSize: '0.85rem',
@@ -715,7 +831,7 @@ const DashboardOutputPreview: React.FC<{
   return (
     <ViewPreview
       ref={previewRef}
-      registryId={output.id}
+      registryId={cardKey ?? output.id}
       serveUrl={url}
       frontendCode={output.files?.['index.html'] ?? ''}
       inputData={inputData}
@@ -723,7 +839,7 @@ const DashboardOutputPreview: React.FC<{
       onConsoleMessage={handleConsoleMessage}
       interactive={interactive}
       onAppClicked={onAppClicked}
-      agentBrowserId={`app:${output.id}`}
+      agentBrowserId={instance > 1 ? `app:${output.id}#${instance}` : `app:${output.id}`}
     />
   );
 };

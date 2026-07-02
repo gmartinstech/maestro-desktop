@@ -44,7 +44,7 @@ import { shallowEqual } from 'react-redux';
 import { fetchDashboards, createDashboard, renameDashboard } from '@/shared/state/dashboardsSlice';
 import { Typewriter } from '@/app/components/feedback/Animated';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
-import { addBrowserCard, addBrowserTab, cycleBrowserTab, reopenLastClosed } from '@/shared/state/dashboardLayoutSlice';
+import { addBrowserCard, addBrowserTab, cycleBrowserTab, reopenLastClosed, addViewCard } from '@/shared/state/dashboardLayoutSlice';
 import { setPendingBrowserUrl } from '@/shared/state/tempStateSlice';
 import { fetchOutputs } from '@/shared/state/outputsSlice';
 import { setInstalling } from '@/shared/state/updateSlice';
@@ -81,10 +81,6 @@ const AppShell: React.FC = () => {
     };
     return fn as typeof navigateRaw;
   }, [navigateRaw]);
-  // Navigate to an app instantly on click. The old debounce here swallowed clicks the user could see (felt broken) and never actually fixed the crash, since letting each app load defeats the debounce anyway. The real GPU-churn source (the WebGL loading placeholder) is now CSS, and the 250ms preview gate still skips webviews for apps switched-past too fast, so instant navigation is safe.
-  const navigateToApp = useCallback((id: string) => {
-    navigate(`/apps/${id}`);
-  }, [navigate]);
   const location = useLocation();
   // React Router (HashRouter) stores a monotonic index in history state. location re-renders on every nav, by which point window.history.state.idx is updated.
   const historyIdx = (window.history.state?.idx as number | undefined) ?? 0;
@@ -438,16 +434,24 @@ const AppShell: React.FC = () => {
 
   const isDashboardRoute = location.pathname === '/' || location.pathname.startsWith('/dashboard/');
   const isDashboardViewActive = location.pathname.startsWith('/dashboard/');
-  const isAppsRoute = location.pathname === '/apps' || location.pathname.startsWith('/apps/');
+  const isAppsRoute = false;  // /apps route removed; app cards live on the dashboard now.
   const isCustomizationRoute = location.pathname === '/customization' || CUSTOMIZATION_PATHS.has(location.pathname);
   const activeDashboardId = location.pathname.startsWith('/dashboard/')
     ? location.pathname.split('/dashboard/')[1]
     : null;
 
   const [lastDashboardId, setLastDashboardId] = useLastDashboardId();
-  const activeAppId = location.pathname.startsWith('/apps/')
-    ? location.pathname.split('/apps/')[1]
-    : null;
+  // Apps no longer have a full-page editor; clicking one in the sidebar drops (or focuses) its live card on the current dashboard. Fold-in of the old App Builder.
+  const navigateToApp = useCallback((id: string) => {
+    dispatch(addViewCard({ outputId: id }));
+    if (lastDashboardId && location.pathname !== `/dashboard/${lastDashboardId}`) {
+      navigate(`/dashboard/${lastDashboardId}`);
+    }
+  }, [dispatch, navigate, lastDashboardId, location.pathname]);
+  // With the /apps route gone, an app row is "active" when its card is open on the dashboard, not from the URL.
+  const openViewCardOutputIds = useAppSelector((s) =>
+    new Set(Object.values(s.dashboardLayout.viewCards).map((vc) => vc.output_id)),
+  );
 
   const handleDashboardsClick = () => {
     if (isDashboardRoute && location.pathname === '/') {
@@ -486,17 +490,7 @@ const AppShell: React.FC = () => {
   };
 
   const handleAppsClick = () => {
-    if (isAppsRoute && location.pathname === '/apps') {
-      setAppsExpanded((prev) => !prev);
-    } else {
-      navigate('/apps');
-      setAppsExpanded(true);
-    }
-  };
-
-  const handleCreateApp = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigate('/apps/new');
+    setAppsExpanded((prev) => !prev);
   };
 
   return (
@@ -1120,21 +1114,6 @@ const AppShell: React.FC = () => {
                   },
                 }}
               />
-              <Tooltip title="New app" placement="right">
-                <IconButton
-                  size="small"
-                  onClick={handleCreateApp}
-                  sx={{
-                    color: c.text.ghost,
-                    p: 0.25,
-                    mr: 0.25,
-                    borderRadius: 1,
-                    '&:hover': { color: c.accent.primary, bgcolor: `${c.accent.primary}14` },
-                  }}
-                >
-                  <Plus size={15} />
-                </IconButton>
-              </Tooltip>
               {appsList.length > 0 && (
                 <ExpandMoreIcon
                   sx={{
@@ -1163,7 +1142,7 @@ const AppShell: React.FC = () => {
                 }}
               >
                 {appsList.map((app) => {
-                  const isActive = activeAppId === app.id;
+                  const isActive = openViewCardOutputIds.has(app.id);
                   return (
                     <Box
                       key={app.id}

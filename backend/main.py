@@ -253,16 +253,17 @@ def p_ws_auth_ok(websocket: WebSocket) -> bool:
 
 
 @app.websocket("/ws/outputs/runtime/{workspace_id}/logs")
-async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
+async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str, instance: int = 1):
     """Stream the persistent app-backend's stdout/stderr to the Terminal
     pane. On connect we replay the runtime's ring buffer so a Terminal
     tab opened mid-session sees the context it missed, then we tail
-    every subsequent line until disconnect."""
+    every subsequent line until disconnect. `instance` targets a specific
+    dashboard card's runtime when the same app is open more than once."""
     if not p_ws_auth_ok(websocket):
         return
     await websocket.accept()
     from backend.apps.outputs.runtime import manager as runtime_manager
-    rt = runtime_manager.get(workspace_id)
+    rt = runtime_manager.get(workspace_id, instance)
     if rt is None:
         # No active runtime, surface that to the client and close. The frontend will call /runtime/start and reconnect. Also emit a status frame with is_new_mode (computed from disk) so the preview pane shows the "starting preview…" placeholder for webapp_template workspaces instead of falling back to the legacy /serve/index.html URL (which 404s in new-mode).
         try:

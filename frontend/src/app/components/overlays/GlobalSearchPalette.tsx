@@ -54,7 +54,6 @@ const ACTIONS: ActionResult[] = [
   { kind: 'action', id: 'go-skills', name: 'Go to Skills', keywords: 'customize skills' },
   { kind: 'action', id: 'go-actions', name: 'Go to Actions', keywords: 'customize tools actions mcp' },
   { kind: 'action', id: 'go-modes', name: 'Go to Modes', keywords: 'customize modes' },
-  { kind: 'action', id: 'go-apps', name: 'Go to Apps', keywords: 'apps mini app' },
   { kind: 'action', id: 'all-dashboards', name: 'All dashboards', keywords: 'overview picker browse boards' },
 ];
 
@@ -153,7 +152,6 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
       case 'go-skills': navigate('/skills'); break;
       case 'go-actions': navigate('/actions'); break;
       case 'go-modes': navigate('/modes'); break;
-      case 'go-apps': navigate('/apps'); break;
       case 'all-dashboards': navigate('/'); break;
     }
   }, [dispatch, navigate]);
