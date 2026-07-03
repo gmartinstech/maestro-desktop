@@ -123,9 +123,6 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gemini-3.1-flash-lite-api", "label": "Gemini 3.1 Flash Lite (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.1-flash-lite-preview", "model_id": "gemini-3.1-flash-lite-preview",
          "api": "gemini", "reasoning": True, "route": "api"},
-        {"value": "gemini-3-flash-api", "label": "Gemini 3 Flash (API key)",
-         "context_window": 1_000_000, "router_model_id": "gemini-3-flash-preview", "model_id": "gemini-3-flash-preview",
-         "api": "gemini", "reasoning": True, "route": "api"},
     ],
 }
 

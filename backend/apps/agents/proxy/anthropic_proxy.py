@@ -32,7 +32,7 @@ P_CLAUDE_MODEL_PREFIXES = (
 
 P_GEMINI_MODEL_PREFIXES = ("gemini/", "gc/", "ag/")
 
-# Own-key Gemini ("gemini-3-flash-api" etc.) skips the gemini/ prefix; match bare names so $schema scrub still fires.
+# Own-key Gemini ("gemini-3.5-flash-api" etc.) skips the gemini/ prefix; match bare names so $schema scrub still fires.
 P_GEMINI_BARE_MODEL_PATTERNS = ("gemini-",)
 
 # Gemini's function_declarations validator accepts only a small OpenAPI subset. A denylist was whack-a-mole: every new JSON Schema construct that slipped through (union `type`, anyOf, $comment, format, ...) was a fresh prod 400 with zero tokens in. We invert it: keep ONLY the keys Gemini is known to accept, and fold the two "optional" encodings Anthropic emits (a union `type` list, and an anyOf whose other branch is `{"type":"null"}`) into the `nullable` flag Gemini actually understands. Everything dropped is advisory; the model still reads it from `description`. The win is structural: an unknown future key can't 400 us.
