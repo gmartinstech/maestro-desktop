@@ -387,14 +387,16 @@ async def p_watchdog_loop() -> None:
     false-negative while a busy router streams, and acting on one bad probe would rotate a LIVE
     router's request log and burn a duplicate spawn attempt."""
     failures = 0
+    p_loop = asyncio.get_running_loop()
     while True:
         await asyncio.sleep(P_WATCHDOG_BACKOFF_SECONDS if failures >= 3 else P_WATCHDOG_INTERVAL_SECONDS)
         try:
-            if is_running():
+            # is_running()'s HTTP confirm is SYNC and can stall 2s while the router is busy streaming; a periodic pulse must never block the event loop, so probe from a thread.
+            if await p_loop.run_in_executor(None, is_running):
                 failures = 0
                 continue
             await asyncio.sleep(2)
-            if is_running():
+            if await p_loop.run_in_executor(None, is_running):
                 failures = 0
                 continue
             logger.warning("9Router watchdog: router is down (confirmed twice); reviving")
