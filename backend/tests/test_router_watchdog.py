@@ -30,16 +30,102 @@ def test_watchdog_revives_then_backs_off():
              patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc.asyncio, "sleep", fake_sleep):
             task = asyncio.get_running_loop().create_task(proc.p_watchdog_loop())
-            while len(sleeps) < 6:
+            while len(sleeps) < 9:
                 await real_sleep(0)
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
-        assert len(ensures) >= 3, "a down router must be revived on every pulse"
+        assert len(ensures) >= 2, "a confirmed-down router must be revived"
         assert sleeps[0] == proc.P_WATCHDOG_INTERVAL_SECONDS
-        assert sleeps[4] == proc.P_WATCHDOG_BACKOFF_SECONDS, "3 straight failures must back off"
+        assert sleeps[1] == 2, "two-strike: a single failed probe must be re-confirmed before reviving"
+        assert proc.P_WATCHDOG_BACKOFF_SECONDS in sleeps, "3 straight failures must back off"
+
+    asyncio.run(run())
+
+
+def test_watchdog_single_false_negative_never_revives():
+    async def run():
+        sleeps: list = []
+        ensures: list = []
+        probes: list = []
+
+        async def fake_sleep(d):
+            sleeps.append(d)
+            await real_sleep(0)
+
+        async def fake_ensure():
+            ensures.append(1)
+
+        def flaky_is_running():
+            # First probe of each pulse fails (busy-router false negative); the confirm succeeds.
+            probes.append(1)
+            return len(probes) % 2 == 0
+
+        real_sleep = asyncio.sleep
+        with patch.object(proc, "is_running", flaky_is_running), \
+             patch.object(proc, "ensure_running", fake_ensure), \
+             patch.object(proc.asyncio, "sleep", fake_sleep):
+            task = asyncio.get_running_loop().create_task(proc.p_watchdog_loop())
+            while len(probes) < 8:
+                await real_sleep(0)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        assert not ensures, "a transient probe failure must never trigger a revive"
+
+    asyncio.run(run())
+
+
+def test_death_watcher_revives_instantly_and_guards_loops():
+    async def run():
+        ensures: list = []
+
+        async def fake_ensure():
+            ensures.append(1)
+
+        class FakeProc:
+            def __init__(self):
+                self.dead = False
+            def wait(self):
+                while not self.dead:
+                    pass
+            def poll(self):
+                return 1 if self.dead else None
+
+        fp = FakeProc()
+        proc.p_recent_death_monos.clear()
+        with patch.object(proc, "ensure_running", fake_ensure), \
+             patch.object(proc, "p_process", fp):
+            task = asyncio.get_running_loop().create_task(proc.p_death_watch(fp))
+            await asyncio.sleep(0.05)
+            assert not ensures, "no revive while the process lives"
+            fp.dead = True
+            for _ in range(200):
+                if ensures:
+                    break
+                await asyncio.sleep(0.01)
+            assert ensures, "process death must trigger an instant revive"
+            await task
+        # Crash-loop guard: a 3rd death inside 60s defers to the watchdog.
+        ensures.clear()
+        proc.p_recent_death_monos[:] = [proc.time.monotonic() - 5, proc.time.monotonic() - 3]
+        fp2 = FakeProc(); fp2.dead = True
+        with patch.object(proc, "ensure_running", fake_ensure), \
+             patch.object(proc, "p_process", fp2):
+            await proc.p_death_watch(fp2)
+        assert not ensures, "3 deaths in 60s must defer to the backed-off watchdog"
+        # A superseded/stopped handle never revives.
+        ensures.clear()
+        proc.p_recent_death_monos.clear()
+        fp3 = FakeProc(); fp3.dead = True
+        with patch.object(proc, "ensure_running", fake_ensure), \
+             patch.object(proc, "p_process", None):
+            await proc.p_death_watch(fp3)
+        assert not ensures, "a deliberately stopped router must stay down"
 
     asyncio.run(run())
 
