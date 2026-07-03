@@ -20,7 +20,6 @@ import InputBase from '@mui/material/InputBase';
 import { LayoutDashboard } from 'lucide-react';
 import PsychologyIcon from '@mui/icons-material/PsychologyOutlined';
 import BuildIcon from '@mui/icons-material/BuildOutlined';
-import TuneIcon from '@mui/icons-material/TuneOutlined';
 import { LayoutGrid } from 'lucide-react';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Settings as LucideSettings } from 'lucide-react';
@@ -63,7 +62,6 @@ const UPDATE_DISMISS_KEY = 'openswarm-update-dismissed';
 const CUSTOMIZATION_ITEMS = [
   { label: 'Skills', path: '/skills', icon: <PsychologyIcon />, onboarding: 'sidebar-skills' },
   { label: 'Actions', path: '/actions', icon: <BuildIcon />, onboarding: 'sidebar-actions' },
-  { label: 'Modes', path: '/modes', icon: <TuneIcon />, onboarding: 'sidebar-modes' },
 ];
 
 const CUSTOMIZATION_PATHS = new Set(CUSTOMIZATION_ITEMS.map((i) => i.path));
