@@ -1334,12 +1334,13 @@ def test_post_action_state_truncates_long_lists(monkeypatch):
     from backend.apps.agents.browser import browser_agent as ba
     calls = []
     monkeypatch.setattr(ba.browser_wait, "smart_wait", p_fake_settle(calls))
-    long_list = "\n".join(f'[{i}]<button "b{i}">' for i in range(60))
+    # cap is 60 (matches the frontend list cap); truncation only kicks in past that
+    long_list = "\n".join(f'[{i}]<button "b{i}">' for i in range(80))
     out = asyncio.run(ba.post_action_state(
         "BrowserType", {"selector": "#q", "text": "hi"}, {"text": "Typed"},
         "b1", "", p_fake_exec(calls, long_list), "",
     ))
-    assert "(+25 more rows" in out and '[34]<button "b34">' in out and '[35]' not in out
+    assert "(+20 more rows" in out and '[59]<button "b59">' in out and '[60]' not in out
 
 
 def test_post_action_state_hung_settle_attaches_nothing(monkeypatch):
@@ -1523,3 +1524,38 @@ def test_strip_lone_surrogates():
     blocks[0]["text"].encode("utf-8")
     err = format_tool_result({"error": "bad \ud83e node"}, "BrowserClickIndex")
     err[0]["text"].encode("utf-8")
+
+
+def test_loop_tier_pin_flag_overrides_model_failsafe(monkeypatch):
+    # V7: OPENSWARM_BROWSER_LOOP_TIER pins the loop to a fast-capable tier (provider-agnostic),
+    # default off inherits the parent model, and a resolver failure falls back to the inherited id.
+    import backend.apps.settings.credentials as cred_mod
+    import backend.apps.agents.providers.registry as reg_mod
+    BH.BROWSER_HISTORY.clear()
+    primary = FakeLLM([Resp([Blk("text", "done")], stop_reason="end_turn")] * 5)
+    p_install(monkeypatch, primary, FakeAux())
+
+    async def p_tier_resolve(s, preferred_tier="haiku", primary_api=None):
+        return (f"pinned-{preferred_tier}", None)
+    monkeypatch.setattr(reg_mod, "resolve_aux_model", p_tier_resolve, raising=True)
+    # same client whatever the id, so the loop runs and we can read which model it used
+    monkeypatch.setattr(cred_mod, "get_anthropic_client_for_model", lambda s, m: primary, raising=True)
+
+    # default OFF: inherit the parent's resolved id
+    monkeypatch.delenv("OPENSWARM_BROWSER_LOOP_TIER", raising=False)
+    asyncio.run(BA.run_browser_agent(task="t", browser_id="b1", model="opus", initial_url=None))
+    assert primary.calls[-1]["model"] == "primary-x"
+
+    # flag ON: pin to the fast-capable tier
+    primary.turn = 0
+    monkeypatch.setenv("OPENSWARM_BROWSER_LOOP_TIER", "sonnet")
+    asyncio.run(BA.run_browser_agent(task="t", browser_id="b2", model="opus", initial_url=None))
+    assert primary.calls[-1]["model"] == "pinned-sonnet"
+
+    # fail-safe: resolver raises -> keep the inherited id, never break the run
+    async def p_boom(s, preferred_tier="haiku", primary_api=None):
+        raise RuntimeError("no provider")
+    monkeypatch.setattr(reg_mod, "resolve_aux_model", p_boom, raising=True)
+    primary.turn = 0
+    asyncio.run(BA.run_browser_agent(task="t", browser_id="b3", model="opus", initial_url=None))
+    assert primary.calls[-1]["model"] == "primary-x"

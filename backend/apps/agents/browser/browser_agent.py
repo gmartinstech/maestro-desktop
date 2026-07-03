@@ -350,7 +350,8 @@ P_AUTO_STATE_TOOLS = {
     "BrowserNavigate", "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
     "BrowserType", "BrowserPressKey", "BrowserScroll", "BrowserBatch",
 }
-P_AUTO_STATE_MAX_LINES = 35
+# Matches the frontend's DEFAULT_INTERACTIVE_CAP (interactiveRanking.ts): a shorter cap here silently hid rows 36-60 that an explicit BrowserListInteractives would show, forcing the model to re-list the very elements it just acted on. Delta compression keeps the common attach small, so the worst case (a full 60-row attach) is bounded and rare.
+P_AUTO_STATE_MAX_LINES = 60
 P_AUTO_SETTLE_CAPS_MS = {"BrowserNavigate": 2500, "BrowserBatch": 1500}
 
 # URL shapes that mean "a list of candidates to pick from" (auto candidate scan)
@@ -679,6 +680,17 @@ async def run_browser_agent(
                 "action_log": [],
                 "final_screenshot": None,
             }
+    # A/B lever (flag-gated, default off): pin the browser LOOP to a fast-capable tier instead of inheriting the parent's frontier model. Measured 2026-07-03: Opus->Sonnet is ~2x/turn on a gen-bound turn and mechanical browsing rarely needs frontier reasoning. Provider-agnostic via resolve_aux_model's tier map; any failure falls back to the inherited model so the flag can never break a run.
+    p_loop_tier = os.environ.get("OPENSWARM_BROWSER_LOOP_TIER", "").strip().lower()
+    if p_loop_tier in ("haiku", "sonnet"):
+        try:
+            p_pinned, _ = await resolve_aux_model(
+                browser_settings, preferred_tier=p_loop_tier, primary_api=get_api_type(model))
+            if p_pinned and p_pinned != api_model:
+                logger.info(f"[browser-agent {session_id}] loop-tier pin: {api_model} -> {p_pinned} (tier={p_loop_tier})")
+                api_model = p_pinned
+        except Exception as e:
+            logger.info(f"[browser-agent {session_id}] loop-tier pin skipped ({e}); inheriting {api_model}")
     # Route the client based on the resolved model id, not just connection_mode. Without this, a pinned-route value like "sonnet-cc" resolves to "cc/claude-sonnet-4-6" but the old get_anthropic_client() still returned an OpenSwarm-proxy client (because connection_mode was openswarm-pro), which then rejected the cc/ prefix and surfaced as a misleading "OpenSwarm servers are busy" error.
     client = get_anthropic_client_for_model(browser_settings, api_model)
 
