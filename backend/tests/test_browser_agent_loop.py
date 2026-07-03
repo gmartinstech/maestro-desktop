@@ -63,6 +63,17 @@ def p_rp(goal, mem="Share dialog is a cross-origin iframe; use the index list.")
 DOC_URL = "https://docs.google.com/document/d/abc/edit"
 
 
+def p_run_settled(**kw):
+    """run_browser_agent then drain the backgrounded learning task; the distill
+    no longer blocks the reply path, so tests asserting its effects must settle it."""
+    async def p_go():
+        r = await BA.run_browser_agent(**kw)
+        if BA.p_learn_tasks:
+            await asyncio.gather(*list(BA.p_learn_tasks), return_exceptions=True)
+        return r
+    return asyncio.run(p_go())
+
+
 def p_install(monkeypatch, primary, aux):
     # local imports inside run_browser_agent resolve from these source modules
     import backend.apps.settings.settings as settings_mod
@@ -71,10 +82,11 @@ def p_install(monkeypatch, primary, aux):
     import backend.apps.agents.agent_manager as am_mod
 
     monkeypatch.setattr(settings_mod, "load_settings", lambda: {"fake": True}, raising=True)
-    monkeypatch.setattr(reg_mod, "find_builtin_model", lambda m: object(), raising=True)
+    # a dict (not object()) so get_api_type's (entry or {}).get("api") works like the real registry rows
+    monkeypatch.setattr(reg_mod, "find_builtin_model", lambda m: {"api": "anthropic"}, raising=True)
     monkeypatch.setattr(reg_mod, "resolve_model_id_for_sdk", lambda m, s: "primary-x", raising=True)
 
-    async def p_aux_resolve(s, preferred_tier="haiku"):
+    async def p_aux_resolve(s, preferred_tier="haiku", primary_api=None):
         return ("aux-x", None)
     monkeypatch.setattr(reg_mod, "resolve_aux_model", p_aux_resolve, raising=True)
 
@@ -938,9 +950,9 @@ def test_playbook_distills_on_success_survives_restart_and_seeds_next_run(monkey
     ])
     pbaux = PBAux()
     p_install(monkeypatch, primary1, pbaux)
-    asyncio.run(BA.run_browser_agent(
+    p_run_settled(
         task="find design engineers", browser_id="b1", model="sonnet", initial_url=DOC_URL,
-    ))
+    )
     assert pbaux.calls >= 1, "a substantive success must trigger the distill aux call"
     assert PB.get_playbook("docs.google.com"), "playbook recorded for the host"
 
@@ -995,7 +1007,7 @@ def test_ambient_memory_signals_fire_calmly(monkeypatch):
     # Run 1: nothing learned yet -> NO recall line, but it learns -> closing line.
     p_install(monkeypatch, p_run(), PBAux())
     monkeypatch.setattr(BA.ws_manager, "send_to_session", p_cap, raising=False)
-    asyncio.run(BA.run_browser_agent(task="find engineers", browser_id="b1", model="sonnet", initial_url=DOC_URL))
+    p_run_settled(task="find engineers", browser_id="b1", model="sonnet", initial_url=DOC_URL)
     joined1 = " ".join(msgs)
     assert "Picking up what I learned" not in joined1, "no recall on the first-ever visit"
     assert "so I'm faster here next time" in joined1, "closing 'learned' line after first success"

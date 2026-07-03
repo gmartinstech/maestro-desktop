@@ -525,6 +525,10 @@ async def p_request_browser_approval(
     return decision
 
 
+# Background learning tasks (playbook distill) held by strong ref; asyncio only weak-refs tasks, and a GC'd task dies silently mid-distill.
+p_learn_tasks: set[asyncio.Task] = set()
+
+
 async def run_browser_agent(
     task: str,
     browser_id: str,
@@ -587,8 +591,16 @@ async def run_browser_agent(
         whole point of front-loading). Best-effort; never raises."""
         recs = []
         try:
-            li = await execute_browser_tool("BrowserListInteractives", {}, browser_id, tab_id)
-            gt = await execute_browser_tool("BrowserGetText", {}, browser_id, tab_id)
+            # The two front-load reads are independent, so fire them together: the AX-tree list (slow, occlusion-filtered) and the text read overlap instead of adding up. return_exceptions keeps it best-effort, one read failing no longer discards the other.
+            li, gt = await asyncio.gather(
+                execute_browser_tool("BrowserListInteractives", {}, browser_id, tab_id),
+                execute_browser_tool("BrowserGetText", {}, browser_id, tab_id),
+                return_exceptions=True,
+            )
+            if not isinstance(li, dict):
+                li = {}
+            if not isinstance(gt, dict):
+                gt = {}
             url = li.get("url") or gt.get("url") or label_url or ""
             parts = []
             if li.get("text") and "error" not in li:
@@ -630,6 +642,7 @@ async def run_browser_agent(
     from backend.apps.settings.credentials import get_anthropic_client_for_model
     from backend.apps.agents.providers.registry import (
         find_builtin_model,
+        get_api_type,
         resolve_model_id_for_sdk,
         resolve_aux_model,
     )
@@ -759,7 +772,10 @@ async def run_browser_agent(
         if not p_aux_state["resolved"]:
             p_aux_state["resolved"] = True
             try:
-                aux_model, _ = await resolve_aux_model(browser_settings, preferred_tier="haiku")
+                # primary_api unlocks the registry's family-match + API-key branches; without it an OpenAI/Google key-only user gets a raise here and auto-scan + playbook learning silently die.
+                aux_model, _ = await resolve_aux_model(
+                    browser_settings, preferred_tier="haiku", primary_api=get_api_type(model),
+                )
                 p_aux_state["model"] = aux_model
                 p_aux_state["client"] = get_anthropic_client_for_model(browser_settings, aux_model)
             except Exception as e:
@@ -2132,10 +2148,12 @@ async def run_browser_agent(
 
         # Tier-2 memory: on a substantive verified success, distill this run into the DURABLE strategy playbook (one cheap aux call, mem0-style distill+ reconcile). Fires for BOTH mechanical and judgment tasks, it's how the judgment ones (which can't be skills) still get faster/wiser next time.
         if browser_playbook.should_learn(honest, turn + 1):
-            try:
-                # App mode keys by the stable app id (the run had no URL host); web keys by the final host, which navigation may have changed.
-                rec_pb_host = browser_id if app_mode else browser_skills.host_of(last_seen_url)
-                if rec_pb_host:
+            async def p_distill_learning() -> None:
+                try:
+                    # App mode keys by the stable app id (the run had no URL host); web keys by the final host, which navigation may have changed.
+                    rec_pb_host = browser_id if app_mode else browser_skills.host_of(last_seen_url)
+                    if not rec_pb_host:
+                        return
                     aux_client, aux_model = await p_get_aux_client()
                     changed = await browser_playbook.distill_and_store(
                         rec_pb_host, skill_key_task, latest_working_mem, summary,
@@ -2151,8 +2169,12 @@ async def run_browser_agent(
                         await ws_manager.send_to_session(session_id, "agent:message", {
                             "session_id": session_id, "message": p_learn_msg.model_dump(mode="json"),
                         })
-            except Exception as e:
-                logger.debug(f"[browser-playbook] distill skipped: {e}")
+                except Exception as e:
+                    logger.debug(f"[browser-playbook] distill skipped: {e}")
+            # Learning is advisory to FUTURE runs, so the user's reply must not wait on this aux call; it used to sit between "done" and the reply.
+            p_lt = asyncio.create_task(p_distill_learning())
+            p_learn_tasks.add(p_lt)
+            p_lt.add_done_callback(p_learn_tasks.discard)
         # The model asked to leave the browser open because the deliverable lives on the page (a video playing, a page to read). Pin the card so the auto-close on parent finish skips it. Only on honest success: never pin a broken or ghost run open. The keep broadcast lands before the parent reaches terminal state (it awaits this run), so the frontend has the flag set before any close path runs.
         if honest and done_keep_open and dashboard_id:
             try:
