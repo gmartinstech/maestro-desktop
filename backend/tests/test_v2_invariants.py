@@ -555,15 +555,15 @@ def test_resolve_sdk_gemini_prefers_antigravity_over_api_key():
     s = AppSettings()
     s.google_api_key = "ai-studio-key"
     with patch.object(registry, "p_antigravity_connected", return_value=True):
-        # flash IS AG-serveable -> AG wins over the key
-        assert registry.resolve_model_id_for_sdk("gemini-3-flash", s) == "ag/gemini-3-flash"
+        # flash-lite IS AG-serveable (via ag/gemini-3-flash) -> AG wins over the key
+        assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s) == "ag/gemini-3-flash"
     with patch.object(registry, "p_antigravity_connected", return_value=False):
         # AG not connected -> key
-        assert registry.resolve_model_id_for_sdk("gemini-3-flash", s) == "gemini/gemini-3-flash-preview"
+        assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s) == "gemini/gemini-3.1-flash-lite-preview"
     # No key, no AG -> gc/ subscription lane untouched
     s2 = AppSettings()
     with patch.object(registry, "p_antigravity_connected", return_value=False):
-        assert registry.resolve_model_id_for_sdk("gemini-3-flash", s2) == "gc/gemini-3-flash-preview"
+        assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s2) == "gc/gemini-3.1-flash-lite-preview"
 
 
 def test_error_classify_schema_translation_400_is_not_auth():
@@ -664,16 +664,18 @@ def test_dashboard_get_strips_only_orphan_session_cards():
 
 def test_banned_models_not_offered():
     """Gemini 3.1 Pro (no working lane: AG can't serve it, AI Studio key 429s
-    pro-preview) stays pulled from the picker. Guard so a refactor can't
-    silently re-list a model that can't run. (Fable 5 was re-listed 2026-07-02
-    after its ban lifted, so it left this list.)"""
+    pro-preview) stays pulled from the picker. Gemini 3 Flash pulled too (both
+    rows): the direct-API lane is flaky and 429-throttled, so it only sold a slow
+    option. Guard so a refactor can't silently re-list a model that can't run.
+    (Fable 5 was re-listed 2026-07-02 after its ban lifted, so it left this list.)"""
     from backend.apps.agents.providers.registry import BUILTIN_MODELS
     all_values = {m["value"] for models in BUILTIN_MODELS.values() for m in models}
-    for dead in ("gemini-3.1-pro", "gemini-3.1-pro-api"):
+    for dead in ("gemini-3.1-pro", "gemini-3.1-pro-api", "gemini-3-flash", "gemini-3-flash-api"):
         assert dead not in all_values, f"{dead} is back in the picker"
-    # No '3.1 pro' label survives in any provider group either.
+    # No '3.1 pro' or '3 flash' label survives in any provider group either.
     all_labels = " | ".join(m["label"].lower() for models in BUILTIN_MODELS.values() for m in models)
     assert "3.1 pro" not in all_labels
+    assert "gemini 3 flash" not in all_labels
 
 
 # =========================================================================== Group E, 9Router-streamed 401 detection =========================================================================== 9Router sometimes returns upstream auth failures AS the assistant's reply text, not as an exception. We detect the pattern in the stream handler to substitute a friendly bubble.

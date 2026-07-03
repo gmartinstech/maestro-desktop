@@ -288,7 +288,7 @@ const DEFAULT_MODEL_PRIORITY: string[] = [
 const DEFAULT_MODEL_PICKS: Record<string, string[]> = {
   Anthropic: ['sonnet-cc', 'sonnet'],
   OpenAI: ['gpt-5.4-mini', 'gpt-5.4'],
-  Google: ['gemini-2.5-flash', 'gemini-3-flash', 'gemini-2.5-pro'],
+  Google: ['gemini-2.5-flash', 'gemini-2.5-pro'],
   'OpenSwarm Pro': ['sonnet', 'opus'],
   OpenSwarm: ['gpt-5-mini', 'claude-haiku-4.5', 'gpt-4.1'],
 };

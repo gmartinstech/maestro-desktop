@@ -112,19 +112,13 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-flash-lite-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
-        # gemini-3-pro removed: gemini-3-pro-preview was shut down 2026-03-09 (dead on both the direct API and the Gemini CLI backend). gemini-3-flash kept: it's superseded on the direct API but still serves on the CLI subscription route.
-        {"value": "gemini-3-flash", "label": "Gemini 3 Flash",
-         "context_window": 1_000_000, "router_model_id": "gc/gemini-3-flash-preview",
-         "api": "gemini-cli", "subscription_only": True, "reasoning": True},
+        # gemini-3-pro removed 2026-03-09 (shut down). gemini-3-flash pulled too (both sub + api-key rows): the direct-API lane is flaky and 429-throttled (measured 7-21s + quota errors), so it only sold a slow option; ag/gemini-3-flash lives on as an aux model, not a picker row.
         # API-key entries: bypass 9Router, call generativelanguage.googleapis.com.
         {"value": "gemini-3.5-flash-api", "label": "Gemini 3.5 Flash (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.5-flash", "model_id": "gemini-3.5-flash",
          "api": "gemini", "reasoning": True, "route": "api"},
         {"value": "gemini-3.1-flash-lite-api", "label": "Gemini 3.1 Flash Lite (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.1-flash-lite-preview", "model_id": "gemini-3.1-flash-lite-preview",
-         "api": "gemini", "reasoning": True, "route": "api"},
-        {"value": "gemini-3-flash-api", "label": "Gemini 3 Flash (API key)",
-         "context_window": 1_000_000, "router_model_id": "gemini-3-flash-preview", "model_id": "gemini-3-flash-preview",
          "api": "gemini", "reasoning": True, "route": "api"},
     ],
 }
@@ -252,8 +246,7 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     # Gemini lane order: Antigravity OAuth (for the models it serves), then AI Studio apikey, then Gemini CLI. AG bypasses the thoughtSignature validator that breaks multi-step Gemini turns AND supports real reasoning, so a connected AG sub is preferred over the AI Studio key, which otherwise silently shadowed it. The map is AG's allowlist; pro variants 404/400 on AG and are deliberately absent, so they fall through to the key.
     P_ANTIGRAVITY_MAP = {
         # gemini-3-pro-preview disabled: AG returns 404 even with active conn. gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant 400s every request with "invalid argument" (the `-high` thinking- budget alias on AG requires a thinking_config the CLI doesn't emit). Falls through to the AI Studio key / gc/ instead.
-        "gemini-3-flash-preview": "gemini-3-flash",
-        "gemini-3.1-flash-lite-preview": "gemini-3-flash",
+        "gemini-3.1-flash-lite-preview": "gemini-3-flash",  # 3.1-flash-lite has no AG variant, so AG serves it via gemini-3-flash
     }
     if entry.get("api") == "gemini-cli":
         rid = entry.get("router_model_id", "")
@@ -384,7 +377,6 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     # Google; Gemini CLI subscription path, user pays nothing per token
     ("Google", "gemini-3.5-flash"): (0.0, 0.0),
     ("Google", "gemini-3.1-flash-lite"): (0.0, 0.0),
-    ("Google", "gemini-3-flash"): (0.0, 0.0),
     ("Google", "gemini-2.5-pro"): (0.0, 0.0),
     ("Google", "gemini-2.5-flash"): (0.0, 0.0),
     # OpenRouter-backed (approximate)
