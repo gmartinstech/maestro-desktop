@@ -29,7 +29,7 @@ def test_watchdog_revives_then_backs_off():
         with patch.object(proc, "is_running", return_value=False), \
              patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc.asyncio, "sleep", fake_sleep):
-            task = asyncio.get_running_loop().create_task(proc.p_watchdog_loop())
+            task = asyncio.get_running_loop().create_task(proc.watchdog_loop())
             while len(sleeps) < 9:
                 await real_sleep(0)
             task.cancel()
@@ -38,9 +38,9 @@ def test_watchdog_revives_then_backs_off():
             except asyncio.CancelledError:
                 pass
         assert len(ensures) >= 2, "a confirmed-down router must be revived"
-        assert sleeps[0] == proc.P_WATCHDOG_INTERVAL_SECONDS
+        assert sleeps[0] == proc.WATCHDOG_INTERVAL_SECONDS
         assert sleeps[1] == 2, "two-strike: a single failed probe must be re-confirmed before reviving"
-        assert proc.P_WATCHDOG_BACKOFF_SECONDS in sleeps, "3 straight failures must back off"
+        assert proc.WATCHDOG_BACKOFF_SECONDS in sleeps, "3 straight failures must back off"
 
     asyncio.run(run())
 
@@ -67,7 +67,7 @@ def test_watchdog_single_false_negative_never_revives():
         with patch.object(proc, "is_running", flaky_is_running), \
              patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc.asyncio, "sleep", fake_sleep):
-            task = asyncio.get_running_loop().create_task(proc.p_watchdog_loop())
+            task = asyncio.get_running_loop().create_task(proc.watchdog_loop())
             while len(probes) < 8:
                 await real_sleep(0)
             task.cancel()
@@ -97,10 +97,10 @@ def test_death_watcher_revives_instantly_and_guards_loops():
                 return 1 if self.dead else None
 
         fp = FakeProc()
-        proc.p_recent_death_monos.clear()
+        proc.recent_death_monos.clear()
         with patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc, "p_process", fp):
-            task = asyncio.get_running_loop().create_task(proc.p_death_watch(fp))
+            task = asyncio.get_running_loop().create_task(proc.death_watch(fp))
             await asyncio.sleep(0.05)
             assert not ensures, "no revive while the process lives"
             fp.dead = True
@@ -112,19 +112,19 @@ def test_death_watcher_revives_instantly_and_guards_loops():
             await task
         # Crash-loop guard: a 3rd death inside 60s defers to the watchdog.
         ensures.clear()
-        proc.p_recent_death_monos[:] = [proc.time.monotonic() - 5, proc.time.monotonic() - 3]
+        proc.recent_death_monos[:] = [proc.time.monotonic() - 5, proc.time.monotonic() - 3]
         fp2 = FakeProc(); fp2.dead = True
         with patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc, "p_process", fp2):
-            await proc.p_death_watch(fp2)
+            await proc.death_watch(fp2)
         assert not ensures, "3 deaths in 60s must defer to the backed-off watchdog"
         # A superseded/stopped handle never revives.
         ensures.clear()
-        proc.p_recent_death_monos.clear()
+        proc.recent_death_monos.clear()
         fp3 = FakeProc(); fp3.dead = True
         with patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc, "p_process", None):
-            await proc.p_death_watch(fp3)
+            await proc.death_watch(fp3)
         assert not ensures, "a deliberately stopped router must stay down"
 
     asyncio.run(run())
@@ -146,7 +146,7 @@ def test_watchdog_healthy_router_never_spawns():
         with patch.object(proc, "is_running", return_value=True), \
              patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc.asyncio, "sleep", fake_sleep):
-            task = asyncio.get_running_loop().create_task(proc.p_watchdog_loop())
+            task = asyncio.get_running_loop().create_task(proc.watchdog_loop())
             while len(sleeps) < 4:
                 await real_sleep(0)
             task.cancel()
@@ -155,7 +155,7 @@ def test_watchdog_healthy_router_never_spawns():
             except asyncio.CancelledError:
                 pass
         assert not ensures
-        assert all(d == proc.P_WATCHDOG_INTERVAL_SECONDS for d in sleeps)
+        assert all(d == proc.WATCHDOG_INTERVAL_SECONDS for d in sleeps)
 
     asyncio.run(run())
 
@@ -166,9 +166,9 @@ def test_stop_cancels_watchdog():
             while True:
                 await asyncio.sleep(3600)
 
-        proc.p_watchdog_task = asyncio.get_running_loop().create_task(forever())
+        proc.watchdog_task = asyncio.get_running_loop().create_task(forever())
         proc.stop()
-        assert proc.p_watchdog_task is None
+        assert proc.watchdog_task is None
 
     asyncio.run(run())
 
@@ -198,11 +198,11 @@ def test_detection_revival_gated_on_evidence():
              patch.object(nr_pkg, "ensure_running", fake_ensure), \
              patch.object(proc, "has_persisted_connections", return_value=False):
             # Zero-config: no keys, no proxy mode, no persisted connections -> no revival attempt.
-            assert await cpe.p_router_available(AppSettings()) is False
+            assert await cpe.router_available(AppSettings()) is False
             assert not ensures
             # A persisted subscription connection alone IS evidence -> revival attempted.
             with patch.object(proc, "has_persisted_connections", return_value=True):
-                assert await cpe.p_router_available(AppSettings()) is False  # ensure failed (router stays down)
+                assert await cpe.router_available(AppSettings()) is False  # ensure failed (router stays down)
                 assert ensures, "sub-only users must get a revival attempt"
 
     asyncio.run(run())

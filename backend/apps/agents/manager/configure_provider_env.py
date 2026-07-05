@@ -16,7 +16,7 @@ logger = __import__("logging").getLogger(__name__)
 
 
 @typechecked
-async def p_router_available(global_settings: AppSettings) -> bool:
+async def router_available(global_settings: AppSettings) -> bool:
     """True when 9Router is up, reviving it first if it died. A dead router must never masquerade
     as "no provider configured": detection now shares the dispatch path's lazy-start, so a crashed
     or orphaned router self-heals on the very next send instead of erroring the turn. Revival is
@@ -181,7 +181,7 @@ async def configure_provider_env(
     elif api_type == "anthropic" and not resolved_is_9router and global_settings.anthropic_api_key:
         options_kwargs["env"] = {"ANTHROPIC_API_KEY": global_settings.anthropic_api_key}
         logger.info("[MCP-DEBUG] Using direct Anthropic API key")
-    elif await p_router_available(global_settings):
+    elif await router_available(global_settings):
         # Gemini-bound ids go through the local proxy for schema scrubbing; everything else hits 9Router directly.
         is_gemini_bound = (
             isinstance(resolved_model, str)
@@ -231,7 +231,7 @@ async def configure_provider_env(
         options_kwargs["env"] = env
         logger.info(f"[MCP-DEBUG] Using 9Router (api_type={api_type})")
     else:
-        # p_router_available() above already attempted a revival; reaching here means it truly can't start.
+        # router_available() above already attempted a revival; reaching here means it truly can't start.
         if api_type != "anthropic" or resolved_is_9router:
             raise ValueError(
                 f"9Router is not running; cannot use {session.model}. "

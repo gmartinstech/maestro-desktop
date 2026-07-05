@@ -138,8 +138,8 @@ def test_idle_eviction():
         async def connect():
             return FakeClient(made)
 
-        old_ttl = cp.P_IDLE_EVICT_SECONDS
-        cp.P_IDLE_EVICT_SECONDS = 0.05
+        old_ttl = cp.IDLE_EVICT_SECONDS
+        cp.IDLE_EVICT_SECONDS = 0.05
         try:
             h = await acquire_client(pool, "s1", "fp", connect)
             await acquire_client(pool, "s2", "fp", connect)
@@ -155,7 +155,7 @@ def test_idle_eviction():
             h2 = await acquire_client(pool, "s1", "fp", connect)
             assert h2.client.alive
         finally:
-            cp.P_IDLE_EVICT_SECONDS = old_ttl
+            cp.IDLE_EVICT_SECONDS = old_ttl
 
     asyncio.run(run())
 

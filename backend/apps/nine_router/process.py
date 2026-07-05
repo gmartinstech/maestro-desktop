@@ -376,12 +376,12 @@ def has_persisted_connections() -> bool:
 
 
 # 20s pulse while healthy; after 3 straight failed revives (no node, broken install) back way off so a dead-end setup logs once per 5min instead of crash-looping.
-P_WATCHDOG_INTERVAL_SECONDS = 20.0
-P_WATCHDOG_BACKOFF_SECONDS = 300.0
-p_watchdog_task: "asyncio.Task | None" = None
+WATCHDOG_INTERVAL_SECONDS = 20.0
+WATCHDOG_BACKOFF_SECONDS = 300.0
+watchdog_task: "asyncio.Task | None" = None
 
 
-async def p_watchdog_loop() -> None:
+async def watchdog_loop() -> None:
     """Backstop healer for routers we DIDN'T spawn (adopted port-holders have no handle for the
     death-watcher). Two-strike confirmation before reviving: the sync is_running probe can
     false-negative while a busy router streams, and acting on one bad probe would rotate a LIVE
@@ -389,7 +389,7 @@ async def p_watchdog_loop() -> None:
     failures = 0
     p_loop = asyncio.get_running_loop()
     while True:
-        await asyncio.sleep(P_WATCHDOG_BACKOFF_SECONDS if failures >= 3 else P_WATCHDOG_INTERVAL_SECONDS)
+        await asyncio.sleep(WATCHDOG_BACKOFF_SECONDS if failures >= 3 else WATCHDOG_INTERVAL_SECONDS)
         try:
             # is_running()'s HTTP confirm is SYNC and can stall 2s while the router is busy streaming; a periodic pulse must never block the event loop, so probe from a thread.
             if await p_loop.run_in_executor(None, is_running):
@@ -417,10 +417,10 @@ async def p_watchdog_loop() -> None:
 # no false positives), so total heal time = just the respawn. Crash-loop guard: 3 deaths inside
 # 60s defers to the backed-off watchdog instead of hot-spinning a broken install.
 p_death_watcher_task: "asyncio.Task | None" = None
-p_recent_death_monos: "list[float]" = []
+recent_death_monos: "list[float]" = []
 
 
-async def p_death_watch(proc_handle: "subprocess.Popen[Any]") -> None:
+async def death_watch(proc_handle: "subprocess.Popen[Any]") -> None:
     global p_is_running_last_ok
     loop = asyncio.get_running_loop()
     try:
@@ -433,9 +433,9 @@ async def p_death_watch(proc_handle: "subprocess.Popen[Any]") -> None:
     if proc_handle is not p_process:
         return
     now = time.monotonic()
-    p_recent_death_monos.append(now)
-    del p_recent_death_monos[:-3]
-    if len(p_recent_death_monos) == 3 and now - p_recent_death_monos[0] < 60:
+    recent_death_monos.append(now)
+    del recent_death_monos[:-3]
+    if len(recent_death_monos) == 3 and now - recent_death_monos[0] < 60:
         logger.warning("9Router died 3x in 60s; leaving revival to the backed-off watchdog")
         return
     logger.warning("9Router process died; instant revive")
@@ -451,18 +451,18 @@ def start_death_watcher() -> None:
     if p_death_watcher_task is not None and not p_death_watcher_task.done():
         return
     try:
-        p_death_watcher_task = asyncio.get_running_loop().create_task(p_death_watch(p_process))
+        p_death_watcher_task = asyncio.get_running_loop().create_task(death_watch(p_process))
     except RuntimeError:
         logger.warning("9Router death-watcher: no running loop; not armed")
 
 
 def start_watchdog() -> None:
     """Idempotent; armed by ensure_running() on success, cancelled by stop()."""
-    global p_watchdog_task
-    if p_watchdog_task is not None and not p_watchdog_task.done():
+    global watchdog_task
+    if watchdog_task is not None and not watchdog_task.done():
         return
     try:
-        p_watchdog_task = asyncio.get_running_loop().create_task(p_watchdog_loop())
+        watchdog_task = asyncio.get_running_loop().create_task(watchdog_loop())
     except RuntimeError:
         logger.warning("9Router watchdog: no running loop; not armed")
 
@@ -593,11 +593,11 @@ async def p_ensure_running_impl():
 
 def stop():
     """Stop the 9Router subprocess."""
-    global p_process, p_watchdog_task, p_death_watcher_task
+    global p_process, watchdog_task, p_death_watcher_task
     # Cancel the healers FIRST or they would revive the router we're about to kill (shutdown = the one sanctioned "down").
-    if p_watchdog_task is not None:
-        p_watchdog_task.cancel()
-        p_watchdog_task = None
+    if watchdog_task is not None:
+        watchdog_task.cancel()
+        watchdog_task = None
     if p_death_watcher_task is not None:
         p_death_watcher_task.cancel()
         p_death_watcher_task = None

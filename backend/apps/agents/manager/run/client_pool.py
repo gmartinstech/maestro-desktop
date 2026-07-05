@@ -70,7 +70,7 @@ class ClientHandle(BaseModel):
 
 
 # A pooled CLI holds ~100MB+ per session; evict clients idle past this so parked chats don't accumulate subprocesses (respawn on the next message is the normal cold path).
-P_IDLE_EVICT_SECONDS = float(os.environ.get("OSW_CLIENT_IDLE_EVICT_SECONDS", "1800"))
+IDLE_EVICT_SECONDS = float(os.environ.get("OSW_CLIENT_IDLE_EVICT_SECONDS", "1800"))
 
 
 @typechecked
@@ -81,7 +81,7 @@ async def evict_idle_clients(pool: Dict[str, "ClientHandle"]) -> None:
         handle = pool.get(sid)
         if handle is None or handle.lock.locked():
             continue
-        if now - handle.last_used > P_IDLE_EVICT_SECONDS:
+        if now - handle.last_used > IDLE_EVICT_SECONDS:
             logger.info(f"[client-pool] {sid}: idle-evict after {int(now - handle.last_used)}s")
             await dispose_client(pool, sid)
 
