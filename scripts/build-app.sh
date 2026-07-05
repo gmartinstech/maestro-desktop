@@ -69,7 +69,8 @@ if $SIGN_MODE; then
     # A signed build is a build users actually run, so its Widevine VMP signature
     # is mandatory: the afterPack hook hard-fails on a missing/failed signature
     # instead of shipping a DMG whose Spotify/Netflix audio is silently dead.
-    export VMP_REQUIRE_SIGN=1
+    # Respect an explicit outer VMP_REQUIRE_SIGN=0: a cred-less local cut may consciously ship DRM-limited (CI always has EVS secrets, so releases from CI keep the hard gate).
+    export VMP_REQUIRE_SIGN=${VMP_REQUIRE_SIGN:-1}
 fi
 
 # Step 0: Ensure bundled uv + uvx binaries exist.
