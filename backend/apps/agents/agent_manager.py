@@ -151,6 +151,13 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
                         "message_id": p_tool_msg_id,
                     })
                 self.live_partial.pop(session_id, None)
+                # Tell the user we self-healed instead of retrying in silence: the frontend renders this as a muted transient pill (same language as the rate-limit pill), not an error card.
+                try:
+                    await ws_manager.send_to_session(session_id, "agent:context_recovered", {
+                        "session_id": session_id,
+                    })
+                except Exception:
+                    logger.debug("context_recovered broadcast failed", exc_info=True)
                 try:
                     from backend.apps.service.client import submit_diagnostic
                     from backend.apps.agents.core.error_classify import redact_for_telemetry

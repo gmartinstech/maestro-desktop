@@ -61,6 +61,7 @@ import ToolGroupBubble, { RenderItem, ToolGroup, isToolGroup, isToolPair } from 
 import ApprovalBar, { BatchApprovalBar } from './shell/ApprovalBar';
 import ForceStopAgentBar from './ForceStopAgentBar';
 import { RateLimitPill } from './shell/RateLimitPill';
+import { ContextRecoveredPill } from './shell/ContextRecoveredPill';
 import ChatInput, { ChatInputHandle } from './ChatInput';
 import ContextDrawer from './shell/ContextDrawer';
 import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
@@ -1841,6 +1842,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
         )}
 
         <RateLimitPill sessionId={session.id} />
+        <ContextRecoveredPill sessionId={session.id} />
 
         {isGlowing ? (
           <Box

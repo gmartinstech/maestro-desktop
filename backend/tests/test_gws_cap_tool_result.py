@@ -26,16 +26,24 @@ def test_small_result_untouched() -> None:
     assert b.text == "one short email"
 
 
-def test_oversized_single_block_capped_with_marker() -> None:
+def test_oversized_single_block_capped_with_marker_and_spilled(tmp_path, monkeypatch) -> None:
+    import backend.apps.google_workspace_mcp_shim.cap_tool_result as capmod
+    monkeypatch.setattr(capmod, "REPORT_DIR", str(tmp_path))
     b = block("E" * 300_000)
     cap_tool_result(([b], {"result": "E" * 300_000}))
-    assert len(b.text) < MAX_RESULT_CHARS + 400
+    assert len(b.text) < MAX_RESULT_CHARS + 600
     assert b.text.startswith("E")
     assert "Truncated" in b.text
+    assert "saved to" in b.text
     assert len(b.text) // 4 < 25_000
+    reports = list(tmp_path.iterdir())
+    assert len(reports) == 1
+    assert reports[0].read_text() == "E" * 300_000
 
 
-def test_budget_spans_multiple_blocks() -> None:
+def test_budget_spans_multiple_blocks(tmp_path, monkeypatch) -> None:
+    import backend.apps.google_workspace_mcp_shim.cap_tool_result as capmod
+    monkeypatch.setattr(capmod, "REPORT_DIR", str(tmp_path))
     a, b, c = block("A" * 40_000), block("B" * 40_000), block("C" * 40_000)
     cap_tool_result([a, b, c])
     assert a.text == "A" * 40_000
@@ -51,7 +59,9 @@ def test_non_text_blocks_pass_through() -> None:
     assert txt.text == "hello"
 
 
-def test_bare_list_return_shape() -> None:
+def test_bare_list_return_shape(tmp_path, monkeypatch) -> None:
+    import backend.apps.google_workspace_mcp_shim.cap_tool_result as capmod
+    monkeypatch.setattr(capmod, "REPORT_DIR", str(tmp_path))
     b = block("Z" * 100_000)
     out = cap_tool_result([b])
     assert out is not None
