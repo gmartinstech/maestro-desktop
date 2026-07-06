@@ -83,8 +83,8 @@ def p_run_settled(**kw):
     no longer blocks the reply path, so tests asserting its effects must settle it."""
     async def p_go():
         r = await BA.run_browser_agent(**kw)
-        if BA.p_learn_tasks:
-            await asyncio.gather(*list(BA.p_learn_tasks), return_exceptions=True)
+        if BA.learn_tasks:
+            await asyncio.gather(*list(BA.learn_tasks), return_exceptions=True)
         return r
     return asyncio.run(p_go())
 

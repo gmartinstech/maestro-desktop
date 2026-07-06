@@ -527,7 +527,7 @@ async def p_request_browser_approval(
 
 
 # Background learning tasks (playbook distill) held by strong ref; asyncio only weak-refs tasks, and a GC'd task dies silently mid-distill.
-p_learn_tasks: set[asyncio.Task] = set()
+learn_tasks: set[asyncio.Task] = set()
 
 
 async def run_browser_agent(
@@ -2043,6 +2043,9 @@ async def run_browser_agent(
                     f"[browser-agent {session_id}] browser card {browser_id} is unusable "
                     f"({card_gone_streak} consecutive gone/hung results); aborting fast"
                 )
+                if os.environ.get("OSW_DEADCARD_EVICT") == "1":
+                    DEAD_CARDS.add(browser_id)
+                    logger.info(f"[browser-agent] {browser_id} marked dead; same-host reuse will skip it")
                 break
 
         if cancel_event.is_set():
@@ -2189,8 +2192,8 @@ async def run_browser_agent(
                     logger.debug(f"[browser-playbook] distill skipped: {e}")
             # Learning is advisory to FUTURE runs, so the user's reply must not wait on this aux call; it used to sit between "done" and the reply.
             p_lt = asyncio.create_task(p_distill_learning())
-            p_learn_tasks.add(p_lt)
-            p_lt.add_done_callback(p_learn_tasks.discard)
+            learn_tasks.add(p_lt)
+            p_lt.add_done_callback(learn_tasks.discard)
         # The model asked to leave the browser open because the deliverable lives on the page (a video playing, a page to read). Pin the card so the auto-close on parent finish skips it. Only on honest success: never pin a broken or ghost run open. The keep broadcast lands before the parent reaches terminal state (it awaits this run), so the frontend has the flag set before any close path runs.
         if honest and done_keep_open and dashboard_id:
             try:
@@ -2255,6 +2258,8 @@ async def run_browser_agent(
 
 # Cards a sub-agent is actively driving in this process. Reuse must never hand two agents one webview (their commands would interleave into chaos).
 ACTIVE_AGENT_CARDS: set[str] = set()
+# Cards a run declared unusable (gone/hung streak); reuse must not resurrect them or every retry inherits the wedge.
+DEAD_CARDS: set[str] = set()
 # find+claim+create must be one critical section or two parallel dispatches race to claim the same idle card (or both miss and double-create).
 p_card_pick_lock = asyncio.Lock()
 
@@ -2277,7 +2282,7 @@ def find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | Non
     own, orphan = "", ""
     for bid, card in cards.items():
         spawned = getattr(card, "spawned_by", None)
-        if not spawned or bid in ACTIVE_AGENT_CARDS:
+        if not spawned or bid in ACTIVE_AGENT_CARDS or bid in DEAD_CARDS:
             continue
         if browser_skills.host_of(getattr(card, "url", "") or "") != want:
             continue
@@ -2386,6 +2391,19 @@ async def run_browser_agents(
                         await execute_browser_tool("BrowserNavigate", {"url": url}, browser_id)
                     except Exception:
                         pass
+            elif os.environ.get("OSW_PRELUDE_TRIM") == "1":
+                # Poll until the mounting card serves real page text instead of a blind 2s; capped, so the worst case is the old wait plus one probe.
+                p_mount_t0 = time.monotonic()
+                while time.monotonic() - p_mount_t0 < 2.5:
+                    try:
+                        p_probe = await execute_browser_tool("BrowserGetText", {}, browser_id)
+                        if (isinstance(p_probe, dict) and not p_probe.get("error")
+                                and len(str(p_probe.get("text") or "")) > 200):
+                            break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.25)
+                logger.info(f"[browser-cold] mount poll {int((time.monotonic() - p_mount_t0) * 1000)}ms for {browser_id}")
             else:
                 await asyncio.sleep(2.0)
         elif browser_id and not app_mode:
@@ -2393,6 +2411,10 @@ async def run_browser_agents(
 
         is_pre_selected = browser_id in pre_selected
         p_nav_url = url or ("" if reused else entry_url)
+        # The fresh card already opened AT entry_url, so the pre-loop nav is a full second page load of the same page; trim mode drops it (perceive reads the mounting page, and the loop can still navigate itself if that read comes up empty).
+        if (os.environ.get("OSW_PRELUDE_TRIM") == "1" and not reused and not url
+                and entry_url and p_nav_url == entry_url):
+            p_nav_url = ""
         try:
             return await run_browser_agent(
                 task=task_text,
