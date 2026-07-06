@@ -694,6 +694,23 @@ async def run_browser_agent(
     # Route the client based on the resolved model id, not just connection_mode. Without this, a pinned-route value like "sonnet-cc" resolves to "cc/claude-sonnet-4-6" but the old get_anthropic_client() still returned an OpenSwarm-proxy client (because connection_mode was openswarm-pro), which then rejected the cc/ prefix and surfaced as a misleading "OpenSwarm servers are busy" error.
     client = get_anthropic_client_for_model(browser_settings, api_model)
 
+    from backend.apps.agents.browser import browser_prestage
+    if browser_prestage.prestage_enabled() and not app_mode and not cancel_event.is_set():
+        try:
+            p_ps_block, p_ps_url, p_ps_recs = await asyncio.wait_for(
+                browser_prestage.run_prestage(
+                    task, browser_id, tab_id, current_url, browser_settings,
+                    get_api_type(model), execute_browser_tool,
+                ),
+                timeout=browser_prestage.TOTAL_TIMEOUT_S + 10,
+            )
+            if p_ps_block:
+                preloaded_perception = p_ps_block
+                current_url = p_ps_url or current_url
+                preloaded_reads.extend(p_ps_recs)
+        except Exception as e:
+            logger.info(f"[browser-prestage] outer skip ({e})")
+
     # Resume prior conversation on this browser if we have one cached. This lets the sub-agent skip the "take a screenshot to figure out where I am" cycle every time the parent issues a new task. Defensively validate the cache; if it's somehow corrupted (orphaned tool_use_ids), drop it and start fresh rather than crash on the next API call.
     prior_messages = browser_history.BROWSER_HISTORY.get(browser_id) or []
     if prior_messages and not validate_message_pairing(prior_messages):

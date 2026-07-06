@@ -1,0 +1,186 @@
+"""
+Navigation pre-stage: before the big model wakes, a cheap aux model drives
+NAVIGATE/CLICK-only steps on the live webview until the page is where the main
+agent only has to do the final content action (read the answer, type into an
+open composer). Deletes the 4-6 cold orientation turns from the big loop; the
+big model starts staged instead of exploring at ~3s a thought.
+
+Safety is code, not prose: the only tools this module can issue are
+BrowserNavigate and BrowserClickIndex, and a click whose listed element text
+smells irreversible (send/submit/pay/...) is refused in code, ending the
+pre-stage so the main loop's full guard stack owns that step.
+"""
+
+import asyncio
+import logging
+import os
+import re
+import time
+from typing import Awaitable, Callable
+
+logger = logging.getLogger(__name__)
+
+MAX_STEPS = 4
+STEP_TIMEOUT_S = 8.0
+TOTAL_TIMEOUT_S = 25.0
+
+P_STEP_RE = re.compile(r"^\s*(NAVIGATE|CLICK|READY)\b[:\s]*(.*)$", re.I)
+P_BLOCKED_CLICK_RE = re.compile(
+    r"\b(send|submit|post|pay|buy|order|delete|confirm|apply|accept|invite|"
+    r"connect|purchase|checkout|subscribe|unfollow|sign\s?out|log\s?out)\b",
+    re.I,
+)
+
+P_SYSTEM = (
+    "You pre-stage a browser for a main agent. Using ONLY navigation (opening "
+    "pages, clicking links or buttons that open/reveal things), get the page to "
+    "the state where the main agent only has to do the FINAL content action "
+    "(read the requested info, or type into an already-open composer/form).\n"
+    "NEVER click anything that sends, submits, posts, pays, buys, deletes, "
+    "accepts, connects, or subscribes. Opening a composer (e.g. a 'Message' "
+    "button) is allowed; pressing its Send is not. If the next needed step is "
+    "typing text or an irreversible click, the stage is set.\n"
+    "Reply with exactly ONE line:\n"
+    "NAVIGATE <absolute url>\n"
+    "CLICK <index>\n"
+    "READY <short reason>\n"
+    "If unsure, reply READY."
+)
+
+ToolRunner = Callable[[str, dict, str, str], Awaitable[dict]]
+
+
+def prestage_enabled() -> bool:
+    return os.environ.get("OSW_PRESTAGE") == "1"
+
+
+def list_entry_for(list_text: str, index: int) -> str:
+    for line in (list_text or "").splitlines():
+        if line.strip().startswith(f"[{index}]"):
+            return line.strip()
+    return ""
+
+
+def parse_step(reply: str) -> tuple[str, str]:
+    m = P_STEP_RE.match((reply or "").strip().splitlines()[0] if reply else "")
+    if not m:
+        return "ready", ""
+    return m.group(1).lower(), m.group(2).strip()
+
+
+def perception_block(li_text: str, gt_text: str) -> str:
+    parts = []
+    if li_text:
+        parts.append("Interactive elements already on the page:\n" + li_text)
+    if gt_text:
+        parts.append("Visible page text (truncated):\n" + gt_text[:2000])
+    if not parts:
+        return ""
+    return (
+        "\n\n[Page already loaded and inspected for you, act directly; "
+        "no need to screenshot or list elements again unless it changes]\n"
+        + "\n\n".join(parts)
+    )
+
+
+async def run_prestage(
+    task: str,
+    browser_id: str,
+    tab_id: str,
+    start_url: str,
+    settings,
+    primary_api: str | None,
+    execute_tool: ToolRunner,
+) -> tuple[str, str, list[dict]]:
+    """(perception_block, current_url, action_records); ('', start_url, [])
+    means nothing staged and the caller proceeds exactly as before."""
+    t0 = time.monotonic()
+    recs: list[dict] = []
+    try:
+        from backend.apps.settings.credentials import get_anthropic_client_for_model
+        from backend.apps.agents.providers.registry import resolve_aux_model
+        from backend.apps.agents.core.aux_llm import safe_resp_text
+
+        aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku", primary_api=primary_api)
+        client = get_anthropic_client_for_model(settings, aux_model)
+
+        async def perceive() -> tuple[str, str, str]:
+            li, gt = await asyncio.gather(
+                execute_tool("BrowserListInteractives", {}, browser_id, tab_id),
+                execute_tool("BrowserGetText", {}, browser_id, tab_id),
+                return_exceptions=True,
+            )
+            li = li if isinstance(li, dict) else {}
+            gt = gt if isinstance(gt, dict) else {}
+            url = str(li.get("url") or gt.get("url") or "")
+            li_text = str(li.get("text") or "") if "error" not in li else ""
+            gt_text = str(gt.get("text") or "") if "error" not in gt else ""
+            return li_text, gt_text, url
+
+        current_url = start_url
+        li_text, gt_text = "", ""
+        steps = 0
+        while steps < MAX_STEPS and (time.monotonic() - t0) < TOTAL_TIMEOUT_S:
+            li_text, gt_text, seen_url = await perceive()
+            current_url = seen_url or current_url
+            reply = safe_resp_text(await asyncio.wait_for(
+                client.messages.create(
+                    model=aux_model, max_tokens=60, temperature=0, system=P_SYSTEM,
+                    messages=[{"role": "user", "content": (
+                        f"Task: {task[:1500]}\n\nCurrent URL: {current_url}\n\n"
+                        f"Interactive elements:\n{li_text[:4000]}\n\n"
+                        f"Visible text (truncated):\n{gt_text[:1200]}"
+                    )}],
+                ),
+                timeout=STEP_TIMEOUT_S,
+            )).strip()
+            verb, arg = parse_step(reply)
+            if verb == "ready" or not arg:
+                logger.info(f"[browser-prestage] READY after {steps} step(s): {arg[:80]}")
+                break
+            if verb == "navigate":
+                if not arg.startswith(("http://", "https://")):
+                    break
+                r = await execute_tool("BrowserNavigate", {"url": arg}, browser_id, tab_id)
+                ok = isinstance(r, dict) and "error" not in r
+                recs.append({"tool": "BrowserNavigate", "input": {"url": arg}, "ok": ok,
+                             "result_summary": str(r.get("text", r.get("error", "")))[:200] if isinstance(r, dict) else "",
+                             "elapsed_ms": 0})
+                logger.info(f"[browser-prestage] step {steps + 1}: nav {arg} ok={ok}")
+                if not ok:
+                    break
+            else:
+                try:
+                    idx = int(re.sub(r"\D", "", arg) or "-1")
+                except ValueError:
+                    break
+                entry = list_entry_for(li_text, idx)
+                if idx < 0 or not entry or P_BLOCKED_CLICK_RE.search(entry):
+                    logger.info(f"[browser-prestage] refusing click {idx} ({entry[:80]!r}); handing to main loop")
+                    break
+                r = await execute_tool("BrowserClickIndex", {"index": idx}, browser_id, tab_id)
+                ok = isinstance(r, dict) and "error" not in r
+                recs.append({"tool": "BrowserClickIndex", "input": {"index": idx}, "ok": ok,
+                             "result_summary": entry[:200], "elapsed_ms": 0})
+                logger.info(f"[browser-prestage] step {steps + 1}: click [{idx}] {entry[:60]!r} ok={ok}")
+                if not ok:
+                    break
+            steps += 1
+            await asyncio.sleep(0.4)
+
+        if steps:
+            li_text, gt_text, seen_url = await perceive()
+            current_url = seen_url or current_url
+        block = perception_block(li_text, gt_text)
+        for tool_name, text in (("BrowserListInteractives", li_text), ("BrowserGetText", gt_text)):
+            if text:
+                recs.append({"tool": tool_name, "input": {}, "ok": True,
+                             "result_summary": text[:200], "elapsed_ms": 0})
+        logger.info(
+            f"[browser-prestage] done: steps={steps} url={current_url[:80]} "
+            f"in {int((time.monotonic() - t0) * 1000)}ms"
+        )
+        return block, current_url, recs
+    except Exception as e:
+        logger.info(f"[browser-prestage] skipped ({e})")
+        return "", start_url, recs
