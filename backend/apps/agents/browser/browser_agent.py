@@ -1746,6 +1746,17 @@ async def run_browser_agent(
                         for r in (result.get("results") or []))
                     if p_send_click:
                         send_confirmed = True
+                        if os.environ.get("OSW_RECEIPT_DONE", "1") != "0":
+                            # Deterministic receipt: the clean send click IS the proof, so the run ends here in code instead of paying one more model turn for a Done. Same honesty bar (the click + composer-clear is the evidence the gate reads), ~3s less wall per send.
+                            done_called = True
+                            done_success = True
+                            p_payload = browser_batch_replay.send_payload_from_log(action_log, task)
+                            done_message = (
+                                f'Sent "{p_payload}", the send registered and the composer cleared.'
+                                if p_payload else
+                                "Sent it, the send registered and the composer cleared."
+                            )
+                            logger.info(f"[browser-receipt {session_id}] send receipt passed; run ends in code (no Done turn)")
                         result["text"] = (f"{result.get('text') or ''}\n\n[task complete] The send "
                             "went through (the composer cleared). Don't re-check it. Finish now by "
                             "calling Done with your reply to the user.")

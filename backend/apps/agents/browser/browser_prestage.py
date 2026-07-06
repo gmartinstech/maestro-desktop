@@ -96,7 +96,10 @@ def stage_note_for(start_url: str, done: list[str], current_url: str, complete: 
             f"[Pre-staged for you and VERIFIED: starting from {start_url or 'the entry page'}, "
             f"already performed: {'; '.join(done)}. You are NOW on {current_url}. The "
             "navigation part of the task is DONE, do not go back or re-verify it; "
-            "perform only the remaining final action(s).]"
+            "perform only the remaining final action(s). Staged runs took 7 solo turns "
+            "where 2 suffice: if the remaining work is composing, use ONE BrowserBatch to "
+            "focus the box and type the text, then the Send/Submit click SOLO with expect. "
+            "Do not re-list first; the elements are listed below.]"
         )
     return (
         f"[Partial pre-staging: already performed {'; '.join(done)}. You are NOW on "
