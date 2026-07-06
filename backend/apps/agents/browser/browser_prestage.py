@@ -135,7 +135,7 @@ async def run_prestage(
         li_text, gt_text = "", ""
         steps = 0
         done_desc: list[str] = []
-        last_step: tuple[str, str] = ("", "")
+        seen_steps: set[tuple[str, str]] = set()
 
         async def settle(pre_url: str, pre_text: str) -> None:
             # A click returns before the page swaps; perceiving too early reads the OLD page and the aux re-issues the same click (observed 4x loop). Wait for the page to actually change, capped.
@@ -163,10 +163,11 @@ async def run_prestage(
             if verb == "ready" or not arg:
                 logger.info(f"[browser-prestage] READY after {steps} step(s): {arg[:80]}")
                 break
-            if (verb, arg) == last_step:
+            # Any revisit (not just consecutive) is a loop signal: an A/B nav flap slipped past the consecutive-only check.
+            if (verb, arg) in seen_steps:
                 logger.info(f"[browser-prestage] repeated step {verb} {arg[:40]!r}; stopping")
                 break
-            last_step = (verb, arg)
+            seen_steps.add((verb, arg))
             if verb == "navigate":
                 if not arg.startswith(("http://", "https://")):
                     break
