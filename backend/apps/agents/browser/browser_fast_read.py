@@ -40,7 +40,7 @@ P_MAX_LINKS = 60
 
 
 def hop_enabled() -> bool:
-    return os.environ.get("OSW_FASTREAD_HOP") == "1"
+    return os.environ.get("OSW_FASTREAD_HOP", "1") != "0"
 
 
 def extract_links(html: str, base_url: str) -> list[tuple[str, str]]:

@@ -51,7 +51,7 @@ ToolRunner = Callable[[str, dict, str, str], Awaitable[dict]]
 
 
 def prestage_enabled() -> bool:
-    return os.environ.get("OSW_PRESTAGE") == "1"
+    return os.environ.get("OSW_PRESTAGE", "1") != "0"
 
 
 def list_entry_for(list_text: str, index: int) -> str:

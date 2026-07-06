@@ -29,6 +29,11 @@ def _isolate_browser_state(monkeypatch):
     monkeypatch.setenv("OPENSWARM_BROWSER_SKILLS_DIR", skills_dir)
     monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", metrics_dir)
     monkeypatch.setenv("OPENSWARM_BROWSER_PLAYBOOK_DIR", playbook_dir)
+    # The speed levers are default-ON in prod; pin them off for the suite so mocked loop tests keep exact aux-call/turn expectations (same pattern as OPENSWARM_PERSISTENT_CLIENT). The levers are exercised by their own live gates + targeted tests that set the flag explicitly.
+    monkeypatch.setenv("OSW_PRESTAGE", "0")
+    monkeypatch.setenv("OSW_FASTREAD_HOP", "0")
+    monkeypatch.setenv("OSW_PRELUDE_TRIM", "0")
+    monkeypatch.setenv("OSW_DEADCARD_EVICT", "0")
 
     def _reset():
         for mod in ("browser_skills", "browser_playbook"):

@@ -2060,7 +2060,7 @@ async def run_browser_agent(
                     f"[browser-agent {session_id}] browser card {browser_id} is unusable "
                     f"({card_gone_streak} consecutive gone/hung results); aborting fast"
                 )
-                if os.environ.get("OSW_DEADCARD_EVICT") == "1":
+                if os.environ.get("OSW_DEADCARD_EVICT", "1") != "0":
                     DEAD_CARDS.add(browser_id)
                     logger.info(f"[browser-agent] {browser_id} marked dead; same-host reuse will skip it")
                 break
@@ -2408,7 +2408,7 @@ async def run_browser_agents(
                         await execute_browser_tool("BrowserNavigate", {"url": url}, browser_id)
                     except Exception:
                         pass
-            elif os.environ.get("OSW_PRELUDE_TRIM") == "1":
+            elif os.environ.get("OSW_PRELUDE_TRIM", "1") != "0":
                 # Poll until the mounting card serves real page text instead of a blind 2s; capped, so the worst case is the old wait plus one probe.
                 p_mount_t0 = time.monotonic()
                 while time.monotonic() - p_mount_t0 < 2.5:
@@ -2429,7 +2429,7 @@ async def run_browser_agents(
         is_pre_selected = browser_id in pre_selected
         p_nav_url = url or ("" if reused else entry_url)
         # The fresh card already opened AT entry_url, so the pre-loop nav is a full second page load of the same page; trim mode drops it (perceive reads the mounting page, and the loop can still navigate itself if that read comes up empty).
-        if (os.environ.get("OSW_PRELUDE_TRIM") == "1" and not reused and not url
+        if (os.environ.get("OSW_PRELUDE_TRIM", "1") != "0" and not reused and not url
                 and entry_url and p_nav_url == entry_url):
             p_nav_url = ""
         try:
