@@ -17,10 +17,20 @@ CLIENT_ID/SECRET become unused placeholders.
 """
 
 import functools
+import importlib.util
 import os
+import sys
 
 import google_workspace_mcp.auth.gauth as gauth
 from google.oauth2.credentials import Credentials
+
+# Load the cap helper as a loose sibling file (not `from backend...`): the shim runs in uv's ephemeral env where the project isn't a package, and a path-load can't drag in backend's transitive deps. Kept next to run.py so the bundle always ships them together.
+def p_load_cap():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cap_tool_result.py")
+    spec = importlib.util.spec_from_file_location("gws_cap_tool_result", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.cap_tool_result
 
 
 @functools.lru_cache(maxsize=1)
@@ -45,6 +55,19 @@ gauth.get_credentials = p_patched_get_credentials
 
 from google_workspace_mcp import __main__ as p_gw_main  # noqa: E402,F401
 from google_workspace_mcp.app import mcp  # noqa: E402
+
+
+# Fail-open: if the cap helper can't load (unexpected bundle layout), run uncapped rather than break the whole Google Workspace tool.
+try:
+    p_cap = p_load_cap()
+    p_orig_call_tool = mcp.call_tool
+
+    async def p_capped_call_tool(name, arguments):
+        return p_cap(await p_orig_call_tool(name, arguments))
+
+    mcp.call_tool = p_capped_call_tool
+except Exception as p_e:
+    print(f"[gws-shim] result cap disabled ({p_e}); running uncapped", file=sys.stderr)
 
 
 if __name__ == "__main__":
