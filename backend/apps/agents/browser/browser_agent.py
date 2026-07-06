@@ -450,8 +450,8 @@ async def post_action_state(
     lst = None
     p_send_si = None
     if p_composer_fill:
-        # The Send button lazy-renders a beat LATER than the text commits (measured: not in the AX tree even at 2.5s, worse under load), and a single re-list races that and loses, the old handoff never fired (send-ready=0 across 10 A/B legs). So POLL the actual interactives list for a REAL Send button and stop the instant it appears; this checks for the exact thing we hand over, not just 'Send' text.
-        p_deadline = time.monotonic() + 6.0
+        # The Send button lazy-renders a beat LATER than the text commits (measured: not in the AX tree even at 2.5s, worse under load), and a single re-list races that and loses, the old handoff never fired (send-ready=0 across 10 A/B legs). So POLL the actual interactives list for a REAL Send button and stop the instant it appears; this checks for the exact thing we hand over, not just 'Send' text. Deadline cut 6s->2.4s: recent sends ran the FULL 6s and still found nothing (send_button_found=False 3/3), so the long tail bought pure wall time; two polls catch the lazy-render case, the model finds Send itself past that.
+        p_deadline = time.monotonic() + 2.4
         while True:
             try:
                 p_l = await asyncio.wait_for(
@@ -1716,7 +1716,19 @@ async def run_browser_agent(
                 # Act-and-confirm: if the agent declared the change it expects, VERIFY it actually happened, success is observed, never assumed. A hit returns fast (act + confirm in one turn); a miss is a clear "may not have worked" (and a wedge surfaces as a clean not-confirmed, not a blind 20s timeout), so the agent never claims a success it didn't see or re-fires blindly.
                 p_expect = (str(tu.input.get("expect") or "").strip()
                            if isinstance(tu.input, dict) else "")
-                if p_expect and "error" not in result and tu.name in P_CONFIRM_TOOLS:
+                # A send-class click's text-probe is documented-unreliable (sent text renders late/split/scrolled off) and the composer-clear receipt supersedes it, so don't burn the 4s probe timeout on exactly the clicks that never confirm by text.
+                p_is_send_click = (task_is_send and "error" not in result and tu.name in P_CONFIRM_TOOLS
+                    and (browser_batch_replay.is_send_completed(
+                        {"action": "click", "name": result.get("clickedName") or "",
+                         "role": result.get("clickedRole") or ""}) or any(
+                        browser_batch_replay.is_send_completed(
+                            {"action": "click", "name": r.get("clickedName") or "",
+                             "role": r.get("clickedRole") or ""})
+                        for r in (result.get("results") or []))))
+                if p_is_send_click and p_expect:
+                    result["confirmed"] = True
+                    result["text"] = f"{result.get('text') or ''}\nConfirmed by receipt: the send-class click registered."
+                elif p_expect and "error" not in result and tu.name in P_CONFIRM_TOOLS:
                     # target_only: wait for the expected text to actually appear, don't call it 'not confirmed' just because the page settled first (a sent message lands in the thread a beat after settle, esp. under load)
                     p_conf = await browser_wait.smart_wait(p_wait_exec, browser_id, tab_id, 4000,
                                                           until=p_expect, target_only=True)
