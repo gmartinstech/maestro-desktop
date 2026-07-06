@@ -68,7 +68,7 @@ def parse_step(reply: str) -> tuple[str, str]:
     return m.group(1).lower(), m.group(2).strip()
 
 
-def perception_block(li_text: str, gt_text: str) -> str:
+def perception_block(li_text: str, gt_text: str, stage_note: str = "") -> str:
     parts = []
     if li_text:
         parts.append("Interactive elements already on the page:\n" + li_text)
@@ -79,7 +79,21 @@ def perception_block(li_text: str, gt_text: str) -> str:
     return (
         "\n\n[Page already loaded and inspected for you, act directly; "
         "no need to screenshot or list elements again unless it changes]\n"
+        + (f"{stage_note}\n" if stage_note else "")
         + "\n\n".join(parts)
+    )
+
+
+def stage_note_for(start_url: str, done: list[str], current_url: str) -> str:
+    """Without this the main model re-verifies the route from scratch (observed:
+    it navigated straight back to the start page), erasing the staging win."""
+    if not done:
+        return ""
+    return (
+        f"[Pre-staged for you and VERIFIED: starting from {start_url or 'the entry page'}, "
+        f"already performed: {'; '.join(done)}. You are NOW on {current_url}. The "
+        "navigation part of the task is DONE, do not go back or re-verify it; "
+        "perform only the remaining final action(s).]"
     )
 
 
@@ -120,6 +134,17 @@ async def run_prestage(
         current_url = start_url
         li_text, gt_text = "", ""
         steps = 0
+        done_desc: list[str] = []
+        last_step: tuple[str, str] = ("", "")
+
+        async def settle(pre_url: str, pre_text: str) -> None:
+            # A click returns before the page swaps; perceiving too early reads the OLD page and the aux re-issues the same click (observed 4x loop). Wait for the page to actually change, capped.
+            t_s = time.monotonic()
+            while time.monotonic() - t_s < 3.0:
+                await asyncio.sleep(0.35)
+                li2, gt2, u2 = await perceive()
+                if (u2 and u2 != pre_url) or (gt2 and gt2[:400] != pre_text[:400]):
+                    return
         while steps < MAX_STEPS and (time.monotonic() - t0) < TOTAL_TIMEOUT_S:
             li_text, gt_text, seen_url = await perceive()
             current_url = seen_url or current_url
@@ -138,6 +163,10 @@ async def run_prestage(
             if verb == "ready" or not arg:
                 logger.info(f"[browser-prestage] READY after {steps} step(s): {arg[:80]}")
                 break
+            if (verb, arg) == last_step:
+                logger.info(f"[browser-prestage] repeated step {verb} {arg[:40]!r}; stopping")
+                break
+            last_step = (verb, arg)
             if verb == "navigate":
                 if not arg.startswith(("http://", "https://")):
                     break
@@ -149,6 +178,8 @@ async def run_prestage(
                 logger.info(f"[browser-prestage] step {steps + 1}: nav {arg} ok={ok}")
                 if not ok:
                     break
+                done_desc.append(f"navigated to {arg}")
+                await settle(current_url, gt_text)
             else:
                 try:
                     idx = int(re.sub(r"\D", "", arg) or "-1")
@@ -165,13 +196,14 @@ async def run_prestage(
                 logger.info(f"[browser-prestage] step {steps + 1}: click [{idx}] {entry[:60]!r} ok={ok}")
                 if not ok:
                     break
+                done_desc.append(f"clicked {entry[:70]}")
+                await settle(current_url, gt_text)
             steps += 1
-            await asyncio.sleep(0.4)
 
         if steps:
             li_text, gt_text, seen_url = await perceive()
             current_url = seen_url or current_url
-        block = perception_block(li_text, gt_text)
+        block = perception_block(li_text, gt_text, stage_note_for(start_url, done_desc, current_url))
         for tool_name, text in (("BrowserListInteractives", li_text), ("BrowserGetText", gt_text)):
             if text:
                 recs.append({"tool": tool_name, "input": {}, "ok": True,
