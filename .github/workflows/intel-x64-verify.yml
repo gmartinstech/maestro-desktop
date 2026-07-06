@@ -113,15 +113,18 @@ jobs:
         shell: pwsh
         run: |
           Start-Process -FilePath "$env:TEMP\OpenSwarm-Setup-x64.exe" -ArgumentList "--silent"
-          $deadline = (Get-Date).AddMinutes(8)
+          # the root OpenSwarm.exe is Squirrel's stub; the real app + resources
+          # live in app-<version>\. python.exe appearing = install truly done.
+          $deadline = (Get-Date).AddMinutes(10)
           do {
             Start-Sleep -Seconds 5
-            $exe = Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Depth 2 -Filter "OpenSwarm.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          } until ($exe -or (Get-Date) -gt $deadline)
-          if (-not $exe) { Get-ChildItem "$env:LOCALAPPDATA" -Depth 1 | Select-Object FullName; throw "installed OpenSwarm.exe not found" }
-          echo "APP_EXE=$($exe.FullName)" >> $env:GITHUB_ENV
-          echo "APP_DIR=$($exe.DirectoryName)" >> $env:GITHUB_ENV
-          echo "installed at $($exe.FullName)"
+            $py = Get-ChildItem "$env:LOCALAPPDATA\openswarm\app-*\resources\python-env\python.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          } until ($py -or (Get-Date) -gt $deadline)
+          if (-not $py) { Get-ChildItem "$env:LOCALAPPDATA\openswarm" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object FullName -First 40; throw "installed python-env not found" }
+          $appDir = $py.FullName -replace '\\resources\\python-env\\python\.exe$', ''
+          echo "APP_EXE=$appDir\OpenSwarm.exe" >> $env:GITHUB_ENV
+          echo "APP_DIR=$appDir" >> $env:GITHUB_ENV
+          echo "installed at $appDir"
 
       - name: bundled python + claude CLI run on real Windows x64
         shell: pwsh
