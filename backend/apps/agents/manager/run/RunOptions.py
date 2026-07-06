@@ -260,6 +260,13 @@ class RunOptions(AgentManagerProtocol):
                 get_branch_messages(session),
                 cutoff_msg_id=session.compacted_through_msg_id,
             )
+            # Distill the dropped span into a cached aux summary so a rebuild keeps the gist of old turns instead of hard-dropping them. Fail-open: "" -> the plain recap above, exactly today's behavior.
+            from backend.apps.agents.manager.session.distill_history import distilled_history_summary
+            from backend.apps.agents.manager.session.history_compaction import wrap_platform_note
+            distilled = await distilled_history_summary(session, global_settings)
+            if distilled:
+                fenced = wrap_platform_note(f"Summary of earlier conversation (older turns compacted):\n{distilled}")
+                history = f"{fenced}\n\n{history}" if history else fenced
             if history:
                 if isinstance(prompt_content, str):
                     prompt_content = history + "\n\n" + prompt_content
