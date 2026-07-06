@@ -67,13 +67,14 @@ def format_link_menu(links: list[tuple[str, str]]) -> str:
     return "\n".join(f"{i + 1}. {text} -> {url}" for i, (text, url) in enumerate(links))
 
 
-def parse_follow(answer: str, links: list[tuple[str, str]]) -> str:
-    """The hop URL the aux picked, or ''. Out-of-range picks are ''."""
+def parse_follow(answer: str, links: list[tuple[str, str]]) -> tuple[str, str]:
+    """The (anchor text, url) the aux picked, or ('', ''). Out-of-range picks
+    are dropped."""
     m = P_FOLLOW_RE.match((answer or "").strip())
     if not m:
-        return ""
+        return "", ""
     idx = int(m.group(1)) - 1
-    return links[idx][1] if 0 <= idx < len(links) else ""
+    return links[idx] if 0 <= idx < len(links) else ("", "")
 
 
 def extract_entry_url(brief: str) -> str:
@@ -99,8 +100,26 @@ async def fetch_page_text(url: str, prompt: str) -> str:
     return "\n".join(p.get("text", "") for p in parts if p.get("type") == "text")
 
 
-async def fetch_raw_links(url: str) -> list[tuple[str, str]]:
-    """Raw-HTML link harvest for the hop menu; best-effort, empty on any miss."""
+P_TAG_STRIP_RES = (
+    re.compile(r"<(script|style|noscript)\b.*?</\1>", re.I | re.S),
+    re.compile(r"<[^>]+>"),
+)
+
+
+def strip_tags(html: str) -> str:
+    """Whole-page text incl. bylines/usernames; trafilatura's main-content pass
+    drops exactly the metadata that answers who/when questions, so hop mode
+    reads the raw page instead."""
+    import html as p_html_mod
+
+    text = html or ""
+    for rx in P_TAG_STRIP_RES:
+        text = rx.sub(" ", text)
+    return re.sub(r"[ \t\r\f\v]+", " ", p_html_mod.unescape(text)).strip()
+
+
+async def fetch_raw(url: str) -> str:
+    """Raw HTML via the SSRF guard; '' on any miss."""
     try:
         from backend.apps.agents.tools.ssrf_guard import safe_fetch
 
@@ -110,9 +129,9 @@ async def fetch_raw_links(url: str) -> list[tuple[str, str]]:
                        timeout=8.0),
             timeout=10.0,
         )
-        return extract_links(resp.text, url)
+        return resp.text or ""
     except Exception:
-        return []
+        return ""
 
 
 async def ask_aux(client, aux_model: str, system: str, content: str) -> str:
@@ -137,12 +156,14 @@ async def try_fast_read(prompt: str, brief: str, settings, primary_api: str | No
     try:
         hop = hop_enabled()
         t0 = time.monotonic()
+        links: list[tuple[str, str]] = []
         if hop:
-            text, links = await asyncio.gather(
-                fetch_page_text(entry, prompt), fetch_raw_links(entry),
-            )
+            raw = await fetch_raw(entry)
+            text, links = strip_tags(raw), extract_links(raw, entry)
+            if page_is_thin(text):
+                text = await fetch_page_text(entry, prompt)
         else:
-            text, links = await fetch_page_text(entry, prompt), []
+            text = await fetch_page_text(entry, prompt)
         fetch_ms = int((time.monotonic() - t0) * 1000)
         if page_is_thin(text):
             logger.info(f"[browser-fast-read] thin/errored read of {entry} ({len(text)}ch in {fetch_ms}ms); browser fallback")
@@ -163,16 +184,23 @@ async def try_fast_read(prompt: str, brief: str, settings, primary_api: str | No
         answer = await ask_aux(client, aux_model, P_HOP_SYSTEM if links else P_ANSWER_SYSTEM, content)
         answer_ms = int((time.monotonic() - t1) * 1000)
 
-        hop_url = parse_follow(answer, links) if hop and links else ""
+        hop_anchor, hop_url = parse_follow(answer, links) if hop and links else ("", "")
         if hop_url:
             t2 = time.monotonic()
-            hop_text = await fetch_page_text(hop_url, prompt)
+            hop_text = strip_tags(await fetch_raw(hop_url))
+            if page_is_thin(hop_text):
+                hop_text = await fetch_page_text(hop_url, prompt)
             if page_is_thin(hop_text):
                 logger.info(f"[browser-fast-read] hop to {hop_url} was thin; browser fallback")
                 return None
             answer = await ask_aux(
                 client, aux_model, P_ANSWER_SYSTEM,
-                f"Request: {prompt}\n\nPage text from {hop_url}:\n{hop_text[:P_MAX_PAGE_CHARS]}",
+                f"Request: {prompt}\n\n"
+                f"Context: the navigation in the request is ALREADY DONE. From {entry} "
+                f"you chose the link '{hop_anchor}' as the one leading to the answer, and "
+                f"the page text below is that destination. Extract the requested "
+                f"information from it.\n\n"
+                f"Page text from {hop_url}:\n{hop_text[:P_MAX_PAGE_CHARS]}",
             )
             logger.info(
                 f"[browser-fast-read] followed link {hop_url} "
