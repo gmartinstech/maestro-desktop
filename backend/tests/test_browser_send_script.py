@@ -93,8 +93,8 @@ async def test_opener_hop_full_success():
     """On a messaging THREAD-LIST page (full-page surface): script opens the
     conversation composer, fills, sees it commit, finds the late Send, clicks,
     sees it clear -> receipt passes."""
-    # fresh read (PROFILE, still no composer) -> opener path -> click Message -> composer appears
-    r, calls = await run(TASK, PROFILE, [PROFILE, COMPOSER_EMPTY, COMPOSER_FILLED, COMPOSER_FILLED, COMPOSER_SENT])
+    # poll reads stay no-composer (PROFILE x3) -> opener path -> click Message -> composer appears
+    r, calls = await run(TASK, PROFILE, [PROFILE, PROFILE, PROFILE, COMPOSER_EMPTY, COMPOSER_FILLED, COMPOSER_SENT])
     assert r is not None and r["sent"] is True
     assert r["payload"] == "[test] hello world r9-os"
     # opener click (50), fill into composer (2 w/ text), solo send click (14)

@@ -129,11 +129,14 @@ async def run_send_script(
 
     composer = composer_index_in_state(state_text)
     if not composer:
-        # The staged snapshot is prestage's, taken the instant it clicked Message; the overlay composer lazy-renders a beat later, so it's on the page but not in that frozen list (r263 declined on exactly this). One fresh read catches it before we fall back to the opener.
-        fresh = await fresh_list()
-        composer = composer_index_in_state(fresh)
-        if composer:
-            state_text = fresh
+        # The staged snapshot is prestage's, frozen the instant it clicked Message; the overlay composer lazy-renders a beat later (r263/r269 declined on exactly this, prestage's LAST step was the Message click). Poll a short window so the overlay has time to appear before we fall back to the opener.
+        for wait_s in (0.6, 1.2, 1.4):
+            await asyncio.sleep(wait_s)
+            fresh = await fresh_list()
+            composer = composer_index_in_state(fresh)
+            if composer:
+                state_text = fresh
+                break
     if not composer:
         # Reversible-opener hop: prestage often stops on the profile with the "Message" opener visible (its settle raced the overlay). Opening a composer is the allowed opener class; the irreversible bar is unchanged.
         opener = opener_index_in_state(state_text)
