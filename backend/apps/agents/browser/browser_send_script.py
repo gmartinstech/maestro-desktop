@@ -39,6 +39,16 @@ def quoted_payload(task: str) -> str:
     return spans.pop() if len(spans) == 1 else ""
 
 
+P_OPENER_ROW_RE = re.compile(r"\[(\d+)\]\*?<\s*(?:link|button)\s+\"(Message|Reply|Compose|New message)\"", re.I)
+
+
+def opener_index_in_state(state_text: str):
+    """(index, name) of the single exact-named composer OPENER, or None. Exact
+    names only, so an upsell like 'Send InMail' can never match."""
+    hits = [(int(m.group(1)), m.group(2)) for m in P_OPENER_ROW_RE.finditer(state_text or "")]
+    return hits[0] if len(hits) == 1 else None
+
+
 def composer_index_in_state(state_text: str):
     """(index, name) of the single compose-shaped textbox, or None. Two
     candidates = ambiguous = model's problem."""
@@ -62,9 +72,7 @@ async def run_send_script(
     'payload': str, 'log': [...], 'note': str}."""
     t0 = time.monotonic()
     payload = quoted_payload(task)
-    composer = composer_index_in_state(state_text)
-    # No Send-button precondition: composer sites (LinkedIn) lazy-render Send only AFTER text commits, so it's resolved post-fill; never appearing = clean pre-click abort.
-    if not (payload and composer):
+    if not payload:
         return None
     log: list[dict] = []
 
@@ -75,6 +83,28 @@ async def run_send_script(
             return str(r.get("text") or "") if isinstance(r, dict) and "error" not in r else ""
         except Exception:
             return ""
+
+    composer = composer_index_in_state(state_text)
+    if not composer:
+        # Reversible-opener hop: prestage often stops on the profile with the "Message" opener visible (its settle raced the overlay). Opening a composer is the allowed opener class; the irreversible bar is unchanged.
+        opener = opener_index_in_state(state_text)
+        if not opener:
+            return None
+        r_open = await execute_tool("BrowserClickIndex", {"index": opener[0]}, browser_id, tab_id)
+        if not (isinstance(r_open, dict) and "error" not in r_open):
+            return None
+        log.append({"tool": "BrowserClickIndex", "input": {"index": opener[0]}, "ok": True,
+                    "result_summary": f"script opened composer via {opener[1]!r}"[:200], "elapsed_ms": 0})
+        for wait_s in (0.6, 1.2):
+            await asyncio.sleep(wait_s)
+            state_text = await fresh_list()
+            composer = composer_index_in_state(state_text)
+            if composer:
+                break
+        if not composer:
+            logger.info("[browser-sendscript] opener clicked but no composer appeared; handing to model")
+            return None
+    # No Send-button precondition: composer sites (LinkedIn) lazy-render Send only AFTER text commits, so it's resolved post-fill; never appearing = clean pre-click abort.
 
     # 1. fill (focused by node, the composer overlay path coordinate clicks miss)
     r_fill = await execute_tool("BrowserClickIndex", {"index": composer[0], "text": payload}, browser_id, tab_id)
