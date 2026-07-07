@@ -1077,6 +1077,11 @@ async function handleBatch(wv: BrowserWebview, params: Record<string, any>): Pro
     }
 
     const urlBefore = wv.getURL();
+    // Carry the self-heal + click-effect toggles into click sub-actions (most clicks are batched, so gating only the top-level click_index misses them).
+    if (subType === 'click_index') {
+      if (params.selfheal !== undefined && subParams.selfheal === undefined) subParams.selfheal = params.selfheal;
+      if (params.effectProbe && subParams.effectProbe === undefined) subParams.effectProbe = true;
+    }
     let subResult: Record<string, any>;
     try {
       subResult = await BATCH_DISPATCH[subType](wv, subParams);

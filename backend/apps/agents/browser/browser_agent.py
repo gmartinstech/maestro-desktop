@@ -293,20 +293,24 @@ async def execute_browser_tool(
         return {"error": f"Unknown browser tool: {tool_name}"}
 
     params = {k: v for k, v in tool_input.items()}
-    # Self-healing click toggle (renderer escalates a stale-index failure to a fresh by-name click). Default on; OSW_SELFHEAL_CLICK=0 disables it for the A/B off-arm.
-    if action == "click_index":
+    # Self-healing click toggle + click-effect metric. Threaded for solo clicks AND batches (most clicks are batched, so gating on click_index alone misses them). handleBatch propagates these into its click_index sub-actions.
+    if action in ("click_index", "batch"):
         params["selfheal"] = os.environ.get("OSW_SELFHEAL_CLICK", "1") != "0"
-        # Metric only: measure how often a "successful" click changed nothing (wrong/dead element). Off by default = zero cost.
         if os.environ.get("OSW_CLICK_EFFECT_PROBE") == "1":
             params["effectProbe"] = True
     request_id = uuid4().hex
     result = await ws_manager.send_browser_command(
         request_id, action, browser_id, params, tab_id=tab_id,
     )
-    if isinstance(result, dict) and result.get("selfHealed"):
-        logger.info(f"[browser-selfheal] recovered a stale-index click via {result['selfHealed']} -> {browser_id}")
-    if isinstance(result, dict) and result.get("clickEffect"):
-        logger.info(f"[click-effect] {result['clickEffect']}  ({p_action or action}) -> {browser_id}")
+    # Click telemetry lives at the top level for a solo click and inside `results[]` for a batched one; scan both.
+    p_click_parts = [result] if isinstance(result, dict) else []
+    if isinstance(result, dict) and isinstance(result.get("results"), list):
+        p_click_parts += [r for r in result["results"] if isinstance(r, dict)]
+    for p_cr in p_click_parts:
+        if p_cr.get("selfHealed"):
+            logger.info(f"[browser-selfheal] recovered a stale-index click via {p_cr['selfHealed']} -> {browser_id}")
+        if p_cr.get("clickEffect"):
+            logger.info(f"[click-effect] {p_cr['clickEffect']} -> {browser_id}")
     return result
 
 
