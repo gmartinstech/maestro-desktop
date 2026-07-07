@@ -129,10 +129,16 @@ async def run_send_script(
 
     composer = composer_index_in_state(state_text)
     if not composer:
+        # The staged snapshot is prestage's, taken the instant it clicked Message; the overlay composer lazy-renders a beat later, so it's on the page but not in that frozen list (r263 declined on exactly this). One fresh read catches it before we fall back to the opener.
+        fresh = await fresh_list()
+        composer = composer_index_in_state(fresh)
+        if composer:
+            state_text = fresh
+    if not composer:
         # Reversible-opener hop: prestage often stops on the profile with the "Message" opener visible (its settle raced the overlay). Opening a composer is the allowed opener class; the irreversible bar is unchanged.
         opener = opener_index_in_state(state_text)
         if not opener:
-            logger.info("[browser-sendscript] decline: no composer and no single exact-named opener in staged state")
+            logger.info("[browser-sendscript] decline: no composer and no single exact-named opener in staged or fresh state")
             return None
         logger.info(f"[browser-sendscript] firing via opener {opener[1]!r} [{opener[0]}]")
         r_open = await execute_tool("BrowserClickIndex", {"index": opener[0]}, browser_id, tab_id)
