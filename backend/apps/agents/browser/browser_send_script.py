@@ -21,7 +21,9 @@ from typing import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
-P_QUOTED_RE = re.compile(r"['\"]([^'\"]{4,300})['\"]")
+# Double quotes are unambiguous. Single quotes only delimit when the opener is at a word boundary (start/space/colon), so an in-word apostrophe like "chen's" is never mistaken for a payload quote, that mispairing was silently corrupting the canonical "text him '...'" errand.
+P_QUOTED_DQ_RE = re.compile(r'"([^"]{4,300})"')
+P_QUOTED_SQ_RE = re.compile(r"(?:^|[\s:>])'([^']{4,300})'")
 P_COMPOSER_ROW_RE = re.compile(r"\[(\d+)\]\*?<\s*textbox\s+\"([^\"]*)\"", re.I)
 P_COMPOSER_NAME_RE = re.compile(r"write|message|compose|reply", re.I)
 
@@ -34,9 +36,14 @@ def script_enabled() -> bool:
 
 def quoted_payload(task: str) -> str:
     """The exact text the user quoted, only when it's unambiguous: exactly one
-    distinct quoted span in the task. Anything else is the model's judgment call."""
-    spans = {m.group(1).strip() for m in P_QUOTED_RE.finditer(task or "") if m.group(1).strip()}
-    return spans.pop() if len(spans) == 1 else ""
+    distinct quoted span in the task. Anything else is the model's judgment call.
+    Double quotes win outright; single quotes must be word-boundary-delimited so
+    an apostrophe inside a name can't hijack the match."""
+    dq = {m.group(1).strip() for m in P_QUOTED_DQ_RE.finditer(task or "") if m.group(1).strip()}
+    if dq:
+        return dq.pop() if len(dq) == 1 else ""
+    sq = {m.group(1).strip() for m in P_QUOTED_SQ_RE.finditer(task or "") if m.group(1).strip()}
+    return sq.pop() if len(sq) == 1 else ""
 
 
 P_OPENER_ROW_RE = re.compile(r"\[(\d+)\]\*?<\s*(?:link|button)\s+\"(Message|Reply|Compose|New message)\"", re.I)
