@@ -126,6 +126,7 @@ class FakeAgentManager:
     def __init__(self):
         self.sessions: dict[str, SimpleNamespace] = {}
         self.tasks: dict[str, object] = {}
+        self.live_partial: dict[str, object] = {}
         self.launched_configs: list[object] = []
         self.sent_messages: list[str] = []
         # statuses[i] is the session status after the i-th send_message; absent entries default to 'completed'. cost_usd lands on the run.
@@ -162,6 +163,7 @@ def fake_agent_manager(monkeypatch):
     fake = FakeAgentManager()
     monkeypatch.setattr(p_am.agent_manager, "sessions", fake.sessions)
     monkeypatch.setattr(p_am.agent_manager, "tasks", fake.tasks)
+    monkeypatch.setattr(p_am.agent_manager, "live_partial", fake.live_partial)
     monkeypatch.setattr(p_am.agent_manager, "launch_agent", fake.launch_agent)
     monkeypatch.setattr(p_am.agent_manager, "send_message", fake.send_message)
     monkeypatch.setattr(p_am.agent_manager, "close_session", fake.close_session)

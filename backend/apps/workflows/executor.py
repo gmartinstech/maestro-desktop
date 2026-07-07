@@ -469,7 +469,7 @@ async def execute(
     return run
 
 
-async def _await_session_idle(session_id: str, run_id: Optional[str] = None, timeout_s: float = 600.0) -> str:
+async def _await_session_idle(session_id: str, run_id: Optional[str] = None, idle_timeout_s: float = 1200.0) -> str:
     """Wait out the current step's agent turn. Returns a disposition:
       'idle'    turn finished, advance to the next step
       'error'   the agent session errored
@@ -477,17 +477,24 @@ async def _await_session_idle(session_id: str, run_id: Optional[str] = None, tim
 
     For a real run (run_id given) a user PAUSE shows up as the session going
     'stopped' WITHOUT a stop signal; that is not terminal, so we hold here
-    until Resume or Stop, keeping the step deadline fresh so a long pause
+    until Resume or Stop, keeping the idle deadline fresh so a long pause
     doesn't fail the step. The attended test-run driver passes no run_id and
     treats 'stopped' as terminal (no pause/resume there).
 
     Polls cheaply since agent_manager doesn't expose a per-session completion
-    future. Bounded by timeout_s so a stuck step can't hang the runner forever.
+    future. The deadline is idle-based, not a wall-clock cap on the step: any
+    agent activity (a committed message or a streamed text chunk growing
+    live_partial) resets it, so a legitimately long busy step never trips it
+    while a hung session still dies after idle_timeout_s of silence. A single
+    in-flight tool call commits nothing until its result lands, so
+    idle_timeout_s must stay >= the longest single-tool runtime (Bash caps at
+    600s); don't lower it without special-casing in-flight tool calls.
     """
     from backend.apps.agents.agent_manager import agent_manager
 
     hold_on_pause = run_id is not None
-    deadline = asyncio.get_event_loop().time() + timeout_s
+    last_activity: Optional[tuple] = None
+    deadline = asyncio.get_event_loop().time() + idle_timeout_s
     while True:
         if run_id is not None and _run_control.get(run_id) == "stop":
             return "stopped"
@@ -498,8 +505,8 @@ async def _await_session_idle(session_id: str, run_id: Optional[str] = None, tim
         if status == "stopped":
             if not hold_on_pause:
                 return "stopped"
-            # Paused. Hold, and reset the deadline so paused wall-time doesn't count against the step timeout.
-            deadline = asyncio.get_event_loop().time() + timeout_s
+            # Paused. Hold, and reset the deadline so paused wall-time doesn't count as idle.
+            deadline = asyncio.get_event_loop().time() + idle_timeout_s
             await asyncio.sleep(0.1)
             continue
         if status == "error":
@@ -509,6 +516,22 @@ async def _await_session_idle(session_id: str, run_id: Optional[str] = None, tim
         task = agent_manager.tasks.get(session_id)
         if task is not None and task.done() and status not in ("running", "waiting_approval"):
             return "idle"
+        if status == "waiting_approval":
+            # A pending permission prompt is bounded by the approval flow's own ask_timeout; waiting on the user isn't idleness.
+            deadline = asyncio.get_event_loop().time() + idle_timeout_s
+        else:
+            msgs = getattr(sess, "messages", []) or []
+            partial = agent_manager.live_partial.get(session_id)
+            # Timestamp catches in-place upserts (same id, fresh Message object); partial length catches mid-stream text between commits.
+            activity = (
+                len(msgs),
+                msgs[-1].id if msgs else None,
+                msgs[-1].timestamp if msgs else None,
+                len(getattr(partial, "text", "") or ""),
+            )
+            if activity != last_activity:
+                last_activity = activity
+                deadline = asyncio.get_event_loop().time() + idle_timeout_s
         if asyncio.get_event_loop().time() > deadline:
-            raise TimeoutError(f"Step exceeded {timeout_s}s on session {session_id}")
+            raise TimeoutError(f"No agent activity for {idle_timeout_s}s on session {session_id}")
         await asyncio.sleep(0.05)
