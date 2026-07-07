@@ -71,19 +71,21 @@ def composer_index_in_state(state_text: str):
     return hits[0] if len(hits) == 1 else None
 
 
-# Surfaces where a filled composer reliably exposes a detectable Send button. The
-# live A/B (r246-r251) proved the profile docked-overlay composer is the opposite:
-# the script fills it, LinkedIn's overlay Send never lands in the interactives list,
-# the script aborts, and the half-staged handoff + recovery path ran 4x SLOWER and
-# less reliable than a clean model run. So the script fires ONLY on a full-page
-# composer surface; anywhere else it declines UNTOUCHED (no fill) and the model owns it.
-P_COMPOSER_PAGE_RE = re.compile(r"/messaging/(thread|compose)/", re.I)
+# Surfaces that carry a real person-composer: the full-page messaging thread AND
+# the profile page (whose docked-overlay composer is reached by the Message opener).
+# History: the overlay was first BANNED here because its Send ranks out of the capped
+# interactives list, so the script aborted and the handoff ran 4x slower (live A/B
+# r246-r251). Ground truth (probe r-dump) then showed the Send IS a real button the
+# model clicks by name; the click-by-name fallback now completes it (validated live,
+# receipt-cleared in 1.4s on /in/), so the overlay is winnable and back in scope.
+# Empty/unknown URLs still decline: firing on a non-composer page is net-negative.
+P_COMPOSER_PAGE_RE = re.compile(r"linkedin\.com/(messaging/|in/)", re.I)
 
 
 def surface_supports_script(current_url: str) -> bool:
-    """A full-page messaging composer (Send renders as a real listed button), not
-    the profile /in/ docked overlay (Send is a lazy, unlisted control). Empty URL
-    is unknown -> decline, since firing on the wrong surface is net-negative."""
+    """True on a LinkedIn messaging thread or profile (both carry a person-composer
+    whose Send resolves via the ranked list or the click-by-name fallback). Empty or
+    off-surface URLs decline, since firing where there's no composer is net-negative."""
     return bool(current_url and P_COMPOSER_PAGE_RE.search(current_url))
 
 
@@ -105,7 +107,7 @@ async def run_send_script(
     prompt; the composed task carries the routing brief whose own quoted strings
     made every real payload look ambiguous (r242/r243)."""
     t0 = time.monotonic()
-    if not surface_supports_script(current_url):
+    if not surface_supports_script(current_url) and os.environ.get("OSW_SENDSCRIPT_PROBE") != "1":
         logger.info(f"[browser-sendscript] decline: surface {current_url[:60]!r} not a full-page composer (overlay firing is net-negative)")
         return None
     if P_READONLY_RE.search(task) or P_READONLY_RE.search(payload_source or ""):
@@ -158,31 +160,34 @@ async def run_send_script(
     if not fill_ok:
         logger.info("[browser-sendscript] fill errored; handing to model untouched")
         return None
-    # 2. verify committed + re-resolve Send from the same fresh state. LinkedIn enables Send only after its own JS digests the input, sometimes beats after the text is visibly committed (r244 aborted at ~1s with the payload in the box and Send still absent), so the scan keeps going a little longer than feels necessary.
+    # 2. verify the fill committed. Send is resolved AFTER, two ways: LinkedIn enables Send only once its JS digests the input (beats later than the text is visible), so the scan waits a little.
     state2 = ""
     committed = False
-    send_btn2 = None
     for wait_s in (0.4, 0.8, 1.2, 1.6):
         await asyncio.sleep(wait_s)
         state2 = await fresh_list()
         committed = bool(state2 and payload_in_textbox(state2, payload))
-        send_btn2 = send_index_in_state(state2) if committed else None
-        if committed and send_btn2:
+        if committed:
             break
     if not committed:
         logger.info("[browser-sendscript] fill not seen committed; aborting pre-click")
         return None
-    if not send_btn2:
-        logger.info("[browser-sendscript] Send button never enabled after committed fill; aborting pre-click")
-        return None
-    # 3. the one irreversible click, solo
-    r_send = await execute_tool("BrowserClickIndex", {"index": send_btn2[0]}, browser_id, tab_id)
+    # 3. the one irreversible click, solo. Prefer the ranked list's exact Send (an index click, cheapest); fall back to click-by-name, which searches the FULL enumerated DOM. GROUND TRUTH (probe r-dump): the profile-overlay Send is a real button the model clicks by name, but it ranks OUT of the capped numbered list, so send_index_in_state alone never sees it. click-by-name is exactly how the model sends there.
+    send_btn2 = send_index_in_state(state2)
+    if send_btn2:
+        r_send = await execute_tool("BrowserClickIndex", {"index": send_btn2[0]}, browser_id, tab_id)
+        send_name = send_btn2[1]
+    else:
+        if os.environ.get("OSW_SENDSCRIPT_PROBE") == "1":
+            logger.info(f"[browser-sendscript-probe] committed-fill interactives (Send not in ranked list):\n{state2[:3000]}")
+        r_send = await execute_tool("BrowserClickByName", {"name": "Send", "role": "button"}, browser_id, tab_id)
+        send_name = "Send (by-name)"
     send_ok = isinstance(r_send, dict) and "error" not in r_send
-    log.append({"tool": "BrowserClickIndex", "input": {"index": send_btn2[0]},
-                "ok": send_ok, "result_summary": f"script send click {send_btn2[1]!r}"[:200],
-                "elapsed_ms": 0, "clicked_role": "button", "clicked_name": send_btn2[1]})
+    log.append({"tool": "send click", "input": {"via": "index" if send_btn2 else "by-name"},
+                "ok": send_ok, "result_summary": f"script send click {send_name!r}"[:200],
+                "elapsed_ms": 0, "clicked_role": "button", "clicked_name": send_name})
     if not send_ok:
-        logger.info("[browser-sendscript] send click errored; handing to model (fill committed, NOT sent)")
+        logger.info(f"[browser-sendscript] send click errored ({send_name}); handing to model (fill committed, NOT sent)")
         return None
     # 4. two-sided receipt: composer seen cleared of the payload
     cleared = False

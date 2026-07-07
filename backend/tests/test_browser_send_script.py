@@ -12,6 +12,10 @@ PROFILE = '[22]*<link "Tyler Chen Premium 1st">\n[50]*<link "Message">\n[51]<but
 COMPOSER_EMPTY = '[2]<textbox "Write a message">\n[9]<button "Attach">'
 COMPOSER_FILLED = '[2]<textbox "Write a message" value="[test] hello world r9-os">\n[14]<button "Send">'
 COMPOSER_SENT = '[2]<textbox "Write a message">\n[9]<button "Attach">'  # cleared, Send gone
+# The profile-overlay committed-fill (ground truth from probe r-dump): payload IS
+# in the box but the Send button ranks OUT of the capped numbered list, so the
+# script must fall back to click-by-name (how the model itself sends there).
+COMPOSER_FILLED_NO_SEND = '[1]<textbox "I\'m looking for…">\n[24]<textbox "Write a message" value="[test] hello world r9-os">'
 
 TASK = "go to tyler chen's linkedin hes in entrepreneurs first and text him '[test] hello world r9-os'"
 
@@ -46,16 +50,42 @@ async def run(task, state0, list_script, url=THREAD_URL):
     return r, calls
 
 
+FEED_URL = "https://www.linkedin.com/feed/"
+
+
 @pytest.mark.asyncio
-async def test_surface_gate_declines_profile_overlay():
-    """The live A/B (r246-r251) proved firing on the profile /in/ docked-overlay is
-    net-negative: fill commits, overlay Send never lists, abort, and the half-staged
-    handoff ran 4x slower than a clean model run. So a profile URL declines UNTOUCHED."""
+async def test_surface_gate_declines_off_surface():
+    """A page with no person-composer (the feed, an unknown URL) declines UNTOUCHED,
+    so the script never fires where a fill would land nowhere useful."""
     ex, calls = make_exec([COMPOSER_FILLED, COMPOSER_FILLED, COMPOSER_SENT])
     r = await ss.run_send_script(TASK, "b1", "", COMPOSER_EMPTY, ex, send_index_in_state,
-                                 payload_in_textbox, payload_source=TASK, current_url=PROFILE_URL)
+                                 payload_in_textbox, payload_source=TASK, current_url=FEED_URL)
     assert r is None
-    assert not calls["clicks"]  # nothing touched, model gets a clean composer
+    assert not calls["clicks"]
+
+
+@pytest.mark.asyncio
+async def test_surface_gate_allows_profile_overlay():
+    """The profile /in/ overlay is winnable via click-by-name (ground truth: its Send
+    ranks out of the list but is a real button), so it's back in scope, not declined."""
+    ex, calls = make_exec([COMPOSER_FILLED_NO_SEND, COMPOSER_FILLED_NO_SEND, COMPOSER_SENT])
+    r = await ss.run_send_script(TASK, "b1", "", COMPOSER_EMPTY, ex, send_index_in_state,
+                                 payload_in_textbox, payload_source=TASK, current_url=PROFILE_URL)
+    assert r is not None and r["sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_send_via_click_by_name_when_send_absent_from_ranked_list():
+    """Ground truth (probe r-dump): the committed-fill state has the payload in the
+    box but NO Send in the capped numbered list. The script falls back to
+    click-by-name (the model's own send path there) and the receipt still passes."""
+    ex, calls = make_exec([COMPOSER_FILLED_NO_SEND, COMPOSER_FILLED_NO_SEND, COMPOSER_SENT])
+    r = await ss.run_send_script(TASK, "b1", "", COMPOSER_EMPTY, ex, send_index_in_state,
+                                 payload_in_textbox, payload_source=TASK, current_url=THREAD_URL)
+    assert r is not None and r["sent"] is True
+    # the send went through click-by-name, not an index click
+    byname = [c for c in calls["clicks"] if c[0] == "BrowserClickByName"]
+    assert byname and byname[0][1] == {"name": "Send", "role": "button"}
 
 
 @pytest.mark.asyncio
