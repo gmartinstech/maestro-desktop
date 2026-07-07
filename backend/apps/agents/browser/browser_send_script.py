@@ -107,8 +107,8 @@ async def run_send_script(
     prompt; the composed task carries the routing brief whose own quoted strings
     made every real payload look ambiguous (r242/r243)."""
     t0 = time.monotonic()
-    if not surface_supports_script(current_url) and os.environ.get("OSW_SENDSCRIPT_PROBE") != "1":
-        logger.info(f"[browser-sendscript] decline: surface {current_url[:60]!r} not a full-page composer (overlay firing is net-negative)")
+    if not surface_supports_script(current_url):
+        logger.info(f"[browser-sendscript] decline: surface {current_url[:60]!r} carries no person-composer")
         return None
     if P_READONLY_RE.search(task) or P_READONLY_RE.search(payload_source or ""):
         logger.info("[browser-sendscript] decline: read-only directive in task")
@@ -187,8 +187,6 @@ async def run_send_script(
         r_send = await execute_tool("BrowserClickIndex", {"index": send_btn2[0]}, browser_id, tab_id)
         send_name = send_btn2[1]
     else:
-        if os.environ.get("OSW_SENDSCRIPT_PROBE") == "1":
-            logger.info(f"[browser-sendscript-probe] committed-fill interactives (Send not in ranked list):\n{state2[:3000]}")
         r_send = await execute_tool("BrowserClickByName", {"name": "Send", "role": "button"}, browser_id, tab_id)
         send_name = "Send (by-name)"
     send_ok = isinstance(r_send, dict) and "error" not in r_send
