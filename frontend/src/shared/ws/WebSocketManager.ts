@@ -26,7 +26,7 @@ import {
   clearTurnLabel,
 } from '../state/agentsSlice';
 import { streamStart, streamDelta, streamEnd, clearStreamingForSession } from '../state/streamingSlice';
-import { addBrowserCardFromBackend, markBrowserCardEnding, keepBrowserCardOpen, placeBesideCard, placeBelowCard, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, WORKFLOW_CARD_GAP, openWorkflowsApp, openWorkflowMonitor } from '../state/dashboardLayoutSlice';
+import { addBrowserCardFromBackend, markBrowserCardEnding, keepBrowserCardOpen, placeBesideCard, placeBelowCard, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, WORKFLOW_CARD_GAP, openWorkflowsApp, openWorkflowMonitor, removeBrowserCard } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
 import { fetchSettings } from '../state/settingsSlice';
 import { displaySessionName } from '../state/sessionDisplay';
@@ -761,6 +761,13 @@ class WebSocketManager {
       case 'dashboard:browser_card_keep':
         if (data.browser_id) {
           store.dispatch(keepBrowserCardOpen(data.browser_id));
+        }
+        break;
+
+      case 'dashboard:browser_card_evict':
+        // A wedged/unusable card the backend is tearing down BEFORE it spawns a recovery card. Remove it now (no fade, no Keep pill) so its <webview> unmounts and stops starving the renderer while the fresh card mounts.
+        if (data.browser_id) {
+          store.dispatch(removeBrowserCard(data.browser_id));
         }
         break;
 

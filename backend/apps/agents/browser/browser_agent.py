@@ -2177,6 +2177,8 @@ async def run_browser_agent(
                 if os.environ.get("OSW_DEADCARD_EVICT", "1") != "0":
                     DEAD_CARDS.add(browser_id)
                     logger.info(f"[browser-agent] {browser_id} marked dead; same-host reuse will skip it")
+                    # Tear the wedged webview DOWN now, before recovery spawns a fresh card. Two heavy pages (the dead one + the recovery one) starve the renderer's event loop = the recovery-card wedge; unmounting the dead one frees its renderer process so the recovery card is the only heavy neighbor.
+                    await p_evict_dead_card(dashboard_id, browser_id)
                 break
 
         if cancel_event.is_set():
@@ -2424,6 +2426,29 @@ def find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | Non
             if parent is None or getattr(parent, "status", "") != "running":
                 orphan = orphan or bid
     return own or orphan
+
+
+async def p_evict_dead_card(dashboard_id: str | None, browser_id: str) -> None:
+    """Free a wedged card's webview so the recovery card isn't its heavy neighbor:
+    tell the renderer to unmount it (frees the renderer process), and drop it from
+    the persisted layout so it doesn't reappear. Fail-open, never blocks the abort."""
+    ACTIVE_AGENT_CARDS.discard(browser_id)
+    try:
+        await ws_manager.broadcast_global("dashboard:browser_card_evict", {
+            "dashboard_id": dashboard_id or "", "browser_id": browser_id})
+    except Exception:
+        pass
+    if not dashboard_id:
+        return
+    try:
+        from backend.apps.dashboards.dashboards import load, save
+        dash = load(dashboard_id)
+        if browser_id in dash.layout.browser_cards:
+            del dash.layout.browser_cards[browser_id]
+            dash.updated_at = datetime.now()
+            save(dash)
+    except Exception:
+        pass
 
 
 async def p_create_browser_card(dashboard_id: str, url: str, parent_session_id: str | None = None) -> str:
