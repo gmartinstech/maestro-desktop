@@ -883,7 +883,7 @@ async function handleListInteractives(wv: BrowserWebview, params: Record<string,
 
   // Dedupe twins, rank what a human acts on first (and the current goal highest), cap the long tail.
   const goal = typeof params?.goal === 'string' ? params.goal : '';
-  const { shown: ranked, truncated } = rankAndCapInteractives(candidates, { goal });
+  const { shown: ranked, truncated } = rankAndCapInteractives(candidates, { goal, docOrder: params?.docOrder !== false });
   const { kept: shown, dropped: covered } = await dropCoveredElements(wv, ranked);
 
   // The previous look's cache feeds two things: * markers for brand-new elements, and STABLE indices so the same element keeps the same number across looks (the model can act on a remembered index without re-reading the whole list, browser-use's stable-hash trick on our node ids).

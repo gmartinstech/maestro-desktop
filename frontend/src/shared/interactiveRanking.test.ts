@@ -123,3 +123,13 @@ test('unknown role is not dropped (survives the cap), displayed in document orde
   assert.deepEqual(shown.map((x) => x.backendNodeId), [1, 2, 3]);
   assert.ok(shown.some((x) => x.role === 'weirdrole'));
 });
+
+test('docOrder:false keeps legacy rank-order display (the A/B off-arm)', () => {
+  const { shown } = rankAndCapInteractives([
+    mk('option', 'opt', 1),
+    mk('button', 'Go', 2),
+    mk('textbox', 'email', 3),
+  ], { docOrder: false });
+  // rank order: textbox(0) < button(1) < option(3)
+  assert.deepEqual(shown.map((x) => x.backendNodeId), [3, 2, 1]);
+});

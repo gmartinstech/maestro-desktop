@@ -48,6 +48,9 @@ export interface RankOptions {
   cap?: number;
   // The agent's current goal; elements whose name matches it float to the top so the thing the model is actually looking for survives the cap.
   goal?: string;
+  // Display the surviving items in document order (default). false = legacy rank-order
+  // display, kept only so the A/B can measure the document-order win against it.
+  docOrder?: boolean;
 }
 
 // Words too generic to be useful signal, including the browser-action verbs and UI nouns that would otherwise match half the page ("click the button").
@@ -93,6 +96,7 @@ export function rankAndCapInteractives(
   // ordinals ("the 4th story" landed at [48], out of order), forcing the model to
   // burn a turn reading page text just to recover position; document order lets it
   // count directly. The high-signal-subset win (from the cap) is untouched.
-  const shown = selected.sort((a, b) => a.i - b.i).map((x) => x.it);
+  const displayed = opts.docOrder === false ? selected : selected.slice().sort((a, b) => a.i - b.i);
+  const shown = displayed.map((x) => x.it);
   return { shown, truncated: Math.max(0, ranked.length - shown.length) };
 }

@@ -298,6 +298,9 @@ async def execute_browser_tool(
         params["selfheal"] = os.environ.get("OSW_SELFHEAL_CLICK", "1") != "0"
         if os.environ.get("OSW_CLICK_EFFECT_PROBE") == "1":
             params["effectProbe"] = True
+    # Document-order interactives display (default on); OSW_DOC_ORDER=0 = legacy rank-order, for the A/B off-arm.
+    if action == "list_interactives":
+        params["docOrder"] = os.environ.get("OSW_DOC_ORDER", "1") != "0"
     request_id = uuid4().hex
     result = await ws_manager.send_browser_command(
         request_id, action, browser_id, params, tab_id=tab_id,
