@@ -431,7 +431,11 @@ BROWSER_TOOLS_SCHEMA = [
     {
         "name": "BrowserBatch",
         "description": (
-            "Your standard way to ACT on the page. Every mutation (navigate, "
+            "Low-level action batch for INDEPENDENT actions (navigate, scroll, press) "
+            "or when you must act by index/point. For a sequence of DEPENDENT named "
+            "click/fill steps (open menu then pick item, fill then fill), prefer "
+            "BrowserActVerified: it self-verifies each step and re-aims in code. "
+            "Every mutation (navigate, "
             "click, type, press, scroll) is a sub-action in this array, 1-5 per "
             "call; an array of one is fine when that is genuinely all you know. "
             "Each sub-action executes in order with the URL captured before/after. "
