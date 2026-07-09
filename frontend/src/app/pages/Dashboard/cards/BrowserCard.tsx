@@ -823,7 +823,11 @@ const BrowserCard: React.FC<Props> = ({
       data-select-meta={JSON.stringify({ name: activeTitle || 'Browser', url: activeUrl })}
       // Marks a kept-alive card parked off-screen (it belongs to another dashboard); fit-to-view must skip it or it pans the canvas to chase it and the card bleeds onto the dashboard you're viewing.
       data-keepalive-hidden={keepAliveHidden ? '1' : undefined}
-      onPointerDownCapture={() => onBringToFront?.(browserId, 'browser')}
+      onPointerDownCapture={(e: React.PointerEvent) => {
+        onBringToFront?.(browserId, 'browser');
+        // Capture-phase so chrome clicks (tab strip, URL bar) the children swallow still select the card; clicks inside the guest page never reach the host at all. Shift keeps the bubbled toggle path.
+        if (e.button === 0 && !e.shiftKey) onCardSelect?.(browserId, 'browser', false);
+      }}
       onClick={(e: React.MouseEvent) => {
         if (justDraggedRef.current) return;
         onCardSelect?.(browserId, 'browser', e.shiftKey);
