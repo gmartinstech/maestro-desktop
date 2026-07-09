@@ -523,6 +523,16 @@ async def post_action_state(
         return ""
     state = lst["text"] if seen_lines is None else delta_state(lst["text"], seen_lines)
     out = f"\n\n{PAGE_STATE_MARKER}\n{p_truncate_state(state)}"
+    # Fold the page's READABLE TEXT in alongside the clickable elements (flag-gated). The model perceives nearly every page TWICE, once via list_interactives and once via GetText (measured: ~52% of all tool calls are perception, half of that redundant list+text pairs). Attaching a trimmed text excerpt here means after any action it already has BOTH views, so it never spends a separate GetText turn. A cheap code-side read (ms) trades for a ~4s model turn.
+    if os.environ.get("OSW_FOLD_TEXT", "0") == "1":
+        try:
+            p_gt = await asyncio.wait_for(
+                wait_exec("BrowserGetText", {}, browser_id, tab_id), timeout=5.0)
+            p_txt = str(p_gt.get("text") or "") if isinstance(p_gt, dict) and "error" not in p_gt else ""
+            if p_txt:
+                out += f"\n\n[Page text (you have this already, no need to GetText):]\n{p_txt[:1800]}"
+        except Exception:
+            pass
     # Hand the Send button's index over so the model clicks it directly instead of scanning the list or hunting via CSS/JS/screenshots (the polled list above is what makes Send actually present to point at, the two work together).
     if p_send_si:
         out = (f"\n\n[send-ready] Your message is typed and the Send button is index "
