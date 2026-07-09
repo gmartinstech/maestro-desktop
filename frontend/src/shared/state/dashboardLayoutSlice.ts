@@ -419,7 +419,6 @@ export function placeBesideCard(
   exclude?: CardPlacementExclusion,
   gap: number = GRID_GAP * 12,
   exact: boolean = false,
-  overlap: boolean = false,
 ): { x: number; y: number } {
   const rects = collectOccupiedRects(state, expandedSessionIds, exclude);
   const targetX = anchor.x + anchor.width + gap;
@@ -435,13 +434,30 @@ export function placeBesideCard(
     ? Math.max(...columnCards.map((c) => c.y + c.height)) + GRID_GAP
     : anchor.y;
 
-  // overlap: dock beside the anchor no matter what else is there (the new card sits on top via its higher zOrder). A chat-spawned browser must land next to its chat even onto an occupied spot; dodging to a free grid cell is the "spawned off to the side" behavior we're removing. Still stacks under this chat's own browser column (targetY) so sibling browsers don't cover each other.
-  if (overlap) return { x: targetX, y: targetY };
   // exact keeps the precise gap (so the card mirrors however its anchor was placed, e.g. a run browser matching the hub->monitor gap); grid-snapping would knock that gap off. Fall back to the snapped search only if the exact spot is taken.
   if (exact && !rects.some((r) => rectsOverlap({ x: targetX, y: targetY, w: newW, h: newH }, r))) {
     return { x: targetX, y: targetY };
   }
   return findOpenSpotNear(targetX, targetY, rects, newW, newH);
+}
+
+// Dock a chat-spawned browser to the right of its chat card. Unlike placeBesideCard, this ALWAYS lands beside the chat (overlap is fine, the new card sits on top via zOrder) so an occupied spot can never fling the browser to a far grid cell or stack it under an unrelated card. Only this chat's OWN browsers (same spawned_by, still in the column) stack under each other so siblings don't fully cover one another; every other card is ignored.
+export function placeBrowserBesideChat(
+  state: DashboardLayoutState,
+  chat: { x: number; y: number; width: number; height: number },
+  parentSessionId: string,
+  newW: number,
+  newH: number,
+  excludeBrowserId?: string,
+): { x: number; y: number } {
+  const targetX = chat.x + chat.width + GRID_GAP * 12;
+  const siblings = Object.values(state.browserCards).filter(
+    (c) => c.browser_id !== excludeBrowserId && c.spawned_by === parentSessionId && Math.abs(c.x - targetX) < 50,
+  );
+  const targetY = siblings.length > 0
+    ? Math.max(...siblings.map((c) => c.y + c.height)) + GRID_GAP
+    : chat.y;
+  return { x: targetX, y: targetY };
 }
 
 // Dock a new card directly below an anchor card (left edges aligned). Used for a browser spawned by a Workflows-hub chat, which has no agent card to sit beside.
@@ -1660,7 +1676,7 @@ const dashboardLayoutSlice = createSlice({
         if (parentCard) {
           for (const bc of Object.values(state.browserCards)) {
             if (bc.spawned_by !== session.id) continue;
-            const pos = placeBesideCard(state, parentCard, bc.width, bc.height, undefined, { type: 'browser' as const, id: bc.browser_id }, undefined, false, true);
+            const pos = placeBrowserBesideChat(state, parentCard, session.id, bc.width, bc.height, bc.browser_id);
             bc.x = pos.x;
             bc.y = pos.y;
             state.glowingBrowserCards[bc.browser_id] = { sourceId: session.id, fading: false, label: 'Use Browser' };

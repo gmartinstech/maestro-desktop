@@ -27,7 +27,7 @@ import {
   clearTurnLabel,
 } from '../state/agentsSlice';
 import { streamStart, streamDelta, streamEnd, clearStreamingForSession } from '../state/streamingSlice';
-import { addBrowserCardFromBackend, markBrowserCardEnding, keepBrowserCardOpen, placeBesideCard, placeBelowCard, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, WORKFLOW_CARD_GAP, openWorkflowsApp, openWorkflowMonitor } from '../state/dashboardLayoutSlice';
+import { addBrowserCardFromBackend, markBrowserCardEnding, keepBrowserCardOpen, placeBesideCard, placeBelowCard, placeBrowserBesideChat, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP, WORKFLOW_CARD_GAP, openWorkflowsApp, openWorkflowMonitor } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
 import { fetchSettings } from '../state/settingsSlice';
 import { displaySessionName } from '../state/sessionDisplay';
@@ -791,7 +791,7 @@ class WebSocketManager {
               let pos: { x: number; y: number } | null = null;
               let glowLabel = 'Use Browser';
               if (parentCard) {
-                pos = placeBesideCard(layoutState, parentCard, browserCard.width, browserCard.height, undefined, exclude, undefined, false, true);
+                pos = placeBrowserBesideChat(layoutState, parentCard, parentId, browserCard.width, browserCard.height, browserCard.browser_id);
               } else if (sess?.workflow_run_id && layoutState.workflowsMonitorCard) {
                 pos = placeBesideCard(layoutState, layoutState.workflowsMonitorCard, browserCard.width, browserCard.height, undefined, exclude, WORKFLOW_CARD_GAP, true);
               } else if (sess?.workflow_edit_id && layoutState.workflowsHub) {
