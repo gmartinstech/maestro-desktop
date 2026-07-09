@@ -96,10 +96,11 @@ export function useDashboardSelection(
           }
           return next;
         }
-        if (prev.has(id)) {
-          return new Map();
+        // Plain click selects the clicked card (collapsing any multi-select to it) so spawn-beside-selection actually fires; deselect = empty-canvas click or Esc.
+        if (prev.size === 1 && prev.has(id)) {
+          return prev;
         }
-        return prev;
+        return new Map([[id, type]]);
       });
     },
     [],
