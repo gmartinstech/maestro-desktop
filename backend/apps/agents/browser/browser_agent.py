@@ -751,8 +751,29 @@ async def run_browser_agent(
     # Route the client based on the resolved model id, not just connection_mode. Without this, a pinned-route value like "sonnet-cc" resolves to "cc/claude-sonnet-4-6" but the old get_anthropic_client() still returned an OpenSwarm-proxy client (because connection_mode was openswarm-pro), which then rejected the cc/ prefix and surfaced as a misleading "OpenSwarm servers are busy" error.
     client = get_anthropic_client_for_model(browser_settings, api_model)
 
+    # Skill key, derived EARLY so both the prestage-skip below and the replay lookup share it. Prefer the USER's original request over the orchestrator's reformulation (reformulations vary run-to-run and silently break exact-key replay); multi-quoted messages fall back to the differentiated task.
+    skill_key_task = task
+    if parent_session_id:
+        try:
+            p_psess = agent_manager.get_session(parent_session_id)
+            if p_psess:
+                for p_m in reversed(p_psess.messages):
+                    if p_m.role == "user" and isinstance(p_m.content, str) and p_m.content.strip():
+                        p_orig = p_m.content.strip()
+                        if len(browser_skills.template_task(p_orig)[1]) <= 1:
+                            skill_key_task = p_orig
+                        break
+        except Exception:
+            pass
+    # A learned skill's replayed prefix does the same navigation prestage would aux-drive (~8-12s): when one exists for this host+task, skip prestage and let the replay own the nav.
+    p_early_host = browser_skills.host_of(initial_url or current_url or next(iter(re.findall(r"https?://\S+", task)), ""))
+    p_skip_prestage_for_skill = bool(p_early_host and browser_skills.find_skill(p_early_host, skill_key_task))
+    if p_skip_prestage_for_skill:
+        logger.info(f"[browser-skills] skill exists for {p_early_host}; skipping prestage (replay owns the nav)")
+
     from backend.apps.agents.browser import browser_prestage
-    if browser_prestage.prestage_enabled() and not app_mode and not cancel_event.is_set():
+    if (browser_prestage.prestage_enabled() and not app_mode and not cancel_event.is_set()
+            and not p_skip_prestage_for_skill):
         try:
             p_ps_block, p_ps_url, p_ps_recs = await asyncio.wait_for(
                 browser_prestage.run_prestage(
@@ -982,20 +1003,7 @@ async def run_browser_agent(
             return None
         return task.result()
 
-    # Skill key: prefer the USER's original request over the orchestrator's reformulation. The reformulation varies run-to-run ("click the search box" vs "find the search box") and that variance silently breaks exact-key replay (measured: two issuances of one request produced two skills). The user's words are stable across repeats. Guard: if the message carries multiple quoted values, several same-host sub-tasks could collide on one key, so fall back to the (differentiated) delegated task; the verify gate backs this up if a key is ever too loose.
-    skill_key_task = task
-    if parent_session_id:
-        try:
-            p_psess = agent_manager.get_session(parent_session_id)
-            if p_psess:
-                for p_m in reversed(p_psess.messages):
-                    if p_m.role == "user" and isinstance(p_m.content, str) and p_m.content.strip():
-                        p_orig = p_m.content.strip()
-                        if len(browser_skills.template_task(p_orig)[1]) <= 1:
-                            skill_key_task = p_orig
-                        break
-        except Exception:
-            pass
+    # (skill_key_task derived earlier, above the prestage gate, so the skip check and this lookup share one key)
 
     # --- Fast path: replay a previously-learned skill with NO LLM round-trips. This is what gets a REPEAT task from ~50s (full agent loop) down to ~1s, i.e. faster than a human. Robust by construction: clicks re-resolve by (role,name), every step is verified, and ANY miss aborts to the full LLM agent below (which re-records), so a changed page can never ghost-succeed.
     replay_attempted = False
