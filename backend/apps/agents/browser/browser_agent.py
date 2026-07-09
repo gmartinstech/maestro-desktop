@@ -1013,6 +1013,7 @@ async def run_browser_agent(
         allow_prefix, a send-gated skill replays its safe navigation prefix
         mechanically and hands the live agent just the irreversible tail."""
         nonlocal final_screenshot, last_seen_url, replay_attempted, replay_prefix_note
+        nonlocal preloaded_perception, current_url
         if not host:
             return None
 
@@ -1077,6 +1078,11 @@ async def run_browser_agent(
                         f"full agent from scratch (trust verdict: {verdict})"
                     )
                     return None
+                # The end-of-run record_skill distills from action_log; without the replayed prefix in it, a warm run re-records a TAIL-ONLY skill (navigation missing) and clobbers the good one.
+                action_log.append({
+                    "tool": step["tool"], "input": step.get("params", {}), "ok": True,
+                    "result_summary": str(res.get("text", ""))[:200], "elapsed_ms": el_ms,
+                })
                 if res.get("url"):
                     last_seen_url = res["url"]
             replay_attempted = True
@@ -1085,6 +1091,12 @@ async def run_browser_agent(
                 lst = await execute_browser_tool("BrowserListInteractives", {}, browser_id, tab_id)
                 if isinstance(lst, dict) and lst.get("text") and "error" not in lst:
                     p_fresh = f"\nCurrent page state after the replayed prefix:\n{p_truncate_state(lst['text'])}"
+                    # THE MARRIAGE (flag-gated): hand the post-prefix state to the verified send-script slot, the proven code tail (fill -> verify -> send -> two-sided receipt). A warm write then completes with ZERO model turns: replayed prefix + verified tail. Fail-open: if the script declines, the model gets the existing handoff note, today's behavior.
+                    if os.environ.get("OSW_REPLAY_SENDTAIL", "0") == "1":
+                        preloaded_perception = str(lst["text"])
+                        if lst.get("url"):
+                            current_url = str(lst["url"])
+                        logger.info("[browser-skills] prefix handoff -> send-script slot armed (perception + url set)")
             except Exception:
                 pass
             remaining = "; ".join(f"{s['tool']}({str(s.get('params', {}))[:80]})" for s in steps[unsafe_i:])

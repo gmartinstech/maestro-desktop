@@ -1600,3 +1600,63 @@ def test_act_verified_refuses_irreversible_and_runs_reversible(monkeypatch):
     assert any(c["action"] == "click_index" and c["params"].get("index") == 1 for c in sent)
     # 3) honest verdict fed back (static fake page = no observable change; never a fake OK)
     assert "FAILED" in all_msgs or "OK (verified)" in all_msgs
+
+
+def test_warm_send_prefix_replay_marries_send_script_zero_llm_turns(monkeypatch):
+    # THE WARM-WRITE PATH (B): a learned send-gated skill replays its navigation
+    # prefix mechanically, then hands the post-prefix state to the verified
+    # send-script tail (fill -> verify -> send -> receipt). The model is NEVER
+    # called: a warm write is replay + code, end to end.
+    monkeypatch.setenv("OSW_SEND_SCRIPT", "1")
+    monkeypatch.setenv("OSW_REPLAY_SENDTAIL", "1")
+    import backend.apps.agents.browser.browser_skills as SK
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear(); SK.SKILLS.clear()
+
+    TASK = "go to tyler chen's linkedin and text him '[test] warm hi w1'"
+    HOST = "www.linkedin.com"
+    THREAD = "https://www.linkedin.com/messaging/thread/2-abc/"
+    sig = SK.compute_sig(TASK)
+    SK.SKILLS[f"{HOST}|{sig}"] = {
+        "host": HOST, "task_sig": sig, "recorded_at": 0, "replays": 0,
+        "persisted": False, "rev": 1, "state": SK.PROBATION, "fails": 0,
+        "composed_of": [],
+        "steps": [
+            {"tool": "BrowserNavigate", "params": {"url": THREAD}},
+            {"tool": "BrowserClickByName", "params": {"name": "Send"}},  # send-gated tail
+        ],
+    }
+
+    primary = FakeLLM([Resp([Blk("text", "should never be called")], stop_reason="end_turn")])
+    aux = FakeAux()
+    sent = p_install(monkeypatch, primary, aux)
+
+    COMPOSER = '[2]<textbox "Write a message">'
+    COMMITTED = '[2]<textbox "Write a message" value="[test] warm hi w1">\n[14]<button "Send">'
+    CLEARED = '[2]<textbox "Write a message">\n[9]<button "Attach">'
+    seq = {"n": 0}
+    states = [COMPOSER, COMMITTED, CLEARED, CLEARED]
+
+    async def p_cmd(request_id, action, browser_id, params, tab_id=""):
+        sent.append({"action": action, "params": params})
+        if action == "list_interactives":
+            s = states[min(seq["n"], len(states) - 1)]; seq["n"] += 1
+            return {"text": s, "url": THREAD}
+        if action == "navigate":
+            return {"text": "Navigated", "url": THREAD}
+        if action == "click_index":
+            return {"text": "Clicked", "url": THREAD, "clickedRole": "button", "clickedName": "Send"}
+        if action == "evaluate":
+            return {"text": json.dumps({"ready": True, "quiet": 9999, "elems": 100, "found": True}), "url": THREAD}
+        return {"text": "ok", "url": THREAD}
+    monkeypatch.setattr(BA.ws_manager, "send_browser_command", p_cmd, raising=False)
+
+    result = asyncio.run(BA.run_browser_agent(
+        task=TASK, browser_id="b1", model="sonnet", initial_url=THREAD,
+    ))
+    # prefix replayed (navigate dispatched), script filled + sent, receipt passed
+    assert any(c["action"] == "navigate" for c in sent)
+    assert any(c["action"] == "click_index" and c["params"].get("text") for c in sent), "script fill ran"
+    assert result.get("done") is True
+    assert "Sent" in str(result.get("summary", ""))
+    # the whole warm write took ZERO model turns
+    assert primary.calls == [], f"model was called {len(primary.calls)}x; warm write should be replay+code only"
