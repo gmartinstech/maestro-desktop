@@ -96,6 +96,16 @@ def surface_supports_script(current_url: str, state_text: str = "") -> bool:
     return bool(composer_index_in_state(state_text) or opener_index_in_state(state_text))
 
 
+def dryrun_report(state_text: str, armed: bool, filled: bool, url: str = "") -> str:
+    """One grep-stable line for the coverage harness: what the staged perception held
+    and how far the script got. Only ever emitted in dry-run measurement mode."""
+    boxes = len(P_COMPOSER_ROW_RE.findall(state_text or ""))
+    return (f"[dryrun-report] armed={int(bool(armed))} "
+            f"composer={int(bool(composer_index_in_state(state_text or '')))} "
+            f"opener={int(bool(opener_index_in_state(state_text or '')))} "
+            f"textboxes={boxes} filled={int(bool(filled))} url={(url or '')[:120]}")
+
+
 async def run_send_script(
     task: str,
     browser_id: str,

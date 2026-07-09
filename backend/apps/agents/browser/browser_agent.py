@@ -1272,6 +1272,7 @@ async def run_browser_agent(
 
     # Staged-send script: prestage left a ready composer + the task quotes its payload -> code runs the fill/verify/send/verify tail the model spends 4-5 turns on. Success skips the loop entirely (turns=0); any pre-click ambiguity falls through untouched.
     from backend.apps.agents.browser import browser_send_script
+    p_script = None
     if (browser_send_script.script_enabled() and task_is_send and not app_mode
             and preloaded_perception and not cancel_event.is_set()):
         try:
@@ -1294,6 +1295,17 @@ async def run_browser_agent(
             else:
                 # Clicked but the composer did NOT clear: the send is UNVERIFIED. Leave send_confirmed False so the loop can't shortcut to a "done" it never earned (r264 set it True here and the model then FALSELY claimed delivery). The model gets ONE truthful verify pass, never a blind resend.
                 task = f"{task}\n\n[{p_script['note']}]"
+
+    # Dry-run is a measurement mode, so the run ENDS here either way: letting the model loop run would both risk the REAL send the flag exists to avoid and rescue declines the flag exists to attribute. Inert when the flag is off.
+    if os.environ.get("OSW_SENDSCRIPT_DRYRUN") == "1" and not done_called:
+        p_dr = browser_send_script.dryrun_report(
+            preloaded_perception or "", bool(task_is_send and preloaded_perception),
+            isinstance(p_script, dict), current_url)
+        logger.info(p_dr)
+        done_called = True
+        done_success = True
+        done_message = ("DRY-RUN coverage probe: no send was performed and none should be "
+                        "retried; report this outcome verbatim. " + p_dr)
 
     # Code-side plan dispatch (the turn-collapser that doesn't wait for the model to adopt a tool): one aux call compiles the task's mechanical prefix into verified steps, code executes them, and the big model starts with that work DONE. Fail-open: no plan/steps = today's loop untouched.
     from backend.apps.agents.browser import browser_plan_dispatch

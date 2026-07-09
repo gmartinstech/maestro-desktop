@@ -186,6 +186,23 @@ async def test_composed_task_brief_quotes_fire_via_payload_source():
     assert r["payload"] == "[test] hello world r9-os"
 
 
+def test_dryrun_report_encodes_the_gate_funnel():
+    """The coverage harness greps this one line for gate attribution: a staged composer
+    reports composer=1, a bare page reports zeros, and armed/filled ride the booleans."""
+    r = ss.dryrun_report(COMPOSER_EMPTY, armed=True, filled=True, url=THREAD_URL)
+    assert "armed=1" in r and "composer=1" in r and "filled=1" in r and "textboxes=1" in r
+    r0 = ss.dryrun_report(NO_COMPOSER, armed=False, filled=False)
+    assert "armed=0" in r0 and "composer=0" in r0 and "opener=0" in r0 and "textboxes=0" in r0
+
+
+def test_dryrun_report_counts_unmatched_textboxes():
+    """The X 'Post text' class: a textbox present but name-unmatched must be visible in
+    the report (textboxes>0, composer=0), or the funnel can't tell R from N failures."""
+    state = '[4]<textbox "Some Novel Label">\n[7]<button "Go">'
+    r = ss.dryrun_report(state, armed=True, filled=False)
+    assert "composer=0" in r and "textboxes=1" in r
+
+
 @pytest.mark.asyncio
 async def test_readonly_probe_never_fires():
     """The send-probe quotes the very payload it checks for; without this wall the
