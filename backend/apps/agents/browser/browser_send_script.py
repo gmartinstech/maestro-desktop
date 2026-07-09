@@ -187,6 +187,14 @@ async def run_send_script(
     if not committed:
         logger.info("[browser-sendscript] fill not seen committed; aborting pre-click")
         return None
+    # Dry-run probe: prove the script FIRES + fills on a NON-LinkedIn site without ever
+    # doing the outward send. Everything up to here ran (surface gate passed, composer
+    # found, fill committed); we stop before the irreversible click and report readiness.
+    if os.environ.get("OSW_SENDSCRIPT_DRYRUN") == "1":
+        send_ready = bool(send_index_in_state(state2))
+        logger.info(f"[browser-sendscript] DRYRUN: WOULD send (fill committed, send_button_listed={send_ready}); not clicking")
+        return {"sent": False, "payload": payload, "log": log,
+                "note": "DRYRUN: filled + ready to send, stopped before the irreversible click"}
     # 3. the one irreversible click, solo. Prefer the ranked list's exact Send (an index click, cheapest); fall back to click-by-name, which searches the FULL enumerated DOM. GROUND TRUTH (probe r-dump): the profile-overlay Send is a real button the model clicks by name, but it ranks OUT of the capped numbered list, so send_index_in_state alone never sees it. click-by-name is exactly how the model sends there.
     send_btn2 = send_index_in_state(state2)
     if send_btn2:
