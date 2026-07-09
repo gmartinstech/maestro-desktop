@@ -25,6 +25,7 @@ import { fetchOutputs, type Output } from '@/shared/state/outputsSlice';
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
 import { fetchWorkflows, fetchAllRuns, fetchActiveRuns } from '@/shared/state/workflowsSlice';
 import { fetchMissedRuns } from '@/shared/state/missedRunsSlice';
+import { fetchProviderHealth } from '@/shared/state/subscriptionsSlice';
 import { dashboardWs } from '@/shared/ws/WebSocketManager';
 import { initBrowserCommandHandler } from '@/shared/browserCommandHandler';
 import { getKeepAliveBrowserIds } from '@/shared/browserFocus';
@@ -81,6 +82,14 @@ export function useDashboardLifecycle({
     if (!isActive || missedRunsCheckedThisSession) return;
     missedRunsCheckedThisSession = true;
     dispatch(fetchMissedRuns());
+    // Login-health check rides the same once-per-launch gate; delayed so the lazy router has time to boot, with ONE retry when the probe reports it wasn't up yet.
+    const t = setTimeout(async () => {
+      try {
+        const res = await dispatch(fetchProviderHealth()).unwrap();
+        if (res.skipped) setTimeout(() => { dispatch(fetchProviderHealth()); }, 45_000);
+      } catch { /* probe is best-effort; silence on failure */ }
+    }, 12_000);
+    return () => clearTimeout(t);
   }, [isActive, dispatch]);
 
   // Track dashboard engagement time

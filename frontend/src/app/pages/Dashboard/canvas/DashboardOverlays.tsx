@@ -6,6 +6,7 @@ import CardSearchPalette from '../controls/CardSearchPalette';
 import DirectionHints from '../controls/DirectionHints';
 import WorkflowRunningToast from '@/app/pages/Workflows/WorkflowRunningToast';
 import MissedRunsToast from '@/app/pages/Workflows/MissedRunsToast';
+import ProviderHealthToast from '@/app/components/overlays/ProviderHealthToast';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import type {
   CardPosition,
@@ -152,6 +153,9 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
 
       {/* Launch nudge when scheduled runs elapsed while the app was closed */}
       <MissedRunsToast />
+
+      {/* Launch nudge when a subscription login died while the app was closed */}
+      <ProviderHealthToast />
     </>
   );
 };

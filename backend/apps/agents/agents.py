@@ -488,6 +488,24 @@ async def subscriptions_exchange(body: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@agents.router.get("/subscriptions/health")
+async def subscriptions_health():
+    """Boot-time login-health check: 1-token probe per ACTIVE subscription lane, reporting only
+    definitive auth-death (the silent credential-rot class). `skipped` when the router isn't up yet
+    so the frontend can retry once instead of reading 'all healthy' off a cold boot."""
+    from backend.apps.nine_router import is_running, get_providers
+    from backend.apps.nine_router.subscription_health import probe_subscription_health
+    if not is_running():
+        return {"dead": [], "skipped": True}
+    try:
+        connections = await get_providers()
+        dead = await probe_subscription_health(connections)
+        return {"dead": dead, "skipped": False}
+    except Exception as e:
+        logger.debug(f"subscription health probe failed: {e}")
+        return {"dead": [], "skipped": True}
+
+
 @agents.router.get("/subscriptions/models")
 async def subscriptions_models():
     """List all models available through connected subscriptions."""
