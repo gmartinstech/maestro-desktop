@@ -171,6 +171,9 @@ def scrub_request_for_openai_gpt5(body: bytes) -> bytes:
                "logprobs", "top_logprobs", "logit_bias"):
         if parsed.pop(p_k, None) is not None:
             mutated = True
+    # OpenAI started rejecting reasoning_effort + function tools together on /chat/completions (live-confirmed 2026-07-08, all gpt-5.x); dropping effort loses thinking but the turn completes.
+    if "tools" in parsed and parsed.pop("reasoning_effort", None) is not None:
+        mutated = True
     try:
         before = json.dumps(parsed.get("messages"), sort_keys=True) if "messages" in parsed else ""
         p_rewrite_document_to_openai_file(parsed)

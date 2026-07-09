@@ -1716,6 +1716,15 @@ def test_gpt5_param_scrub_drops_unsupported_sampling_knobs():
     assert json.loads(scrub_gpt5_params(json.dumps(
         {"model": "gpt-4o", "temperature": 0, "top_p": 0.5}).encode())) == \
         {"model": "gpt-4o", "temperature": 0, "top_p": 0.5}
+    # reasoning_effort + function tools together 400 on /chat/completions (live-confirmed 2026-07-08 on gpt-5.5/5.4/5.4-mini); with tools present effort must go, without tools it must stay.
+    combo = json.dumps({"model": "gpt-5.4-mini", "messages": [], "max_tokens": 200,
+                        "reasoning_effort": "low", "tools": [{"type": "function", "function": {"name": "t"}}]}).encode()
+    solo = json.dumps({"model": "gpt-5.4-mini", "messages": [], "max_tokens": 200,
+                       "reasoning_effort": "low"}).encode()
+    for fn in (scrub_request_for_openai_gpt5, scrub_gpt5_params):
+        assert "reasoning_effort" not in json.loads(fn(combo)), fn.__name__
+        assert json.loads(fn(combo))["tools"], fn.__name__
+        assert json.loads(fn(solo)).get("reasoning_effort") == "low", fn.__name__
 
 
 def test_openrouter_plugin_array_matches_docs():
@@ -2801,9 +2810,10 @@ def test_sync_custom_providers_updates_existing_node_in_place():
 
 
 def test_sync_custom_providers_deletes_orphaned_managed_nodes():
-    """When a user removes a custom provider in Settings, the next sync
-    should delete the corresponding 9Router node (and its connection
-    cascades). Other unmanaged nodes must NOT be touched."""
+    """When a user removes a custom provider in Settings (list still NON-empty), the next
+    sync should delete the corresponding 9Router node (its connection cascades). Unmanaged
+    nodes must NOT be touched. An EMPTY list never sweeps (corrupt/defaulted settings at
+    boot must not mass-reap live connections; see test_router_sync_guards.py)."""
     import asyncio
     from unittest.mock import patch as upatch
     from backend.apps.nine_router import sync_custom_providers
@@ -2827,7 +2837,9 @@ def test_sync_custom_providers_deletes_orphaned_managed_nodes():
     with upatch("backend.apps.nine_router.is_running", return_value=True), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
-        asyncio.run(sync_custom_providers([]))  # empty list → delete all managed
+        asyncio.run(sync_custom_providers(
+            [{"name": "KeptProvider", "base_url": "http://localhost:9999/v1", "api_key": "k"}]
+        ))
 
     deletes = [c for c in state["calls"] if c[0] == "DELETE"]
     deleted_urls = [c[1] for c in deletes]
