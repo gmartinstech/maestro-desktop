@@ -10,7 +10,7 @@ import { shouldStopWaiting, SETTLE_POLL_MS, settleProbeJs } from './browserSettl
 
 let initialized = false;
 
-export type BrowserAction = 'screenshot' | 'get_text' | 'get_console' | 'navigate' | 'click' | 'type' | 'evaluate' | 'get_elements' | 'scroll' | 'wait' | 'press_key' | 'list_interactives' | 'click_index' | 'click_point' | 'batch' | 'detect_webmcp' | 'list_routes' | 'replay_route' | 'click_by_name';
+export type BrowserAction = 'screenshot' | 'get_text' | 'get_console' | 'navigate' | 'click' | 'type' | 'evaluate' | 'get_elements' | 'scroll' | 'wait' | 'press_key' | 'list_interactives' | 'click_index' | 'click_point' | 'batch' | 'detect_webmcp' | 'list_routes' | 'replay_route' | 'click_by_name' | 'find_composer';
 
 export interface BrowserActivity {
   action: BrowserAction;
@@ -336,6 +336,66 @@ async function handleType(wv: BrowserWebview, params: Record<string, any>): Prom
   })()`;
   const result = await evalInPage(wv, code);
   return result;
+}
+
+// Find the page's composer STRUCTURALLY, not by accessible name: the biggest editable
+// region (contenteditable / textarea / text input) that is a real writing surface, not a
+// search box. Ranks by editable-richness + proximity to a Send/Post/Reply control + size,
+// so it picks the comment box out of a page that also has a search field. Marks the winner
+// with data-osw-composer so a follow-up type/click can target it by a stable selector.
+// With {fill}, it also types + reads back in the SAME in-page context (the only reliable
+// commit-check for a React-controlled contenteditable, whose value never reaches the AX tree).
+async function handleFindComposer(wv: BrowserWebview, params: Record<string, any>): Promise<Record<string, any>> {
+  const fill = params.fill != null ? String(params.fill) : null;
+  const safeFill = JSON.stringify(fill);
+  const code = `(() => {
+    const SUBMIT = /\\b(send|post|reply|comment|tweet|publish|share|message)\\b/i;
+    const SEARCH = /search|find\\b|filter|query|lookup|explore|jump to/i;
+    const vis = (el) => {
+      const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+      return r.width >= 80 && r.height >= 16 && s.visibility !== 'hidden'
+        && s.display !== 'none' && s.opacity !== '0';
+    };
+    const cands = [...document.querySelectorAll(
+      'textarea, [contenteditable="true"], [role="textbox"], input[type="text"]')];
+    let best = null, bestScore = 0, bestNear = false;
+    for (const el of cands) {
+      if (!vis(el) || el.readOnly || el.disabled) continue;
+      const label = ((el.getAttribute('aria-label')||'') + ' ' + (el.getAttribute('placeholder')||'')
+        + ' ' + (el.getAttribute('data-placeholder')||'') + ' ' + (el.getAttribute('name')||'')).trim();
+      if (el.type === 'search' || SEARCH.test(label)) continue;
+      const rich = el.tagName === 'TEXTAREA' || el.isContentEditable || el.getAttribute('role') === 'textbox';
+      const area = el.closest('form, [role="dialog"], [role="group"], section, main, [role="main"]') || document.body;
+      let near = false;
+      const btns = area.querySelectorAll('button, [role="button"], input[type="submit"]');
+      for (const b of btns) {
+        const bt = ((b.textContent||'') + ' ' + (b.getAttribute('aria-label')||'')).trim();
+        if (bt.length < 40 && SUBMIT.test(bt)) { near = true; break; }
+      }
+      if (!rich && !near) continue;                       // a bare form input near nothing is not a composer
+      const r = el.getBoundingClientRect();
+      const score = (el.isContentEditable ? 2 : 0) + (el.tagName === 'TEXTAREA' ? 2 : 0)
+        + (near ? 3 : 0) + Math.min((r.width * r.height) / 40000, 3) + (SUBMIT.test(label) ? 1 : 0);
+      if (score > bestScore) { bestScore = score; best = el; bestNear = near; }
+    }
+    if (!best || bestScore < 2) return { found: false };
+    best.setAttribute('data-osw-composer', '1');
+    let filled = false;
+    if (${safeFill} != null) {
+      best.scrollIntoView({ block: 'center', behavior: 'instant' }); best.focus();
+      if (best.select) best.select();
+      document.execCommand('selectAll', false); document.execCommand('delete', false);
+      document.execCommand('insertText', false, ${safeFill});
+      best.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: ${safeFill} }));
+      best.dispatchEvent(new Event('change', { bubbles: true }));
+      const now = (best.value != null ? best.value : (best.textContent || ''));
+      filled = now.includes(${safeFill});
+    }
+    return { found: true, selector: '[data-osw-composer="1"]', tag: best.tagName.toLowerCase(),
+      role: best.isContentEditable ? 'contenteditable' : (best.getAttribute('role') || best.tagName.toLowerCase()),
+      score: Math.round(bestScore * 10) / 10, nearSubmit: bestNear, filled };
+  })()`;
+  return await evalInPage(wv, code);
 }
 
 // Electron sendInputEvent expects names like 'Up', 'Enter', 'Space', not 'ArrowUp'/' '/'Esc'.
@@ -1569,6 +1629,9 @@ async function runBrowserCommand(
         break;
       case 'type':
         result = await handleType(wv, params);
+        break;
+      case 'find_composer':
+        result = await handleFindComposer(wv, params);
         break;
       case 'evaluate':
         result = await handleEvaluate(wv, params);

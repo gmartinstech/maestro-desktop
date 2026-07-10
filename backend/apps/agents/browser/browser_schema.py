@@ -752,6 +752,8 @@ ACTION_MAP = {
     "BrowserReplayRoute": "replay_route",
     # Internal replay primitive (skill replay calls it directly; not in the LLM-facing schema). Re-resolves a click target by role+name.
     "BrowserClickByName": "click_by_name",
+    # Internal: structural composer finder (send-script fallback; not LLM-facing). Ranks editable regions, marks the winner, optionally fills+verifies in-page.
+    "BrowserFindComposer": "find_composer",
 }
 
 # --- App agent: driving an OpenSwarm-built app via its native bridge ---------

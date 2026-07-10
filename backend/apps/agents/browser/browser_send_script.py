@@ -124,7 +124,10 @@ async def run_send_script(
     prompt; the composed task carries the routing brief whose own quoted strings
     made every real payload look ambiguous (r242/r243)."""
     t0 = time.monotonic()
-    if not surface_supports_script(current_url, state_text):
+    p_struct = os.environ.get("OSW_COMPOSER_STRUCT") == "1"
+    # The name-based surface gate can't see an unnamed/non-standard composer; under the
+    # structural flag, don't early-decline on it, the in-page finder gets a chance below.
+    if not surface_supports_script(current_url, state_text) and not p_struct:
         logger.info(f"[browser-sendscript] decline: no composer or opener in the perception ({current_url[:50]!r})")
         return None
     if P_READONLY_RE.search(task) or P_READONLY_RE.search(payload_source or ""):
@@ -154,50 +157,70 @@ async def run_send_script(
             if composer:
                 state_text = fresh
                 break
+    p_struct_selector: str = ""
     if not composer:
         # Reversible-opener hop: prestage often stops on the profile with the "Message" opener visible (its settle raced the overlay). Opening a composer is the allowed opener class; the irreversible bar is unchanged.
         opener = opener_index_in_state(state_text)
-        if not opener:
-            logger.info("[browser-sendscript] decline: no composer and no single exact-named opener in staged or fresh state")
-            return None
-        logger.info(f"[browser-sendscript] firing via opener {opener[1]!r} [{opener[0]}]")
-        r_open = await execute_tool("BrowserClickIndex", {"index": opener[0]}, browser_id, tab_id)
-        if not (isinstance(r_open, dict) and "error" not in r_open):
-            return None
-        log.append({"tool": "BrowserClickIndex", "input": {"index": opener[0]}, "ok": True,
-                    "result_summary": f"script opened composer via {opener[1]!r}"[:200], "elapsed_ms": 0})
-        for wait_s in (0.6, 1.2):
-            await asyncio.sleep(wait_s)
-            state_text = await fresh_list()
-            composer = composer_index_in_state(state_text)
-            if composer:
-                break
+        if opener:
+            logger.info(f"[browser-sendscript] firing via opener {opener[1]!r} [{opener[0]}]")
+            r_open = await execute_tool("BrowserClickIndex", {"index": opener[0]}, browser_id, tab_id)
+            if not (isinstance(r_open, dict) and "error" not in r_open):
+                return None
+            log.append({"tool": "BrowserClickIndex", "input": {"index": opener[0]}, "ok": True,
+                        "result_summary": f"script opened composer via {opener[1]!r}"[:200], "elapsed_ms": 0})
+            for wait_s in (0.6, 1.2):
+                await asyncio.sleep(wait_s)
+                state_text = await fresh_list()
+                composer = composer_index_in_state(state_text)
+                if composer:
+                    break
+        # Structural fallback: the AX-name detector missed it (an unnamed contenteditable, a
+        # non-standard rich editor, or two textboxes it couldn't disambiguate). Ask the page to
+        # rank its editable regions and fill+read-back the winner IN-PAGE (the only reliable
+        # commit-check for a React contenteditable, whose text never reaches the AX value).
+        # Flag-gated so the proven name path stays the default.
+        if not composer and p_struct:
+            fc = await execute_tool("BrowserFindComposer", {"fill": payload}, browser_id, tab_id)
+            if isinstance(fc, dict) and fc.get("found") and fc.get("filled"):
+                p_struct_selector = str(fc.get("selector") or "")
+                logger.info(f"[browser-sendscript] structural composer role={fc.get('role')!r} "
+                            f"score={fc.get('score')} nearSubmit={fc.get('nearSubmit')} filled+verified")
+                log.append({"tool": "BrowserFindComposer", "input": {"fill": "<payload>"}, "ok": True,
+                            "result_summary": f"structural composer {fc.get('role')!r} filled+verified"[:200], "elapsed_ms": 0})
+                composer = (-1, str(fc.get("role") or "composer"))
+            else:
+                logger.info(f"[browser-sendscript] structural finder: no usable composer ({str(fc)[:120]})")
         if not composer:
-            logger.info("[browser-sendscript] opener clicked but no composer appeared; handing to model")
+            logger.info("[browser-sendscript] decline: no composer, opener, or structural editable")
             return None
     # No Send-button precondition: composer sites (LinkedIn) lazy-render Send only AFTER text commits, so it's resolved post-fill; never appearing = clean pre-click abort.
     logger.info(f"[browser-sendscript] fill target {composer[1]!r} [{composer[0]}]")
 
-    # 1. fill (focused by node, the composer overlay path coordinate clicks miss)
-    r_fill = await execute_tool("BrowserClickIndex", {"index": composer[0], "text": payload}, browser_id, tab_id)
-    fill_ok = isinstance(r_fill, dict) and "error" not in r_fill
-    log.append({"tool": "BrowserClickIndex", "input": {"index": composer[0], "text": payload},
-                "ok": fill_ok, "result_summary": f"script fill into {composer[1]!r}"[:200], "elapsed_ms": 0})
-    if not fill_ok:
-        logger.info("[browser-sendscript] fill errored; handing to model untouched")
-        return None
-    # 2. verify the fill committed. Send is resolved AFTER, two ways: LinkedIn enables Send only once its JS digests the input (beats later than the text is visible), so the scan waits a little.
-    state2 = ""
-    committed = False
-    for wait_s in (0.4, 0.8, 1.2, 1.6):
-        await asyncio.sleep(wait_s)
+    if p_struct_selector:
+        # The finder already filled + read-back-verified in-page; nothing to re-fill or re-check.
         state2 = await fresh_list()
-        committed = bool(state2 and payload_in_textbox(state2, payload))
-        if committed:
-            break
-    if not committed:
-        logger.info("[browser-sendscript] fill not seen committed; aborting pre-click")
-        return None
+        committed = True
+    else:
+        # 1. fill (focused by node, the composer overlay path coordinate clicks miss)
+        r_fill = await execute_tool("BrowserClickIndex", {"index": composer[0], "text": payload}, browser_id, tab_id)
+        fill_ok = isinstance(r_fill, dict) and "error" not in r_fill
+        log.append({"tool": "BrowserClickIndex", "input": {"index": composer[0], "text": payload},
+                    "ok": fill_ok, "result_summary": f"script fill into {composer[1]!r}"[:200], "elapsed_ms": 0})
+        if not fill_ok:
+            logger.info("[browser-sendscript] fill errored; handing to model untouched")
+            return None
+        # 2. verify the fill committed. Send is resolved AFTER, two ways: LinkedIn enables Send only once its JS digests the input (beats later than the text is visible), so the scan waits a little.
+        state2 = ""
+        committed = False
+        for wait_s in (0.4, 0.8, 1.2, 1.6):
+            await asyncio.sleep(wait_s)
+            state2 = await fresh_list()
+            committed = bool(state2 and payload_in_textbox(state2, payload))
+            if committed:
+                break
+        if not committed:
+            logger.info("[browser-sendscript] fill not seen committed; aborting pre-click")
+            return None
     # Dry-run probe: prove the script FIRES + fills on a NON-LinkedIn site without ever
     # doing the outward send. Everything up to here ran (surface gate passed, composer
     # found, fill committed); we stop before the irreversible click and report readiness.
