@@ -356,8 +356,19 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
       return r.width >= 80 && r.height >= 16 && s.visibility !== 'hidden'
         && s.display !== 'none' && s.opacity !== '0';
     };
-    const cands = [...document.querySelectorAll(
-      'textarea, [contenteditable="true"], [role="textbox"], input[type="text"]')];
+    // Pierce shadow DOM: Reddit (shreddit), Telegram, WhatsApp, Slack build their composer
+    // inside web-component shadow roots that a light-DOM querySelectorAll can't see.
+    const SEL = 'textarea, [contenteditable="true"], [role="textbox"], input[type="text"]';
+    const deep = (root, out, depth) => {
+      if (depth > 8 || out.length > 400) return out;
+      let kids; try { kids = root.querySelectorAll('*'); } catch (e) { return out; }
+      for (const el of kids) {
+        if (el.matches && el.matches(SEL)) out.push(el);
+        if (el.shadowRoot) deep(el.shadowRoot, out, depth + 1);
+      }
+      return out;
+    };
+    const cands = deep(document, [], 0);
     let best = null, bestScore = 0, bestNear = false;
     for (const el of cands) {
       if (!vis(el) || el.readOnly || el.disabled) continue;
