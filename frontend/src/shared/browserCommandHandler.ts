@@ -369,11 +369,16 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
         && s.display !== 'none' && s.opacity !== '0';
     };
     // Pierce shadow DOM: Reddit (shreddit), Telegram, WhatsApp, Slack build their composer
-    // inside web-component shadow roots that a light-DOM querySelectorAll can't see.
-    const deepAll = (root, out, depth) => {
-      if (depth > 8 || out.length > 4000) return out;
-      let kids; try { kids = root.querySelectorAll('*'); } catch (e) { return out; }
-      for (const el of kids) { out.push(el); if (el.shadowRoot) deepAll(el.shadowRoot, out, depth + 1); }
+    // inside web-component shadow roots that a light-DOM querySelectorAll can't see. Collect
+    // only the SELECTOR matches (a few hundred at most), never every node: a heavy SPA like X
+    // has 10k+ nodes and the composer sits late in document order, so an all-node walk with a
+    // node cap truncates before ever reaching it (the regression that hid X's own composer).
+    const deepMatch = (root, sel, out, depth) => {
+      if (depth > 8 || out.length > 400) return out;
+      let hits; try { hits = root.querySelectorAll(sel); } catch (e) { hits = []; }
+      for (const el of hits) out.push(el);
+      let all; try { all = root.querySelectorAll('*'); } catch (e) { return out; }
+      for (const el of all) { if (el.shadowRoot) deepMatch(el.shadowRoot, sel, out, depth + 1); }
       return out;
     };
     const EDIT = 'textarea, [contenteditable="true"], [role="textbox"], input[type="text"]';
@@ -381,10 +386,9 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
       + ' ' + (el.getAttribute('data-placeholder')||'') + ' ' + (el.getAttribute('name')||'')).trim();
 
     const findBest = () => {
-      const all = deepAll(document, [], 0);
+      const all = deepMatch(document, EDIT, [], 0);
       let best = null, bestScore = 0, bestNear = false;
       for (const el of all) {
-        if (!el.matches || !el.matches(EDIT)) continue;
         if (!vis(el) || el.readOnly || el.disabled) continue;
         const label = labelOf(el);
         if (el.type === 'search' || SEARCH.test(label)) continue;
@@ -411,12 +415,12 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
     };
 
     // The reveal actions, tried in yield order. Each returns true if it clicked/scrolled.
+    const TRIGGER_SEL = 'button, [role="button"], a[href], summary, [tabindex], div[class*="placeholder" i], span[class*="placeholder" i]';
     const clickTrigger = () => {
-      const all = deepAll(document, [], 0);
+      const all = deepMatch(document, TRIGGER_SEL, [], 0);
       let best = null, bestScore = -1;
       for (const el of all) {
-        const clickable = el.matches && el.matches('button, [role="button"], a[href], summary, [tabindex], [contenteditable="false"], div[class*="placeholder" i], span[class*="placeholder" i]');
-        if (!clickable || !vis(el)) continue;
+        if (!vis(el)) continue;
         const txt = ((el.textContent||'') + ' ' + (el.getAttribute('aria-label')||'') + ' ' + (el.getAttribute('placeholder')||'')).trim();
         if (txt.length > 60 || !OPENER.test(txt) || HARDBLOCK.test(txt)) continue;
         const r = el.getBoundingClientRect();
@@ -431,12 +435,15 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
       return true;
     };
     const openFirstItem = () => {
-      const container = document.querySelector('[role="list"], [role="grid"], [role="feed"], main, [role="main"]') || document.body;
-      const items = container.querySelectorAll('[role="listitem"], [role="row"], [role="article"], article, li a[href], a[role="link"]');
+      // Chat/message lists (X DM [data-testid=conversation], WhatsApp/Telegram [role=grid]
+      // rows, conversation links) plus generic feeds. Pierce shadow DOM so web-component chat
+      // lists are reachable. Take the first visible list-like item and open it.
+      const ITEM_SEL = '[data-testid="conversation"], [role="listitem"], [role="row"], [role="article"], article, li a[href], a[role="link"], a[href*="/messages/"], a[href*="/chat/"]';
+      const items = deepMatch(document, ITEM_SEL, [], 0);
       for (const it of items) {
         if (!vis(it)) continue;
         const r = it.getBoundingClientRect();
-        if (r.top < 40 || r.top > window.innerHeight) continue;   // skip sticky headers / offscreen
+        if (r.top < 40 || r.top > window.innerHeight || r.height > window.innerHeight * 0.6) continue;   // skip headers / offscreen / the whole pane
         const target = it.matches('a[href], [role="link"]') ? it : (it.querySelector('a[href], [role="link"], [role="button"]') || it);
         target.scrollIntoView({ block: 'center', behavior: 'instant' });
         target.click();
@@ -469,18 +476,35 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
     }
     if (!hit) return { found: false, reveals: acts };
 
-    const best = hit.el;
+    const fillEl = (el) => {
+      el.scrollIntoView({ block: 'center', behavior: 'instant' }); el.focus();
+      if (el.select) el.select();
+      document.execCommand('selectAll', false); document.execCommand('delete', false);
+      document.execCommand('insertText', false, ${safeFill});
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: ${safeFill} }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      const now = (el.value != null ? el.value : (el.textContent || ''));
+      return now.includes(${safeFill});
+    };
+
+    let best = hit.el;
     best.setAttribute('data-osw-composer', '1');
     let filled = false;
     if (${safeFill} != null) {
-      best.scrollIntoView({ block: 'center', behavior: 'instant' }); best.focus();
-      if (best.select) best.select();
-      document.execCommand('selectAll', false); document.execCommand('delete', false);
-      document.execCommand('insertText', false, ${safeFill});
-      best.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: ${safeFill} }));
-      best.dispatchEvent(new Event('change', { bubbles: true }));
-      const now = (best.value != null ? best.value : (best.textContent || ''));
-      filled = now.includes(${safeFill});
+      filled = fillEl(best);
+      // Activation-click fallback: YouTube (and many comment widgets) render a placeholder
+      // that only spawns the real contenteditable once clicked. If the fill didn't commit,
+      // click the found element, let the real editor mount, rescan, and fill THAT.
+      if (!filled) {
+        try { best.click(); } catch (e) { /* click may be intercepted */ }
+        const re = await pollFind(1500);
+        if (re) {
+          best.removeAttribute('data-osw-composer');
+          best = re.el; hit = re; best.setAttribute('data-osw-composer', '1');
+          filled = fillEl(best);
+          acts.push('activate');
+        }
+      }
     }
     return { found: true, selector: '[data-osw-composer="1"]', tag: best.tagName.toLowerCase(),
       role: best.isContentEditable ? 'contenteditable' : (best.getAttribute('role') || best.tagName.toLowerCase()),
