@@ -7,6 +7,7 @@ import { dashboardWs } from './ws/WebSocketManager';
 import { resolveInput } from './resolveUrl';
 import { rankAndCapInteractives, type RankItem } from './interactiveRanking';
 import { shouldStopWaiting, SETTLE_POLL_MS, settleProbeJs } from './browserSettle';
+import { unwrapCdpEval } from './cdpEval';
 
 let initialized = false;
 
@@ -195,7 +196,40 @@ async function countSafeRoutes(wv: BrowserWebview): Promise<number> {
 const STUCK_EVAL_GRACE_MS = 2500;
 const STUCK_EVAL_LIMIT_MS = 9000;
 
+// Run `code` in the guest page. In Electron we prefer CDP Runtime.evaluate: it runs in the
+// browser process, so it is NOT suspended while the page is still loading, the way
+// webContents.executeJavaScript is (that suspend, on a page whose trackers never let it "stop
+// loading", is the 15s command wedge). When the CDP bridge isn't there (dev Chrome, or a forced
+// A/B via window.__OSW_CDP_EVAL__ = false) we fall back to the executeJavaScript path unchanged,
+// so behavior never regresses where CDP can't run. Both paths keep the same contract: return the
+// value, throw on a page-side error, mark dom-ready on success.
 async function evalInPage(wv: BrowserWebview, code: string): Promise<any> {
+  const cdpBridge = (window as any).openswarm?.sendCdpCommand;
+  if (cdpBridge && (window as any).__OSW_CDP_EVAL__ !== false) {
+    let cdp: any;
+    try {
+      cdp = await sendCdp(wv, 'Runtime.evaluate',
+        { expression: code, returnByValue: true, awaitPromise: true });
+    } catch {
+      // CDP INFRA failure (the debugger can't attach because DevTools or a remote-debugging
+      // port already holds this webContents, or the bridge errored). Never worse than today:
+      // fall through to the executeJavaScript path. A real PAGE exception is NOT an infra
+      // failure, it rides exceptionDetails below, so it still surfaces as a throw.
+      cdp = undefined;
+    }
+    if (cdp !== undefined) {
+      const value = unwrapCdpEval(cdp);   // throws on a real page-side exception
+      markDomReady(wv);
+      return value;
+    }
+  }
+  return await evalViaExecuteJs(wv, code);
+}
+
+// The original webContents.executeJavaScript path, kept as the dev-Chrome / bridge-absent
+// fallback: it suspends until the page stops loading, so a grace/limit race cancels stragglers
+// with wv.stop() once the document is ready and flushes the queue.
+async function evalViaExecuteJs(wv: BrowserWebview, code: string): Promise<any> {
   const run = wv.executeJavaScript(code).then((v) => {
     markDomReady(wv);
     return { done: true as const, value: v };
