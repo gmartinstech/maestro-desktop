@@ -175,7 +175,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
 
   animateToRef.current = animateTo;
 
-  // Plain wheel zooms at the viewport center; cmd/ctrl+wheel and trackpad pinch zoom at the cursor.
+  // Plain wheel zooms at the viewport center; cmd/ctrl+wheel pans vertically; trackpad pinch zooms at the cursor.
   useEffect(() => {
     const el = viewportRef.current;
     if (!el || !enabled) return;  // Skip wheel listener when canvas is hidden
@@ -233,8 +233,8 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     const scrollableCache: WeakMap<HTMLElement, 'scrollable' | 'not'> = new WeakMap();
 
     const onWheel = (e: WheelEvent) => {
-      // Pinch-to-zoom on trackpads sets ctrlKey; plain scroll does not
-      const isPinchZoom = e.ctrlKey || e.metaKey;
+      // ctrl/cmd wheel is a modifier gesture: a real held key (cmd/ctrl + scroll → vertical pan) or a trackpad pinch, which also sets ctrlKey (→ zoom at cursor). Either way it bypasses scrollable children and acts on the canvas.
+      const isModifierWheel = e.ctrlKey || e.metaKey;
 
       // Let scrollable children handle the event when appropriate, but fall through to canvas pan if the child is at its scroll boundary.
       const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
@@ -259,7 +259,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
           scrollableCache.set(target, cls);
         }
 
-        if (cls === 'scrollable' && !isPinchZoom) {
+        if (cls === 'scrollable' && !isModifierWheel) {
           // Re-read scrollHeight/clientHeight; cached decision is structural, scroll position is dynamic.
           const canScrollY = target.scrollHeight > target.clientHeight;
           const canScrollX = target.scrollWidth > target.clientWidth;
@@ -292,8 +292,12 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
         inertiaFrameRef.current = null;
       }
 
-      if (isPinchZoom) {
-        // Pinch / cmd+wheel → accumulate zoom deltas + last cursor position. factor = 2^(-Σdy·s) which equals the product of per-event factors, so accumulating dy is mathematically identical to applying each event one at a time.
+      if (isModifierWheel && cmdRef.current) {
+        // Real cmd/ctrl physically held + scroll → vertical pan. cmdRef is set from a keydown; a trackpad pinch sets ctrlKey with no keydown, so it falls through to the zoom branch below and pinch-to-zoom survives.
+        pendingPanDy += dy;
+        scheduleWheelFlush();
+      } else if (isModifierWheel) {
+        // Trackpad pinch → accumulate zoom deltas + last cursor position. factor = 2^(-Σdy·s) which equals the product of per-event factors, so accumulating dy is mathematically identical to applying each event one at a time.
         const rect = el.getBoundingClientRect();
         pendingZoomDy += dy;
         pendingZoomCenter = { cx: e.clientX - rect.left, cy: e.clientY - rect.top };
