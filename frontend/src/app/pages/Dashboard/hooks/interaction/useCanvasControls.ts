@@ -9,6 +9,8 @@ const MAX_ZOOM = 3.0;
 const ZOOM_IN_FACTOR = 1.1;
 const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR;
 const FIT_PADDING = 200;
+// A mouse notch lands as deltaY 100 where a trackpad sends ~1-10, so cap the per-event zoom delta: uncapped, one notch is a ~24% jump and macOS wheel acceleration stacks them. No-op for trackpads.
+const WHEEL_ZOOM_DELTA_CAP = 24;
 
 // Maps the 1 to 100 user setting to an internal multiplier (50 default = 0.004).
 function sensitivityToMultiplier(setting: number): number {
@@ -301,9 +303,9 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
         pendingPanDx += dx;
         scheduleWheelFlush();
       } else {
-        // Plain vertical scroll → zoom, anchored at the viewport center (same anchor as zoomIn/zoomOut), not the cursor.
+        // Plain vertical scroll → zoom, anchored at the viewport center (same anchor as zoomIn/zoomOut), not the cursor. Clamp the per-event delta so a discrete mouse notch is a small step, not a lurch.
         const rect = el.getBoundingClientRect();
-        pendingZoomDy += dy;
+        pendingZoomDy += clamp(dy, -WHEEL_ZOOM_DELTA_CAP, WHEEL_ZOOM_DELTA_CAP);
         pendingZoomCenter = { cx: rect.width / 2, cy: rect.height / 2 };
         scheduleWheelFlush();
       }
