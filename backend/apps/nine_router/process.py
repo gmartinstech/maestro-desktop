@@ -359,20 +359,24 @@ async def ensure_running():
         start_death_watcher()
 
 
-def has_persisted_connections() -> bool:
-    """True when 9Router's on-disk db shows an active provider connection. Readable while the
-    router is DOWN, so revival logic can tell a sub-only user (revive!) from a zero-config one
-    (don't boot a router that has nothing to route). Fail-closed on any read problem."""
+def read_persisted_connections() -> list[dict]:
+    """Raw providerConnections from 9Router's on-disk db. Readable while the router is DOWN,
+    and carries fields (idToken, email) the router's HTTP /providers response strips.
+    Empty list on any read problem."""
     try:
         import json as p_json
         with open(os.path.join(p_nine_router_data_dir(), "db.json"), encoding="utf-8") as f:
             db = p_json.load(f)
-        return any(
-            isinstance(c, dict) and c.get("isActive")
-            for c in (db.get("providerConnections") or [])
-        )
+        return [c for c in (db.get("providerConnections") or []) if isinstance(c, dict)]
     except Exception:
-        return False
+        return []
+
+
+def has_persisted_connections() -> bool:
+    """True when 9Router's on-disk db shows an active provider connection, so revival logic can
+    tell a sub-only user (revive!) from a zero-config one (don't boot a router that has nothing
+    to route). Fail-closed on any read problem."""
+    return any(c.get("isActive") for c in read_persisted_connections())
 
 
 # 20s pulse while healthy; after 3 straight failed revives (no node, broken install) back way off so a dead-end setup logs once per 5min instead of crash-looping.
