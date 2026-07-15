@@ -72,6 +72,8 @@ export function useDashboardInteractions({
     }
     setFocusedCardId(id);
     setTimeout(() => {
+      // The capture-phase select fires this on pointer DOWN; if the press became a drag (or marquee), re-framing the camera mid-gesture is the "canvas yanks as I start dragging" nudge. The webview shield class is up for exactly that window.
+      if (document.body.classList.contains('dashboard-marquee-active')) return;
       const rect = getCardRect(id, type);
       if (rect) canvas.actions.fitToCards([rect], 1.15, true, type === 'browser' ? 0.8 : undefined);
       setTimeout(() => {
