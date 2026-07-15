@@ -93,6 +93,10 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
          "context_window": 400_000, "router_model_id": "cx/gpt-5.4-mini",
          "api": "codex", "subscription_only": True, "reasoning": True},
         # gpt-5.3-codex (+ high/xhigh) removed: superseded by GPT-5.5 as OpenAI's recommended Codex model, and high/xhigh were never separate models (just reasoning-effort variants), so they were redundant clutter. API-key entries: route through 9Router's `cp-openai` provider-node (registered by sync_openai_api_key) so 9Router's translator dispatches to our local openai-passthrough proxy. The passthrough renames `max_tokens` → `max_completion_tokens` before forwarding to api.openai.com, fixing OpenAI's GPT-5 family 400. The bare router_model_id (e.g. "gpt-5.5") still appears in the request body; only the routing prefix changes.
+        # GPT-5.6 (newest, 2026-07): API-key lane only. A cx/gpt-5.6 subscription entry is deliberately NOT added, cx/ 404s newer OpenAI models on the pinned 9Router 0.3.60 (same reason gpt-5.5's cx entry stays pulled); add one once the pin moves and cx/gpt-5.6 resolves. Unverified against a live router/OpenAI here (no creds); pull if it errors live.
+        {"value": "gpt-5.6-api", "label": "GPT-5.6 (API key)",
+         "context_window": 1_000_000, "router_model_id": "cp-openai/gpt-5.6", "model_id": "gpt-5.6",
+         "api": "openai", "reasoning": True, "route": "api"},
         {"value": "gpt-5.5-api", "label": "GPT-5.5 (API key)",
          "context_window": 1_000_000, "router_model_id": "cp-openai/gpt-5.5", "model_id": "gpt-5.5",
          "api": "openai", "reasoning": True, "route": "api"},
@@ -368,6 +372,7 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     ("Anthropic", "fable-5-api"): (10.0, 50.0),
     ("Anthropic", "haiku"): (1.0, 5.0),
     # OpenAI; Codex subscription path, user pays nothing per token
+    ("OpenAI", "gpt-5.6"): (0.0, 0.0),
     ("OpenAI", "gpt-5.5"): (0.0, 0.0),
     ("OpenAI", "gpt-5.4"): (0.0, 0.0),
     ("OpenAI", "gpt-5.4-mini"): (0.0, 0.0),
