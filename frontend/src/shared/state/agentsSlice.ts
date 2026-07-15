@@ -1406,10 +1406,20 @@ const agentsSlice = createSlice({
           else mergedMessages.splice(at, 0, m);
         }
         delete (session as AgentSession & { _streamingActive?: boolean })._streamingActive;
+        // Keep the EXISTING object for any message the snapshot didn't change: this refetch runs every 5s while a session is live, and fresh JSON clones of identical messages broke every bubble's React.memo (a whole-transcript re-render hitch per tick).
+        const prevById = new Map((existing?.messages ?? []).map((m) => [m.id, m]));
+        const contentUnchanged = (a: AgentMessage, b: AgentMessage): boolean =>
+          typeof a.content === 'string' && typeof b.content === 'string'
+            ? a.content === b.content
+            : Array.isArray(a.content) && Array.isArray(b.content) && a.content.length === b.content.length;
+        const stableMessages = mergedMessages.map((m) => {
+          const prev = prevById.get(m.id);
+          return prev && prev.timestamp === m.timestamp && prev.role === m.role && contentUnchanged(prev, m) ? prev : m;
+        });
         state.sessions[session.id] = {
           ...session,
           name: normalizeSessionName(session.name),
-          messages: mergedMessages,
+          messages: stableMessages,
           pending_approvals: session.pending_approvals ?? existing?.pending_approvals ?? [],
           tool_group_meta: session.tool_group_meta ?? existing?.tool_group_meta ?? {},
           // mcp_suggestions live in client state only (the backend never returns them in the session payload). Preserve them across refresh so the suggestion banner stays put until the user dismisses it or activates one.
