@@ -102,6 +102,36 @@ def test_comment_parses_new_thing():
     assert json.loads(p_text(out))["id"] == "t1_new"
 
 
+def test_comment_recovers_receipt_from_legacy_jquery_shape():
+    # The classic web endpoint sometimes answers /api/comment with a "jquery" command
+    # array (no data.things), which the old parse read as empty -> receipt "ok". The new
+    # thing's fullname + permalink are still echoed, so p_receipt must recover them and
+    # NOT return the parent id we replied to.
+    resp = {"jquery": [
+        [0, 1, "attr", "find"],
+        [1, 2, "call", ["#thing_t3_parent"]],
+        [2, 3, "call", ["t1_new1", "/r/x/comments/parent/_/t1_new1/"]],
+    ], "success": True}
+    with patch.object(reddit_writes, "api", return_value=resp):
+        out = handle_tool_call("reddit_comment", {"parent_id": "t3_parent", "text": "nice"})
+    data = json.loads(p_text(out))
+    assert data["id"] == "t1_new1"
+    assert data["permalink"] == "/r/x/comments/parent/_/t1_new1/"
+
+
+def test_comment_reply_scan_skips_the_parent_comment():
+    # Replying to a t1_ comment: the jquery response echoes BOTH the parent t1_ and the
+    # new t1_. Parent appears first (its DOM node is the insert target); exclude it.
+    resp = {"jquery": [
+        [0, 1, "call", ["#thing_t1_parent"]],
+        [1, 2, "call", ["t1_parent"]],
+        [2, 3, "call", ["t1_child"]],
+    ]}
+    with patch.object(reddit_writes, "api", return_value=resp):
+        out = handle_tool_call("reddit_comment", {"parent_id": "t1_parent", "text": "reply"})
+    assert json.loads(p_text(out))["id"] == "t1_child"
+
+
 def test_submit_surfaces_reddit_errors():
     envelope = {"json": {"errors": [["SUBREDDIT_NOEXIST", "that subreddit doesn't exist", "sr"]], "data": {}}}
     with patch.object(reddit_writes, "api", return_value=envelope):

@@ -338,6 +338,30 @@ def p_extract_domain(url: str) -> str | None:
         return None
 
 
+async def run_api_write(tool_input: dict, current_url: str) -> dict:
+    """Route a BrowserApiWrite to the API-first write tier: resolve the current site's
+    domain, call its own write API through the borrowed session, and return a truthful
+    result (a real receipt on success, a 'use the UI' miss otherwise). Never raises: a
+    missing adapter or a site-reject is a typed miss, so the model falls back to the UI
+    path, never a crash and never a false claim of success."""
+    from backend.apps.agents.browser import site_write_registry
+    action = str((tool_input or {}).get("action") or "").strip()
+    if not action:
+        return {"error": "BrowserApiWrite needs an 'action' (comment, reply, post, edit, or delete)."}
+    domain = p_extract_domain(current_url or "")
+    if not domain:
+        return {"error": "Can't tell what site you're on yet; navigate to the site first, then do the write through the UI or retry."}
+    params = {k: v for k, v in (tool_input or {}).items() if k not in ("action", "expect")}
+    res = await site_write_registry.api_write(domain, action, params)
+    if res.ok:
+        return {"ok": True, "text": (
+            f"Done via the {res.domain} API in {res.latency_ms}ms. Receipt: {res.receipt}. "
+            "The write landed, that receipt is your proof; you're finished with this step."
+        )}
+    # A miss (no adapter / site-reject) surfaces as an error so the model does the write via the UI and the run never distills it as a success.
+    return {"error": f"API write not used ({res.error}). Do this action through the UI instead."}
+
+
 def strip_lone_surrogates(s: str) -> str:
     # The JS/webview hands us page text as UTF-16, so an emoji can arrive as half of its surrogate pair; Python carries the orphan but .encode('utf-8') later (the SDK serializing the request to the LLM) detonates with "surrogates not allowed" and kills the turn. Swap any orphan for the replacement char.
     return re.sub(r"[\ud800-\udfff]", "�", s) if s else s
@@ -1894,6 +1918,12 @@ async def run_browser_agent(
                         "do that step SOLO with BrowserClickIndex + `expect` proof, and "
                         "batch only the routine steps around it."
                     )}
+                elif tu.name == "BrowserApiWrite":
+                    # API-first write tier: the site's own write API via the borrowed session, deterministic + a real receipt. A miss is a typed "use the UI" (never a crash), so the loop falls back cleanly.
+                    result = await p_cancellable(run_api_write(tu.input, current_url))
+                    if result is None:
+                        cancelled = True
+                        break
                 elif tu.name == "BrowserWait":
                     # Smart wait: return as soon as the page is ready (target or DOM settle), not on a blind timer (the audit's 42%-of-time hog).
                     result = await browser_wait.smart_wait(
@@ -1908,6 +1938,10 @@ async def run_browser_agent(
                     cancelled = True
                     break
                 elapsed_ms = int((time.time() - start) * 1000)
+
+                # An API-first write that returned ok carries its own typed receipt, so it IS the confirmation: mark the send done so the loop drives to Done without a redundant UI re-verify (and never re-fires it).
+                if tu.name == "BrowserApiWrite" and isinstance(result, dict) and result.get("ok"):
+                    send_confirmed = True
 
                 # Act-and-confirm: if the agent declared the change it expects, VERIFY it actually happened, success is observed, never assumed. A hit returns fast (act + confirm in one turn); a miss is a clear "may not have worked" (and a wedge surfaces as a clean not-confirmed, not a blind 20s timeout), so the agent never claims a success it didn't see or re-fires blindly.
                 p_expect = (str(tu.input.get("expect") or "").strip()

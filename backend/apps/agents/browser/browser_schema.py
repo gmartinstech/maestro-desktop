@@ -608,6 +608,33 @@ BROWSER_TOOLS_SCHEMA = [
         },
     },
     {
+        "name": "BrowserApiWrite",
+        "description": (
+            "Perform a WRITE on the CURRENT site through the site's OWN API using your "
+            "already-logged-in session, instead of clicking the UI. This is deterministic "
+            "and far more reliable: no captcha, no button to miss, no selector to drift, "
+            "and it hands back the site's REAL receipt (the new post/comment's id and "
+            "permalink) as proof it landed. Only some sites are supported so far "
+            "(currently Reddit: comment, reply, post, edit, delete). If the current site "
+            "has no adapter you get a clean 'no adapter' miss, just do the write through "
+            "the UI instead. This IS a real write: call it ONCE, and the receipt is your "
+            "confirmation, do not re-check or re-fire it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "The write to perform: comment, reply, post, edit, or delete."},
+                "parent_id": {"type": "string", "description": "comment/reply: fullname of the post/comment you're replying to (e.g. t3_abc, t1_xyz)."},
+                "thing_id": {"type": "string", "description": "edit/delete: fullname of your OWN post/comment (e.g. t1_xyz)."},
+                "text": {"type": "string", "description": "The body text (comment/reply/post/edit)."},
+                "subreddit": {"type": "string", "description": "post: the subreddit name, without the r/ prefix."},
+                "title": {"type": "string", "description": "post: the post title."},
+                "url": {"type": "string", "description": "post: a URL to submit as a link post (omit for a text post)."},
+            },
+            "required": ["action"],
+        },
+    },
+    {
         "name": "BrowserRepeatFlow",
         "description": (
             "Repeat a mechanical flow you JUST did, fast, for many inputs, without "
