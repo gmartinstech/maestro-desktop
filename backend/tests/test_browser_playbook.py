@@ -186,3 +186,21 @@ def test_seed_playbook_fallback_and_supersede():
     pb.persist("github.com", ["learned: use the org filter"])
     pb.CACHE.clear()
     assert pb.get_playbook("github.com") == ["learned: use the org filter"]
+
+
+def test_broadened_seed_coverage_and_write_mechanics():
+    from backend.apps.agents.browser.seed_for import SEED_PLAYBOOKS, seed_for
+    # the newly added high-traffic sites all resolve to non-empty guidance
+    for host in ("youtube.com", "reddit.com", "wikipedia.org", "mail.google.com",
+                 "imdb.com", "stackoverflow.com", "indeed.com", "zillow.com",
+                 "news.ycombinator.com", "medium.com", "notion.so", "glassdoor.com"):
+        assert seed_for(host), f"{host} should have a seed"
+        assert seed_for("www." + host) == seed_for(host)          # www-strip still matches
+    # the popular WRITE targets carry a first-run write mechanic (the point of the seed for writes)
+    assert any("Post" in b for b in seed_for("x.com"))
+    assert any("Comment" in b for b in seed_for("youtube.com"))
+    assert any("Send" in b for b in seed_for("mail.google.com"))
+    # reddit steers first writes to the deterministic path, not the bot-gated UI composer
+    assert any("BrowserApiWrite" in b for b in seed_for("reddit.com"))
+    # no duplicate host keys slipped in (a dup would silently drop a site's guidance)
+    assert len(SEED_PLAYBOOKS) == len(set(SEED_PLAYBOOKS))

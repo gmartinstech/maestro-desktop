@@ -89,6 +89,7 @@ SEED_PLAYBOOKS: dict[str, list[str]] = {
     ],
     "x.com": [
         "Most actions need sign-in. Once logged in, search via URL: x.com/search?q=QUERY (twitter.com redirects here).",
+        "To post: click the composer ('What is happening?'), type, then click Post; do NOT press Enter (it inserts a newline). To reply, open the tweet and use its Reply box then the Reply button.",
     ],
     "quora.com": [
         "Search via URL: quora.com/search?q=QUERY. Reading often triggers a sign-in wall after a bit of scrolling.",
@@ -110,6 +111,44 @@ SEED_PLAYBOOKS: dict[str, list[str]] = {
     ],
     "figma.com": [
         "The landing page is marketing; the app needs sign-in. If not signed in, use RequestHumanIntervention.",
+    ],
+    "youtube.com": [
+        "Search via URL: youtube.com/results?search_query=QUERY. A video is youtube.com/watch?v=ID; browsing and watching work logged-out.",
+        "To comment: open the video, click the 'Add a comment...' box, type, then click Comment (needs sign-in).",
+    ],
+    "reddit.com": [
+        "Search via URL: reddit.com/search/?q=QUERY. A subreddit is reddit.com/r/NAME; most browsing works logged-out.",
+        "Posting/commenting needs sign-in and the composer is bot-gated; prefer the built-in write path (BrowserApiWrite) over driving the UI composer.",
+    ],
+    "wikipedia.org": [
+        "Read via URL: en.wikipedia.org/wiki/TITLE (spaces become _). Search via en.wikipedia.org/w/index.php?search=QUERY. Fully readable logged-out.",
+    ],
+    "mail.google.com": [
+        "Needs sign-in. Search via URL: mail.google.com/mail/u/0/#search/QUERY. To send: click Compose, fill To then Subject then the body, then click Send.",
+    ],
+    "imdb.com": [
+        "A title lives at imdb.com/title/ttID. Search via URL: imdb.com/find/?q=QUERY. Readable logged-out.",
+    ],
+    "stackoverflow.com": [
+        "Search via URL: stackoverflow.com/search?q=QUERY. Questions and answers are readable logged-out; voting/answering needs sign-in.",
+    ],
+    "indeed.com": [
+        "Job search via URL: indeed.com/jobs?q=WHAT&l=WHERE. Browsing works logged-out; applying needs sign-in and is heavily bot-gated (expect a captcha).",
+    ],
+    "zillow.com": [
+        "Search via URL: zillow.com/homes/CITY-STATE_rb/. Heavy anti-bot: a press-and-hold or captcha wall is common on more than a few requests.",
+    ],
+    "news.ycombinator.com": [
+        "The front page is news.ycombinator.com; an item (post + comments) is news.ycombinator.com/item?id=ID. Fully readable logged-out; commenting/voting needs sign-in.",
+    ],
+    "medium.com": [
+        "Articles are readable but many hit a metered paywall after a few reads; search via URL: medium.com/search?q=QUERY.",
+    ],
+    "notion.so": [
+        "The landing page is marketing; the workspace needs sign-in. If not signed in, use RequestHumanIntervention.",
+    ],
+    "glassdoor.com": [
+        "Heavy sign-in and anti-bot walls appear quickly; treat as often not reliably automatable, and use RequestHumanIntervention on a wall rather than fighting it.",
     ],
 }
 

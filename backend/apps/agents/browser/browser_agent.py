@@ -799,7 +799,7 @@ async def run_browser_agent(
                 "action_log": [],
                 "final_screenshot": None,
             }
-    # A/B lever (flag-gated, default off): pin the browser LOOP to a fast-capable tier instead of inheriting the parent's frontier model. Measured 2026-07-03: Opus->Sonnet is ~2x/turn on a gen-bound turn and mechanical browsing rarely needs frontier reasoning. Provider-agnostic via resolve_aux_model's tier map; any failure falls back to the inherited model so the flag can never break a run.
+    # A/B lever (flag-gated, default off): pin the browser LOOP to a fast tier instead of inheriting the parent's frontier model, since mechanical browsing rarely needs frontier reasoning. RE-MEASURED 2026-07-15 (live cc/ lanes, n=10 browser-shaped tool turns): the old "Opus->Sonnet ~2x" is STALE, opus-4-6 ~= sonnet-4-6 now (~2.3s, ratio 1.08x); the real ~2x/turn lever is HAIKU (1.2s vs 2.4s, complete distribution separation, tool_use 10/10). So set OPENSWARM_BROWSER_LOOP_TIER=haiku for the speedup, not sonnet. Provider-agnostic via resolve_aux_model's tier map; any failure falls back to the inherited model so the flag can never break a run.
     p_loop_tier = os.environ.get("OPENSWARM_BROWSER_LOOP_TIER", "").strip().lower()
     if p_loop_tier in ("haiku", "sonnet"):
         try:
