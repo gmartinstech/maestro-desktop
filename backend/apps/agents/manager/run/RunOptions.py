@@ -188,7 +188,7 @@ class RunOptions(AgentManagerProtocol):
         }
         # cc/cx/gc/ag/gemini/openrouter prefixes force 9Router; route="api" bypasses to the provider's host directly; otherwise Pro proxy or key.
         await configure_provider_env(
-            options_kwargs, session, resolved_model, api_type, global_settings, []
+            options_kwargs, session, resolved_model, api_type, global_settings
         )
         if mcp_servers:
             options_kwargs["mcp_servers"] = mcp_servers
