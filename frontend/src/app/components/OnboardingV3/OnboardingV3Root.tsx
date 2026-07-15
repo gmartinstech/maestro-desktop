@@ -55,7 +55,7 @@ const IntroBeat: React.FC<{ c: ClaudeTokens; line: string; sub?: string; onNext:
   <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: c.bg.inverse, overflow: 'hidden' }}>
     <motion.div
       initial={{ scale: 0.35, opacity: 0, x: 0, y: 0 }}
-      animate={{ scale: [0.35, 1, 1.06, 1], opacity: [0, 0.55, 0.5, 0.55], x: [0, 0, 22, 0], y: [0, 0, -14, 0] }}
+      animate={{ scale: [0.35, 1, 1.06, 1], opacity: [0, 0.62, 0.56, 0.62], x: [0, 0, 22, 0], y: [0, 0, -14, 0] }}
       transition={{ duration: 9, times: [0, 0.16, 0.6, 1], ease: 'easeInOut' }}
       style={{
         position: 'absolute', width: 560, height: 560, borderRadius: 999,
@@ -173,14 +173,14 @@ const OnboardingV3Root: React.FC = () => {
             background: c.bg.page,
           }}
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false}>
             <motion.div
               key={beat}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.32 }}
-              style={{ width: '100%', height: '100%' }}
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+              style={{ position: 'absolute', inset: 0 }}
             >
               {beat === 'welcome' && <IntroBeat c={c} line="Welcome." onNext={() => setBeat('newos')} />}
               {beat === 'newos' && <IntroBeat c={c} line="This is your new OS." onNext={() => setBeat('connect')} />}
@@ -206,8 +206,8 @@ const OnboardingV3Root: React.FC = () => {
             transition={{ duration: 0.3 }}
             style={{ position: 'absolute', top: 13, left: 14, display: 'flex', gap: 7, pointerEvents: 'none' }}
           >
-            {[0, 1, 2].map((i) => (
-              <span key={i} style={{ width: 11, height: 11, borderRadius: 999, background: 'rgba(255,255,255,0.22)' }} />
+            {['#FF5F57', '#FEBC2E', '#28C840'].map((dot) => (
+              <span key={dot} style={{ width: 11, height: 11, borderRadius: 999, background: dot, opacity: 0.9 }} />
             ))}
           </motion.div>
           {finishing && (

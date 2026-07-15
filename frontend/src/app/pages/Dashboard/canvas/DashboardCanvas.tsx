@@ -224,7 +224,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
               position: 'absolute',
               inset: 0,
               pointerEvents: 'none',
-              background: `linear-gradient(115deg, ${gradient.map((hex, i) => `${hex}24 ${(i / (gradient.length - 1)) * 100}%`).join(', ')})`,
+              background: `linear-gradient(115deg, ${gradient.map((hex, i) => `${hex}2b ${(i / (gradient.length - 1)) * 100}%`).join(', ')})`,
             }}
           />
         )}

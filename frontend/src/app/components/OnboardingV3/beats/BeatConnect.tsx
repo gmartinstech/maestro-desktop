@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Check } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE } from '@/shared/config';
 import { fetchModels } from '@/shared/state/modelsSlice';
@@ -101,7 +102,6 @@ const BeatConnect: React.FC<{
                 display: 'flex', alignItems: 'center', gap: 14, padding: '13px 14px 13px 16px', textAlign: 'left',
                 borderRadius: c.radius.md, border: `1px solid ${filled ? c.accent.primary : c.border.medium}`,
                 background: c.bg.surface, cursor: connected ? 'default' : 'pointer', fontFamily: 'inherit',
-                boxShadow: c.shadow.sm,
               }}
             >
               <span style={{
@@ -135,7 +135,18 @@ const BeatConnect: React.FC<{
           </motion.div>
         )}
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 8, cursor: 'pointer', fontSize: '0.82rem', color: c.text.tertiary, lineHeight: 1.5 }}>
-          <input type="checkbox" checked={scanConsent} onChange={(e) => setScanConsent(e.target.checked)} style={{ marginTop: 2 }} />
+          <button
+            onClick={(e) => { e.preventDefault(); setScanConsent(!scanConsent); }}
+            style={{
+              width: 16, height: 16, marginTop: 2, borderRadius: 5, padding: 0, cursor: 'pointer', flexShrink: 0,
+              border: `1.5px solid ${scanConsent ? c.accent.primary : c.border.strong}`,
+              background: scanConsent ? c.accent.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+          >
+            {scanConsent && <Check size={11} color="#fff" strokeWidth={3.2} />}
+          </button>
           <span>Take a quick local look around to personalize my setup. Nothing leaves this Mac.</span>
         </label>
         <div style={{ display: 'flex', gap: 18, marginTop: 2 }}>

@@ -43,8 +43,8 @@ const BeatApps: React.FC<{
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 12px', borderBottom: `1px solid ${c.border.subtle}`, background: c.bg.elevated }}>
-          {[0, 1, 2].map((i) => (
-            <span key={i} style={{ width: 10, height: 10, borderRadius: 999, background: c.border.strong }} />
+          {['#FF5F57', '#FEBC2E', '#28C840'].map((dot) => (
+            <span key={dot} style={{ width: 10, height: 10, borderRadius: 999, background: dot, opacity: 0.85 }} />
           ))}
           <span style={{ marginLeft: 8, fontSize: '0.72rem', fontWeight: 600, color: c.text.tertiary, letterSpacing: '0.04em' }}>OpenSwarm</span>
         </div>

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
+import { useThemeAccent } from '@/shared/styles/ThemeContext';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
 // Film grain as a data URI so the CSP never phones out; opacity keeps it a texture, not noise.
 export const GRAIN_URL = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")";
 
 // Arc's torn seam: the dark copy panel ends in a zigzag bite instead of a straight border.
-const ZIGZAG_CLIP = `polygon(0 0, 100% 0, ${Array.from({ length: 50 }, (unused, i) => `calc(100% - 6px) ${i * 2 + 1}%, 100% ${i * 2 + 2}%`).join(', ')}, 0 100%)`;
+const ZIGZAG_CLIP = `polygon(0 0, 100% 0, ${Array.from({ length: 30 }, (unused, i) => `calc(100% - 12px) ${i * 3.33 + 1.66}%, 100% ${i * 3.33 + 3.33}%`).join(', ')}, 0 100%)`;
 
 const SPRING = { type: 'spring' as const, stiffness: 260, damping: 26 };
 
@@ -22,6 +23,10 @@ const BeatShell: React.FC<{
   onBack?: () => void;
   children: React.ReactNode;
 }> = ({ c, title, body, nextLabel, nextDisabled, onNext, onBack, children }) => {
+  // Arc's post-theme screens wear the user's color everywhere; the stage drinks the picked stops (or accent) instead of staying flat paper.
+  const { accent, gradient } = useThemeAccent();
+  const stops = gradient ?? (accent ? [accent] : [c.accent.primary]);
+  const stageWash = `linear-gradient(115deg, ${stops.map((hex, i) => `${hex}2e ${stops.length > 1 ? (i / (stops.length - 1)) * 100 : 100}%`).join(', ')}), ${c.bg.secondary}`;
   // Zen steal: controls stay inert until the entrance lands so a double-click from the prior beat can't fire them.
   const [armed, setArmed] = useState(false);
   useEffect(() => {
@@ -87,8 +92,10 @@ const BeatShell: React.FC<{
         style={{
           position: 'relative', flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: 36, boxSizing: 'border-box', overflow: 'auto',
+          background: stageWash,
         }}
       >
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.08, pointerEvents: 'none' }} />
         <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {children}
         </div>
