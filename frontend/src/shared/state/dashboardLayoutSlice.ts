@@ -1369,7 +1369,7 @@ const dashboardLayoutSlice = createSlice({
 
     addNote(
       state,
-      action: PayloadAction<{ x?: number; y?: number; expandedSessionIds?: string[]; color?: NoteColor }>,
+      action: PayloadAction<{ x?: number; y?: number; expandedSessionIds?: string[]; color?: NoteColor; content?: string }>,
     ) {
       const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       let posX: number, posY: number;
@@ -1388,7 +1388,7 @@ const dashboardLayoutSlice = createSlice({
         y: posY,
         width: DEFAULT_NOTE_W,
         height: DEFAULT_NOTE_H,
-        content: '',
+        content: action.payload.content ?? '',
         color: action.payload.color || 'yellow',
         zOrder: state.nextZOrder++,
       };

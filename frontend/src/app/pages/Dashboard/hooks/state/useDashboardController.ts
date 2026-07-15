@@ -17,6 +17,7 @@ import { useCardDrag } from '../interaction/useCardDrag';
 import { useSubAgentLifecycle } from '../lifecycle/useSubAgentLifecycle';
 import { useDashboardLifecycle } from '../lifecycle/useDashboardLifecycle';
 import { useWelcomeDraft } from '../lifecycle/useWelcomeDraft';
+import { useOnboardingRevealSeed } from '../lifecycle/useOnboardingRevealSeed';
 import { useDashboardThumbnail } from './useDashboardThumbnail';
 import { useSiblingRestack } from '../lifecycle/useSiblingRestack';
 import { useAgentSpawn } from '../lifecycle/useAgentSpawn';
@@ -161,6 +162,15 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     viewportRef: canvas.viewportRef,
     canvasStateRef,
     spawnOriginsRef,
+  });
+
+  // Onboarding v3 reveal: seeds the personalized note + welcome chat the instant the flow's curtain lifts.
+  useOnboardingRevealSeed({
+    isActive,
+    canvasEmpty,
+    viewportRef: canvas.viewportRef,
+    canvasStateRef,
+    createWelcomeDraft,
   });
 
   // ---- Auto-reveal / collapse / unreveal sub-agent cards ----

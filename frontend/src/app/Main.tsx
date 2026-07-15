@@ -28,6 +28,7 @@ import ErrorBoundary from './components/feedback/ErrorBoundary';
 import { setPanelMode, disableOnboardingAfterCrash } from '@/shared/state/onboardingProgressSlice';
 
 const Analytics = React.lazy(() => import('./pages/Analytics/Analytics'));
+const OnboardingV3Root = React.lazy(() => import('./components/OnboardingV3/OnboardingV3Root'));
 const OnboardingRoot = React.lazy(() =>
   import('./components/Onboarding').then((m) => ({ default: m.OnboardingRoot })),
 );
@@ -68,7 +69,7 @@ import { useRouteTracker } from '@/shared/hooks/useRouteTracker';
 import { useDeepLink } from '@/shared/hooks/useDeepLink';
 import { useWindowFocus } from '@/shared/hooks/useWindowFocus';
 import { useInteractionHeartbeat } from '@/shared/hooks/useInteractionHeartbeat';
-import { ThemeProvider, useThemeMode, useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { ThemeProvider, useThemeMode, useThemeAccent, useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
 function buildMuiTheme(c: ClaudeTokens, mode: 'light' | 'dark') {
@@ -202,7 +203,9 @@ const DeepLinkListener: React.FC<{ children: React.ReactNode }> = ({ children })
 const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
   const { setMode: setThemeMode } = useThemeMode();
+  const { setAccent } = useThemeAccent();
   const theme = useAppSelector((s) => s.settings.data.theme);
+  const accentColor = useAppSelector((s) => s.settings.data.accent_color);
   const loaded = useAppSelector((s) => s.settings.loaded);
   const allowExperimentalUpdates = useAppSelector((s) => s.settings.data.allow_experimental_updates);
   useEffect(() => {
@@ -254,6 +257,11 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
   useEffect(() => {
     if (loaded) setThemeMode(theme as 'light' | 'dark');
   }, [loaded, theme, setThemeMode]);
+
+  // Effect re-fires only when the persisted value changes, so live pad drags (context-only until finish() patches) never get snapped back by a mid-drag settings refetch.
+  useEffect(() => {
+    if (loaded) setAccent(accentColor ?? null);
+  }, [loaded, accentColor, setAccent]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -523,6 +531,11 @@ const ThemedApp: React.FC = () => {
                 <OnboardingErrorGuard>
                   <Suspense fallback={null}>
                     <OnboardingRoot />
+                  </Suspense>
+                </OnboardingErrorGuard>
+                <OnboardingErrorGuard>
+                  <Suspense fallback={null}>
+                    <OnboardingV3Root />
                   </Suspense>
                 </OnboardingErrorGuard>
               </DeepLinkListener>
