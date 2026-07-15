@@ -21,7 +21,6 @@ import {
   EXPANDED_CARD_MIN_H,
   GRID_GAP,
   type CardPosition,
-  SPAWN_FOCUS_MAX_ZOOM,
 } from '@/shared/state/dashboardLayoutSlice';
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
 import type { ContextPath } from '@/app/components/editor/DirectoryBrowser';
@@ -199,7 +198,7 @@ export function useAgentSpawn({
             if (bc) rects.push({ x: bc.x, y: bc.y, width: bc.width, height: bc.height });
           }
         }
-        canvasActions.fitToCards(rects, SPAWN_FOCUS_MAX_ZOOM, true, undefined, true);
+        canvasActions.revealCards(rects);
         handleHighlightCard(draftId);
       }
 

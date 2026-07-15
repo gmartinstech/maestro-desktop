@@ -20,7 +20,6 @@ import {
   clearPendingFocusWorkflowId,
   clearPendingFocusWorkflowsHub,
   type ViewCardPosition,
-  SPAWN_FOCUS_MAX_ZOOM,
 } from '@/shared/state/dashboardLayoutSlice';
 import { fetchOutputs, type Output } from '@/shared/state/outputsSlice';
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
@@ -216,7 +215,7 @@ export function useDashboardLifecycle({
     setTimeout(() => {
       const card = store.getState().dashboardLayout.cards[agentId];
       if (card) {
-        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], SPAWN_FOCUS_MAX_ZOOM, true);
+        canvasActions.revealCards([{ x: card.x, y: card.y, width: card.width, height: card.height }]);
         handleHighlightCard(agentId);
       }
     }, 350);
@@ -232,13 +231,7 @@ export function useDashboardLifecycle({
     setTimeout(() => {
       const card = store.getState().dashboardLayout.browserCards[browserId];
       if (card) {
-        canvasActions.fitToCards(
-          [{ x: card.x, y: card.y, width: card.width, height: card.height }],
-          1.15,
-          true,
-          0.8,
-          true,
-        );
+        canvasActions.revealCards([{ x: card.x, y: card.y, width: card.width, height: card.height }]);
         handleHighlightCard(browserId);
       }
     }, 200);
@@ -254,7 +247,7 @@ export function useDashboardLifecycle({
     setTimeout(() => {
       const card = store.getState().dashboardLayout.viewCards[cardKey];
       if (card) {
-        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], SPAWN_FOCUS_MAX_ZOOM, true);
+        canvasActions.revealCards([{ x: card.x, y: card.y, width: card.width, height: card.height }]);
         handleHighlightCard(cardKey);
       }
     }, 200);
@@ -269,11 +262,7 @@ export function useDashboardLifecycle({
     setTimeout(() => {
       const card = store.getState().dashboardLayout.workflowCards[workflowId];
       if (card) {
-        canvasActions.fitToCards(
-          [{ x: card.x, y: card.y, width: card.width, height: card.height }],
-          SPAWN_FOCUS_MAX_ZOOM,
-          true,
-        );
+        canvasActions.revealCards([{ x: card.x, y: card.y, width: card.width, height: card.height }]);
         handleHighlightCard(workflowId);
       }
     }, 200);
@@ -353,7 +342,7 @@ export function useDashboardLifecycle({
         const rects = [{ x: vc.x, y: vc.y, width: vc.width, height: vc.height }];
         const ac = store.getState().dashboardLayout.cards[sid];
         if (ac) rects.push({ x: ac.x, y: ac.y, width: ac.width, height: ac.height });
-        canvasActions.fitToCards(rects, SPAWN_FOCUS_MAX_ZOOM, true);
+        canvasActions.revealCards(rects);
         handleHighlightCard(outputId);
       }, 200);
     }

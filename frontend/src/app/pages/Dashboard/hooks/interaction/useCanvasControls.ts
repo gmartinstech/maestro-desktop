@@ -687,6 +687,46 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     [cancelAnimation, animateTo, computeFitTarget],
   );
 
+  // Figma-style spawn camera: never zoom IN, never move if the cards are already on screen; otherwise the minimal pan that reveals them, zooming out only when they cannot fit at the current zoom.
+  const revealCards = useCallback(
+    (cardRects: Array<{ x: number; y: number; width: number; height: number }>) => {
+      const viewport = viewportRef.current;
+      if (!viewport || cardRects.length === 0) return;
+      const v = viewport.getBoundingClientRect();
+      if (v.width <= 0 || v.height <= 0) return;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const r of cardRects) {
+        minX = Math.min(minX, r.x);
+        minY = Math.min(minY, r.y);
+        maxX = Math.max(maxX, r.x + r.width);
+        maxY = Math.max(maxY, r.y + r.height);
+      }
+      if (!isFinite(minX)) return;
+      const REVEAL_MARGIN = 48;
+      const cur = stateRef.current;
+      const fitZoom = Math.min(
+        (v.width - REVEAL_MARGIN * 2) / (maxX - minX),
+        (v.height - REVEAL_MARGIN * 2) / (maxY - minY),
+      );
+      const zoom = clamp(Math.min(cur.zoom, fitZoom), MIN_ZOOM, MAX_ZOOM);
+      // If zooming out, keep the viewport-center world point fixed first, then clamp.
+      const ratio = zoom / cur.zoom;
+      let panX = v.width / 2 - (v.width / 2 - cur.panX) * ratio;
+      let panY = v.height / 2 - (v.height / 2 - cur.panY) * ratio;
+      const left = minX * zoom + panX, right = maxX * zoom + panX;
+      if (left < REVEAL_MARGIN) panX += REVEAL_MARGIN - left;
+      else if (right > v.width - REVEAL_MARGIN) panX -= right - (v.width - REVEAL_MARGIN);
+      const top = minY * zoom + panY, bottom = maxY * zoom + panY;
+      if (top < REVEAL_MARGIN) panY += REVEAL_MARGIN - top;
+      else if (bottom > v.height - REVEAL_MARGIN) panY -= bottom - (v.height - REVEAL_MARGIN);
+      const cur2 = stateRef.current;
+      if (Math.abs(panX - cur2.panX) < 2 && Math.abs(panY - cur2.panY) < 2 && Math.abs(zoom - cur2.zoom) < 0.005) return;
+      cancelAnimation();
+      animateTo({ panX, panY, zoom }, FIT_DURATION);
+    },
+    [cancelAnimation, animateTo],
+  );
+
   const handlers = useMemo(() => ({
     onMouseDown: handleMouseDown,
     onMouseMove: handleMouseMove,
@@ -694,8 +734,8 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
   }), [handleMouseDown, handleMouseMove, handleMouseUp]);
 
   const actions = useMemo(() => ({
-    zoomIn, zoomOut, resetZoom, fitToView, fitToCards, animateTo, cancelAnimation, setState,
-  }), [zoomIn, zoomOut, resetZoom, fitToView, fitToCards, animateTo, cancelAnimation]);
+    zoomIn, zoomOut, resetZoom, fitToView, fitToCards, revealCards, animateTo, cancelAnimation, setState,
+  }), [zoomIn, zoomOut, resetZoom, fitToView, fitToCards, revealCards, animateTo, cancelAnimation]);
 
   return {
     ...state,
