@@ -45,6 +45,7 @@ class PrepRequest(BaseModel):
 
     scan: Optional[ScanResult] = None
     picked_apps: List[str] = Field(default_factory=list)
+    identity: List[ProviderIdentity] = Field(default_factory=list)
 
 
 class PrepResponse(BaseModel):

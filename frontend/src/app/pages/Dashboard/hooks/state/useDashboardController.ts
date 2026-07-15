@@ -168,6 +168,8 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
   useOnboardingRevealSeed({
     isActive,
     canvasEmpty,
+    dashboardId,
+    expandedSessionIds,
     viewportRef: canvas.viewportRef,
     canvasStateRef,
     createWelcomeDraft,

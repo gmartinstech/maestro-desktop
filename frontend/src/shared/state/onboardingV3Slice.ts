@@ -11,6 +11,8 @@ export interface OnboardingV3State {
   greeting: string | null;
   starters: PersonalizedStarter[];
   scanSummary: string | null;
+  /** Read-only audit prompt to launch as a live agent at reveal; null = chips only. */
+  autoPrompt: string | null;
 }
 
 const initialState: OnboardingV3State = {
@@ -19,6 +21,7 @@ const initialState: OnboardingV3State = {
   greeting: null,
   starters: [],
   scanSummary: null,
+  autoPrompt: null,
 };
 
 const onboardingV3Slice = createSlice({
@@ -28,15 +31,17 @@ const onboardingV3Slice = createSlice({
     setFlowActive(state, action: PayloadAction<boolean>) {
       state.flowActive = action.payload;
     },
-    stageReveal(state, action: PayloadAction<{ greeting: string | null; starters: PersonalizedStarter[]; scanSummary: string | null }>) {
+    stageReveal(state, action: PayloadAction<{ greeting: string | null; starters: PersonalizedStarter[]; scanSummary: string | null; autoPrompt: string | null }>) {
       state.revealPending = true;
       state.greeting = action.payload.greeting;
       state.starters = action.payload.starters;
       state.scanSummary = action.payload.scanSummary;
+      state.autoPrompt = action.payload.autoPrompt;
     },
     clearReveal(state) {
       state.revealPending = false;
       state.scanSummary = null;
+      state.autoPrompt = null;
     },
   },
 });

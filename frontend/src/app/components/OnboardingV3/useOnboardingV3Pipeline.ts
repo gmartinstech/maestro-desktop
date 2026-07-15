@@ -14,12 +14,13 @@ export function useOnboardingV3Pipeline() {
   const { accent, gradient } = useThemeAccent();
   const { mode } = useThemeMode();
   const [identity, setIdentity] = useState<ProviderIdentity[]>([]);
+  const identityRef = useRef<ProviderIdentity[]>([]);
   const scanRef = useRef<Promise<ScanResult | null> | null>(null);
   const prepRef = useRef<Promise<PrepResponse | null> | null>(null);
   const scanResultRef = useRef<ScanResult | null>(null);
 
   const kickIdentity = useCallback(() => {
-    fetchIdentity().then(setIdentity).catch(() => {});
+    fetchIdentity().then((ids) => { identityRef.current = ids; setIdentity(ids); }).catch(() => {});
   }, []);
 
   const kickScan = useCallback((consented: boolean) => {
@@ -32,7 +33,7 @@ export function useOnboardingV3Pipeline() {
   const kickPrep = useCallback((pickedApps: string[]) => {
     if (prepRef.current) return;
     const scanPromise = scanRef.current ?? Promise.resolve(null);
-    prepRef.current = scanPromise.then((scan) => runPrep(scan, pickedApps)).catch(() => null);
+    prepRef.current = scanPromise.then((scan) => runPrep(scan, pickedApps, identityRef.current)).catch(() => null);
   }, []);
 
   const finish = useCallback(async (outcome: 'done' | 'skipped') => {
@@ -46,6 +47,8 @@ export function useOnboardingV3Pipeline() {
     const prep = await Promise.race([prepRef.current ?? Promise.resolve(null), timeout]);
     const greeting = prep?.greeting?.trim() || null;
     const starters = prep?.starters ?? [];
+    // Auto-run only a REAL prep result's first starter (the prompt contract makes it a read-only audit); the static fallback never auto-runs.
+    const autoPrompt = greeting && starters.length > 0 ? starters[0].prompt : null;
     // Await the PATCH so personalized_greeting/starters are IN settings before the reveal seeds the welcome chat; the greeting stream snapshots settings at mount.
     try {
       await dispatch(updateSettingsPatch({
@@ -57,7 +60,7 @@ export function useOnboardingV3Pipeline() {
         personalized_starters: starters,
       })).unwrap();
     } catch {}
-    dispatch(stageReveal({ greeting, starters, scanSummary: summarizeScan(scanResultRef.current) }));
+    dispatch(stageReveal({ greeting, starters, scanSummary: summarizeScan(scanResultRef.current), autoPrompt }));
     dispatch(setFlowActive(false));
   }, [dispatch, accent, gradient, mode]);
 
