@@ -10,6 +10,8 @@ import {
   fetchIdentity, runPrep, runScan, summarizeScan,
   type PrepResponse, type ProviderIdentity, type ScanResult,
 } from './onboardingV3Api';
+import { USAGE_READ_JS, summarizeUsage, type ProviderUsage, type UsageProvider } from '@/shared/providerUsage';
+import { findWebviewByDomain } from '@/shared/browserRegistry';
 
 // The curtain machinery: scan kicks off during the OAuth wait, prep during the theme beat, and the moment prep resolves the audit AND the app build launch as REAL background agents, so the curtain lifts on work already in motion. Every stage fails soft; the flow never blocks on any of it.
 export function useOnboardingV3Pipeline() {
@@ -21,6 +23,8 @@ export function useOnboardingV3Pipeline() {
   const scanRef = useRef<Promise<ScanResult | null> | null>(null);
   const prepRef = useRef<Promise<PrepResponse | null> | null>(null);
   const scanResultRef = useRef<ScanResult | null>(null);
+  const usageSummaryRef = useRef<string>('');
+  const usageReadRef = useRef<Promise<void> | null>(null);
   const connected = useAppSelector((s) => hasModelConnected(s));
   const model = useAppSelector((s) => s.settings.data.default_model);
   const launchCtxRef = useRef({ connected: false, model: 'sonnet' });
@@ -29,6 +33,22 @@ export function useOnboardingV3Pipeline() {
 
   const kickIdentity = useCallback(() => {
     fetchIdentity().then((ids) => { identityRef.current = ids; setIdentity(ids); }).catch(() => {});
+  }, []);
+
+  // Read what the user works on from an already-open, logged-in provider card (chatgpt.com / claude.ai) via the proven findWebviewByDomain + executeJavaScript path. Fail-open: no card, not logged in, or off-Electron => empty summary, prep falls back to scan + identity.
+  const kickUsageRead = useCallback((provider: string, consented: boolean) => {
+    if (usageReadRef.current || !consented) return;
+    const key: UsageProvider | null = provider === 'codex' ? 'codex' : provider === 'claude' ? 'claude' : null;
+    if (!key) return;
+    usageReadRef.current = (async () => {
+      try {
+        const domain = key === 'codex' ? 'chatgpt.com' : 'claude.ai';
+        const wv = findWebviewByDomain(domain);
+        if (!wv || typeof wv.executeJavaScript !== 'function') return;
+        const raw = (await wv.executeJavaScript(USAGE_READ_JS[key])) as ProviderUsage | null;
+        usageSummaryRef.current = summarizeUsage(raw);
+      } catch { /* fail-open */ }
+    })();
   }, []);
 
   const kickScan = useCallback((consented: boolean) => {
@@ -56,7 +76,10 @@ export function useOnboardingV3Pipeline() {
   const kickPrep = useCallback((pickedApps: string[]) => {
     if (prepRef.current) return;
     const scanPromise = scanRef.current ?? Promise.resolve(null);
-    prepRef.current = scanPromise.then((scan) => runPrep(scan, pickedApps, identityRef.current)).catch(() => null);
+    const usagePromise = usageReadRef.current ?? Promise.resolve();
+    prepRef.current = Promise.all([scanPromise, usagePromise])
+      .then(([scan]) => runPrep(scan, pickedApps, identityRef.current, usageSummaryRef.current))
+      .catch(() => null);
     // Launch the prepped work MID-FLOW (theme/card beats cover the latency): audit + app build, gated to a real connected model so the fragile free trial never carries it.
     void prepRef.current.then((prep) => {
       if (launchedRef.current || !prep || !prep.greeting || !launchCtxRef.current.connected) return;
@@ -94,5 +117,5 @@ export function useOnboardingV3Pipeline() {
     dispatch(setFlowActive(false));
   }, [dispatch, accent, gradient, mode]);
 
-  return { identity, kickIdentity, kickScan, kickPrep, finish };
+  return { identity, kickIdentity, kickScan, kickUsageRead, kickPrep, finish };
 }

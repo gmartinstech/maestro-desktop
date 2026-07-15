@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { updateSettingsPatch } from '@/shared/state/settingsSlice';
 import { setFlowActive } from '@/shared/state/onboardingV3Slice';
+import { selectSubscriptionConnections } from '@/shared/state/subscriptionsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { useOnboardingV3Pipeline } from './useOnboardingV3Pipeline';
@@ -115,15 +116,18 @@ const OnboardingV3Root: React.FC = () => {
   const pipeline = useOnboardingV3Pipeline();
   const [beat, setBeat] = useState<Beat>('welcome');
   const [scanConsent, setScanConsent] = useState(true);
+  const [usageConsent, setUsageConsent] = useState(true);
   const [picks, setPicks] = useState<string[]>([]);
+  const connectedProvider = useAppSelector((s) => selectSubscriptionConnections(s).find((cx) => cx.isActive !== false)?.provider ?? null);
   const [finishing, setFinishing] = useState(false);
 
-  const { kickIdentity, kickScan, kickPrep, finish } = pipeline;
+  const { kickIdentity, kickScan, kickUsageRead, kickPrep, finish } = pipeline;
 
   const onConnected = useCallback(() => {
     kickIdentity();
     kickScan(scanConsent);
-  }, [kickIdentity, kickScan, scanConsent]);
+    if (connectedProvider) kickUsageRead(connectedProvider, usageConsent);
+  }, [kickIdentity, kickScan, kickUsageRead, scanConsent, usageConsent, connectedProvider]);
 
   const leaveConnect = useCallback(() => {
     kickScan(scanConsent);
@@ -190,6 +194,8 @@ const OnboardingV3Root: React.FC = () => {
                   identity={pipeline.identity}
                   scanConsent={scanConsent}
                   setScanConsent={setScanConsent}
+                  usageConsent={usageConsent}
+                  setUsageConsent={setUsageConsent}
                   onConnected={onConnected}
                   onNext={leaveConnect}
                   onBack={() => setBeat('newos')}

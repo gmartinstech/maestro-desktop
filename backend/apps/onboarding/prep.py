@@ -26,8 +26,9 @@ P_SYSTEM = (
     "organize local files, browse the web in a real browser, build small apps, and run agents in parallel. "
     "Given facts about the user's machine and the apps they picked, respond with STRICT JSON only: "
     '{"greeting": string, "starters": [{"title": string, "prompt": string}], "app_title": string, "app_prompt": string}. '
-    "First, silently infer a short profile of this user from the facts (developer or designer or student, work or "
-    "personal, from apps, folders, plan tier, and email domain); tune every task to that profile and do not output it. "
+    "First, silently infer a short profile of this user. If usage_summary is present it is the STRONGEST signal (it is "
+    "what they actually ask their AI about and facts their AI remembers about them); weight it above everything else, "
+    "then apps, folders, plan tier, email domain. Tune every task and the personal app to that profile; do not output the profile. "
     "Exactly 4 starters. Each title is 2-5 words. Each prompt is a concrete, safe, immediately runnable task "
     "referencing the user's real folders, file counts, or picked apps when possible; never invent facts, never "
     "propose deleting anything without review. The FIRST starter must be an audit sized for parallel sub-work "

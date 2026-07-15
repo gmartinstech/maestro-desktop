@@ -19,10 +19,12 @@ const BeatConnect: React.FC<{
   identity: ProviderIdentity[];
   scanConsent: boolean;
   setScanConsent: (v: boolean) => void;
+  usageConsent: boolean;
+  setUsageConsent: (v: boolean) => void;
   onConnected: () => void;
   onNext: () => void;
   onBack: () => void;
-}> = ({ c, identity, scanConsent, setScanConsent, onConnected, onNext, onBack }) => {
+}> = ({ c, identity, scanConsent, setScanConsent, usageConsent, setUsageConsent, onConnected, onNext, onBack }) => {
   const dispatch = useAppDispatch();
   const connected = useAppSelector((s) => hasModelConnected(s));
   const freeTrial = useAppSelector((s) => hasFreeTrialActive(s));
@@ -148,6 +150,21 @@ const BeatConnect: React.FC<{
             {scanConsent && <Check size={11} color="#fff" strokeWidth={3.2} />}
           </button>
           <span>Take a quick local look around to personalize my setup. Nothing leaves this Mac.</span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, cursor: 'pointer', fontSize: '0.82rem', color: c.text.tertiary, lineHeight: 1.5 }}>
+          <button
+            onClick={(e) => { e.preventDefault(); setUsageConsent(!usageConsent); }}
+            style={{
+              width: 16, height: 16, marginTop: 2, borderRadius: 5, padding: 0, cursor: 'pointer', flexShrink: 0,
+              border: `1.5px solid ${usageConsent ? c.accent.primary : c.border.strong}`,
+              background: usageConsent ? c.accent.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+          >
+            {usageConsent && <Check size={11} color="#fff" strokeWidth={3.2} />}
+          </button>
+          <span>Learn what I work on from my chats (read once, never stored).</span>
         </label>
         <div style={{ display: 'flex', gap: 18, marginTop: 2 }}>
           <button onClick={() => setShowKeys(!showKeys)} style={{ border: 'none', background: 'transparent', padding: 0, color: c.text.ghost, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>

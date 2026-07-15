@@ -50,12 +50,12 @@ export async function runScan(): Promise<ScanResult | null> {
   }
 }
 
-export async function runPrep(scan: ScanResult | null, pickedApps: string[], identity: ProviderIdentity[]): Promise<PrepResponse | null> {
+export async function runPrep(scan: ScanResult | null, pickedApps: string[], identity: ProviderIdentity[], usageSummary: string): Promise<PrepResponse | null> {
   try {
     const res = await fetch(`${API_BASE}/onboarding/prep`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scan, picked_apps: pickedApps, identity }),
+      body: JSON.stringify({ scan, picked_apps: pickedApps, identity, usage_summary: usageSummary }),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as PrepResponse;
