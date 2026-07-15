@@ -26,6 +26,8 @@ export const DEFAULT_WORKFLOWS_HUB_W = DEFAULT_BROWSER_CARD_W;
 export const DEFAULT_WORKFLOWS_HUB_H = DEFAULT_BROWSER_CARD_H;
 export const EXPANDED_CARD_MIN_H = 620;
 export const GRID_GAP = 24;
+// Zoom ceiling when the camera frames a freshly spawned card. 1.15 slammed the user to 115% on every spawn; 0.75 keeps the new card readable without the lurch-into-your-face zoom.
+export const SPAWN_FOCUS_MAX_ZOOM = 0.75;
 // Gap between the Workflows window and the cards it spawns (run monitor, that monitor's browser). Keeps the hub -> monitor -> browser row evenly spaced.
 export const WORKFLOW_CARD_GAP = 140;
 const GRID_ORIGIN = { x: 40, y: 100 };
@@ -505,8 +507,14 @@ export function computeSpawnPosition(
     return placeBesideCard(state, anchor.beside, newW, newH, expandedSessionIds);
   }
   if (anchor.viewportCenter) {
-    // Land dead-center, "in front of you", even if a card is already there. Overlap is intentional (new card sits on top via its higher zOrder); dodging to free space is exactly the "spawned off to the side" behavior we're removing.
-    return { x: anchor.viewportCenter.x - newW / 2, y: anchor.viewportCenter.y - newH / 2 };
+    // Closest open gap to the viewport center: dead-center-with-overlap stacked spawns invisibly on top of each other (two center spawns in a row = the second fully covers the first). The spiral stays center-biased so it still reads as "in front of you".
+    return findOpenSpotNear(
+      anchor.viewportCenter.x - newW / 2,
+      anchor.viewportCenter.y - newH / 2,
+      collectOccupiedRects(state, expandedSessionIds),
+      newW,
+      newH,
+    );
   }
   return findOpenGridCell(collectOccupiedRects(state, expandedSessionIds), newW, newH);
 }

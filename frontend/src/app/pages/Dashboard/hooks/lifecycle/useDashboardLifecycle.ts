@@ -20,6 +20,7 @@ import {
   clearPendingFocusWorkflowId,
   clearPendingFocusWorkflowsHub,
   type ViewCardPosition,
+  SPAWN_FOCUS_MAX_ZOOM,
 } from '@/shared/state/dashboardLayoutSlice';
 import { fetchOutputs, type Output } from '@/shared/state/outputsSlice';
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
@@ -215,7 +216,7 @@ export function useDashboardLifecycle({
     setTimeout(() => {
       const card = store.getState().dashboardLayout.cards[agentId];
       if (card) {
-        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true);
+        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], SPAWN_FOCUS_MAX_ZOOM, true);
         handleHighlightCard(agentId);
       }
     }, 350);
@@ -253,7 +254,7 @@ export function useDashboardLifecycle({
     setTimeout(() => {
       const card = store.getState().dashboardLayout.viewCards[cardKey];
       if (card) {
-        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true);
+        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], SPAWN_FOCUS_MAX_ZOOM, true);
         handleHighlightCard(cardKey);
       }
     }, 200);
@@ -270,7 +271,7 @@ export function useDashboardLifecycle({
       if (card) {
         canvasActions.fitToCards(
           [{ x: card.x, y: card.y, width: card.width, height: card.height }],
-          1.15,
+          SPAWN_FOCUS_MAX_ZOOM,
           true,
         );
         handleHighlightCard(workflowId);
@@ -352,7 +353,7 @@ export function useDashboardLifecycle({
         const rects = [{ x: vc.x, y: vc.y, width: vc.width, height: vc.height }];
         const ac = store.getState().dashboardLayout.cards[sid];
         if (ac) rects.push({ x: ac.x, y: ac.y, width: ac.width, height: ac.height });
-        canvasActions.fitToCards(rects, 1.15, true);
+        canvasActions.fitToCards(rects, SPAWN_FOCUS_MAX_ZOOM, true);
         handleHighlightCard(outputId);
       }, 200);
     }

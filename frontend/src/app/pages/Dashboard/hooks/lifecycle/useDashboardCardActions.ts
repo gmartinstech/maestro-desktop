@@ -16,6 +16,7 @@ import {
   DEFAULT_NOTE_W,
   DEFAULT_NOTE_H,
   EXPANDED_CARD_MIN_H,
+  SPAWN_FOCUS_MAX_ZOOM,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { CardType, useDashboardSelection } from '../state/useDashboardSelection';
 import type { CanvasActions } from '../interaction/useCanvasControls';
@@ -65,7 +66,7 @@ export function useDashboardCardActions({
       }
       const card = viewCards[focusKey];
       if (card) {
-        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true, undefined, true);
+        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], SPAWN_FOCUS_MAX_ZOOM, true, undefined, true);
         handleHighlightCard(focusKey);
       }
     }, 200);
@@ -88,7 +89,7 @@ export function useDashboardCardActions({
       const newId = Object.keys(allNotes).find((id) => !prevIds.has(id));
       if (newId) {
         const note = allNotes[newId];
-        canvasActions.fitToCards([{ x: note.x, y: note.y, width: note.width, height: note.height }], 1.15, true, undefined, true);
+        canvasActions.fitToCards([{ x: note.x, y: note.y, width: note.width, height: note.height }], SPAWN_FOCUS_MAX_ZOOM, true, undefined, true);
         handleHighlightCard(newId);
       }
     }, 200);
@@ -109,7 +110,7 @@ export function useDashboardCardActions({
         setTimeout(() => {
           const card = store.getState().dashboardLayout.cards[sessionId];
           if (card) {
-            canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true);
+            canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], SPAWN_FOCUS_MAX_ZOOM, true);
             handleHighlightCard(sessionId);
           }
         }, 200);
