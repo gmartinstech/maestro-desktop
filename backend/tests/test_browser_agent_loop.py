@@ -1524,6 +1524,20 @@ def test_send_index_handoff_points_only_at_a_real_send_button():
     assert send_index_in_state("") is None
 
 
+def test_send_index_finds_the_popular_composers_submit_buttons():
+    # the generalization: the fast send-path must COMPLETE on X/IG/FB/YouTube, so the submit
+    # finder knows Post/Reply/Tweet/etc, not just LinkedIn's "Send".
+    from backend.apps.agents.browser.browser_agent import send_index_in_state
+    assert send_index_in_state('[3]<textbox "Post your reply">\n[8]<button "Reply">') == (8, "Reply")
+    assert send_index_in_state('[2]<textbox "What is happening?">\n[9]<button "Post">') == (9, "Post")
+    assert send_index_in_state('[4]<button "Tweet">') == (4, "Tweet")
+    assert send_index_in_state('[7]<button "Comment">') == (7, "Comment")
+    # exact + button-only keeps the safety: not a look-alike, not a menuitem, not an opener phrase
+    assert send_index_in_state('[5]<button "Post a job">') is None
+    assert send_index_in_state('[6]<menuitem "Share">') is None          # button-only excludes the Drive-Share false positive
+    assert send_index_in_state('[8]<button "Reply to Maya">') is None
+
+
 def test_strip_lone_surrogates():
     from backend.apps.agents.browser.browser_agent import strip_lone_surrogates, format_tool_result
     # an orphan UTF-16 surrogate (half an emoji from the webview) is what crashes the turn at .encode('utf-8'); it must be swapped, not carried through

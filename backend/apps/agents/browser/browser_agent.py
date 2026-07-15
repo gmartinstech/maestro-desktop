@@ -473,13 +473,24 @@ def delta_state(text: str, seen_lines: set[str]) -> str:
 # A button row whose name is exactly a Send control (not "Send InMail credit" or "Send a message to X"); used to hand the model the Send button after it types, so it never burns turns hunting a button that's right there.
 P_SEND_ROW_RE = re.compile(r'\[(\d+)\]\*?<\s*button\s+"([^"]*)"', re.I)
 
+# The submit-button labels across the popular composers, so the fast send-path COMPLETES on
+# X/IG/FB/Threads/YouTube, not just LinkedIn. EXACT match + button-only (P_SEND_ROW_RE) is the
+# safety: "Post" never matches "Post a job", a "Share" menuitem isn't a <button so it's excluded,
+# and every caller is post-fill (a hint, or the send-script's receipt-gated click), so a rare
+# opener-vs-submit mismatch fails safe (the composer just doesn't clear), never a false send.
+P_SEND_LABELS = frozenset({
+    "send", "send now", "send message",              # LinkedIn / Gmail / DMs
+    "post", "post all", "tweet", "reply",            # X / Threads compose + reply
+    "publish", "comment", "share",                   # articles / YouTube+FB comments / shares
+})
+
 
 def send_index_in_state(state_text: str):
-    """(index, name) of a real Send button in an interactives list, or None.
-    Strict exact match so it never grabs an upsell or a profile 'Send a message' link."""
+    """(index, name) of a real submit button in an interactives list, or None. Strict exact
+    match against P_SEND_LABELS so it never grabs an upsell or a profile 'Send a message' link."""
     for line in (state_text or "").splitlines():
         m = P_SEND_ROW_RE.search(line)
-        if m and m.group(2).strip().lower() in ("send", "send now", "send message"):
+        if m and m.group(2).strip().lower() in P_SEND_LABELS:
             return int(m.group(1)), m.group(2)
     return None
 

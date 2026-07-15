@@ -69,8 +69,11 @@ async def test_surface_gate_declines_when_no_composer_in_perception():
 
 @pytest.mark.asyncio
 async def test_surface_gate_fires_on_a_NON_linkedin_composer():
-    """The whole generalization: the same send-script fires on ANY site whose
-    perception carries a composer (here X's 'Post your reply'), no per-site URL gate."""
+    """The whole generalization: the same send-script fires on ANY site whose perception
+    carries a composer (here X's 'Post your reply'), no per-site URL gate, AND completes
+    by clicking X's real submit button ('Reply') BY INDEX. Before the submit-vocabulary
+    was generalized this only 'passed' because the mock succeeds on the by-name 'Send'
+    fallback that doesn't exist on real X, so assert the real index path is taken."""
     X_FILLED = '[3]<textbox "Post your reply" value="[test] hello world r9-os">\n[8]<button "Reply">'
     X_SENT = '[3]<textbox "Post your reply">\n[1]<link "Home">'
     ex, calls = make_exec([X_FILLED, X_FILLED, X_SENT])
@@ -78,6 +81,9 @@ async def test_surface_gate_fires_on_a_NON_linkedin_composer():
                                  payload_in_textbox, payload_source=TASK,
                                  current_url="https://x.com/messages/123")
     assert r is not None and r["sent"] is True
+    # the send went via BrowserClickIndex on X's real Reply submit (8), not the by-name 'Send' crutch
+    assert ("BrowserClickIndex", {"index": 8}) in calls["clicks"]
+    assert not any(t == "BrowserClickByName" for t, _ in calls["clicks"])
 
 
 @pytest.mark.asyncio
