@@ -189,18 +189,28 @@ def test_seed_playbook_fallback_and_supersede():
 
 
 def test_broadened_seed_coverage_and_write_mechanics():
-    from backend.apps.agents.browser.seed_for import SEED_PLAYBOOKS, seed_for
-    # the newly added high-traffic sites all resolve to non-empty guidance
-    for host in ("youtube.com", "reddit.com", "wikipedia.org", "mail.google.com",
-                 "imdb.com", "stackoverflow.com", "indeed.com", "zillow.com",
-                 "news.ycombinator.com", "medium.com", "notion.so", "glassdoor.com"):
+    from backend.apps.agents.browser.seed_playbooks import SEED_PLAYBOOKS
+    from backend.apps.agents.browser.seed_for import seed_for
+    # a broad mainstream cross-section resolves to non-empty guidance (search, shopping, food,
+    # streaming, productivity, travel, health, education, AI, gov, social)
+    for host in ("bing.com", "duckduckgo.com", "youtube.com", "netflix.com", "hulu.com",
+                 "temu.com", "costco.com", "ubereats.com", "uber.com", "opentable.com",
+                 "docs.google.com", "drive.google.com", "calendar.google.com", "outlook.com",
+                 "tripadvisor.com", "realtor.com", "ticketmaster.com", "webmd.com", "goodrx.com",
+                 "quizlet.com", "khanacademy.org", "chatgpt.com", "perplexity.ai", "usps.com",
+                 "messenger.com", "nextdoor.com", "weather.com", "wikipedia.org"):
         assert seed_for(host), f"{host} should have a seed"
         assert seed_for("www." + host) == seed_for(host)          # www-strip still matches
-    # the popular WRITE targets carry a first-run write mechanic (the point of the seed for writes)
+    # the popular WRITE targets carry a first-run write mechanic
     assert any("Post" in b for b in seed_for("x.com"))
     assert any("Comment" in b for b in seed_for("youtube.com"))
     assert any("Send" in b for b in seed_for("mail.google.com"))
-    # reddit steers first writes to the deterministic path, not the bot-gated UI composer
     assert any("BrowserApiWrite" in b for b in seed_for("reddit.com"))
-    # no duplicate host keys slipped in (a dup would silently drop a site's guidance)
+    # SAFETY: every money site is framed READ-ONLY with an explicit NEVER-transact instruction
+    for money in ("paypal.com", "venmo.com", "cash.app", "chase.com", "bankofamerica.com",
+                  "robinhood.com", "coinbase.com", "fidelity.com"):
+        bullets = " ".join(seed_for(money))
+        assert "READ-ONLY" in bullets and "NEVER" in bullets, f"{money} must be read-only framed"
+    # coverage grew well past the original set, and no duplicate host key silently dropped a site
+    assert len(SEED_PLAYBOOKS) >= 90
     assert len(SEED_PLAYBOOKS) == len(set(SEED_PLAYBOOKS))
