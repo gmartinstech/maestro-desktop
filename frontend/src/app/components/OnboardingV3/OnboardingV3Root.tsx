@@ -19,6 +19,8 @@ type Beat = 'welcome' | 'newos' | 'connect' | 'apps' | 'theme' | 'card';
 
 const V2_STORAGE_KEY = 'openswarm.onboarding.v2';
 const WINDOWED_BEATS: Beat[] = ['welcome', 'newos'];
+// The opening is its own vivid moment (electric blue -> indigo -> violet), deliberately off-brand; the user's picked color takes over from the theme beat on.
+const INTRO = { core: '#93b5ff', mid: '#5b6cff', edge: '#a855f7' };
 
 // Decides whether the v3 full-screen flow owns this launch. Only genuinely fresh installs see it: anyone with the v2 tour key or existing sessions is auto-marked skipped so an update never re-onboards a veteran.
 function useOnboardingV3Gate(): boolean {
@@ -56,12 +58,12 @@ const IntroBeat: React.FC<{ c: ClaudeTokens; line: string; sub?: string; onNext:
   <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: c.bg.inverse, overflow: 'hidden' }}>
     <motion.div
       initial={{ scale: 0.35, opacity: 0, x: 0, y: 0 }}
-      animate={{ scale: [0.35, 1, 1.06, 1], opacity: [0, 0.62, 0.56, 0.62], x: [0, 0, 22, 0], y: [0, 0, -14, 0] }}
+      animate={{ scale: [0.35, 1, 1.06, 1], opacity: [0, 0.7, 0.62, 0.7], x: [0, 0, 22, 0], y: [0, 0, -14, 0] }}
       transition={{ duration: 9, times: [0, 0.16, 0.6, 1], ease: 'easeInOut' }}
       style={{
-        position: 'absolute', width: 560, height: 560, borderRadius: 999,
-        background: `radial-gradient(circle at 42% 38%, ${c.accent.hover}, ${c.accent.primary} 55%, transparent 75%)`,
-        filter: 'blur(70px)', pointerEvents: 'none',
+        position: 'absolute', width: 620, height: 620, borderRadius: 999,
+        background: `radial-gradient(circle at 42% 38%, ${INTRO.core}, ${INTRO.mid} 46%, ${INTRO.edge} 70%, transparent 82%)`,
+        filter: 'blur(64px)', pointerEvents: 'none',
       }}
     />
     <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.14, pointerEvents: 'none', mixBlendMode: 'overlay' }} />
@@ -71,7 +73,7 @@ const IntroBeat: React.FC<{ c: ClaudeTokens; line: string; sub?: string; onNext:
       transition={{ type: 'spring', stiffness: 160, damping: 18, delay: 0.2 }}
       style={{ position: 'relative', marginBottom: 22 }}
     >
-      <Starburst size={44} from={c.accent.hover} to={c.accent.primary} />
+      <Starburst size={44} from={INTRO.core} to={INTRO.edge} />
     </motion.div>
     <motion.h1
       initial={{ opacity: 0, y: 16, filter: 'blur(8px)' }}
