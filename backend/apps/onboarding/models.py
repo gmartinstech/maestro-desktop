@@ -53,3 +53,5 @@ class PrepResponse(BaseModel):
 
     greeting: str = ""
     starters: List[PersonalizedStarter] = Field(default_factory=list)
+    app_title: str = ""
+    app_prompt: str = ""

@@ -8,6 +8,7 @@ import WorkflowRunningToast from '@/app/pages/Workflows/WorkflowRunningToast';
 import MissedRunsToast from '@/app/pages/Workflows/MissedRunsToast';
 import ProviderHealthToast from '@/app/components/overlays/ProviderHealthToast';
 import ScheduleOfferToast from '@/app/components/nudges/ScheduleOfferToast';
+import PrepKeepToast from '@/app/components/nudges/PrepKeepToast';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import type {
   CardPosition,
@@ -160,6 +161,9 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
 
       {/* One-shot dependency beat: first completed personalized starter offers to become a weekly job */}
       <ScheduleOfferToast dashboardId={dashboardId} />
+
+      {/* Accept-or-deny for the audit + app the flow started on the user's behalf */}
+      <PrepKeepToast />
     </>
   );
 };

@@ -25,6 +25,8 @@ export interface ScanResult {
 export interface PrepResponse {
   greeting: string;
   starters: PersonalizedStarter[];
+  app_title: string;
+  app_prompt: string;
 }
 
 export async function fetchIdentity(): Promise<ProviderIdentity[]> {

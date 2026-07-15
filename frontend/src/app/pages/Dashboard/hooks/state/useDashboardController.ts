@@ -167,7 +167,6 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
   // Onboarding v3 reveal: seeds the personalized note + welcome chat the instant the flow's curtain lifts.
   useOnboardingRevealSeed({
     isActive,
-    canvasEmpty,
     dashboardId,
     expandedSessionIds,
     viewportRef: canvas.viewportRef,

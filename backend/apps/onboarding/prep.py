@@ -25,7 +25,7 @@ P_SYSTEM = (
     "You write first-run starter tasks for OpenSwarm, a desktop AI agent platform that can "
     "organize local files, browse the web in a real browser, build small apps, and run agents in parallel. "
     "Given facts about the user's machine and the apps they picked, respond with STRICT JSON only: "
-    '{"greeting": string, "starters": [{"title": string, "prompt": string}]}. '
+    '{"greeting": string, "starters": [{"title": string, "prompt": string}], "app_title": string, "app_prompt": string}. '
     "First, silently infer a short profile of this user from the facts (developer or designer or student, work or "
     "personal, from apps, folders, plan tier, and email domain); tune every task to that profile and do not output it. "
     "Exactly 4 starters. Each title is 2-5 words. Each prompt is a concrete, safe, immediately runnable task "
@@ -35,6 +35,9 @@ P_SYSTEM = (
     "modify or delete existing files, because it may be run automatically on the user's behalf. Every starter "
     "must produce a tangible result the user can see (a sorted "
     "folder, a report, a working page); never propose setup, documentation of preferences, or planning-only tasks. "
+    "Also design ONE small personal app for this user: app_title is 2-4 words, app_prompt starts with 'Build me' and "
+    "describes a small, immediately useful single-page app tailored to the profile (their files, habits, or picked "
+    "apps), self-contained with no accounts or API keys. "
     "The greeting is one warm sentence that names 2-3 specific things "
     "found on the machine. Never use em-dashes or en-dashes anywhere. No markdown, no commentary, JSON only."
 )
@@ -54,7 +57,12 @@ def parse_prep(text: str) -> Optional[PrepResponse]:
         ]
         if not starters:
             return None
-        return PrepResponse(greeting=str(data.get("greeting", "")).strip(), starters=starters[:4])
+        return PrepResponse(
+            greeting=str(data.get("greeting", "")).strip(),
+            starters=starters[:4],
+            app_title=str(data.get("app_title", "")).strip(),
+            app_prompt=str(data.get("app_prompt", "")).strip(),
+        )
     except Exception:
         return None
 

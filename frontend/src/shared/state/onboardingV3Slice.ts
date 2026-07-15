@@ -3,6 +3,12 @@ import type { PersonalizedStarter } from '@/shared/state/settingsSlice';
 
 // Transient bridge between the v3 flow overlay and the dashboard: the overlay finishes, stashes the prep payload here, and the dashboard's reveal hook consumes it exactly once to seed the canvas.
 
+export interface PreppedJob {
+  sessionId: string;
+  title: string;
+  kind: 'audit' | 'app';
+}
+
 export interface OnboardingV3State {
   /** True while the full-screen flow owns the window; suppresses onboarding v2. */
   flowActive: boolean;
@@ -13,6 +19,8 @@ export interface OnboardingV3State {
   scanSummary: string | null;
   /** Read-only audit prompt to launch as a live agent at reveal; null = chips only. */
   autoPrompt: string | null;
+  /** Background jobs launched mid-flow (audit + app build); the keep/discard toast owns their fate. */
+  prepped: PreppedJob[];
 }
 
 const initialState: OnboardingV3State = {
@@ -22,6 +30,7 @@ const initialState: OnboardingV3State = {
   starters: [],
   scanSummary: null,
   autoPrompt: null,
+  prepped: [],
 };
 
 const onboardingV3Slice = createSlice({
@@ -38,6 +47,12 @@ const onboardingV3Slice = createSlice({
       state.scanSummary = action.payload.scanSummary;
       state.autoPrompt = action.payload.autoPrompt;
     },
+    addPreppedJob(state, action: PayloadAction<PreppedJob>) {
+      if (!state.prepped.some((j) => j.sessionId === action.payload.sessionId)) state.prepped.push(action.payload);
+    },
+    clearPrepped(state) {
+      state.prepped = [];
+    },
     clearReveal(state) {
       state.revealPending = false;
       state.scanSummary = null;
@@ -46,5 +61,5 @@ const onboardingV3Slice = createSlice({
   },
 });
 
-export const { setFlowActive, stageReveal, clearReveal } = onboardingV3Slice.actions;
+export const { setFlowActive, stageReveal, clearReveal, addPreppedJob, clearPrepped } = onboardingV3Slice.actions;
 export default onboardingV3Slice.reducer;
