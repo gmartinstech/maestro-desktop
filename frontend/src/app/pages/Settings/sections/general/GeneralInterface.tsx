@@ -69,12 +69,12 @@ const GeneralInterface: React.FC<{
       <Box sx={rowSx} {...settingSelectAttrs('accent_color', 'Accent color', 'Interface', 'The accent color used across the app.')}>
         <Typography sx={labelSx}>Accent color</Typography>
         <Typography sx={{ ...descSx, mb: 1.5 }}>
-          Pick any color; buttons, highlights, and glows follow it. Reset returns the stock accent.
+          Pick any color; buttons, highlights, and glows follow it. Add a second dot for a canvas gradient. Reset returns the stock accent.
         </Typography>
         <AccentColorPad
           c={c}
-          accent={form.accent_color ?? null}
-          onPick={(hex) => setForm({ ...form, accent_color: hex })}
+          stops={form.accent_gradient ?? (form.accent_color ? [form.accent_color] : [])}
+          onChange={(next) => setForm({ ...form, accent_color: next?.[0] ?? null, accent_gradient: next && next.length > 1 ? next : null })}
           height={120}
         />
       </Box>

@@ -12,14 +12,19 @@ const BeatTheme: React.FC<{
   onNext: () => void;
   onBack: () => void;
 }> = ({ c, onNext, onBack }) => {
-  const { accent, setAccent } = useThemeAccent();
+  const { accent, setAccent, gradient, setGradient } = useThemeAccent();
   const { mode, setMode } = useThemeMode();
+  const stops = gradient ?? (accent ? [accent] : []);
+  const onStops = (next: string[] | null) => {
+    setAccent(next?.[0] ?? null);
+    setGradient(next && next.length > 1 ? next : null);
+  };
 
   return (
     <BeatShell
       c={c}
       title="Make it yours."
-      body="Pick a color, any color. The whole app repaints as you drag; this is your home now."
+      body="Pick a color, or add a second dot for a gradient. The whole app repaints as you drag; this is your home now."
       nextLabel="Continue"
       onNext={onNext}
       onBack={onBack}
@@ -52,7 +57,7 @@ const BeatTheme: React.FC<{
             </button>
           ))}
         </div>
-        <AccentColorPad c={c} accent={accent} onPick={setAccent} height={210} />
+        <AccentColorPad c={c} stops={stops} onChange={onStops} height={210} />
       </motion.div>
     </BeatShell>
   );

@@ -58,7 +58,7 @@ const Settings: React.FC = () => {
   const loaded = useAppSelector((s) => s.settings.loaded);
   const modes = useAppSelector((s) => s.modes.items);
   const { setMode: setThemeMode } = useThemeMode();
-  const { setAccent } = useThemeAccent();
+  const { setAccent, setGradient } = useThemeAccent();
 
   const modesList = useMemo(() => Object.values(modes), [modes]);
 
@@ -169,11 +169,14 @@ const Settings: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.theme]);
 
-  // Accent applies live too, same contract as theme: instant paint, debounced persist.
+  // Accent + gradient apply live too, same contract as theme: instant paint, debounced persist.
   useEffect(() => {
-    if (open && loaded) setAccent(form.accent_color ?? null);
+    if (open && loaded) {
+      setAccent(form.accent_color ?? null);
+      setGradient(form.accent_gradient ?? null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.accent_color]);
+  }, [form.accent_color, form.accent_gradient]);
 
   useEffect(() => {
     if (!open || !loaded) return;

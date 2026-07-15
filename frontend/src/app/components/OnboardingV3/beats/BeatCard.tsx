@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useThemeAccent } from '@/shared/styles/ThemeContext';
 import { Dices } from 'lucide-react';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import type { ProviderIdentity } from '../onboardingV3Api';
@@ -27,6 +28,7 @@ const BeatCard: React.FC<{
   onFinish: (name: string | null) => void;
   onBack: () => void;
 }> = ({ c, identity, onFinish, onBack }) => {
+  const { gradient } = useThemeAccent();
   const [name, setName] = useState(() => nameFromIdentity(identity));
   const seed = useMemo(() => Math.floor(Math.random() * EPITHETS.length), []);
   const [roll, setRoll] = useState(0);
@@ -54,7 +56,7 @@ const BeatCard: React.FC<{
           }}
         >
           <div style={{ alignSelf: 'flex-start', marginLeft: -8, marginTop: -4 }}>
-            <Starburst size={158} from={c.accent.hover} to={c.accent.pressed} />
+            <Starburst size={158} from={gradient?.[0] ?? c.accent.hover} to={gradient?.[gradient.length - 1] ?? c.accent.pressed} />
           </div>
           <input
             value={name}

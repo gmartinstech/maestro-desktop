@@ -6,6 +6,7 @@ import DashboardCardLayer from './DashboardCardLayer';
 import DashboardOverlays from './DashboardOverlays';
 import DashboardEmptyState from './DashboardEmptyState';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
+import { useThemeAccent } from '@/shared/styles/ThemeContext';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import type {
   CardPosition,
@@ -153,6 +154,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   onTidy,
   onSearchPaletteClose,
 }) => {
+  const { gradient } = useThemeAccent();
   const dotSize = Math.max(1, 1.5 * canvas.zoom);
   const dotSpacing = 24 * canvas.zoom;
 
@@ -215,6 +217,18 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                 : 'default',
         }}
       >
+        {/* Gradient wash: the user's theme-pad stops tint the canvas, Arc-window style; sits under the dot grid. */}
+        {gradient && gradient.length > 1 && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              background: `linear-gradient(115deg, ${gradient.map((hex, i) => `${hex}24 ${(i / (gradient.length - 1)) * 100}%`).join(', ')})`,
+            }}
+          />
+        )}
+
         {/* Dot grid background */}
         <Box
           sx={{

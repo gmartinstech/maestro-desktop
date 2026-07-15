@@ -7,13 +7,24 @@ interface ThemeContextValue {
   mode: ThemeMode;
   tokens: ClaudeTokens;
   accent: string | null;
+  gradient: string[] | null;
   toggleMode: () => void;
   setMode: (mode: ThemeMode) => void;
   setAccent: (hex: string | null) => void;
+  setGradient: (stops: string[] | null) => void;
 }
 
 const STORAGE_KEY = 'self-swarm-theme-mode';
 const ACCENT_STORAGE_KEY = 'self-swarm-theme-accent';
+const GRADIENT_STORAGE_KEY = 'self-swarm-theme-gradient';
+
+function getInitialGradient(): string[] | null {
+  try {
+    const stored = JSON.parse(localStorage.getItem(GRADIENT_STORAGE_KEY) ?? 'null');
+    if (Array.isArray(stored) && stored.length > 1 && stored.every((v) => /^#[0-9a-f]{6}$/i.test(v))) return stored;
+  } catch {}
+  return null;
+}
 
 function getInitialAccent(): string | null {
   try {
@@ -46,14 +57,17 @@ const ThemeContext = createContext<ThemeContextValue>({
   mode: 'light',
   tokens: lightTokens,
   accent: null,
+  gradient: null,
   toggleMode: () => {},
   setMode: () => {},
   setAccent: () => {},
+  setGradient: () => {},
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mode, setModeState] = useState<ThemeMode>(getInitialMode);
   const [accent, setAccentState] = useState<string | null>(getInitialAccent);
+  const [gradient, setGradientState] = useState<string[] | null>(getInitialGradient);
   const firstMount = useRef(true);
 
   useEffect(() => {
@@ -70,14 +84,22 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {}
   }, [accent]);
 
+  useEffect(() => {
+    try {
+      if (gradient) localStorage.setItem(GRADIENT_STORAGE_KEY, JSON.stringify(gradient));
+      else localStorage.removeItem(GRADIENT_STORAGE_KEY);
+    } catch {}
+  }, [gradient]);
+
   const tokens = useMemo(() => withAccent(mode === 'dark' ? darkTokens : lightTokens, accent, mode), [mode, accent]);
 
   // Stable identities: SettingsLoader's "apply settings.theme" effect lists setMode in its deps, so a setter that changed every render made that effect re-fire on each toggle and re-assert the OLD persisted theme until the debounced save caught up: live theme snapped back for ~900ms = the switch flicker.
   const toggleMode = useCallback(() => setModeState((m) => (m === 'light' ? 'dark' : 'light')), []);
   const setMode = useCallback((m: ThemeMode) => setModeState(m), []);
   const setAccent = useCallback((hex: string | null) => setAccentState(hex), []);
+  const setGradient = useCallback((stops: string[] | null) => setGradientState(stops), []);
 
-  const value = useMemo(() => ({ mode, tokens, accent, toggleMode, setMode, setAccent }), [mode, tokens, accent, toggleMode, setMode, setAccent]);
+  const value = useMemo(() => ({ mode, tokens, accent, gradient, toggleMode, setMode, setAccent, setGradient }), [mode, tokens, accent, gradient, toggleMode, setMode, setAccent, setGradient]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
@@ -88,6 +110,6 @@ export const useThemeMode = () => {
   return { mode, toggleMode, setMode };
 };
 export const useThemeAccent = () => {
-  const { accent, setAccent } = useContext(ThemeContext);
-  return { accent, setAccent };
+  const { accent, setAccent, gradient, setGradient } = useContext(ThemeContext);
+  return { accent, setAccent, gradient, setGradient };
 };

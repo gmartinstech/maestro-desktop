@@ -203,9 +203,10 @@ const DeepLinkListener: React.FC<{ children: React.ReactNode }> = ({ children })
 const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
   const { setMode: setThemeMode } = useThemeMode();
-  const { setAccent } = useThemeAccent();
+  const { setAccent, setGradient } = useThemeAccent();
   const theme = useAppSelector((s) => s.settings.data.theme);
   const accentColor = useAppSelector((s) => s.settings.data.accent_color);
+  const accentGradient = useAppSelector((s) => s.settings.data.accent_gradient);
   const loaded = useAppSelector((s) => s.settings.loaded);
   const allowExperimentalUpdates = useAppSelector((s) => s.settings.data.allow_experimental_updates);
   useEffect(() => {
@@ -262,6 +263,13 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
   useEffect(() => {
     if (loaded) setAccent(accentColor ?? null);
   }, [loaded, accentColor, setAccent]);
+
+  // Object identity churns on every settings fetch, so key the effect on the serialized stops.
+  const gradientKey = JSON.stringify(accentGradient ?? null);
+  useEffect(() => {
+    if (loaded) setGradient(accentGradient ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, gradientKey, setGradient]);
 
   useEffect(() => {
     if (!loaded) return;

@@ -65,6 +65,8 @@ class AppSettings(BaseModel):
     onboarding_v3: Optional[str] = None
     # User-picked accent hex from the onboarding theme pad; None = stock accent.
     accent_color: Optional[str] = None
+    # Multi-stop gradient from the theme pad (2-3 hexes); washes the canvas.
+    accent_gradient: Optional[list[str]] = None
     personalized_greeting: Optional[str] = None
     personalized_starters: list["PersonalizedStarter"] = Field(default_factory=list)
     # Suppresses preflight suggestion modal entries the user dismissed; keyed by ToolDefinition.name, value ISO timestamp.

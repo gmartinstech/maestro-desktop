@@ -80,6 +80,8 @@ export interface AppSettings {
   onboarding_v3?: string | null;
   /** User-picked accent hex from the onboarding theme pad; null = stock accent. */
   accent_color?: string | null;
+  /** Multi-stop gradient from the theme pad (2-3 hexes); washes the canvas. */
+  accent_gradient?: string[] | null;
   personalized_greeting?: string | null;
   personalized_starters?: PersonalizedStarter[];
 }

@@ -11,7 +11,7 @@ import {
 // The curtain machinery: scan kicks off during the OAuth wait, prep during the theme beat, so by the reveal everything personal is already sitting in memory. Every stage fails soft; the flow never blocks on any of it.
 export function useOnboardingV3Pipeline() {
   const dispatch = useAppDispatch();
-  const { accent } = useThemeAccent();
+  const { accent, gradient } = useThemeAccent();
   const { mode } = useThemeMode();
   const [identity, setIdentity] = useState<ProviderIdentity[]>([]);
   const scanRef = useRef<Promise<ScanResult | null> | null>(null);
@@ -38,7 +38,7 @@ export function useOnboardingV3Pipeline() {
   const finish = useCallback(async (outcome: 'done' | 'skipped') => {
     if (outcome === 'skipped') {
       dispatch(setFlowActive(false));
-      dispatch(updateSettingsPatch({ onboarding_v3: 'skipped', accent_color: accent, theme: mode }));
+      dispatch(updateSettingsPatch({ onboarding_v3: 'skipped', accent_color: accent, accent_gradient: gradient, theme: mode }));
       return;
     }
     // Cap the wait so a slow aux call degrades to generic starters instead of a hung curtain.
@@ -51,6 +51,7 @@ export function useOnboardingV3Pipeline() {
       await dispatch(updateSettingsPatch({
         onboarding_v3: 'done',
         accent_color: accent,
+        accent_gradient: gradient,
         theme: mode,
         personalized_greeting: greeting,
         personalized_starters: starters,
@@ -58,7 +59,7 @@ export function useOnboardingV3Pipeline() {
     } catch {}
     dispatch(stageReveal({ greeting, starters, scanSummary: summarizeScan(scanResultRef.current) }));
     dispatch(setFlowActive(false));
-  }, [dispatch, accent, mode]);
+  }, [dispatch, accent, gradient, mode]);
 
   return { identity, kickIdentity, kickScan, kickPrep, finish };
 }
