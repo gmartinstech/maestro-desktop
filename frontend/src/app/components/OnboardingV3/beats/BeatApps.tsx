@@ -28,8 +28,8 @@ const BeatApps: React.FC<{
     <BeatShell
       c={c}
       title="Choose the apps you live in."
-      body="I'll shape your starting canvas around them, and I can connect to them later so your agents work where you already do."
-      nextLabel={picks.length > 0 ? 'Continue' : 'Skip for now'}
+      body="I'll shape your starting canvas around them."
+      nextLabel={picks.length > 0 ? 'Next' : 'Skip for now'}
       onNext={onNext}
       onBack={onBack}
     >

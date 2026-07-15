@@ -44,7 +44,7 @@ const BeatShell: React.FC<{
           background: c.bg.inverse, color: c.text.inverse, clipPath: ZIGZAG_CLIP,
         }}
       >
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.16, pointerEvents: 'none', mixBlendMode: 'overlay' }} />
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.1, pointerEvents: 'none', mixBlendMode: 'overlay' }} />
         {onBack && (
           <motion.button
             {...enter(0.05)}
@@ -89,7 +89,6 @@ const BeatShell: React.FC<{
           padding: 36, boxSizing: 'border-box', overflow: 'auto',
         }}
       >
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.07, pointerEvents: 'none' }} />
         <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {children}
         </div>

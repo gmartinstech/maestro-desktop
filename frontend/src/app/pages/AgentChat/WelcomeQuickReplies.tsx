@@ -2,7 +2,7 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, CalendarClock, Check, Sparkles } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Check } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { createWorkflow } from '@/shared/state/workflowsSlice';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
@@ -87,7 +87,6 @@ const WelcomeQuickReplies: React.FC<{
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
-                  <Sparkles size={14} color={c.accent.primary} style={{ flexShrink: 0 }} />
                   {s.title}
                 </motion.button>
               ))}

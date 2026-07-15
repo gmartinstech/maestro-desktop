@@ -183,7 +183,7 @@ const OnboardingV3Root: React.FC = () => {
               style={{ width: '100%', height: '100%' }}
             >
               {beat === 'welcome' && <IntroBeat c={c} line="Welcome." onNext={() => setBeat('newos')} />}
-              {beat === 'newos' && <IntroBeat c={c} line="This is your new OS." sub="A canvas where AI agents do real work for you." onNext={() => setBeat('connect')} />}
+              {beat === 'newos' && <IntroBeat c={c} line="This is your new OS." onNext={() => setBeat('connect')} />}
               {beat === 'connect' && (
                 <BeatConnect
                   c={c}

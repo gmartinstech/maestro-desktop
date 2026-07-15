@@ -39,7 +39,7 @@ const BeatCard: React.FC<{
     <BeatShell
       c={c}
       title={name ? `Welcome to OpenSwarm, ${name}.` : 'Welcome to OpenSwarm.'}
-      body="Here's your Swarm Card. And with that, your canvas is ready."
+      body="Here's your Swarm Card. Show it off or keep it to yourself."
       nextLabel="Get started"
       onNext={() => onFinish(name.trim() || null)}
       onBack={onBack}

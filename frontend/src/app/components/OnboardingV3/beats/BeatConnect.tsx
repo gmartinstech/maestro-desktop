@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE } from '@/shared/config';
 import { fetchModels } from '@/shared/state/modelsSlice';
@@ -13,7 +12,7 @@ import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import type { ProviderIdentity } from '../onboardingV3Api';
 import BeatShell from './BeatShell';
 
-// The single ask of the whole flow. Reuses the proven Settings connect flow verbatim; the scan disclosure lives here as one honest line with an opt-out, and the scan runs during the OAuth wait.
+// The single ask of the whole flow, staged as Arc's import list: radio rows, no filler copy. Reuses the proven Settings connect flow verbatim; the scan disclosure is one quiet line, and the scan runs during the OAuth wait.
 const BeatConnect: React.FC<{
   c: ClaudeTokens;
   identity: ProviderIdentity[];
@@ -82,61 +81,64 @@ const BeatConnect: React.FC<{
     <BeatShell
       c={c}
       title="Connect your AI."
-      body="Use the subscription you already pay for. OpenSwarm runs on your own Claude, ChatGPT, or Gemini account, right from this Mac."
-      nextLabel={connected ? 'Continue' : 'Continue without connecting'}
+      body="Use the subscription you already pay for."
+      nextLabel="Continue"
       onNext={onNext}
       onBack={onBack}
     >
-      <div style={{ width: 'min(460px, 100%)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {SUBSCRIPTION_PROVIDERS.map((p, i) => (
-          <motion.button
-            key={p.id}
-            onClick={() => !connected && handleConnect(p.id)}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 26, delay: 0.1 + i * 0.08 }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', textAlign: 'left',
-              borderRadius: c.radius.md, border: `1px solid ${c.border.medium}`, background: c.bg.surface,
-              cursor: connected ? 'default' : 'pointer', fontFamily: 'inherit',
-              boxShadow: c.shadow.sm,
-            }}
-          >
-            <span style={{ width: 12, height: 12, borderRadius: 999, background: p.color, flexShrink: 0 }} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: '1rem', fontWeight: 600, color: c.text.primary }}>{p.name}</span>
-              <span style={{ display: 'block', fontSize: '0.82rem', color: c.text.tertiary }}>{p.desc}</span>
-            </span>
-            {connecting === p.id && !connected && <span style={{ fontSize: '0.8rem', color: c.text.tertiary }}>waiting for sign-in...</span>}
-            {connected && connecting === p.id && <Check size={18} color={c.status.success} />}
-          </motion.button>
-        ))}
+      <div style={{ width: 'min(440px, 100%)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {SUBSCRIPTION_PROVIDERS.map((p, i) => {
+          const isThis = connecting === p.id;
+          const filled = connected && isThis;
+          return (
+            <motion.button
+              key={p.id}
+              onClick={() => !connected && handleConnect(p.id)}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 26, delay: 0.1 + i * 0.08 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14, padding: '13px 14px 13px 16px', textAlign: 'left',
+                borderRadius: c.radius.md, border: `1px solid ${filled ? c.accent.primary : c.border.medium}`,
+                background: c.bg.surface, cursor: connected ? 'default' : 'pointer', fontFamily: 'inherit',
+                boxShadow: c.shadow.sm,
+              }}
+            >
+              <span style={{
+                width: 18, height: 18, borderRadius: 999, flexShrink: 0, boxSizing: 'border-box',
+                border: `2px solid ${filled ? c.accent.primary : c.border.strong}`,
+                background: filled ? c.accent.primary : 'transparent',
+                boxShadow: filled ? `inset 0 0 0 3px ${c.bg.surface}` : 'none',
+              }} />
+              <span style={{ flex: 1, fontSize: '1rem', fontWeight: 600, color: c.text.primary }}>
+                {p.name}
+                {isThis && !connected && <span style={{ marginLeft: 10, fontSize: '0.8rem', fontWeight: 400, color: c.text.tertiary }}>waiting for sign-in...</span>}
+              </span>
+              <span style={{
+                width: 36, height: 36, borderRadius: 9, flexShrink: 0, background: `${p.color}26`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ width: 13, height: 13, borderRadius: 999, background: p.color }} />
+              </span>
+            </motion.button>
+          );
+        })}
         {userCode && !connected && (
-          <div style={{ textAlign: 'center', padding: '10px 0', fontSize: '0.9rem', color: c.text.secondary }}>
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: '0.9rem', color: c.text.secondary }}>
             Your code: <strong style={{ fontFamily: c.font.mono, letterSpacing: '0.08em' }}>{userCode}</strong>
           </div>
         )}
         {connected && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{
-              padding: '12px 16px', borderRadius: c.radius.md, background: c.status.successBg,
-              color: c.status.success, fontSize: '0.9rem', fontWeight: 500,
-            }}
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '4px 2px', fontSize: '0.9rem', fontWeight: 500, color: c.status.success }}>
             Connected{connectedIdentity?.email ? ` as ${connectedIdentity.email}` : ''}
             {connectedIdentity?.plan ? ` · ${connectedIdentity.label} ${connectedIdentity.plan}` : ''}
           </motion.div>
         )}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 6, cursor: 'pointer', fontSize: '0.8rem', color: c.text.tertiary, lineHeight: 1.5 }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 8, cursor: 'pointer', fontSize: '0.82rem', color: c.text.tertiary, lineHeight: 1.5 }}>
           <input type="checkbox" checked={scanConsent} onChange={(e) => setScanConsent(e.target.checked)} style={{ marginTop: 2 }} />
-          <span>
-            While you sign in, take a quick local look around (app names and folder counts only) to personalize my suggestions.
-            Nothing is stored or sent anywhere except to your own AI.
-          </span>
+          <span>Take a quick local look around to personalize my setup. Nothing leaves this Mac.</span>
         </label>
-        <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
+        <div style={{ display: 'flex', gap: 18, marginTop: 2 }}>
           <button onClick={() => setShowKeys(!showKeys)} style={{ border: 'none', background: 'transparent', padding: 0, color: c.text.ghost, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
             Use an API key instead
           </button>

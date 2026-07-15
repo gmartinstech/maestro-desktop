@@ -24,8 +24,8 @@ const BeatTheme: React.FC<{
     <BeatShell
       c={c}
       title="Make it yours."
-      body="Pick a color, or add a second dot for a gradient. The whole app repaints as you drag; this is your home now."
-      nextLabel="Continue"
+      body="The whole app repaints as you drag. Add a second dot for a gradient."
+      nextLabel="Next"
       onNext={onNext}
       onBack={onBack}
     >

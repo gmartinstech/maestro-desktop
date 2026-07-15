@@ -34,7 +34,6 @@ export function useOnboardingRevealSeed({ isActive, canvasEmpty, viewportRef, ca
         const lines: string[] = ['While you were setting up, I got some ideas ready.'];
         if (scanSummary) lines.push(`Spotted on this Mac: ${scanSummary}.`);
         if (starters.length > 0) lines.push(`Ready to run:\n${starters.map((s) => `- ${s.title}`).join('\n')}`);
-        lines.push('Pick one in the chat, or just type what you need.');
         dispatch(addNote({ x: cx + DEFAULT_CARD_W / 2 + 48, y: cy - 140, color: 'yellow', content: lines.join('\n\n') }));
       }
       createWelcomeDraft();
