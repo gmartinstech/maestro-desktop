@@ -31,6 +31,7 @@ class VerifiedStep(BaseModel):
     text: str = ""       # for a fill
     expect: str = ""     # generic expectation; defaults to filled:<text> / changed
     irreversible: bool = False  # send/submit/pay: acted-but-unverified NEVER re-fires
+    chosen: bool = False  # the planner PICKED this among similar rows: flag it for review before anything irreversible
 
 
 async def p_fresh(execute_tool: ToolRunner, browser_id: str, tab_id: str) -> Tuple[str, str]:

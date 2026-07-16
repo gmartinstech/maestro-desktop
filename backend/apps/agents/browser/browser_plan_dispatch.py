@@ -22,22 +22,33 @@ from backend.apps.agents.browser.browser_prestage import P_BLOCKED_CLICK_RE
 
 logger = logging.getLogger(__name__)
 
-P_MAX_STEPS = 4
+P_MAX_STEPS = 6
 P_AUX_TIMEOUT_S = 10.0
+# Cross-page steps land right after a navigation; give the new page a beat before resolving.
+P_STEP_SETTLE_S = 1.2
+P_STATE_CAP = 6000
 
 P_SYSTEM = (
     "You compile the MECHANICAL prefix of a browser task into steps a dumb executor "
-    "runs. You see the task and the page's interactive elements. Emit ONLY steps you "
-    "are confident about, in order, as STRICT JSON (no prose): an array of\n"
+    "runs and VERIFIES one at a time. You see the task and the page's interactive "
+    "elements. Emit ONLY steps in order, as STRICT JSON (no prose): an array of\n"
     '{"action":"click"|"fill","target":"<element name EXACTLY as listed>",'
     '"role":"button"|"link"|"textbox"|"","text":"<for fill>",'
-    '"expect":"appeared:<text>"|"gone:<text>"|"url_changed"|"changed"|""}\n'
-    "Rules: target must be copied verbatim from a listed element name. ORDINALS map "
-    "to rows: 'the 4th story's comments' = copy the name of the 4th row matching that "
-    "shape (e.g. the 4th 'N comments' link, counting from the top of the list); you "
-    "may and should count. STOP before anything irreversible (send/submit/post/pay/"
-    "delete/confirm/apply), before any ambiguous choice, and before steps whose "
-    "elements are not yet on the page. 0-4 steps; [] when nothing is safely mechanical."
+    '"expect":"appeared:<text>"|"gone:<text>"|"url_changed"|"changed"|"",'
+    '"chosen":true|false}\n'
+    "Rules: a target is copied verbatim from a listed element name, EXCEPT steps after "
+    "one that navigates: those may name an element the task implies will appear (e.g. "
+    "'Message' after opening a profile). Each step is resolved against the live page "
+    "and verified before the next runs, so a wrong guess stops the chain safely. "
+    "Expectations: use url_changed for clicks that open a new page, appeared:<text> "
+    "for clicks that open a dialog or composer. ORDINALS map to rows: 'the 4th "
+    "story's comments' = copy the name of the 4th row matching that shape; you may "
+    "and should count. When the task names a person or thing and several rows are "
+    "similar, PICK the best row using the task's cues (exact name, connection degree, "
+    "location, verified) and mark that step \"chosen\":true. STOP the chain before "
+    "anything irreversible (send/submit/post/pay/delete/confirm/apply). NEVER fill a "
+    "message, comment, or post body: once a composer for one is open, stop, the main "
+    "agent writes and sends it. 0-6 steps; [] when nothing is safely mechanical."
 )
 
 
@@ -62,7 +73,8 @@ def parse_plan(reply: str) -> list:
             break  # irreversible-smelling: refuse this and everything after it
         steps.append(browser_verified_step.VerifiedStep(
             kind=action, target=target, role=str(r.get("role") or ""),
-            text=str(r.get("text") or ""), expect=str(r.get("expect") or "")))
+            text=str(r.get("text") or ""), expect=str(r.get("expect") or ""),
+            chosen=bool(r.get("chosen"))))
     return steps
 
 
@@ -86,9 +98,9 @@ async def run_plan_dispatch(
         client = get_anthropic_client_for_model(settings, aux_model)
         reply = safe_resp_text(await asyncio.wait_for(
             client.messages.create(
-                model=aux_model, max_tokens=400, temperature=0, system=P_SYSTEM,
+                model=aux_model, max_tokens=600, temperature=0, system=P_SYSTEM,
                 messages=[{"role": "user", "content": (
-                    f"Task: {task[:1200]}\n\nInteractive elements:\n{state_text[:3500]}")}],
+                    f"Task: {task[:1200]}\n\nInteractive elements:\n{state_text[:P_STATE_CAP]}")}],
             ), timeout=P_AUX_TIMEOUT_S))
         steps = parse_plan(reply)
         if not steps:
@@ -97,11 +109,12 @@ async def run_plan_dispatch(
         done: list[str] = []
         for step in steps:
             r = await browser_verified_step.run_verified_step(
-                step, browser_id, tab_id, execute_tool)
+                step, browser_id, tab_id, execute_tool, settle_s=P_STEP_SETTLE_S)
             if not r["ok"]:
                 done.append(f"{step.kind} {step.target!r} FAILED ({r['note']}); stopped there")
                 break
-            done.append(f"{step.kind} {step.target!r} done+verified")
+            mark = " [CHOSEN among similar rows: confirm it matches the task before anything irreversible]" if step.chosen else ""
+            done.append(f"{step.kind} {step.target!r} done+verified{mark}")
         note = (
             f"[Plan pre-executed and VERIFIED in code: {'; '.join(done)}. "
             "Do NOT redo these; continue from the page's CURRENT state below.]"

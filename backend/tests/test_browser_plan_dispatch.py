@@ -24,6 +24,25 @@ def test_parse_malformed_and_junk_fail_open():
     assert pd.parse_plan('[{"action":"hover","target":"X"},{"action":"click","target":""}]') == []
 
 
-def test_parse_caps_at_four_steps():
+def test_parse_caps_at_six_steps():
     plan = "[" + ",".join('{"action":"click","target":"B%d"}' % i for i in range(9)) + "]"
-    assert len(pd.parse_plan(plan)) == 4
+    assert len(pd.parse_plan(plan)) == 6
+
+
+def test_parse_carries_the_chosen_flag():
+    # The planner may PICK among similar rows (the disambiguation turn-collapser); the
+    # flag must survive parsing so the handoff note can mark the pick for review.
+    steps = pd.parse_plan(
+        '[{"action":"click","target":"Tyler Chen · 1st · Irvine, CA","chosen":true},'
+        '{"action":"click","target":"Message","role":"button"}]')
+    assert [s.chosen for s in steps] == [True, False]
+
+
+def test_chosen_cannot_smuggle_an_irreversible_click():
+    # A chosen pick relaxes WHICH row gets clicked, never WHAT may be clicked: the
+    # irreversible wall still breaks the chain even on a chosen step.
+    steps = pd.parse_plan(
+        '[{"action":"click","target":"Options","chosen":true},'
+        '{"action":"click","target":"Send now","chosen":true},'
+        '{"action":"click","target":"Home"}]')
+    assert [s.target for s in steps] == ["Options"]
