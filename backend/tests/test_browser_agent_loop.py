@@ -1525,10 +1525,10 @@ def test_compose_send_confirmation_model_voice_with_safe_fallback():
     class Resp2:
         def __init__(self, text): self.content = [Blk2(text)]
     class Aux:
-        def __init__(self, text): self._t = text; self.messages = self
-        async def create(self, **kw): return Resp2(self._t)
+        def __init__(self, text): self.txt = text; self.messages = self
+        async def create(self, **kw): return Resp2(self.txt)
 
-    run = lambda a: asyncio.get_event_loop().run_until_complete(a)
+    def run(a): return asyncio.run(a)
     # clean natural sentence -> used verbatim
     assert run(compose_send_confirmation(Aux("Done, I messaged Tyler and said hi."), "m", "say hi", "hi")) \
         == "Done, I messaged Tyler and said hi."
