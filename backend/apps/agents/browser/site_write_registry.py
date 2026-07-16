@@ -11,6 +11,7 @@ Live-validated end to end on Reddit (comment 271ms + reversible delete 246ms, ty
 """
 
 import asyncio
+import logging
 import os
 import time
 from typing import Any, Callable, Dict, FrozenSet, List, Tuple
@@ -21,6 +22,8 @@ from typeguard import typechecked
 
 from backend.apps.agents.browser import route_write
 from backend.apps.reddit_mcp_shim import reddit_writes
+
+logger = logging.getLogger(__name__)
 
 
 class WriteResult(BaseModel):
@@ -133,6 +136,13 @@ async def api_write(domain: str, action: str, params: Dict[str, Any]) -> WriteRe
         return WriteResult(ok=True, action=action, domain=d,
                            receipt=receipt_str(receipt),
                            latency_ms=int((time.monotonic() - t0) * 1000))
+    except reddit_writes.RedditError as e:
+        # EXPECTED site-side reject (not logged in, rate-limited, bad params): the model sees it and falls back; info, not an alarm. (Future adapters should raise their own recognizable reject type to land here.)
+        logger.info(f"[api-write] {d}/{action} rejected by the site: {e}")
+        return WriteResult(ok=False, action=action, domain=d, error=str(e)[:200],
+                           latency_ms=int((time.monotonic() - t0) * 1000))
     except Exception as e:
+        # UNEXPECTED: the adapter code itself threw (a bug, or the site changed shape). It fails open to the UI, so without this WARNING a systemically-broken fast path is INVISIBLE (looks like the tier just isn't used).
+        logger.warning(f"[api-write] {d}/{action} adapter FAILED unexpectedly (fast path broken here): {e}")
         return WriteResult(ok=False, action=action, domain=d, error=str(e)[:200],
                            latency_ms=int((time.monotonic() - t0) * 1000))

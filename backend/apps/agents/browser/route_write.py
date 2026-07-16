@@ -19,6 +19,7 @@ SAFETY (this IS the posture flip away from GET/HEAD-only, so the walls are belt-
 """
 
 import json
+import logging
 import os
 import re
 import time
@@ -31,6 +32,8 @@ from pydantic import BaseModel, ConfigDict
 from typeguard import typechecked
 
 from backend.apps.social_shims.session_source import get_session
+
+logger = logging.getLogger(__name__)
 
 WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # CSRF header a site derives from a cookie (so it survives a fresh borrowed session). Small on
@@ -206,5 +209,10 @@ def replay_write(method: str, url: str, body: Dict[str, Any], origin: str,
     try:
         status, text = issue_request(method, url, body, headers)
     except Exception as e:
+        # UNEXPECTED: the request itself blew up (network/DNS/TLS), not a same-origin/captured refusal. Fails open to the UI, so log it or the broken route-write tier is invisible.
+        logger.warning(f"[route-write] {method} {url} request FAILED (fast path broken here): {e}")
         return ReplayOutcome(ok=False, error=str(e)[:160], latency_ms=int((time.monotonic() - t0) * 1000))
-    return outcome_from_response(status, text, int((time.monotonic() - t0) * 1000))
+    out = outcome_from_response(status, text, int((time.monotonic() - t0) * 1000))
+    if not out.ok:
+        logger.info(f"[route-write] {method} {url} rejected by site: HTTP {out.status}")
+    return out
