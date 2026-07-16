@@ -514,6 +514,40 @@ def send_submit_index_in_state(state_text: str):
     return None
 
 
+# Tokens that mean the aux wrote machinery, not a user sentence: reject and fall back to a template.
+P_NOT_A_REPLY = ("browser", "clickindex", "composer", "textbox", "```", "{", "index", "http")
+
+
+async def compose_send_confirmation(aux_client, aux_model, task: str, payload: str) -> str:
+    """The final 'done' line in the model's OWN voice, via one cheap aux call, so it isn't a
+    hardcoded template. The SEND already happened in code; this only writes the words. Fail-open:
+    returns '' on any error OR if the output doesn't read like a plain user sentence (tool names,
+    JSON, a URL), so the caller falls back to a simple template. Aux tier = cheap + fast; a
+    one-sentence confirmation needs no frontier model, and it never re-does the mechanical work."""
+    if not aux_client or not aux_model or not payload:
+        return ""
+    prompt = (
+        "You just finished a task for the user by controlling their web browser, and it SUCCEEDED.\n"
+        f"The user asked: {task[:280]}\n"
+        f"What you sent: \"{payload[:280]}\"\n"
+        "Reply with ONE short, warm, first-person sentence confirming it's done, the way a helpful "
+        'friend would (e.g. "Done, I messaged Tyler and said hi."). No technical words, no quotes '
+        "wrapping the whole sentence, no preamble, just the sentence."
+    )
+    try:
+        resp = await aux_client.messages.create(
+            model=aux_model, max_tokens=80,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(getattr(b, "text", "") for b in (resp.content or [])).strip().strip('"').strip()
+    except Exception:
+        return ""
+    low = text.lower()
+    if not text or len(text) > 220 or any(t in low for t in P_NOT_A_REPLY):
+        return ""
+    return text
+
+
 def is_composer_fill(tool_name: str, tool_input: dict) -> bool:
     """True if this action typed a message into a composer (the moment the Send
     button is about to matter). Covers the solo fill, BrowserType, and a batched
@@ -1378,7 +1412,9 @@ async def run_browser_agent(
                 send_confirmed = True
                 done_called = True
                 done_success = True
-                done_message = f'Done, I sent "{p_script["payload"]}" for you.'
+                p_aux_c, p_aux_m = await p_get_aux_client()
+                done_message = (await compose_send_confirmation(p_aux_c, p_aux_m, task, p_script["payload"])
+                                or f'Done, I sent "{p_script["payload"]}" for you.')
             else:
                 # Clicked but the composer did NOT clear: the send is UNVERIFIED. Leave send_confirmed False so the loop can't shortcut to a "done" it never earned (r264 set it True here and the model then FALSELY claimed delivery). The model gets ONE truthful verify pass, never a blind resend.
                 task = f"{task}\n\n[{p_script['note']}]"
@@ -2070,7 +2106,10 @@ async def run_browser_agent(
                                 done_called = True
                                 done_success = True
                                 p_payload = browser_batch_replay.send_payload_from_log(action_log, task)
-                                done_message = (
+                                p_aux_c, p_aux_m = await p_get_aux_client()
+                                p_nice = (await compose_send_confirmation(p_aux_c, p_aux_m, task, p_payload)
+                                          if p_payload else "")
+                                done_message = p_nice or (
                                     f'Done, I sent "{p_payload}" for you.'
                                     if p_payload else
                                     "Done, I sent your message."

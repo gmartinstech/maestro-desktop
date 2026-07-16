@@ -1514,6 +1514,32 @@ def test_composer_fill_detection():
     assert not is_composer_fill("BrowserScroll", {})
 
 
+def test_compose_send_confirmation_model_voice_with_safe_fallback():
+    # The done line is model-written (aux), but validated: a clean sentence is used as-is; tool-ish
+    # / JSON / URL output is rejected so the caller falls back to a template (never leaks machinery).
+    import asyncio
+    from backend.apps.agents.browser.browser_agent import compose_send_confirmation
+
+    class Blk2:
+        def __init__(self, text): self.type = "text"; self.text = text
+    class Resp2:
+        def __init__(self, text): self.content = [Blk2(text)]
+    class Aux:
+        def __init__(self, text): self._t = text; self.messages = self
+        async def create(self, **kw): return Resp2(self._t)
+
+    run = lambda a: asyncio.get_event_loop().run_until_complete(a)
+    # clean natural sentence -> used verbatim
+    assert run(compose_send_confirmation(Aux("Done, I messaged Tyler and said hi."), "m", "say hi", "hi")) \
+        == "Done, I messaged Tyler and said hi."
+    # tool-ish / JSON / url -> rejected (empty) so caller templates
+    assert run(compose_send_confirmation(Aux("Try BrowserClickIndex then list."), "m", "t", "hi")) == ""
+    assert run(compose_send_confirmation(Aux('{"done": true}'), "m", "t", "hi")) == ""
+    # no aux / no payload -> empty (fail-open)
+    assert run(compose_send_confirmation(None, "m", "t", "hi")) == ""
+    assert run(compose_send_confirmation(Aux("Done!"), "m", "t", "")) == ""
+
+
 def test_send_index_handoff_points_only_at_a_real_send_button():
     # after a composer fill we hand the model the Send button's index so it clicks it directly instead of hunting; must never mistake an upsell/profile link for it
     from backend.apps.agents.browser.browser_agent import send_index_in_state
