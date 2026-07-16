@@ -431,6 +431,11 @@ RESULTS_URL_RE = re.compile(
     r"[?&](q|query|keywords|search|search_query|find|term)=|/search\b|/results\b", re.I,
 )
 P_AUTO_SCAN_MAX_PER_RUN = 2
+# The candidate scan is a fast HINT, not the critical path. Cap the aux input to the top of the
+# page (matches are first) and bail quickly, so a big page can't turn the scan into dead idle time
+# (a real 8s stall was measured on LinkedIn search). Head slice + short timeout = finishes-or-skips.
+P_SCAN_TEXT_CAP = 8000
+P_SCAN_TIMEOUT_S = 4.0
 
 
 def p_batch_ends_with_read(tool_input: dict) -> bool:
@@ -986,15 +991,21 @@ async def run_browser_agent(
                 if not isinstance(page, dict) or page.get("error") or not page.get("text"):
                     return ""
                 aux_client, aux_model = await p_get_aux_client()
+                # Cap the aux input to the top of the page: results pages put the matches first, and
+                # feeding a huge LinkedIn/Amazon page to the aux was blowing the whole time budget so
+                # the scan timed out with NOTHING (measured: 8001ms idle, empty). A head slice lets
+                # the aux actually FINISH fast (useful hint) instead of stalling.
                 return await browser_extract.extract_structured(
-                    aux_client, aux_model, str(page["text"]),
+                    aux_client, aux_model, str(page["text"])[:P_SCAN_TEXT_CAP],
                     "These are search results. Identify which result(s) match this task: "
                     f"{scan_for[:400]}\nFor each plausible candidate give its exact displayed name, "
                     "the distinguishing details shown (role, company, location, etc), and why it "
                     "does or does not match. If none clearly match, say so in `best`.",
                     {"candidates": [{"name": "", "details": "", "match": ""}], "best": ""},
                 )
-            out = await asyncio.wait_for(p_inner(), timeout=8.0)
+            # Bail fast: a scan that can't produce a hint quickly is worse than none (the model reads
+            # the page itself next turn anyway), so don't sit idle on it. 8s -> P_SCAN_TIMEOUT_S.
+            out = await asyncio.wait_for(p_inner(), timeout=P_SCAN_TIMEOUT_S)
         except Exception:
             out = ""
         return out or "", int((time.time() - p_t0) * 1000)

@@ -46,9 +46,17 @@ P_COMPOSE_ENTRY_RE = re.compile(r"\b(post|comment|reply|tweet|write|thread|note|
 
 
 def opener_mode() -> bool:
-    """Treatment flag: lets prestage OPEN a composer (post/comment/reply surfaces),
-    not just navigate to an already-open one. Off = today's byte-identical behavior."""
-    return os.environ.get("OSW_PRESTAGE_OPENER", "0") != "0"
+    """Whether prestage may OPEN a composer (click a person's Message / a 'Reply'/'Post'
+    surface) instead of only navigating to an already-open one. It's ON when its own flag is
+    set OR when the send-script is enabled: the send-script can only fire once a composer is
+    reached, and the opener is what reaches it, so they're a pair (a send-script run that
+    lands on a search page with no opener just declines and burns the slow model loop, the
+    exact miss we measured). Safe by construction: the opener never types and refuses any
+    send/submit/pay word, so a worst-case mis-click opens an empty box, never sends."""
+    if os.environ.get("OSW_PRESTAGE_OPENER", "0") != "0":
+        return True
+    from backend.apps.agents.browser.browser_send_script import script_enabled
+    return script_enabled()
 
 
 def click_refused(entry: str, li_text: str) -> bool:

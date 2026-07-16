@@ -54,8 +54,20 @@ def test_opener_allows_plain_navigation(monkeypatch):
 
 
 def test_deeper_reach_only_in_opener_mode(monkeypatch):
+    monkeypatch.delenv("OSW_SEND_SCRIPT", raising=False)   # isolate the opener flag
     monkeypatch.setenv("OSW_PRESTAGE_OPENER", "1")
     assert pre.opener_mode() is True
     monkeypatch.delenv("OSW_PRESTAGE_OPENER", raising=False)
     assert pre.opener_mode() is False
     assert pre.OPENER_MAX_STEPS > pre.MAX_STEPS
+
+
+def test_send_script_enables_opener_mode(monkeypatch):
+    # The coupling: the send-script needs a composer to fire and the opener is what reaches one,
+    # so enabling the send-script turns the opener on even without its own flag (else prestage
+    # lands on a search page, the send-script declines, and the slow model loop runs).
+    monkeypatch.delenv("OSW_PRESTAGE_OPENER", raising=False)
+    monkeypatch.setenv("OSW_SEND_SCRIPT", "1")
+    assert pre.opener_mode() is True
+    monkeypatch.setenv("OSW_SEND_SCRIPT", "0")
+    assert pre.opener_mode() is False
