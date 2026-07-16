@@ -885,6 +885,9 @@ async def run_browser_agent(
         logger.info(f"[browser-skills] skill exists for {p_early_host}; skipping prestage (replay owns the nav)")
 
     from backend.apps.agents.browser import browser_prestage
+    from backend.apps.agents.browser import browser_plan_dispatch
+    # Computed here (pure, task-only) so prestage + every dispatch tier below shares one verdict.
+    task_is_send = not deliverable_is_informational("", task)
     if (browser_prestage.prestage_enabled() and not app_mode and not cancel_event.is_set()
             and not p_skip_prestage_for_skill):
         try:
@@ -892,6 +895,7 @@ async def run_browser_agent(
                 browser_prestage.run_prestage(
                     task, browser_id, tab_id, current_url, browser_settings,
                     get_api_type(model), execute_browser_tool,
+                    perceive_only=(not task_is_send and browser_plan_dispatch.plan_dispatch_enabled()),
                 ),
                 timeout=browser_prestage.TOTAL_TIMEOUT_S + 10,
             )
@@ -1332,33 +1336,6 @@ async def run_browser_agent(
                     f"sim={p_h_score:.2f} steps={len(route_hint_keys)} state={p_h_skill.get('state')}"
                 )
 
-    task_is_send = not deliverable_is_informational("", task)
-    # Pre-nav landed on a results page (the cold entry case): scan it NOW so the model's very first turn can pick a candidate instead of read-then-decide. SKIP it for a SEND task: sending (message a person, reply to a post) clicks through to a composer, it never picks from a ranked candidate list, so the scan is a ~4s blocking aux call for nothing on the exact path we most want instant.
-    p_start_url = (current_url or initial_url or "").split("#")[0]
-    if p_start_url and RESULTS_URL_RE.search(p_start_url) and not task_is_send:
-        auto_scanned_urls.add(p_start_url)
-        p_scan_json, p_sc_ms = await p_scan_results(task)
-        if p_scan_json:
-            auto_scan_count += 1
-            messages[-1]["content"] = (
-                f"{messages[-1]['content']}\n\n[auto candidate scan] An assistant model read "
-                f"this results page against the task:\n{p_scan_json}\n"
-                "Treat it as a hint; verify on the page before acting."
-            )
-            action_log.append({
-                "tool": "BrowserExtract", "input": {"instruction": "(auto candidate scan)"},
-                "result_summary": p_scan_json[:200], "elapsed_ms": p_sc_ms, "ok": True,
-            })
-            logger.info(
-                f"[browser-cold {session_id}] dispatch candidate scan on {p_start_url[:90]} "
-                f"in {p_sc_ms}ms ({len(p_scan_json)}ch)"
-            )
-        else:
-            logger.info(
-                f"[browser-cold {session_id}] dispatch candidate scan empty on "
-                f"{p_start_url[:90]} after {p_sc_ms}ms"
-            )
-
     text_parts = []  # initialized before loop so post-loop summary (line ~1294) has a default
     rp_violations = 0  # turns the model acted without ReportProgress (now accepted + reminded, not rejected)
     # The model finishes by calling the Done tool; `message` is the clean human reply, `success` whether the goal was met. Falls back to terminal text on the rare run that stops without calling Done.
@@ -1461,6 +1438,33 @@ async def run_browser_agent(
             done_called = True
             done_success = True
             done_message = p_read_answer
+
+    # Candidate scan on a results-page entry, MOVED below the collapse tiers: it exists to hint the MODEL's first turn, so on a run the tiers already finished it was a measured ~4s of blocking aux for nothing.
+    p_start_url = (current_url or initial_url or "").split("#")[0]
+    if (p_start_url and RESULTS_URL_RE.search(p_start_url) and not task_is_send
+            and not done_called and not cancel_event.is_set()):
+        auto_scanned_urls.add(p_start_url)
+        p_scan_json, p_sc_ms = await p_scan_results(task)
+        if p_scan_json:
+            auto_scan_count += 1
+            messages[-1]["content"] = (
+                f"{messages[-1]['content']}\n\n[auto candidate scan] An assistant model read "
+                f"this results page against the task:\n{p_scan_json}\n"
+                "Treat it as a hint; verify on the page before acting."
+            )
+            action_log.append({
+                "tool": "BrowserExtract", "input": {"instruction": "(auto candidate scan)"},
+                "result_summary": p_scan_json[:200], "elapsed_ms": p_sc_ms, "ok": True,
+            })
+            logger.info(
+                f"[browser-cold {session_id}] dispatch candidate scan on {p_start_url[:90]} "
+                f"in {p_sc_ms}ms ({len(p_scan_json)}ch)"
+            )
+        else:
+            logger.info(
+                f"[browser-cold {session_id}] dispatch candidate scan empty on "
+                f"{p_start_url[:90]} after {p_sc_ms}ms"
+            )
 
     try:
         for turn in range(MAX_TURNS):

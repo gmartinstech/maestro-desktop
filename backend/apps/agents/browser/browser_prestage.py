@@ -195,9 +195,13 @@ async def run_prestage(
     settings,
     primary_api: str | None,
     execute_tool: ToolRunner,
+    perceive_only: bool = False,
 ) -> tuple[str, str, list[dict]]:
     """(perception_block, current_url, action_records); ('', start_url, [])
-    means nothing staged and the caller proceeds exactly as before."""
+    means nothing staged and the caller proceeds exactly as before.
+    perceive_only skips the aux navigation loop and just captures the page: the
+    caller has a verified click-through tier of its own (plan-dispatch), so the
+    aux asks here were measured pure overhead (~2s) on that path."""
     t0 = time.monotonic()
     recs: list[dict] = []
     try:
@@ -256,7 +260,7 @@ async def run_prestage(
                     break
                 await asyncio.sleep(1.0)
 
-        p_max_steps = OPENER_MAX_STEPS if opener_mode() else MAX_STEPS
+        p_max_steps = 0 if perceive_only else (OPENER_MAX_STEPS if opener_mode() else MAX_STEPS)
         p_total_timeout = OPENER_TOTAL_TIMEOUT_S if opener_mode() else TOTAL_TIMEOUT_S
         p_system = P_SYSTEM_OPENER if opener_mode() else P_SYSTEM
         p_results_overruled = False
@@ -330,7 +334,7 @@ async def run_prestage(
                 done_desc.append(f"clicked {entry[:70]}")
             steps += 1
 
-        if steps:
+        if steps or not li_text:
             li_text, gt_text, seen_url = await perceive()
             current_url = seen_url or current_url
         block = perception_block(li_text, gt_text, stage_note_for(start_url, done_desc, current_url, staged_complete))
@@ -339,8 +343,8 @@ async def run_prestage(
                 recs.append({"tool": tool_name, "input": {}, "ok": True,
                              "result_summary": text[:200], "elapsed_ms": 0})
         logger.info(
-            f"[browser-prestage] done: steps={steps} url={current_url[:80]} "
-            f"in {int((time.monotonic() - t0) * 1000)}ms"
+            f"[browser-prestage] done: steps={steps}{' (perceive-only)' if perceive_only else ''} "
+            f"url={current_url[:80]} in {int((time.monotonic() - t0) * 1000)}ms"
         )
         return block, current_url, recs
     except Exception as e:
