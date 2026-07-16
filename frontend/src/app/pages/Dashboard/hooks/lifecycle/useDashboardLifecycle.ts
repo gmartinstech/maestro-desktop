@@ -113,13 +113,16 @@ export function useDashboardLifecycle({
 
   useEffect(() => {
     if (!dashboardId) return;
-    hasFittedRef.current = false;
-    restoredExpandedRef.current = false;
-    setOutputsRefetched(false);
-    dispatch(resetLayout({ keepBrowserIds: getKeepAliveBrowserIds() }));
-    // CRITICAL path: these populate the cards the user expects to see on first paint. Don't defer.
-    dispatch(fetchSessions({ dashboardId }));
-    dispatch(fetchLayout({ dashboardId }));
+    // Never wipe+reload the layout while a card drag or marquee is in flight: a spurious mid-gesture nav (e.g. a phantom-dashboard round-trip) would unmount the card under the cursor and the drag silently dies. You can't switch dashboards while holding a drag, so any reset firing now is spurious. The shield class is up for exactly that window. Handlers below still install.
+    if (!document.body.classList.contains('dashboard-marquee-active')) {
+      hasFittedRef.current = false;
+      restoredExpandedRef.current = false;
+      setOutputsRefetched(false);
+      dispatch(resetLayout({ keepBrowserIds: getKeepAliveBrowserIds() }));
+      // CRITICAL path: these populate the cards the user expects to see on first paint. Don't defer.
+      dispatch(fetchSessions({ dashboardId }));
+      dispatch(fetchLayout({ dashboardId }));
+    }
     const cleanupBrowserHandler = initBrowserCommandHandler();
     // Global broadcasts (spawned browser cards) skip the replay log, so a socket gap loses them; a reconnect refetch is the only way they return.
     const unsubReconnect = dashboardWs.on('dashboard:reconnected', () => {
