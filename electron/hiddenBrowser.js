@@ -36,9 +36,9 @@ function makeWindow(partition) {
   }
 }
 
-async function withWindow(partition, fn) {
+async function withWindow(partition, fn, extraGraceMs = 0) {
   const win = makeWindow(partition);
-  const killer = setTimeout(() => { try { win.destroy(); } catch (_) {} }, LOAD_TIMEOUT_MS + SETTLE_MS + 8000);
+  const killer = setTimeout(() => { try { win.destroy(); } catch (_) {} }, LOAD_TIMEOUT_MS + SETTLE_MS + 8000 + extraGraceMs);
   try {
     return await fn(win);
   } finally {
@@ -46,6 +46,11 @@ async function withWindow(partition, fn) {
     try { if (!win.isDestroyed()) win.destroy(); } catch (_) {}
   }
 }
+
+// The provider-history harvest paginates a genuinely slow endpoint (ChatGPT's
+// /backend-api/conversations runs ~4s/page), so its offscreen window must outlive a
+// plain fetch/search window or it gets killed mid-pagination and the whole read is lost.
+const HARVEST_GRACE_MS = 20000;
 
 async function loadAndSettle(win, url) {
   // loadURL rejects on a sub-resource abort even when the main frame is fine, so a rejection is a warning, not a failure; we still try to read the DOM.
@@ -78,7 +83,7 @@ async function hiddenEval(partition, url, js) {
   return withWindow(partition, async (win) => {
     await loadAndSettle(win, url);
     return win.webContents.executeJavaScript(js, true).catch(() => null);
-  });
+  }, HARVEST_GRACE_MS);
 }
 
 // Inject the user's own session cookies (read + decrypted by the Python backend) into a
@@ -109,7 +114,7 @@ async function hiddenEvalWithCookies(url, cookieRecords, js) {
     return await withWindow(HARVEST_PARTITION, async (win) => {
       await loadAndSettle(win, url);
       return win.webContents.executeJavaScript(js, true).catch(() => null);
-    });
+    }, HARVEST_GRACE_MS);
   } finally {
     await wipe();
   }

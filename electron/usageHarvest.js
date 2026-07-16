@@ -27,30 +27,40 @@ function configure(opts) {
   if (opts && typeof opts.readCookies === 'function') p_readCookies = opts.readCookies;
 }
 
-// Runs in the page context. Sweeps the full conversation history (all titles,
-// paginated + deduped) plus ChatGPT Memory. Hard caps bound the work + PII footprint
-// even for a user with thousands of chats; every fetch fails open to empty.
+// Runs in the page context. Sweeps recent conversation titles (paginated + deduped)
+// plus ChatGPT Memory. Bounded on EVERY dimension so no provider's endpoint speed can
+// wedge the read: a wall-clock BUDGET_MS (ChatGPT's /conversations is ~4s/page, so an
+// unbounded loop over a many-chat account would run minutes and outlive the offscreen
+// window, losing everything), a per-fetch abort, and hard page/title caps. The most
+// recent titles are the strongest personalization signal, so a partial is a good result.
+const PREAMBLE = `
+  const BUDGET_MS=14000, PAGE=100, CAP_PAGES=60, CAP_TITLES=1000, GAP_MS=120, FETCH_MS=6000;
+  const startedAt = Date.now();
+  const haveTime = () => Date.now() - startedAt < BUDGET_MS;
+  const jget = async (url, extra) => {
+    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), FETCH_MS);
+    try { const r = await fetch(url, Object.assign({credentials:'include', signal:ac.signal}, extra||{})); return r.ok ? await r.json() : null; }
+    catch (e) { return null; } finally { clearTimeout(t); }
+  };`;
 const SCRIPT = {
-  codex: `(async () => {
-    const PAGE=100, CAP_PAGES=60, CAP_TITLES=1000, GAP_MS=90;
+  codex: `(async () => {${PREAMBLE}
     try {
-      const sess = await fetch('/api/auth/session', {credentials:'include'}).then(r=>r.json());
+      const sess = await jget('/api/auth/session');
       if (!sess || !sess.accessToken) return {ok:false, total:0, titles:[], memories:[]};
-      const H = {headers:{Authorization:'Bearer '+sess.accessToken, accept:'application/json'}, credentials:'include'};
+      const H = {headers:{Authorization:'Bearer '+sess.accessToken, accept:'application/json'}};
       const seen = new Set(); const titles = [];
       let offset = 0, page = 0;
-      while (page < CAP_PAGES && titles.length < CAP_TITLES) {
-        const j = await fetch('/backend-api/conversations?offset='+offset+'&limit='+PAGE+'&order=updated', H).then(r=>r.ok?r.json():null).catch(()=>null);
+      while (page < CAP_PAGES && titles.length < CAP_TITLES && haveTime()) {
+        const j = await jget('/backend-api/conversations?offset='+offset+'&limit='+PAGE+'&order=updated', H);
         const items = (j && j.items) || [];
         if (!items.length) break;
         let fresh = 0;
         for (const c of items) { if (c && c.id && !seen.has(c.id)) { seen.add(c.id); if (c.title) titles.push(c.title); fresh++; } }
-        if (fresh === 0) break;
-        if (items.length < PAGE) break;
+        if (fresh === 0 || items.length < PAGE) break;
         offset += PAGE; page++;
         await new Promise(r=>setTimeout(r, GAP_MS));
       }
-      const mem = await fetch('/backend-api/memories?include_memory_entries=true', H).then(r=>r.ok?r.json():null).catch(()=>null);
+      const mem = await jget('/backend-api/memories?include_memory_entries=true', H);
       return {
         ok: true,
         total: seen.size,
@@ -59,22 +69,20 @@ const SCRIPT = {
       };
     } catch (e) { return {ok:false, total:0, titles:[], memories:[]}; }
   })()`,
-  claude: `(async () => {
-    const PAGE=100, CAP_PAGES=60, CAP_TITLES=1000, GAP_MS=90;
+  claude: `(async () => {${PREAMBLE}
     try {
-      const orgs = await fetch('/api/organizations', {credentials:'include', headers:{accept:'application/json'}}).then(r=>r.ok?r.json():null).catch(()=>null);
+      const orgs = await jget('/api/organizations', {headers:{accept:'application/json'}});
       if (!Array.isArray(orgs) || !orgs.length) return {ok:false, total:0, titles:[], memories:[]};
       const org = orgs[0].uuid;
       const seen = new Set(); const titles = [];
       let offset = 0, page = 0;
-      while (page < CAP_PAGES && titles.length < CAP_TITLES) {
-        const convs = await fetch('/api/organizations/'+org+'/chat_conversations?limit='+PAGE+'&offset='+offset, {credentials:'include', headers:{accept:'application/json'}}).then(r=>r.ok?r.json():null).catch(()=>null);
+      while (page < CAP_PAGES && titles.length < CAP_TITLES && haveTime()) {
+        const convs = await jget('/api/organizations/'+org+'/chat_conversations?limit='+PAGE+'&offset='+offset, {headers:{accept:'application/json'}});
         const items = Array.isArray(convs) ? convs : [];
         if (!items.length) break;
         let fresh = 0;
         for (const c of items) { const id = c && c.uuid; if (id && !seen.has(id)) { seen.add(id); if (c.name) titles.push(c.name); fresh++; } }
-        if (fresh === 0) break;
-        if (items.length < PAGE) break;
+        if (fresh === 0 || items.length < PAGE) break;
         offset += PAGE; page++;
         await new Promise(r=>setTimeout(r, GAP_MS));
       }
