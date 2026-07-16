@@ -114,7 +114,7 @@ def test_parse_prep_carries_reasons():
 
 
 def test_summarize_chatgpt_usage_leads_with_memory_and_caps():
-    from backend.apps.onboarding.chatgpt_usage import summarize_chatgpt_usage
+    from backend.apps.onboarding.usage.chatgpt_usage import summarize_chatgpt_usage
 
     s = summarize_chatgpt_usage(812, ["Has an Akita", "Squats 495"], ["Swift concurrency", "Deadlift form"])
     assert "812 past AI conversations" in s
@@ -126,10 +126,36 @@ def test_summarize_chatgpt_usage_leads_with_memory_and_caps():
 
 @pytest.mark.asyncio
 async def test_harvest_chatgpt_usage_fails_open_without_codex(monkeypatch):
-    from backend.apps.onboarding import chatgpt_usage
+    from backend.apps.onboarding.usage import chatgpt_usage
 
     monkeypatch.setattr(chatgpt_usage, "read_persisted_connections", lambda: [])
     assert await chatgpt_usage.harvest_chatgpt_usage() == ""
+
+
+def test_read_provider_cookies_fails_open_without_a_store(monkeypatch):
+    from backend.apps.onboarding.usage import browser_cookies
+
+    # No browser store has the domain -> empty jar, and the keychain is never touched.
+    monkeypatch.setattr(browser_cookies, "p_best_store", lambda domain: None)
+    assert browser_cookies.read_provider_cookies("claude.ai") == {}
+
+
+def test_summarize_claude_usage_counts_and_caps():
+    from backend.apps.onboarding.usage.claude_usage import summarize_claude_usage
+
+    s = summarize_claude_usage(490, ["Yuji Itadori and Buddhism", "B2B SaaS Startup Ideas"])
+    assert "490 past Claude conversations" in s
+    assert "Yuji Itadori and Buddhism; B2B SaaS Startup Ideas" in s
+    big = summarize_claude_usage(1000, [f"topic number {i} about something specific" for i in range(1000)])
+    assert len(big) <= 4000
+
+
+@pytest.mark.asyncio
+async def test_harvest_claude_usage_fails_open_without_cookies(monkeypatch):
+    from backend.apps.onboarding.usage import claude_usage
+
+    monkeypatch.setattr(claude_usage, "read_provider_cookies", lambda domain: {})
+    assert await claude_usage.harvest_claude_usage() == ""
 
 
 @pytest.mark.asyncio

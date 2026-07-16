@@ -43,13 +43,20 @@ def post_scan() -> dict:
 @onboarding.router.post("/prep")
 @typechecked
 async def post_prep(body: PrepRequest) -> dict:
-    from backend.apps.onboarding.chatgpt_usage import harvest_chatgpt_usage
+    from backend.apps.onboarding.usage.chatgpt_usage import harvest_chatgpt_usage
+    from backend.apps.onboarding.usage.claude_usage import harvest_claude_usage
     from backend.apps.settings.store import load_settings
 
-    # The frontend read needs a logged-in provider CARD, which a fresh install lacks; the codex connect token reads the ChatGPT backend directly, so fill the gap here.
+    # The frontend read needs a logged-in provider CARD, which a fresh install lacks. Fill the gap from what we already have: ChatGPT via the codex connect token, Claude via the user's own browser session cookies. Each fails open to "", so a missing one just drops out.
     if not body.usage_summary.strip():
-        harvested = await harvest_chatgpt_usage()
-        if harvested:
-            body.usage_summary = harvested
+        parts: list[str] = []
+        chatgpt = await harvest_chatgpt_usage()
+        if chatgpt:
+            parts.append("ChatGPT usage:\n" + chatgpt)
+        claude = await harvest_claude_usage()
+        if claude:
+            parts.append("Claude usage:\n" + claude)
+        if parts:
+            body.usage_summary = "\n\n".join(parts)
 
     return (await build_prep(load_settings(), body)).model_dump()
