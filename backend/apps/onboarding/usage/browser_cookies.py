@@ -18,7 +18,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from typeguard import typechecked
 
@@ -156,6 +156,47 @@ def read_provider_cookies(domain: str) -> Dict[str, str]:
         except OSError:
             pass
     return jar
+
+
+@typechecked
+def read_provider_cookie_records(domain: str) -> List[Dict[str, Any]]:
+    """Full cookie records ({name,value,domain,path,secure,httponly}) for `domain`, so Electron's offscreen browser can re-inject the session faithfully and pass Cloudflare with a real Chrome TLS handshake. Same one-store, one-keychain-touch path as read_provider_cookies."""
+    store = p_best_store(domain)
+    if store is None:
+        return []
+    browser, db_path = store
+    key = p_safe_storage_key(browser)
+    if key is None:
+        return []
+    records: List[Dict[str, Any]] = []
+    tmp = tempfile.mktemp()
+    try:
+        shutil.copy2(db_path, tmp)
+        con = sqlite3.connect(f"file:{tmp}?mode=ro", uri=True)
+        cur = con.cursor()
+        cur.execute(
+            "SELECT name, encrypted_value, host_key, path, is_secure, is_httponly FROM cookies WHERE host_key LIKE ?",
+            (f"%{domain}",),
+        )
+        for name, enc, host_key, path, is_secure, is_httponly in cur.fetchall():
+            if not enc:
+                continue
+            val = p_decrypt(bytes(enc), key)
+            if val is None:
+                continue
+            records.append({
+                "name": str(name), "value": val, "domain": str(host_key),
+                "path": str(path) or "/", "secure": bool(is_secure), "httponly": bool(is_httponly),
+            })
+        con.close()
+    except Exception:
+        pass
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    return records
 
 
 @typechecked

@@ -767,6 +767,35 @@ function getPythonPath() {
   return path.join(__dirname, '..', 'backend', '.venv', 'bin', 'python3');
 }
 
+// Read the user's provider session cookies via a one-shot bundled-python invocation, so the
+// offscreen harvest can inject them and pass provider Cloudflare with a real Chrome TLS
+// handshake. Spawned, NEVER an HTTP endpoint, so a token-holding agent can't reach it: only
+// the app shell invokes it. Always resolves (to [] on any failure) so the harvest just falls
+// back to the opportunistic path. mirrors startBackend's python env (projectRoot + site-packages).
+function p_readProviderCookies(domain) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    try {
+      const root = isPackaged ? process.resourcesPath : path.join(__dirname, '..');
+      const env = { ...process.env, PYTHONUTF8: '1', PYTHONDONTWRITEBYTECODE: '1' };
+      if (isPackaged) {
+        const sitePackages = process.platform === 'win32'
+          ? path.join(process.resourcesPath, 'python-env', 'Lib', 'site-packages')
+          : path.join(process.resourcesPath, 'python-env', 'lib', 'python3.13', 'site-packages');
+        env.PYTHONPATH = [root, sitePackages].join(path.delimiter);
+      }
+      const proc = spawn(getPythonPath(), ['-m', 'backend.apps.onboarding.usage.dump_cookies', String(domain)], { cwd: root, env });
+      let out = '';
+      proc.stdout.on('data', (d) => { out += d.toString(); });
+      proc.on('error', () => finish([]));
+      proc.on('close', () => { try { const j = JSON.parse(out); finish(Array.isArray(j) ? j : []); } catch (_) { finish([]); } });
+      setTimeout(() => { try { proc.kill(); } catch (_) {} finish([]); }, 25000);
+    } catch (_) { finish([]); }
+  });
+}
+usageHarvest.configure({ readCookies: p_readProviderCookies });
+
 // Path to a real Node.js binary bundled in extraResources, or null if not
 // shipped (dev mode, or build that skipped the node-fetch step). Backend
 // reads OPENSWARM_NODE_PATH env var to prefer this over both system `node`

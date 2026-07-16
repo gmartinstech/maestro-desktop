@@ -15,6 +15,18 @@ const ORIGIN = {
   claude: 'https://claude.ai/',
 };
 
+const DOMAIN = {
+  codex: 'chatgpt.com',
+  claude: 'claude.ai',
+};
+
+// Main injects a (domain) => Promise<cookieRecords[]> that spawns the Python cookie reader.
+// Left null off-Electron / before boot, so harvest silently skips the imported-cookie path.
+let p_readCookies = null;
+function configure(opts) {
+  if (opts && typeof opts.readCookies === 'function') p_readCookies = opts.readCookies;
+}
+
 // Runs in the page context. Sweeps the full conversation history (all titles,
 // paginated + deduped) plus ChatGPT Memory. Hard caps bound the work + PII footprint
 // even for a user with thousands of chats; every fetch fails open to empty.
@@ -73,10 +85,29 @@ const SCRIPT = {
 
 const EMPTY = { ok: false, total: 0, titles: [], memories: [] };
 
-async function harvest(partition, provider) {
-  if (provider !== 'codex' && provider !== 'claude') return EMPTY;
-  const res = await hiddenBrowser.hiddenEval(partition, ORIGIN[provider], SCRIPT[provider]).catch(() => null);
-  return res && typeof res === 'object' && res.ok ? res : EMPTY;
+function p_usable(res) {
+  return res && typeof res === 'object' && res.ok &&
+    (res.total > 0 || (res.memories && res.memories.length) || (res.titles && res.titles.length));
 }
 
-module.exports = { harvest };
+async function harvest(partition, provider) {
+  if (provider !== 'codex' && provider !== 'claude') return EMPTY;
+  // First run: read the user's own browser session cookies, inject into a throwaway real-Chrome
+  // context, and harvest there. This is the only path that beats provider Cloudflare AND works
+  // before the user has opened the site in-app.
+  if (p_readCookies) {
+    try {
+      const records = await p_readCookies(DOMAIN[provider]);
+      if (records && records.length) {
+        const viaCookies = await hiddenBrowser.hiddenEvalWithCookies(ORIGIN[provider], records, SCRIPT[provider]).catch(() => null);
+        if (p_usable(viaCookies)) return viaCookies;
+      }
+    } catch (_) { /* fall through to the opportunistic path */ }
+  }
+  // Opportunistic: the user already logged into the site in an in-app card, so the browser
+  // partition holds the session; read it directly (also a real Chrome context).
+  const res = await hiddenBrowser.hiddenEval(partition, ORIGIN[provider], SCRIPT[provider]).catch(() => null);
+  return p_usable(res) ? res : EMPTY;
+}
+
+module.exports = { harvest, configure };

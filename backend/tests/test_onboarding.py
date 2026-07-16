@@ -135,9 +135,25 @@ async def test_harvest_chatgpt_usage_fails_open_without_codex(monkeypatch):
 def test_read_provider_cookies_fails_open_without_a_store(monkeypatch):
     from backend.apps.onboarding.usage import browser_cookies
 
-    # No browser store has the domain -> empty jar, and the keychain is never touched.
+    # No browser store has the domain -> empty jar/records, and the keychain is never touched.
     monkeypatch.setattr(browser_cookies, "p_best_store", lambda domain: None)
     assert browser_cookies.read_provider_cookies("claude.ai") == {}
+    assert browser_cookies.read_provider_cookie_records("claude.ai") == []
+
+
+def test_dump_cookies_only_serves_allowlisted_domains(monkeypatch, capsys):
+    from backend.apps.onboarding.usage import dump_cookies
+
+    # Patch the name in dump_cookies' own namespace, so a real read (+ keychain) never fires.
+    monkeypatch.setattr(dump_cookies, "read_provider_cookie_records", lambda domain: [{"name": "x", "value": "y"}])
+    # An off-list domain must never trigger a read, prints [].
+    monkeypatch.setattr("sys.argv", ["dump_cookies", "evil.example.com"])
+    dump_cookies.main()
+    assert capsys.readouterr().out == "[]"
+    # An allowlisted domain passes through to the reader.
+    monkeypatch.setattr("sys.argv", ["dump_cookies", "claude.ai"])
+    dump_cookies.main()
+    assert '"name": "x"' in capsys.readouterr().out
 
 
 def test_summarize_claude_usage_counts_and_caps():

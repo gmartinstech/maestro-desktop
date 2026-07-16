@@ -6,7 +6,7 @@
 //
 // Main-process only (offscreen BrowserWindow isn't a renderer webview). Every
 // path destroys its window in a finally, so a failure can never leak a window.
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, session } = require('electron');
 
 const SCRAPE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const SETTLE_MS = 2800;
@@ -81,6 +81,40 @@ async function hiddenEval(partition, url, js) {
   });
 }
 
+// Inject the user's own session cookies (read + decrypted by the Python backend) into a
+// throwaway IN-MEMORY session, then run an app-authored read from a real Chromium context.
+// This is how we beat provider Cloudflare: a raw HTTP client's TLS handshake gets fingerprint-
+// blocked, but this IS Chrome, so it passes exactly like the user's browser. The partition has
+// no "persist:" prefix, so nothing ever hits disk; cookies are cleared before AND after.
+const HARVEST_PARTITION = 'osw-usage-harvest';
+
+async function hiddenEvalWithCookies(url, cookieRecords, js) {
+  const ses = session.fromPartition(HARVEST_PARTITION);
+  const wipe = async () => { try { await ses.clearStorageData({ storages: ['cookies'] }); } catch (_) {} };
+  await wipe();
+  for (const c of cookieRecords || []) {
+    try {
+      await ses.cookies.set({
+        url,
+        name: c.name,
+        value: c.value,
+        domain: c.domain || undefined,
+        path: c.path || '/',
+        secure: c.secure !== false,
+        httpOnly: !!c.httponly,
+      });
+    } catch (_) { /* skip a malformed cookie, never abort the set */ }
+  }
+  try {
+    return await withWindow(HARVEST_PARTITION, async (win) => {
+      await loadAndSettle(win, url);
+      return win.webContents.executeJavaScript(js, true).catch(() => null);
+    });
+  } finally {
+    await wipe();
+  }
+}
+
 // Google first (direct result URLs, best quality); DuckDuckGo in a real browser
 // second (immune to the httpx 202 throttle); Bing last (results are redirect-wrapped).
 const ENGINES = [
@@ -114,4 +148,4 @@ async function hiddenSearch(partition, query, numResults) {
   return { error: 'all browser search engines failed', detail: errors.join('; ') };
 }
 
-module.exports = { hiddenFetch, hiddenSearch, hiddenEval };
+module.exports = { hiddenFetch, hiddenSearch, hiddenEval, hiddenEvalWithCookies };
