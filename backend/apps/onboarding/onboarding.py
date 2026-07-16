@@ -43,6 +43,13 @@ def post_scan() -> dict:
 @onboarding.router.post("/prep")
 @typechecked
 async def post_prep(body: PrepRequest) -> dict:
+    from backend.apps.onboarding.chatgpt_usage import harvest_chatgpt_usage
     from backend.apps.settings.store import load_settings
+
+    # The frontend read needs a logged-in provider CARD, which a fresh install lacks; the codex connect token reads the ChatGPT backend directly, so fill the gap here.
+    if not body.usage_summary.strip():
+        harvested = await harvest_chatgpt_usage()
+        if harvested:
+            body.usage_summary = harvested
 
     return (await build_prep(load_settings(), body)).model_dump()

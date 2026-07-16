@@ -113,6 +113,25 @@ def test_parse_prep_carries_reasons():
     assert parsed.app_reason == "you plan lifts with ChatGPT daily"
 
 
+def test_summarize_chatgpt_usage_leads_with_memory_and_caps():
+    from backend.apps.onboarding.chatgpt_usage import summarize_chatgpt_usage
+
+    s = summarize_chatgpt_usage(812, ["Has an Akita", "Squats 495"], ["Swift concurrency", "Deadlift form"])
+    assert "812 past AI conversations" in s
+    assert "Has an Akita; Squats 495" in s
+    assert "Swift concurrency; Deadlift form" in s
+    big = summarize_chatgpt_usage(1000, [], [f"topic number {i} about something" for i in range(1000)])
+    assert len(big) <= 4000
+
+
+@pytest.mark.asyncio
+async def test_harvest_chatgpt_usage_fails_open_without_codex(monkeypatch):
+    from backend.apps.onboarding import chatgpt_usage
+
+    monkeypatch.setattr(chatgpt_usage, "read_persisted_connections", lambda: [])
+    assert await chatgpt_usage.harvest_chatgpt_usage() == ""
+
+
 @pytest.mark.asyncio
 async def test_build_prep_fails_open_without_provider(monkeypatch):
     async def boom(*args, **kwargs):
