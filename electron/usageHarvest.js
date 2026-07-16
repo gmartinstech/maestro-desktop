@@ -152,12 +152,24 @@ async function p_harvestOnce(partition, provider) {
 // windows still self-destruct via withWindow. Comfortably above a healthy harvest (~6s).
 const HARVEST_HARD_CAP_MS = 30000;
 
+// Never re-hit a provider we've already read successfully within this window. Rapid repeated
+// reads of the SAME session (especially Google's rotating __Secure-1PSIDTS) can trip provider
+// anti-abuse and log the user OUT of their real account, so every caller funnels through this
+// one cooldown. Failed reads are NOT cached, so a not-yet-logged-in provider stays retryable;
+// a cached success also serves an instant re-request with zero extra network.
+const HARVEST_COOLDOWN_MS = 15 * 60 * 1000;
+const p_okCache = {};
+
 async function harvest(partition, provider) {
   if (provider !== 'codex' && provider !== 'claude' && provider !== 'gemini') return EMPTY;
-  return Promise.race([
+  const cached = p_okCache[provider];
+  if (cached && Date.now() - cached.at < HARVEST_COOLDOWN_MS) return cached.result;
+  const result = await Promise.race([
     p_harvestOnce(partition, provider),
     new Promise((resolve) => setTimeout(() => resolve(EMPTY), HARVEST_HARD_CAP_MS)),
   ]);
+  if (p_usable(result)) p_okCache[provider] = { at: Date.now(), result };
+  return result;
 }
 
 module.exports = { harvest, configure };
