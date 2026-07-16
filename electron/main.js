@@ -54,6 +54,7 @@ const { spawn, execFileSync } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 const hiddenBrowser = require('./hiddenBrowser');
+const usageHarvest = require('./usageHarvest');
 const getPort = require('get-port');
 const http = require('http');
 const affiliateTracking = require('./affiliateTracking');
@@ -2808,6 +2809,14 @@ async function readPartitionCookies(domain) {
   }
 }
 ipcMain.handle('get-partition-cookies', (_e, domain) => readPartitionCookies(domain));
+
+// Silently read the user's own chatgpt.com / claude.ai history from the browser
+// partition's logged-in session (offscreen, no card) so onboarding can personalize.
+// Provider-gated + main-owned script (see usageHarvest.js); fails open to the empty
+// shape when no session exists in the partition.
+ipcMain.handle('harvest-usage', (_e, provider) =>
+  usageHarvest.harvest(BROWSER_PARTITION, provider).catch(() => ({ ok: false, total: 0, titles: [], memories: [] })),
+);
 
 // Suspend/resume state capsules: the app renderer stages a resumed webview's sessionStorage snapshot here (keyed by that guest's webContents id) right before loadURL; the guest preload sync-takes it at document-start with an origin match, so page scripts see restored state and logins survive suspension. In-memory only, single-shot, short TTL; a guest can only ever take its OWN capsule.
 const pendingSessionCapsules = new Map();

@@ -68,6 +68,19 @@ async function hiddenFetch(partition, url) {
   });
 }
 
+// Load a URL offscreen on the given partition (so it inherits that partition's
+// logged-in session) and run an app-authored script in the page context, returning
+// whatever it resolves to. Used to read the user's own provider history (chatgpt.com /
+// claude.ai) with no visible card. The script is caller-owned and must be app code,
+// never anything a remote page or the renderer can choose; the offscreen window is
+// destroyed in withWindow's finally regardless of outcome.
+async function hiddenEval(partition, url, js) {
+  return withWindow(partition, async (win) => {
+    await loadAndSettle(win, url);
+    return win.webContents.executeJavaScript(js, true).catch(() => null);
+  });
+}
+
 // Google first (direct result URLs, best quality); DuckDuckGo in a real browser
 // second (immune to the httpx 202 throttle); Bing last (results are redirect-wrapped).
 const ENGINES = [
@@ -101,4 +114,4 @@ async function hiddenSearch(partition, query, numResults) {
   return { error: 'all browser search engines failed', detail: errors.join('; ') };
 }
 
-module.exports = { hiddenFetch, hiddenSearch };
+module.exports = { hiddenFetch, hiddenSearch, hiddenEval };

@@ -10,8 +10,7 @@ import {
   fetchIdentity, runPrep, runScan, summarizeScan,
   type PrepResponse, type ProviderIdentity, type ScanResult,
 } from './onboardingV3Api';
-import { USAGE_READ_JS, summarizeUsage, type ProviderUsage, type UsageProvider } from '@/shared/providerUsage';
-import { findWebviewByDomain } from '@/shared/browserRegistry';
+import { summarizeUsage, type ProviderUsage, type UsageProvider } from '@/shared/providerUsage';
 import type { ModelOption } from '@/shared/state/modelsSlice';
 
 // The auto-launched onboarding jobs must ride the CHEAP tier, not the user's premium default; running two Sonnet/Opus agents unprompted on first launch would burn real quota. Pick the lowest-intelligence (cheapest) model in the default's provider group, so a Claude user's demo runs on Haiku, a ChatGPT user's on mini.
@@ -47,17 +46,16 @@ export function useOnboardingV3Pipeline() {
     fetchIdentity().then((ids) => { identityRef.current = ids; setIdentity(ids); }).catch(() => {});
   }, []);
 
-  // Read what the user works on from an already-open, logged-in provider card (chatgpt.com / claude.ai) via the proven findWebviewByDomain + executeJavaScript path. Fail-open: no card, not logged in, or off-Electron => empty summary, prep falls back to scan + identity.
+  // Read what the user works on, silently and with no card: main opens the provider site offscreen on the browser partition and runs its own harvest script (see electron/usageHarvest.js). Fail-open: no session in the partition, off-Electron, or an error => empty summary, prep falls back to scan + identity.
   const kickUsageRead = useCallback((provider: string, consented: boolean) => {
     if (usageReadRef.current || !consented) return;
     const key: UsageProvider | null = provider === 'codex' ? 'codex' : provider === 'claude' ? 'claude' : null;
     if (!key) return;
     usageReadRef.current = (async () => {
       try {
-        const domain = key === 'codex' ? 'chatgpt.com' : 'claude.ai';
-        const wv = findWebviewByDomain(domain);
-        if (!wv || typeof wv.executeJavaScript !== 'function') return;
-        const raw = (await wv.executeJavaScript(USAGE_READ_JS[key])) as ProviderUsage | null;
+        const harvestUsage = window.openswarm?.harvestUsage;
+        if (typeof harvestUsage !== 'function') return;
+        const raw = (await harvestUsage(key)) as ProviderUsage | null;
         usageSummaryRef.current = summarizeUsage(raw);
       } catch { /* fail-open */ }
     })();

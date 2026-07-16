@@ -50,6 +50,7 @@ declare global {
     onReloadShortcut?: (cb: () => void) => () => void;
     onBrowserShortcut?: (cb: (payload: { action: string; webContentsId: number }) => void) => () => void;
     openExternal: (url: string) => Promise<void>;
+    harvestUsage?: (provider: string) => Promise<{ ok: boolean; total: number; titles: string[]; memories: string[] } | null>;
     hardReset?: () => Promise<void>;
     clearBrowserData?: () => Promise<{ ok: boolean }>;
     onAuthUrl?: (cb: (url: string) => void) => () => void;
