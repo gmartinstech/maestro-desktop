@@ -23,13 +23,18 @@ P_AUX_TIMEOUT_S = 12.0
 # LinkedIn profile read 184 chars right after the click); wait out the render, bounded.
 P_THIN_RETRIES = 3
 P_THIN_SETTLE_S = 1.2
+# A long-enough-but-still-rendering page reads as INSUFFICIENT (measured: profile
+# passed 500 chars with the headline section missing); one settle + re-read + re-ask.
+P_INSUFFICIENT_RETRIES = 1
+P_INSUFFICIENT_SETTLE_S = 1.5
 
 P_SYSTEM = (
     "Answer the user's request using ONLY the page text provided. Be direct and "
     "complete in a few sentences; quote exact titles/values from the page. End "
     "with nothing else.\n"
-    "If the page text does not contain what the request needs, reply with "
-    "exactly the single word INSUFFICIENT."
+    "If ANY part of what the request asks for is missing from the page text, "
+    "reply with exactly the single word INSUFFICIENT. A partial or hedged "
+    "answer is worse than declining: the caller has a full fallback."
 )
 
 
@@ -56,31 +61,38 @@ async def run_read_script(
     if aux_client is None or not aux_model:
         return None
     try:
-        page = ""
-        for attempt in range(P_THIN_RETRIES):
-            r = await asyncio.wait_for(
-                execute_tool("BrowserGetText", {}, browser_id, tab_id), timeout=P_TEXT_TIMEOUT_S)
-            page = str(r.get("text") or "") if isinstance(r, dict) and "error" not in r else ""
-            if len(page) >= P_MIN_PAGE_CHARS:
-                break
-            await asyncio.sleep(P_THIN_SETTLE_S)
-        if len(page) < P_MIN_PAGE_CHARS:
-            logger.info(f"[browser-readscript] page too thin ({len(page)} chars); loop runs")
-            return None
         from backend.apps.agents.core.aux_llm import safe_resp_text
-        reply = safe_resp_text(await asyncio.wait_for(
-            aux_client.messages.create(
-                model=aux_model, max_tokens=500, temperature=0, system=P_SYSTEM,
-                messages=[{"role": "user", "content": (
-                    f"Request: {task[:1200]}\n\nPage text:\n{page[:P_MAX_PAGE_CHARS]}")}],
-            ), timeout=P_AUX_TIMEOUT_S))
-        ms = int((time.monotonic() - t0) * 1000)
-        answer = is_answer(reply)
-        if answer is None:
-            logger.info(f"[browser-readscript] insufficient in {ms}ms; loop runs")
-            return None
-        logger.info(f"[browser-readscript] answered from the staged page in {ms}ms")
-        return answer
+
+        async def p_page_text() -> str:
+            for attempt in range(P_THIN_RETRIES):
+                r = await asyncio.wait_for(
+                    execute_tool("BrowserGetText", {}, browser_id, tab_id), timeout=P_TEXT_TIMEOUT_S)
+                text = str(r.get("text") or "") if isinstance(r, dict) and "error" not in r else ""
+                if len(text) >= P_MIN_PAGE_CHARS:
+                    return text
+                await asyncio.sleep(P_THIN_SETTLE_S)
+            return ""
+
+        for ask in range(1 + P_INSUFFICIENT_RETRIES):
+            page = await p_page_text()
+            if len(page) < P_MIN_PAGE_CHARS:
+                logger.info(f"[browser-readscript] page too thin ({len(page)} chars); loop runs")
+                return None
+            reply = safe_resp_text(await asyncio.wait_for(
+                aux_client.messages.create(
+                    model=aux_model, max_tokens=500, temperature=0, system=P_SYSTEM,
+                    messages=[{"role": "user", "content": (
+                        f"Request: {task[:1200]}\n\nPage text:\n{page[:P_MAX_PAGE_CHARS]}")}],
+                ), timeout=P_AUX_TIMEOUT_S))
+            ms = int((time.monotonic() - t0) * 1000)
+            answer = is_answer(reply)
+            if answer is not None:
+                logger.info(f"[browser-readscript] answered from the staged page in {ms}ms (ask {ask + 1})")
+                return answer
+            if ask < P_INSUFFICIENT_RETRIES:
+                await asyncio.sleep(P_INSUFFICIENT_SETTLE_S)
+        logger.info(f"[browser-readscript] insufficient in {int((time.monotonic() - t0) * 1000)}ms; loop runs")
+        return None
     except Exception as e:
         logger.info(f"[browser-readscript] skipped ({e})")
         return None
