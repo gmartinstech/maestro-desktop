@@ -44,6 +44,52 @@ def script_enabled() -> bool:
     return os.environ.get("OSW_SEND_SCRIPT", "0") != "0"
 
 
+async def complete_send(
+    payload: str, state_committed: str, browser_id: str, tab_id: str,
+    execute_tool: ToolRunner, send_index_in_state: Callable[[str], object],
+) -> Dict[str, object]:
+    """Send tail for a composer that ALREADY holds `payload` (visible in state_committed): find the
+    Send control (ranked index first, else click-by-name over the full DOM), click it once, and
+    verify the two-sided receipt (the composer cleared the payload). Returns {clicked, sent, log,
+    note}: `clicked` = the send click landed, `sent` = the clear was verified. Never types, so it
+    can't fabricate content; a wrong Send match just fails the receipt, never a false claim. Shared
+    by the dispatch send-script and the mid-loop post-fill takeover."""
+    log: list = []
+
+    async def fresh_list() -> str:
+        try:
+            r = await asyncio.wait_for(
+                execute_tool("BrowserListInteractives", {}, browser_id, tab_id), timeout=6.0)
+            return str(r.get("text") or "") if isinstance(r, dict) and "error" not in r else ""
+        except Exception:
+            return ""
+
+    send_btn = send_index_in_state(state_committed)
+    if send_btn:
+        r_send = await execute_tool("BrowserClickIndex", {"index": send_btn[0]}, browser_id, tab_id)
+        send_name = send_btn[1]
+    else:
+        r_send = await execute_tool("BrowserClickByName", {"name": "Send", "role": "button"}, browser_id, tab_id)
+        send_name = "Send (by-name)"
+    clicked = isinstance(r_send, dict) and "error" not in r_send
+    log.append({"tool": "send click", "input": {"via": "index" if send_btn else "by-name"},
+                "ok": clicked, "result_summary": f"send click {send_name!r}"[:200],
+                "elapsed_ms": 0, "clicked_role": "button", "clicked_name": send_name})
+    if not clicked:
+        return {"clicked": False, "sent": False, "log": log, "note": "send click errored; fill committed, NOT sent"}
+    sent = False
+    for wait_s in (0.4, 1.0, 1.6):
+        await asyncio.sleep(wait_s)
+        state3 = await fresh_list()
+        if state3 and browser_verified_action.expectation_met(f"cleared:{payload}", state_committed, state3):
+            sent = True
+            break
+    note = ("" if sent else
+            "A Send-class click already RAN for this payload but the composer state is unverified: "
+            "verify on the page whether it delivered; do NOT send again unless verifiably absent.")
+    return {"clicked": True, "sent": sent, "log": log, "note": note}
+
+
 def quoted_payload(task: str) -> str:
     """The exact text the user quoted, only when it's unambiguous: exactly one
     distinct quoted span in the task. Anything else is the model's judgment call.
@@ -251,34 +297,11 @@ async def run_send_script(
         logger.info(f"[browser-sendscript] DRYRUN: WOULD send (fill committed, send_button_listed={send_ready}); not clicking")
         return {"sent": False, "payload": payload, "log": log,
                 "note": "DRYRUN: filled + ready to send, stopped before the irreversible click"}
-    # 3. the one irreversible click, solo. Prefer the ranked list's exact Send (an index click, cheapest); fall back to click-by-name, which searches the FULL enumerated DOM. GROUND TRUTH (probe r-dump): the profile-overlay Send is a real button the model clicks by name, but it ranks OUT of the capped numbered list, so send_index_in_state alone never sees it. click-by-name is exactly how the model sends there.
-    send_btn2 = send_index_in_state(state2)
-    if send_btn2:
-        r_send = await execute_tool("BrowserClickIndex", {"index": send_btn2[0]}, browser_id, tab_id)
-        send_name = send_btn2[1]
-    else:
-        r_send = await execute_tool("BrowserClickByName", {"name": "Send", "role": "button"}, browser_id, tab_id)
-        send_name = "Send (by-name)"
-    send_ok = isinstance(r_send, dict) and "error" not in r_send
-    log.append({"tool": "send click", "input": {"via": "index" if send_btn2 else "by-name"},
-                "ok": send_ok, "result_summary": f"script send click {send_name!r}"[:200],
-                "elapsed_ms": 0, "clicked_role": "button", "clicked_name": send_name})
-    if not send_ok:
-        logger.info(f"[browser-sendscript] send click errored ({send_name}); handing to model (fill committed, NOT sent)")
+    # 3+4: the irreversible click + two-sided receipt, shared with the mid-loop takeover. A click error hands back to the model (fill committed, not sent); a clicked-but-unverified send returns sent=False so the caller never claims delivery.
+    r = await complete_send(payload, state2, browser_id, tab_id, execute_tool, send_index_in_state)
+    log.extend(r["log"])
+    if not r["clicked"]:
+        logger.info("[browser-sendscript] send click errored; handing to model (fill committed, NOT sent)")
         return None
-    # 4. two-sided receipt via the GENERIC verifier: the send is confirmed only when
-    # the composer clears the payload ("cleared:<payload>"). Same verdict as the old
-    # inline check, now expressed as the site-agnostic expectation a verified-action
-    # executor uses everywhere, so this proven flow IS the executor's verification core.
-    cleared = False
-    for wait_s in (0.4, 1.0, 1.6):
-        await asyncio.sleep(wait_s)
-        state3 = await fresh_list()
-        if state3 and browser_verified_action.expectation_met(f"cleared:{payload}", state2, state3):
-            cleared = True
-            break
-    note = ("" if cleared else
-            "A Send-class click already RAN for this payload but the composer state is unverified: "
-            "verify on the page whether it delivered; do NOT send again unless verifiably absent.")
-    logger.info(f"[browser-sendscript] done sent_receipt={cleared} in {int((time.monotonic() - t0) * 1000)}ms")
-    return {"sent": cleared, "payload": payload, "log": log, "note": note}
+    logger.info(f"[browser-sendscript] done sent_receipt={r['sent']} in {int((time.monotonic() - t0) * 1000)}ms")
+    return {"sent": bool(r["sent"]), "payload": payload, "log": log, "note": str(r["note"])}
