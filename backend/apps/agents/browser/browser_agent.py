@@ -1378,7 +1378,7 @@ async def run_browser_agent(
                 send_confirmed = True
                 done_called = True
                 done_success = True
-                done_message = f'Sent "{p_script["payload"]}", the send registered and the composer cleared.'
+                done_message = f'Done, I sent "{p_script["payload"]}" for you.'
             else:
                 # Clicked but the composer did NOT clear: the send is UNVERIFIED. Leave send_confirmed False so the loop can't shortcut to a "done" it never earned (r264 set it True here and the model then FALSELY claimed delivery). The model gets ONE truthful verify pass, never a blind resend.
                 task = f"{task}\n\n[{p_script['note']}]"
@@ -2071,9 +2071,9 @@ async def run_browser_agent(
                                 done_success = True
                                 p_payload = browser_batch_replay.send_payload_from_log(action_log, task)
                                 done_message = (
-                                    f'Sent "{p_payload}", the send registered and the composer cleared.'
+                                    f'Done, I sent "{p_payload}" for you.'
                                     if p_payload else
-                                    "Sent it, the send registered and the composer cleared."
+                                    "Done, I sent your message."
                                 )
                                 logger.info(f"[browser-receipt {session_id}] two-sided receipt passed (fill committed + composer cleared); run ends in code")
                             else:
