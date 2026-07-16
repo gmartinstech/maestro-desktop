@@ -53,8 +53,6 @@ export function useDashboardInteractions({
 
     selection.selectCard(id, type, false);
     dispatch(bringToFront({ id, type }));
-    // Clicking INTO a card focuses it for scrolling: plain wheel now reads its content instead of zooming the canvas (Google Maps model). Clicking blank canvas clears it (below).
-    setScrollFocusedCard(id);
 
     // The Workflows window is an app you click around inside, not a card you re-center every tap. Single-click only raises + selects it; double-click still zoom-to-fits (handleCardDoubleClick). Without this, clicking any button inside it yanked the canvas into a re-zoom.
     if (type === 'workflows-hub' || type === 'workflows-monitor') return;
@@ -93,6 +91,8 @@ export function useDashboardInteractions({
 
   const handleBringToFront = useCallback((id: string, type: CardType) => {
     dispatch(bringToFront({ id, type }));
+    // Pressing ANY part of a card (header, body, composer) focuses it for scrolling, so its content scrolls instead of the canvas zooming (Google Maps model). Fires via onPointerDownCapture on every card, so a click into a chat's composer focuses it even though the body swallows the bubble. Cleared on blank-canvas press.
+    setScrollFocusedCard(id);
   }, [dispatch]);
 
   // A click INSIDE a webview's page never reaches the host DOM; BrowserCard forwards the guest's app-clicked IPC as this event. Select + raise only, no camera fit: you're clicking around inside the page, re-framing the canvas every tap would be hostile (same carve-out as the Workflows window).
@@ -112,7 +112,7 @@ export function useDashboardInteractions({
       if (agentDriven) return;
       selection.selectCard(browserId, 'browser', false);
       dispatch(bringToFront({ id: browserId, type: 'browser' }));
-      // Clicking inside a browser's page focuses it: plain wheel now scrolls the page instead of zooming the canvas.
+      // In-guest clicks never reach the host capture handler, so mark the browser focused here, mainly to UN-focus any chat so scroll over other cards behaves right (the browser's own page scroll/zoom is native regardless).
       setScrollFocusedCard(browserId);
     };
     window.addEventListener('openswarm:browser-guest-select', onGuestSelect);
