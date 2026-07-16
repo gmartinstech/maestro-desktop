@@ -199,6 +199,22 @@ def read_provider_cookie_records(domain: str) -> List[Dict[str, Any]]:
     return records
 
 
+# Gemini authenticates on the parent .google.com SSO domain, not gemini.google.com, so its
+# session lives in these named cookies. We read ONLY these (never the whole google cookie
+# jar) and only to load a Gemini page offscreen, keeping the ChatGPT/Claude trust frame.
+GOOGLE_AUTH_COOKIE_NAMES = {
+    "SID", "HSID", "SSID", "APISID", "SAPISID", "SIDCC", "NID",
+    "__Secure-1PSID", "__Secure-3PSID", "__Secure-1PSIDTS", "__Secure-3PSIDTS",
+    "__Secure-1PSIDCC", "__Secure-3PSIDCC", "__Secure-1PAPISID", "__Secure-3PAPISID",
+}
+
+
+@typechecked
+def read_google_session_records() -> List[Dict[str, Any]]:
+    """The named Google SSO cookies from .google.com, so the offscreen browser can load Gemini logged in. Scoped to the auth set by name, never a general google-cookie sweep."""
+    return [r for r in read_provider_cookie_records(".google.com") if r.get("name") in GOOGLE_AUTH_COOKIE_NAMES]
+
+
 @typechecked
 def cookie_header(jar: Dict[str, str]) -> str:
     return "; ".join(f"{k}={v}" for k, v in jar.items())

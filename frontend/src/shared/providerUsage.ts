@@ -1,6 +1,6 @@
 // The user's provider chat history is read offscreen in the main process (see electron/usageHarvest.js), which owns the injected script + the partition session. This module holds only the shared shape + the pure summarizer that turns the raw read into the compact profile block prep sees. The raw read is dropped after; only this summary travels.
 
-export type UsageProvider = 'codex' | 'claude';
+export type UsageProvider = 'codex' | 'claude' | 'gemini';
 
 export interface ProviderUsage {
   ok: boolean;

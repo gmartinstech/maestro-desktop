@@ -144,8 +144,9 @@ def test_read_provider_cookies_fails_open_without_a_store(monkeypatch):
 def test_dump_cookies_only_serves_allowlisted_domains(monkeypatch, capsys):
     from backend.apps.onboarding.usage import dump_cookies
 
-    # Patch the name in dump_cookies' own namespace, so a real read (+ keychain) never fires.
+    # Patch the names in dump_cookies' own namespace, so a real read (+ keychain) never fires.
     monkeypatch.setattr(dump_cookies, "read_provider_cookie_records", lambda domain: [{"name": "x", "value": "y"}])
+    monkeypatch.setattr(dump_cookies, "read_google_session_records", lambda: [{"name": "SID", "value": "g"}])
     # An off-list domain must never trigger a read, prints [].
     monkeypatch.setattr("sys.argv", ["dump_cookies", "evil.example.com"])
     dump_cookies.main()
@@ -154,6 +155,31 @@ def test_dump_cookies_only_serves_allowlisted_domains(monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", ["dump_cookies", "claude.ai"])
     dump_cookies.main()
     assert '"name": "x"' in capsys.readouterr().out
+    # Gemini routes to the SCOPED google reader, not a raw gemini.google.com read.
+    monkeypatch.setattr("sys.argv", ["dump_cookies", "gemini.google.com"])
+    dump_cookies.main()
+    assert '"name": "SID"' in capsys.readouterr().out
+
+
+def test_read_google_session_records_scopes_to_named_auth_cookies(monkeypatch):
+    from backend.apps.onboarding.usage import browser_cookies
+
+    seen_domain = {}
+
+    def fake_records(domain: str):
+        seen_domain["d"] = domain
+        return [
+            {"name": "SID", "value": "a"},
+            {"name": "__Secure-1PSID", "value": "b"},
+            {"name": "SEARCH_SAMESITE", "value": "c"},  # non-auth google cookie
+            {"name": "OTZ", "value": "d"},  # non-auth google cookie
+        ]
+
+    monkeypatch.setattr(browser_cookies, "read_provider_cookie_records", fake_records)
+    recs = browser_cookies.read_google_session_records()
+    # Reads the parent SSO domain, then keeps ONLY the named auth cookies (never a full sweep).
+    assert seen_domain["d"] == ".google.com"
+    assert {r["name"] for r in recs} == {"SID", "__Secure-1PSID"}
 
 
 def test_summarize_claude_usage_counts_and_caps():

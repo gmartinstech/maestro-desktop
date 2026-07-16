@@ -9,15 +9,27 @@ anything (bad domain, no session, denied keychain). Never logs the cookie values
 
 import json
 import sys
+from typing import Any, Dict, List
 
-from backend.apps.onboarding.usage.browser_cookies import read_provider_cookie_records
+from backend.apps.onboarding.usage.browser_cookies import (
+    read_google_session_records,
+    read_provider_cookie_records,
+)
 
 ALLOWED_DOMAINS = {"chatgpt.com", "claude.ai", "gemini.google.com"}
 
 
+def records_for(domain: str) -> List[Dict[str, Any]]:
+    # Gemini's login lives on the parent .google.com SSO domain, so read the scoped google
+    # auth set for it; every other provider reads only its own domain.
+    if domain == "gemini.google.com":
+        return read_google_session_records()
+    return read_provider_cookie_records(domain)
+
+
 def main() -> None:
     domain = sys.argv[1] if len(sys.argv) > 1 else ""
-    records = read_provider_cookie_records(domain) if domain in ALLOWED_DOMAINS else []
+    records = records_for(domain) if domain in ALLOWED_DOMAINS else []
     sys.stdout.write(json.dumps(records))
 
 

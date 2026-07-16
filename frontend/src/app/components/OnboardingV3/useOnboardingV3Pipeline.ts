@@ -49,7 +49,8 @@ export function useOnboardingV3Pipeline() {
   // Read what the user works on, silently and with no card: main opens the provider site offscreen on the browser partition and runs its own harvest script (see electron/usageHarvest.js). Fail-open: no session in the partition, off-Electron, or an error => empty summary, prep falls back to scan + identity.
   const kickUsageRead = useCallback((provider: string, consented: boolean) => {
     if (usageReadRef.current || !consented) return;
-    const key: UsageProvider | null = provider === 'codex' ? 'codex' : provider === 'claude' ? 'claude' : null;
+    const geminiIds = provider === 'antigravity' || provider === 'gemini-cli' || provider === 'gemini';
+    const key: UsageProvider | null = provider === 'codex' ? 'codex' : provider === 'claude' ? 'claude' : geminiIds ? 'gemini' : null;
     if (!key) return;
     usageReadRef.current = (async () => {
       try {

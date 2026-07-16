@@ -13,11 +13,13 @@ const hiddenBrowser = require('./hiddenBrowser');
 const ORIGIN = {
   codex: 'https://chatgpt.com/',
   claude: 'https://claude.ai/',
+  gemini: 'https://gemini.google.com/app',
 };
 
 const DOMAIN = {
   codex: 'chatgpt.com',
   claude: 'claude.ai',
+  gemini: 'gemini.google.com',
 };
 
 // Main injects a (domain) => Promise<cookieRecords[]> that spawns the Python cookie reader.
@@ -89,6 +91,27 @@ const SCRIPT = {
       return {ok:true, total:seen.size, titles:titles.slice(0, CAP_TITLES), memories:[]};
     } catch (e) { return {ok:false, total:0, titles:[], memories:[]}; }
   })()`,
+  // Gemini has no clean history JSON (it's the obfuscated batchexecute RPC), so we scrape the
+  // rendered rail instead: it starts collapsed, so click "Open sidebar", then read the recent
+  // conversation titles as they hydrate. Each title is length-capped so a stray long node can't
+  // pollute the profile; bounded by the same wall-clock budget as the fetch providers.
+  gemini: `(async () => {
+    const BUDGET_MS=14000, CAP_TITLES=200, TITLE_MAX=140; const startedAt=Date.now();
+    try {
+      const btn = Array.from(document.querySelectorAll('button,[role="button"]')).find(b => /open sidebar|main menu|expand/i.test(b.getAttribute('aria-label')||''));
+      if (btn) { try { btn.click(); } catch(_){} }
+      const seen = new Set(); const titles = []; let zeroStreak = 0;
+      while (Date.now()-startedAt < BUDGET_MS && titles.length < CAP_TITLES) {
+        let nodes = document.querySelectorAll('[data-test-id="conversation"] .title-text');
+        if (!nodes.length) nodes = document.querySelectorAll('[data-test-id="conversation"] a');
+        let fresh = 0;
+        nodes.forEach(e => { const t=(e.textContent||'').trim().slice(0, TITLE_MAX); if (t && !seen.has(t)) { seen.add(t); titles.push(t); fresh++; } });
+        if (titles.length > 0 && fresh === 0) { if (++zeroStreak >= 2) break; } else { zeroStreak = 0; }
+        await new Promise(r=>setTimeout(r, 700));
+      }
+      return { ok: titles.length>0, total: titles.length, titles: titles.slice(0, CAP_TITLES), memories: [] };
+    } catch (e) { return {ok:false, total:0, titles:[], memories:[]}; }
+  })()`,
 };
 
 const EMPTY = { ok: false, total: 0, titles: [], memories: [] };
@@ -99,7 +122,7 @@ function p_usable(res) {
 }
 
 async function harvest(partition, provider) {
-  if (provider !== 'codex' && provider !== 'claude') return EMPTY;
+  if (provider !== 'codex' && provider !== 'claude' && provider !== 'gemini') return EMPTY;
   // First run: read the user's own browser session cookies, inject into a throwaway real-Chrome
   // context, and harvest there. This is the only path that beats provider Cloudflare AND works
   // before the user has opened the site in-app.
