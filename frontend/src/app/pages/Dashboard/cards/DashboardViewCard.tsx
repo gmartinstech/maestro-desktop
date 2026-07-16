@@ -409,6 +409,10 @@ const DashboardViewCard: React.FC<Props> = ({
   const displayW = localResize?.w ?? cardWidth;
   const displayH = localResize?.h ?? cardHeight;
   const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
+  // Drag via a compositor transform, not left/top: an app card's webview surface shimmers back and forth while edge-panning otherwise (the transform and the late left/top relayout desync a frame). Same fix as BrowserCard.
+  const dragging = isDragging && !!localDragPos && !localResize;
+  const dragTx = dragging ? displayX - cardX : 0;
+  const dragTy = dragging ? displayY - cardY : 0;
 
   return (
     <Box
@@ -429,8 +433,9 @@ const DashboardViewCard: React.FC<Props> = ({
         // contain + willChange: own compositor layer so paint stays scoped (see AgentCard for full rationale).
         contain: 'layout style',
         willChange: 'transform',
-        left: displayX,
-        top: displayY,
+        left: dragging ? cardX : displayX,
+        top: dragging ? cardY : displayY,
+        transform: dragging ? `translate3d(${dragTx}px, ${dragTy}px, 0)` : undefined,
         width: displayW,
         height: displayH,
         borderRadius: `${c.radius.lg}px`,

@@ -790,6 +790,10 @@ const BrowserCard: React.FC<Props> = ({
   const displayW = localResize?.w ?? cardWidth;
   const displayH = localResize?.h ?? cardHeight;
   const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
+  // During a drag, move the card by a COMPOSITOR transform, not left/top layout: while edge-panning, the canvas transform and the card's left/top update land a frame apart, and the webview's guest surface follows the transform immediately while left/top relayouts late, so the browser visibly shimmers back and forth. A transform for the drag delta rides the same compositor path as the canvas pan, so they move together in one frame.
+  const dragging = isDragging && !!localDragPos && !localResize;
+  const dragTx = dragging ? displayX - cardX : 0;
+  const dragTy = dragging ? displayY - cardY : 0;
 
   const isSecure = activeUrl.startsWith('https://');
   const isSearch = isGoogleSearch(activeUrl);
@@ -854,8 +858,9 @@ const BrowserCard: React.FC<Props> = ({
         contain: 'layout style',
         // Own compositor layer so hover/paint invalidations stay contained to this card. See AgentCard for full rationale.
         willChange: 'transform',
-        left: keepAliveHidden ? -100000 : displayX,
-        top: displayY,
+        left: keepAliveHidden ? -100000 : (dragging ? cardX : displayX),
+        top: dragging ? cardY : displayY,
+        transform: dragging ? `translate3d(${dragTx}px, ${dragTy}px, 0)` : undefined,
         width: displayW,
         height: displayH,
         borderRadius: `${c.radius.lg}px`,
