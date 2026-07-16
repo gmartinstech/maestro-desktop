@@ -243,7 +243,13 @@ BROWSER_TOOLS_SCHEMA = [
     },
     {
         "name": "BrowserNavigate",
-        "description": "Navigate the browser to a URL.",
+        "description": (
+            "Navigate the browser to a URL. Use a normal page URL a person would see. "
+            "Do NOT point it at a raw JSON/API endpoint (a /api/... or search-JSON URL "
+            "like Instagram's web/search/topsearch): that paints an unreadable data wall "
+            "in the card. To READ a site's own API, use BrowserReplayRoute, which fetches "
+            "the JSON silently without disturbing the page."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
