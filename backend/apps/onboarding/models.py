@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.apps.settings.models import PersonalizedStarter
+from backend.apps.settings.models import PersonalizedAutomation, PersonalizedStarter
 
 
 class ProviderIdentity(BaseModel):
@@ -56,3 +56,4 @@ class PrepResponse(BaseModel):
     starters: List[PersonalizedStarter] = Field(default_factory=list)
     app_title: str = ""
     app_prompt: str = ""
+    automations: List[PersonalizedAutomation] = Field(default_factory=list)

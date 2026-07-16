@@ -1,5 +1,5 @@
 import { API_BASE } from '@/shared/config';
-import type { PersonalizedStarter } from '@/shared/state/settingsSlice';
+import type { PersonalizedStarter, PersonalizedAutomation } from '@/shared/state/settingsSlice';
 
 export interface ProviderIdentity {
   provider: string;
@@ -27,6 +27,7 @@ export interface PrepResponse {
   starters: PersonalizedStarter[];
   app_title: string;
   app_prompt: string;
+  automations: PersonalizedAutomation[];
 }
 
 export async function fetchIdentity(): Promise<ProviderIdentity[]> {

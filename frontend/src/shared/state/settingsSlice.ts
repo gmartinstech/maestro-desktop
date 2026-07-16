@@ -84,11 +84,18 @@ export interface AppSettings {
   accent_gradient?: string[] | null;
   personalized_greeting?: string | null;
   personalized_starters?: PersonalizedStarter[];
+  personalized_automations?: PersonalizedAutomation[];
 }
 
 export interface PersonalizedStarter {
   title: string;
   prompt: string;
+}
+
+export interface PersonalizedAutomation {
+  title: string;
+  prompt: string;
+  cadence: 'daily' | 'weekday' | 'weekly';
 }
 
 export interface ActivateSubscriptionPayload {

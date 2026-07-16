@@ -12,7 +12,9 @@ from typeguard import typechecked
 
 from backend.apps.agents.core.aux_llm import aux_max_tokens_for, safe_resp_text
 from backend.apps.onboarding.models import PrepRequest, PrepResponse
-from backend.apps.settings.models import AppSettings, PersonalizedStarter
+from backend.apps.settings.models import AppSettings, PersonalizedAutomation, PersonalizedStarter
+
+VALID_CADENCE = {"daily", "weekday", "weekly"}
 
 FALLBACK_STARTERS: List[PersonalizedStarter] = [
     PersonalizedStarter(title="Clean up Downloads", prompt="Sort my Downloads folder into tidy subfolders. Show me the plan before moving anything."),
@@ -25,7 +27,7 @@ P_SYSTEM = (
     "You write first-run starter tasks for OpenSwarm, a desktop AI agent platform that can "
     "organize local files, browse the web in a real browser, build small apps, and run agents in parallel. "
     "Given facts about the user's machine and the apps they picked, respond with STRICT JSON only: "
-    '{"greeting": string, "starters": [{"title": string, "prompt": string}], "app_title": string, "app_prompt": string}. '
+    '{"greeting": string, "starters": [{"title": string, "prompt": string}], "app_title": string, "app_prompt": string, "automations": [{"title": string, "prompt": string, "cadence": "daily"|"weekday"|"weekly"}]}. '
     "First, silently infer a short profile of this user. If usage_summary is present it is the STRONGEST signal (it is "
     "what they actually ask their AI about and facts their AI remembers about them); weight it above everything else, "
     "then apps, folders, plan tier, email domain. Tune every task and the personal app to that profile; do not output the profile. "
@@ -39,6 +41,10 @@ P_SYSTEM = (
     "Also design ONE small personal app for this user: app_title is 2-4 words, app_prompt starts with 'Build me' and "
     "describes a small, immediately useful single-page app tailored to the profile (their files, habits, or picked "
     "apps), self-contained with no accounts or API keys. "
+    "Also propose 2-3 automations: recurring routines worth running on a schedule for THIS user, drawn from their "
+    "profile and habits (for example a daily morning brief, a weekly folder cleanup, a weekday summary of their "
+    "connected apps). Each automation title is 2-4 words, prompt is one runnable instruction, cadence is exactly "
+    "'daily', 'weekday', or 'weekly'. Automations must be safe to run unattended (never delete without review). "
     "The greeting is one warm sentence that names 2-3 specific things "
     "found on the machine. Never use em-dashes or en-dashes anywhere. No markdown, no commentary, JSON only."
 )
@@ -58,11 +64,21 @@ def parse_prep(text: str) -> Optional[PrepResponse]:
         ]
         if not starters:
             return None
+        automations = [
+            PersonalizedAutomation(
+                title=str(a.get("title", "")).strip(),
+                prompt=str(a.get("prompt", "")).strip(),
+                cadence=(str(a.get("cadence", "weekly")).strip().lower() if str(a.get("cadence", "")).strip().lower() in VALID_CADENCE else "weekly"),
+            )
+            for a in data.get("automations", [])
+            if isinstance(a, dict) and str(a.get("title", "")).strip() and str(a.get("prompt", "")).strip()
+        ]
         return PrepResponse(
             greeting=str(data.get("greeting", "")).strip(),
             starters=starters[:4],
             app_title=str(data.get("app_title", "")).strip(),
             app_prompt=str(data.get("app_prompt", "")).strip(),
+            automations=automations[:3],
         )
     except Exception:
         return None
@@ -79,7 +95,7 @@ async def build_prep(settings: AppSettings, request: PrepRequest) -> PrepRespons
         client = get_anthropic_client_for_model(settings, aux_model)
         resp = await client.messages.create(
             model=aux_model,
-            max_tokens=aux_max_tokens_for(aux_model, base=700),
+            max_tokens=aux_max_tokens_for(aux_model, base=1100),
             system=P_SYSTEM,
             messages=[{"role": "user", "content": json.dumps(facts)}],
         )

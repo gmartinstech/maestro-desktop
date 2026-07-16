@@ -69,6 +69,7 @@ class AppSettings(BaseModel):
     accent_gradient: Optional[list[str]] = None
     personalized_greeting: Optional[str] = None
     personalized_starters: list["PersonalizedStarter"] = Field(default_factory=list)
+    personalized_automations: list["PersonalizedAutomation"] = Field(default_factory=list)
     # Suppresses preflight suggestion modal entries the user dismissed; keyed by ToolDefinition.name, value ISO timestamp.
     dismissed_mcp_suggestions: dict[str, str] = Field(default_factory=dict)
     analytics_opt_in: bool = True
@@ -110,3 +111,10 @@ class CustomProvider(BaseModel):
 class PersonalizedStarter(BaseModel):
     title: str
     prompt: str
+
+
+class PersonalizedAutomation(BaseModel):
+    title: str
+    prompt: str
+    # 'daily' | 'weekday' | 'weekly'; the frontend maps this to a workflow schedule.
+    cadence: str = "weekly"

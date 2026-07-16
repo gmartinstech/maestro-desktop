@@ -112,9 +112,10 @@ export function useOnboardingV3Pipeline() {
     const prep = await Promise.race([prepRef.current ?? Promise.resolve(null), timeout]);
     const greeting = prep?.greeting?.trim() || null;
     const starters = prep?.starters ?? [];
+    const automations = prep?.automations ?? [];
     // Jobs already launched mid-flow at prep-resolve; the reveal only composes the canvas.
     const autoPrompt = null;
-    // Await the PATCH so personalized_greeting/starters are IN settings before the reveal seeds the welcome chat; the greeting stream snapshots settings at mount.
+    // Await the PATCH so personalized_greeting/starters/automations are IN settings before the reveal seeds the welcome chat; the greeting stream snapshots settings at mount.
     try {
       await dispatch(updateSettingsPatch({
         onboarding_v3: 'done',
@@ -123,6 +124,7 @@ export function useOnboardingV3Pipeline() {
         theme: mode,
         personalized_greeting: greeting,
         personalized_starters: starters,
+        personalized_automations: automations,
       })).unwrap();
     } catch {}
     dispatch(stageReveal({ greeting, starters, scanSummary: summarizeScan(scanResultRef.current), autoPrompt }));
