@@ -44,6 +44,14 @@ def script_enabled() -> bool:
     return os.environ.get("OSW_SEND_SCRIPT", "0") != "0"
 
 
+def autosend_enabled() -> bool:
+    """The mid-loop post-fill takeover: after the MODEL types the message into a composer, the code
+    finishes the send (find Send, click, verify receipt) instead of the model burning ~3-4 turns on
+    a Send button whose index goes stale after the fill. Rides with the send-script family (same
+    tail + safety), with its own kill switch."""
+    return script_enabled() and os.environ.get("OSW_AUTOSEND", "1") != "0"
+
+
 async def complete_send(
     payload: str, state_committed: str, browser_id: str, tab_id: str,
     execute_tool: ToolRunner, send_index_in_state: Callable[[str], object],

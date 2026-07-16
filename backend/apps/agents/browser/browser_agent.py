@@ -2179,6 +2179,26 @@ async def run_browser_agent(
                 p_fill_text = fill_text_of(tu.name, tool_input)
                 if p_fill_text and payload_in_textbox(p_auto_state or "", p_fill_text):
                     composer_committed_payload = p_fill_text
+                    # B: the model just TYPED the message into a composer on a send task, so finish the send in CODE (find Send, click, verify the composer cleared) instead of it burning ~3-4 turns on a Send button whose index goes stale after the fill. Uses what the MODEL typed, so un-quoted phrasings ("say hi" -> "hi") work; fails safe, an unverified click never claims delivery and send_confirmed blocks a resend.
+                    if (task_is_send and not send_confirmed and tu.name in P_CONFIRM_TOOLS
+                            and browser_send_script.autosend_enabled()):
+                        p_cs = await browser_send_script.complete_send(
+                            composer_committed_payload, p_auto_state or "", browser_id, tab_id,
+                            execute_browser_tool, send_submit_index_in_state)
+                        if p_cs.get("clicked"):
+                            send_confirmed = True
+                            action_log.extend(p_cs.get("log") or [])
+                            if p_cs.get("sent"):
+                                done_called = True
+                                done_success = True
+                                p_aux_c, p_aux_m = await p_get_aux_client()
+                                done_message = (await compose_send_confirmation(
+                                    p_aux_c, p_aux_m, task, composer_committed_payload)
+                                    or f'Done, I sent "{composer_committed_payload}" for you.')
+                                logger.info(f"[browser-autosend {session_id}] post-fill code-send delivered (receipt verified)")
+                            else:
+                                task = f"{task}\n\n[{p_cs.get('note')}]"
+                                logger.info(f"[browser-autosend {session_id}] post-fill send click ran, receipt unverified; model verifies")
 
                 # One gentle nudge per violating turn, folded onto the action that ran, so the model self-corrects next turn without us costing it one.
                 if rp_reminder_pending and tu.name in ACTION_TOOLS_REQUIRING_REPORT:

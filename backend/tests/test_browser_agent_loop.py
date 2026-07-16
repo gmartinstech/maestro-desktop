@@ -1706,3 +1706,49 @@ def test_warm_send_prefix_replay_marries_send_script_zero_llm_turns(monkeypatch)
     assert "sent" in str(result.get("summary", "")).lower()
     # the whole warm write took ZERO model turns
     assert primary.calls == [], f"model was called {len(primary.calls)}x; warm write should be replay+code only"
+
+
+def test_autosend_finishes_the_send_after_the_model_fills(monkeypatch):
+    # B (mid-loop takeover): on an UN-quoted send ("say hi"), the model opens the composer and TYPES
+    # the message; the code then finishes the send (find Send + click + two-sided receipt), so the
+    # model never spends a turn hunting the stale-indexed Send button. Uses what the model typed.
+    monkeypatch.setenv("OSW_SEND_SCRIPT", "1")   # autosend rides with the send-script family
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
+    URL = "https://www.linkedin.com/messaging/thread/2-abc/"
+    COMMITTED = '[2]<textbox "Write a message" value="hi">\n[14]<button "Send">'
+    CLEARED = '[2]<textbox "Write a message">\n[9]<button "Attach">'
+    st = {"filled": False, "sent": False}
+
+    async def p_cmd(request_id, action, browser_id, params, tab_id=""):
+        sent.append({"action": action, "params": params})
+        if action == "click_index":
+            if params.get("text"):
+                st["filled"] = True
+                return {"text": "Clicked", "url": URL}
+            st["sent"] = True
+            return {"text": "Clicked", "url": URL, "clickedRole": "button", "clickedName": "Send"}
+        if action == "click_by_name":
+            st["sent"] = True
+            return {"text": "Clicked", "url": URL, "clickedRole": "button", "clickedName": "Send"}
+        if action == "list_interactives":
+            return {"text": CLEARED if st["sent"] else (COMMITTED if st["filled"] else COMMITTED), "url": URL}
+        if action == "evaluate":
+            return {"text": json.dumps({"ready": True, "quiet": 9999, "elems": 100, "found": True}), "url": URL}
+        return {"text": "ok", "url": URL}
+
+    primary = FakeLLM([
+        Resp([p_rp("type the message"), p_tu("BrowserClickIndex", index=2, text="hi", expect="hi")]),
+        Resp([Blk("text", "fallback, should not be reached")], stop_reason="end_turn"),
+    ])
+    aux = FakeAux()
+    sent = p_install(monkeypatch, primary, aux)
+    monkeypatch.setattr(BA.ws_manager, "send_browser_command", p_cmd, raising=False)
+
+    result = asyncio.run(BA.run_browser_agent(
+        task="say hi to tyler chen on linkedin", browser_id="b1", model="sonnet", initial_url=URL))
+    # the CODE clicked Send (index 14), which the model never scripted (it only filled index 2)
+    assert any(c["action"] == "click_index" and c["params"].get("index") == 14 for c in sent), "code did the send"
+    assert result.get("done") is True
+    assert "sent" in str(result.get("summary", "")).lower()
+    # the model was called ONCE (the fill turn); autosend ended the run, no second send turn
+    assert len(primary.calls) == 1, f"model called {len(primary.calls)}x; the send should cost zero model turns"
