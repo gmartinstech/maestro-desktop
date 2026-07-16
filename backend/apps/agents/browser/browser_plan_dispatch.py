@@ -97,11 +97,15 @@ async def run_plan_dispatch(
 
         aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku", primary_api=primary_api)
         client = get_anthropic_client_for_model(settings, aux_model)
-        reply = safe_resp_text(await asyncio.wait_for(
+        # Assistant prefill "[" makes prose unwritable: the aux was narrating the ambiguity instead of emitting the chosen click (caught live via the empty-plan reply log).
+        reply = "[" + safe_resp_text(await asyncio.wait_for(
             client.messages.create(
                 model=aux_model, max_tokens=600, temperature=0, system=P_SYSTEM,
-                messages=[{"role": "user", "content": (
-                    f"Task: {task[:1200]}\n\nInteractive elements:\n{state_text[:P_STATE_CAP]}")}],
+                messages=[
+                    {"role": "user", "content": (
+                        f"Task: {task[:1200]}\n\nInteractive elements:\n{state_text[:P_STATE_CAP]}")},
+                    {"role": "assistant", "content": "["},
+                ],
             ), timeout=P_AUX_TIMEOUT_S))
         steps = parse_plan(reply)
         if not steps:

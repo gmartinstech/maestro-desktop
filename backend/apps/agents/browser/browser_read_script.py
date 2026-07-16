@@ -11,6 +11,8 @@ import os
 import time
 from typing import Awaitable, Callable, Dict, Optional
 
+from backend.apps.agents.browser.browser_prestage import RESULTS_URL_RE
+
 logger = logging.getLogger(__name__)
 
 ToolRunner = Callable[[str, Dict, str, str], Awaitable[Dict]]
@@ -53,13 +55,15 @@ def is_answer(reply: str) -> Optional[str]:
 
 async def run_read_script(
     aux_client, aux_model, task: str, browser_id: str, tab_id: str,
-    execute_tool: ToolRunner,
+    execute_tool: ToolRunner, current_url: str = "",
 ) -> Optional[str]:
     """The answer to a read task from the staged page, or None (= run the loop).
     Never raises; never acts on the page beyond reading it."""
     t0 = time.monotonic()
     if aux_client is None or not aux_model:
         return None
+    # On a results LIST the miss is structural (the answer lives one click deeper), not hydration; the settle-retry would just re-decline ~3s later.
+    p_retries = 0 if RESULTS_URL_RE.search(current_url or "") else P_INSUFFICIENT_RETRIES
     try:
         from backend.apps.agents.core.aux_llm import safe_resp_text
 
@@ -73,7 +77,7 @@ async def run_read_script(
                 await asyncio.sleep(P_THIN_SETTLE_S)
             return ""
 
-        for ask in range(1 + P_INSUFFICIENT_RETRIES):
+        for ask in range(1 + p_retries):
             page = await p_page_text()
             if len(page) < P_MIN_PAGE_CHARS:
                 logger.info(f"[browser-readscript] page too thin ({len(page)} chars); loop runs")
@@ -89,7 +93,7 @@ async def run_read_script(
             if answer is not None:
                 logger.info(f"[browser-readscript] answered from the staged page in {ms}ms (ask {ask + 1})")
                 return answer
-            if ask < P_INSUFFICIENT_RETRIES:
+            if ask < p_retries:
                 await asyncio.sleep(P_INSUFFICIENT_SETTLE_S)
         logger.info(f"[browser-readscript] insufficient in {int((time.monotonic() - t0) * 1000)}ms; loop runs")
         return None
