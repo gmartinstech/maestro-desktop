@@ -19,6 +19,10 @@ P_MIN_PAGE_CHARS = 500
 P_MAX_PAGE_CHARS = 24000
 P_TEXT_TIMEOUT_S = 8.0
 P_AUX_TIMEOUT_S = 12.0
+# Prestage's click often lands here while the SPA is still hydrating (measured: a
+# LinkedIn profile read 184 chars right after the click); wait out the render, bounded.
+P_THIN_RETRIES = 3
+P_THIN_SETTLE_S = 1.2
 
 P_SYSTEM = (
     "Answer the user's request using ONLY the page text provided. Be direct and "
@@ -52,9 +56,14 @@ async def run_read_script(
     if aux_client is None or not aux_model:
         return None
     try:
-        r = await asyncio.wait_for(
-            execute_tool("BrowserGetText", {}, browser_id, tab_id), timeout=P_TEXT_TIMEOUT_S)
-        page = str(r.get("text") or "") if isinstance(r, dict) and "error" not in r else ""
+        page = ""
+        for attempt in range(P_THIN_RETRIES):
+            r = await asyncio.wait_for(
+                execute_tool("BrowserGetText", {}, browser_id, tab_id), timeout=P_TEXT_TIMEOUT_S)
+            page = str(r.get("text") or "") if isinstance(r, dict) and "error" not in r else ""
+            if len(page) >= P_MIN_PAGE_CHARS:
+                break
+            await asyncio.sleep(P_THIN_SETTLE_S)
         if len(page) < P_MIN_PAGE_CHARS:
             logger.info(f"[browser-readscript] page too thin ({len(page)} chars); loop runs")
             return None
