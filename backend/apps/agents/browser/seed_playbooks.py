@@ -140,7 +140,7 @@ SEED_PLAYBOOKS: dict[str, list[str]] = {
     "eventbrite.com": ["Search via URL: eventbrite.com/d/online/QUERY/. Browsing works logged-out; registering needs sign-in."],
     # --- health ---
     "webmd.com": ["Readable logged-out; search via URL: webmd.com/search/search_results/default.aspx?query=QUERY."],
-    "goodrx.com": ["Search a drug via URL: goodrx.com/QUERY. Prices are readable logged-out."],
+    "goodrx.com": ["A drug's price page is goodrx.com/DRUG-NAME (a specific drug, e.g. goodrx.com/lipitor), NOT free-text search; for an unknown name use the site search box. Prices readable logged-out."],
     "cvs.com": ["General browsing works logged-out; pharmacy and account pages need sign-in and are sensitive."],
     "walgreens.com": ["General browsing works logged-out; pharmacy and account pages need sign-in and are sensitive."],
     # --- education ---
