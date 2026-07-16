@@ -54,12 +54,21 @@ P_SYSTEM = (
 
 
 def parse_plan(reply: str) -> list:
-    """Strict-ish JSON array extraction; anything malformed = [] (fail-open)."""
-    m = re.search(r"\[.*\]", (reply or "").strip(), re.S)
-    if not m:
+    """Strict-ish JSON array extraction; anything malformed = [] (fail-open).
+    A max_tokens-truncated array is salvaged by closing it after the last complete
+    object: the steps run one at a time with verification, so a shortened plan is
+    safe, and losing the tail beats losing the whole plan (measured live)."""
+    text = (reply or "").strip()
+    m = re.search(r"\[.*\]", text, re.S)
+    candidate = m.group(0) if m else ""
+    if not candidate and text.startswith("["):
+        cut = text.rfind("}")
+        if cut > 0:
+            candidate = text[: cut + 1] + "]"
+    if not candidate:
         return []
     try:
-        raw = json.loads(m.group(0))
+        raw = json.loads(candidate)
     except Exception:
         return []
     steps = []
@@ -100,7 +109,7 @@ async def run_plan_dispatch(
         # Assistant prefill "[" makes prose unwritable: the aux was narrating the ambiguity instead of emitting the chosen click (caught live via the empty-plan reply log).
         reply = "[" + safe_resp_text(await asyncio.wait_for(
             client.messages.create(
-                model=aux_model, max_tokens=600, temperature=0, system=P_SYSTEM,
+                model=aux_model, max_tokens=1000, temperature=0, system=P_SYSTEM,
                 messages=[
                     {"role": "user", "content": (
                         f"Task: {task[:1200]}\n\nInteractive elements:\n{state_text[:P_STATE_CAP]}")},
