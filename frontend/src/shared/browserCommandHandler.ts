@@ -312,8 +312,61 @@ async function handleNavigate(wv: BrowserWebview, params: Record<string, any>): 
   } finally {
     removeReady();
   }
+  // A navigate that lands on a raw JSON/API document (Instagram's topsearch, any /api/... GET)
+  // paints an unreadable wall in the card and reads as a crash to the user. Hand the data to the
+  // agent as the result instead, and quietly get the card off the wall, so a person never sees
+  // raw JSON where a page should be.
+  const data = await readDataDocument(wv);
+  if (data) {
+    recoverCardOffDataWall(wv, url);
+    return {
+      text: `Fetched ${data.contentType} data from ${url} (this URL is a raw API endpoint, not a page):\n${data.body}`,
+      url: wv.getURL(),
+      data_document: true,
+    };
+  }
   // Route-count is sampled on the next READ (handleGetText), not here: at navigate-return the SPA's XHRs haven't fired yet, so this would always be ~0.
   return { text: `Navigated to ${url}`, url };
+}
+
+// Chromium renders any JSON (or JSON-shaped text) response with its built-in viewer, so a navigate
+// to an API endpoint leaves the card showing a wall of raw data. contentType is the reliable tell;
+// re-fetch same-origin (the just-loaded GET, idempotent) to hand the agent the exact bytes.
+async function readDataDocument(wv: BrowserWebview): Promise<{ contentType: string; body: string } | null> {
+  const code = `(async () => {
+    const ct = String(document.contentType || '').toLowerCase();
+    const isJson = ct.startsWith('application/json');
+    const maybePlain = ct.startsWith('text/plain');
+    if (!isJson && !maybePlain) return null;
+    try {
+      const r = await fetch(location.href, { credentials: 'include', signal: AbortSignal.timeout(2500) });
+      const body = await r.text();
+      if (maybePlain && !isJson) { try { JSON.parse(body.trim()); } catch (e) { return null; } }
+      return { contentType: ct, body: body.slice(0, 15000) };
+    } catch (e) { return null; }
+  })()`;
+  try {
+    const res = await evalInPage(wv, code);
+    if (res && !res.error && typeof res.body === 'string') return res;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Get the card off a raw-data wall: step back to the real page the agent came from, or, if it opened
+// straight onto the data URL, fall back to the site homepage. Fire-and-forget, the agent already has
+// the data; this is purely so a human sees a page instead of JSON.
+function recoverCardOffDataWall(wv: BrowserWebview, dataUrl: string): void {
+  try {
+    if (wv.canGoBack()) {
+      wv.goBack();
+      return;
+    }
+    void wv.loadURL(new URL(dataUrl).origin).catch(() => {});
+  } catch {
+    /* leave the card as-is if recovery fails; the data still reached the agent */
+  }
 }
 
 async function handleClick(wv: BrowserWebview, params: Record<string, any>): Promise<Record<string, any>> {
