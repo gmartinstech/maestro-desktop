@@ -108,16 +108,24 @@ class WebSocketManager {
   // Frame-aligned message coalescer. Buffers incoming WS messages from all WebSocketManager instances and flushes them in ONE batched React render per animation frame. Without this, N concurrent agents each cause their own renders on every WS message, dozens of full app re-renders per second, fanning out to every useSelector. With it: max one render per frame regardless of message volume.
   private static _messageQueue: Array<{ mgr: WebSocketManager; msg: WSEvent }> = [];
   private static _flushScheduled = false;
+  // rAF never fires when the window paints no frames (minimized, on another Space, occluded). Without a fallback, WS-delivered dashboard mutations (a spawned browser card, an evict) buffer forever and the UI silently desyncs, agent browser cards just never mount. A timer flushes the queue when rAF won't; whichever fires first wins and cancels the other, so a visible window is unchanged (rAF beats a 250ms timer every frame).
+  private static _flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   private static _enqueueMessage(mgr: WebSocketManager, msg: WSEvent) {
     WebSocketManager._messageQueue.push({ mgr, msg });
     if (WebSocketManager._flushScheduled) return;
     WebSocketManager._flushScheduled = true;
     requestAnimationFrame(WebSocketManager._flushMessages);
+    WebSocketManager._flushTimer = setTimeout(WebSocketManager._flushMessages, 250);
   }
 
   private static _flushMessages = () => {
+    if (!WebSocketManager._flushScheduled) return; // the other trigger already drained this batch
     WebSocketManager._flushScheduled = false;
+    if (WebSocketManager._flushTimer !== null) {
+      clearTimeout(WebSocketManager._flushTimer);
+      WebSocketManager._flushTimer = null;
+    }
     if (WebSocketManager._messageQueue.length === 0) return;
     const batch = WebSocketManager._messageQueue;
     WebSocketManager._messageQueue = [];
