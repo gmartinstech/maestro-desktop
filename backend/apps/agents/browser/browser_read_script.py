@@ -99,7 +99,8 @@ async def run_read_script(
                 return answer
             if ask < p_retries:
                 await asyncio.sleep(P_INSUFFICIENT_SETTLE_S)
-        logger.info(f"[browser-readscript] insufficient in {int((time.monotonic() - t0) * 1000)}ms; loop runs")
+        logger.info(f"[browser-readscript] insufficient in {int((time.monotonic() - t0) * 1000)}ms; loop runs "
+                    f"(page={len(page)}ch url={p_live_url[:80]!r} reply: {(reply or '')[:160]!r})")
         return None
     except Exception as e:
         logger.info(f"[browser-readscript] skipped ({e})")

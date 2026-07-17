@@ -49,7 +49,9 @@ P_SYSTEM = (
     "every other cue (title, company, verified): people message people they know. STOP the chain before "
     "anything irreversible (send/submit/post/pay/delete/confirm/apply). NEVER fill a "
     "message, comment, or post body: once a composer for one is open, stop, the main "
-    "agent writes and sends it. 0-6 steps; [] when nothing is safely mechanical."
+    "agent writes and sends it. If the Current URL shows the page ALREADY is the "
+    "target's own page, emit []: a click that goes nowhere just fails verification. "
+    "0-6 steps; [] when nothing is safely mechanical."
 )
 
 
@@ -94,7 +96,7 @@ def plan_dispatch_enabled() -> bool:
 
 async def run_plan_dispatch(
     task: str, state_text: str, browser_id: str, tab_id: str,
-    settings, primary_api, execute_tool,
+    settings, primary_api, execute_tool, current_url: str = "",
 ) -> str:
     """Returns a handoff note describing verified-executed steps ('' = nothing ran).
     Never raises; never acts irreversibly."""
@@ -112,7 +114,8 @@ async def run_plan_dispatch(
                 model=aux_model, max_tokens=1000, temperature=0, system=P_SYSTEM,
                 messages=[
                     {"role": "user", "content": (
-                        f"Task: {task[:1200]}\n\nInteractive elements:\n{state_text[:P_STATE_CAP]}")},
+                        f"Task: {task[:1200]}\n\nCurrent URL: {current_url[:300]}\n\n"
+                        f"Interactive elements:\n{state_text[:P_STATE_CAP]}")},
                     {"role": "assistant", "content": "["},
                 ],
             ), timeout=P_AUX_TIMEOUT_S))

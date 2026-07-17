@@ -1415,6 +1415,7 @@ async def run_browser_agent(
             p_plan_note = await asyncio.wait_for(browser_plan_dispatch.run_plan_dispatch(
                 task, preloaded_perception, browser_id, tab_id,
                 load_settings(), get_api_type(model), execute_browser_tool,
+                current_url=current_url,
             ), timeout=45.0)
         except Exception as p_pe:
             logger.info(f"[plan-dispatch] outer skip ({p_pe})")
