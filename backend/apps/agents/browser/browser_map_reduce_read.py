@@ -67,12 +67,17 @@ P_VALUE_LINE = (
 )
 
 
+P_QUANTITY_RE = re.compile(r"\b(how much|how many|difference|by how)\b", re.I)
+
+
 def op_for(prompt: str) -> str:
-    """'difference' | 'sum' | '' from the request's own wording; '' = aux reduce as before."""
+    """'difference' | 'sum' | '' from the request's own wording; '' = aux reduce as before.
+    Difference also requires a QUANTITY cue: a bare "which is taller?" wants a name, and a
+    number-only computed headline would answer the wrong question (caught in audit, not live)."""
     low = prompt or ""
     if P_SUM_RE.search(low):
         return "sum"
-    if P_DIFF_RE.search(low):
+    if P_DIFF_RE.search(low) and P_QUANTITY_RE.search(low):
         return "difference"
     return ""
 
@@ -150,7 +155,7 @@ async def p_fetch_and_extract(client, aux_model: str, q: str, url: str, ask_valu
         return None
 
 
-async def try_map_reduce_read(prompt: str, brief: str, settings, primary_api: str | None) -> str | None:
+async def try_map_reduce_read(prompt: str, settings, primary_api: str | None) -> str | None:
     """Answer text for a multi-source public read, or None (caller falls to the
     browser leg). Any missing piece returns None, so it never half-answers."""
     if not enabled():

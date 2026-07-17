@@ -56,7 +56,7 @@ async def run_browser_fast_path(
                 # The single page couldn't answer it; a multi-source read (a difference, a compare) fans out to N concurrent single-page reads + one reduce, still no browser and still fail-open.
                 from backend.apps.agents.browser import browser_map_reduce_read
                 text = await browser_map_reduce_read.try_map_reduce_read(
-                    prompt, brief, load_settings(), p_read_api,
+                    prompt, load_settings(), p_read_api,
                 ) or ""
                 p_fp_path = "read-mapreduce" if text else "read->browser"
 
