@@ -89,6 +89,8 @@ export interface AgentSession {
   last_message_preview?: string;
   first_user_message?: string;
   message_count?: number;
+  /** WS seq high-water at snapshot time (GET /sessions only); seeds the resume cursor so connect skips replaying what REST just delivered. */
+  event_seq?: number;
   pending_approvals: ApprovalRequest[];
   branches: Record<string, MessageBranch>;
   active_branch_id: string;
@@ -530,7 +532,8 @@ export const deleteSession = createAsyncThunk(
 export const fetchHistory = createAsyncThunk(
   'agents/fetchHistory',
   async ({ dashboardId }: { dashboardId?: string } = {}) => {
-    const params = new URLSearchParams({ limit: '10000' });
+    // closed_only: an OPEN session landing in state.history made updateSession's resurrection gate swallow its terminal frames (card stuck running, final answer invisible). Search (searchHistory) keeps the full pool.
+    const params = new URLSearchParams({ limit: '10000', closed_only: '1' });
     if (dashboardId) params.set('dashboard_id', dashboardId);
     const res = await fetch(`${AGENTS_API}/history?${params}`);
     const data = await res.json();
@@ -717,7 +720,8 @@ const agentsSlice = createSlice({
       if (state.history[action.payload.id]) {
         if (action.payload.status === 'running' || action.payload.mode === 'browser-agent') {
           delete state.history[action.payload.id];
-        } else {
+        } else if (!state.sessions[action.payload.id]) {
+          // Gate only truly-closed sessions (no live card): a late frame must not resurrect them. A LIVE session that leaked into history used to have its completed frame swallowed here, leaving the card stuck running.
           return;
         }
       }

@@ -324,6 +324,20 @@ class WebSocketManager {
       }
     }
 
+    // Cross-socket dedupe: the backend fans every session frame out to BOTH the dashboard socket and the chat's own socket (same stamped seq), so an expanded chat parsed and reduced everything twice, and whichever copy landed second could be a replayed stale one. Time-windowed rather than a high-water mark so a deliberate later replay (gap recovery resets lastSeq to 0) is never starved.
+    if (typeof msg.seq === 'number' && session_id) {
+      const key = `${session_id}:${msg.seq}`;
+      const now = Date.now();
+      const seen = _recentFrameTimes.get(key);
+      if (seen !== undefined && now - seen < FRAME_DEDUPE_WINDOW_MS) return;
+      _recentFrameTimes.set(key, now);
+      if (_recentFrameTimes.size > 4000) {
+        for (const [k, t] of _recentFrameTimes) {
+          if (now - t >= FRAME_DEDUPE_WINDOW_MS) _recentFrameTimes.delete(k);
+        }
+      }
+    }
+
     // ----- Connection-scoped frames (no business-logic side effects) -----
 
     if (event === 'server:pong') {
@@ -351,6 +365,10 @@ class WebSocketManager {
         // Reset lastSeq, the REST refetch is the new authoritative baseline; subsequent server events with seq numbers will re-establish the high-water mark. Also wipe the cross-mount persistent map so a remount during this gap window doesn't resurrect the stale value.
         this.lastSeq = 0;
         _sessionLastSeq.delete(session_id);
+        // The recovery replay re-delivers seqs possibly seen moments ago; drop them from the dedupe window so it's never starved.
+        for (const k of _recentFrameTimes.keys()) {
+          if (k.startsWith(`${session_id}:`)) _recentFrameTimes.delete(k);
+        }
       }
       return;
     }
@@ -946,6 +964,17 @@ export const dashboardWs = new WebSocketManager(`${WS_BASE}/ws/dashboard`, { ski
 
 // Per-session high-water mark for the resume protocol. Survives across AgentChat mounts/unmounts so reopening a chat doesn't re-trigger a full replay from the server's ring buffer. Why this exists: AgentChat uses `key={session.id}` on the embedded instance inside AgentCard, so every expand/collapse remounts the component, which constructs a fresh WebSocketManager. Without this persistent map, each fresh manager starts at last_seq=0 and asks the server for the entire buffered history. The server faithfully replays it, the client renders the typewriter animation again, and the user sees their completed chat "type itself out" on every reopen. Lifetime: tied to the JS module load, which means the page tab. Lost on full app reload (intentional, that should re-hydrate from REST). On backend restart the buffers are wiped anyway, so a stale lastSeq pointing past the buffer top falls into the "fresh client" path on the server (last_seq>0 but no buffer) which short-circuits to a no-op replay. Safe.
 const _sessionLastSeq: Map<string, number> = new Map();
+
+// (session_id:seq) -> arrival time; entries older than the window are prunable. Bounded by event rate x window, not session count.
+const FRAME_DEDUPE_WINDOW_MS = 5_000;
+const _recentFrameTimes: Map<string, number> = new Map();
+
+/** Seed the resume cursor from a REST hydrate (GET /sessions returns event_seq), so the follow-up WS connect replays only what happened AFTER the snapshot instead of the whole ring buffer the client just received as JSON. Never lowers an existing high-water mark. */
+export function seedSessionSeq(sessionId: string, seq: number): void {
+  if (typeof seq !== 'number' || seq <= 0) return;
+  const cur = _sessionLastSeq.get(sessionId) ?? 0;
+  if (seq > cur) _sessionLastSeq.set(sessionId, seq);
+}
 
 export function createSessionWs(sessionId: string): WebSocketManager {
   return new WebSocketManager(`${WS_BASE}/ws/agents/${sessionId}`, { sessionId });

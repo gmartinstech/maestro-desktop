@@ -9,6 +9,7 @@ from typeguard import typechecked
 
 from backend.apps.agents.agent_manager import agent_manager
 from backend.apps.agents.core.models import AgentConfig, AgentSession, ApprovalResponse
+from backend.apps.agents.core.seq_log import seq_log
 from backend.apps.agents.manager.session.history_compaction import estimate_post_compact_input
 from backend.config.Apps import SubApp
 
@@ -92,7 +93,11 @@ async def get_session(session_id: str):
             session = await agent_manager.resume_session(session_id)
         except ValueError:
             raise HTTPException(status_code=404, detail="Session not found")
-    return session.model_dump(mode="json")
+    # Seq read before the dump (no await between = atomic): the client seeds its WS resume cursor from this, so a REST hydrate isn't followed by a full from-zero replay of everything it just received.
+    event_seq = seq_log.current_seq(session_id)
+    payload = session.model_dump(mode="json")
+    payload["event_seq"] = event_seq
+    return payload
 
 @agents.router.post("/launch")
 async def launch_agent(config: AgentConfig):
@@ -273,10 +278,11 @@ async def delete_session(session_id: str):
     return {"ok": True}
 
 @agents.router.get("/history")
-async def get_history(q: str = "", limit: int = 20, offset: int = 0, dashboard_id: str = ""):
+async def get_history(q: str = "", limit: int = 20, offset: int = 0, dashboard_id: str = "", closed_only: int = 0):
     return agent_manager.get_history(
         q=q, limit=limit, offset=offset,
         dashboard_id=dashboard_id or None,
+        closed_only=bool(closed_only),
     )
 
 @agents.router.get("/sessions/{session_id}/browser-agents")
