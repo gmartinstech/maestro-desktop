@@ -221,6 +221,22 @@ def normalize_for_classifier(prompt: str) -> str:
     return re.sub(r"\btext(ing|ed|s)?\b", "message", prompt, flags=re.I)
 
 
+def seed_hints_for_task(prompt: str) -> str:
+    """Documented facts for sites the task names, fed to the classifier so its ENTRY
+    uses the site's real search-URL pattern instead of the homepage (measured: the aux
+    sent walmart to the homepage while the seed had the exact /search?q= pattern)."""
+    from backend.apps.agents.browser.seed_playbooks import SEED_PLAYBOOKS
+    low = f" {prompt.lower()} "
+    lines: list[str] = []
+    for domain, facts in SEED_PLAYBOOKS.items():
+        name = domain.split(".")[0]
+        if len(name) >= 4 and f" {name}" in low and facts:
+            lines.append(f"{domain}: {facts[0][:180]}")
+            if len(lines) >= 2:
+                break
+    return ("\n\nKnown site facts (use their URL patterns for ENTRY):\n" + "\n".join(lines)) if lines else ""
+
+
 async def classify_and_brief(prompt: str, settings, primary_api: str | None) -> tuple[str, str]:
     """One cheap aux call returns a READ/ACT/NO verdict plus a routing brief
     (entry URL + step outline), timeboxed; any failure means NO (normal path)."""
@@ -239,7 +255,8 @@ async def classify_and_brief(prompt: str, settings, primary_api: str | None) -> 
                 max_tokens=250,
                 temperature=0,
                 system=P_CLASSIFIER_SYSTEM,
-                messages=[{"role": "user", "content": normalize_for_classifier(prompt[:2000])}],
+                messages=[{"role": "user", "content": (
+                    normalize_for_classifier(prompt[:2000]) + seed_hints_for_task(prompt))}],
             ),
             timeout=8.0,
         )
