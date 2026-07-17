@@ -95,9 +95,32 @@ function routeKey(method, template) {
   return String(method || 'GET').toUpperCase() + ' ' + template;
 }
 
+// The mutating body WITH values, but secret-shaped string leaves redacted (belt; the backend
+// recipe learner redacts again). Only JSON, capped: a write recipe needs the real body (the user's
+// payload sits in one leaf), which bodyShape (types only) can't provide. Non-JSON / oversized = null.
+const MAX_BODY_CHARS = 65536;
+
+function redactBodyValues(postData) {
+  if (!postData || postData.length > MAX_BODY_CHARS) return null;
+  try {
+    const walk = (v) =>
+      typeof v === 'string'
+        ? (looksSecretValue(v) ? '<redacted>' : v)
+        : Array.isArray(v)
+          ? v.map(walk)
+          : v && typeof v === 'object'
+            ? Object.fromEntries(Object.keys(v).map((k) => [k, walk(v[k])]))
+            : v;
+    return JSON.stringify(walk(JSON.parse(postData)));
+  } catch {
+    return null;
+  }
+}
+
 function makeRouteEntry(request, resourceType) {
   const method = String(request.method || 'GET').toUpperCase();
   const template = templateUrl(request.url);
+  const safe = isSafeMethod(method);
   return {
     method,
     template,
@@ -105,7 +128,9 @@ function makeRouteEntry(request, resourceType) {
     resourceType,
     headers: redactHeaders(request.headers),
     bodyShape: bodyShape(request.postData),
-    safe: isSafeMethod(method),
+    // Only mutating routes carry a replayable body; a GET's body (if any) is never a write recipe.
+    lastBody: safe ? null : redactBodyValues(request.postData),
+    safe,
     hits: 1,
     lastSeen: Date.now(),
   };
@@ -123,6 +148,9 @@ function recordRoute(routesMap, request, resourceType, now = Date.now()) {
   if (existing) {
     existing.hits += 1;
     existing.lastSeen = now;
+    // Refresh the body so a later replay learns from the FRESHEST call (queryId/token rotation
+    // lives in the URL/headers, but a stale body could hold an old nonce); keep the latest.
+    if (entry.lastBody) existing.lastBody = entry.lastBody;
   } else {
     routesMap.set(key, entry);
     if (routesMap.size > MAX_ROUTES_PER_WC) {

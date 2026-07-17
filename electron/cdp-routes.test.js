@@ -136,3 +136,30 @@ test('makeRouteEntry carries a redacted example url', () => {
   assert.ok(e.example.includes('redacted'));
   assert.ok(!e.example.includes('secretAbc123Long'));
 });
+
+test('makeRouteEntry: mutating route keeps a body, GET does not, secrets redacted', () => {
+  const post = R.makeRouteEntry({
+    method: 'POST',
+    url: 'https://x.com/i/api/graphql/AbC123/CreateTweet',
+    headers: { 'x-csrf-token': 'ct0secret' },
+    postData: JSON.stringify({ variables: { tweet_text: 'hello world' }, authToken: 'aB3xK9mQ2pL7wR4tY8nZ' }),
+  }, 'Fetch');
+  assert.equal(post.safe, false);
+  const body = JSON.parse(post.lastBody);
+  assert.equal(body.variables.tweet_text, 'hello world');      // payload survives
+  assert.equal(body.authToken, '<redacted>');                  // secret leaf redacted
+  assert.equal(post.headers['x-csrf-token'], '<redacted>');    // header redacted
+
+  const get = R.makeRouteEntry({ method: 'GET', url: 'https://x.com/i/api/graphql/AbC123/Home', headers: {}, postData: '' }, 'XHR');
+  assert.equal(get.lastBody, null);                            // no body on a safe route
+});
+
+test('recordRoute: repeat write refreshes lastBody to the freshest call', () => {
+  const m = new Map();
+  const mk = (text) => ({ method: 'POST', url: 'https://x.com/i/api/graphql/AbC/CreateTweet', headers: {}, postData: JSON.stringify({ variables: { tweet_text: text } }) });
+  R.recordRoute(m, mk('first'), 'Fetch');
+  R.recordRoute(m, mk('second'), 'Fetch');
+  const entry = [...m.values()][0];
+  assert.equal(entry.hits, 2);
+  assert.equal(JSON.parse(entry.lastBody).variables.tweet_text, 'second');
+});

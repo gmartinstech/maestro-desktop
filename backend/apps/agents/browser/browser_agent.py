@@ -321,6 +321,28 @@ async def execute_browser_tool(
     return result
 
 
+async def p_learn_write_recipe(execute_tool, browser_id: str, tab_id: str, current_url: str, payload: str) -> None:
+    """After a receipt-VERIFIED DOM write, distill the site's own write route into a replayable
+    recipe so the NEXT write on this host can skip the DOM (the repeated-write tier). Inline +
+    bounded (the card is still alive here; a fire-and-forget task would race the finish teardown)
+    and fully fail-open: no routes / no payload leaf / any error just means no recipe learned, and
+    the DOM path stays the default. Gated OFF until soaked (OSW_WRITE_RECIPES=1)."""
+    if os.environ.get("OSW_WRITE_RECIPES", "0") == "0":
+        return
+    try:
+        from backend.apps.agents.browser import browser_write_recipes, browser_skills
+        host = browser_skills.host_of(current_url or "")
+        if not host or len(payload or "") < 4:
+            return
+        listed = await asyncio.wait_for(
+            execute_tool("BrowserListRoutes", {"writes": True}, browser_id, tab_id), timeout=4.0)
+        routes = listed.get("routes") if isinstance(listed, dict) else None
+        if routes and browser_write_recipes.learn_recipe(host, payload, routes):
+            logger.info(f"[write-recipe] learned a replayable {host} write from a verified DOM send")
+    except Exception:
+        pass
+
+
 def p_extract_domain(url: str) -> str | None:
     """Extract the apex domain from a URL (acme-corp.notion.so → notion.so).
     Returns None for non-http URLs."""
@@ -1414,6 +1436,7 @@ async def run_browser_agent(
                 done_called = True
                 done_success = True
                 p_aux_c, p_aux_m = await p_get_aux_client()
+                await p_learn_write_recipe(execute_browser_tool, browser_id, tab_id, current_url, p_script["payload"])
                 done_message = (await compose_send_confirmation(p_aux_c, p_aux_m, task, p_script["payload"])
                                 or f'Done, I sent "{p_script["payload"]}" for you.')
             else:
@@ -2163,6 +2186,7 @@ async def run_browser_agent(
                                 done_called = True
                                 done_success = True
                                 p_payload = browser_batch_replay.send_payload_from_log(action_log, task)
+                                await p_learn_write_recipe(execute_browser_tool, browser_id, tab_id, current_url, p_payload)
                                 p_aux_c, p_aux_m = await p_get_aux_client()
                                 p_nice = (await compose_send_confirmation(p_aux_c, p_aux_m, task, p_payload)
                                           if p_payload else "")
@@ -2256,6 +2280,7 @@ async def run_browser_agent(
                             if p_cs.get("sent"):
                                 done_called = True
                                 done_success = True
+                                await p_learn_write_recipe(execute_browser_tool, browser_id, tab_id, current_url, composer_committed_payload)
                                 p_aux_c, p_aux_m = await p_get_aux_client()
                                 done_message = (await compose_send_confirmation(
                                     p_aux_c, p_aux_m, task, composer_committed_payload)
