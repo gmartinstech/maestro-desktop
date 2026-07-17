@@ -25,7 +25,7 @@ from backend.apps.agents.manager.configure_provider_env import configure_provide
 from backend.apps.agents.manager.session.workspace_git import ensure_cwd_git_repo
 from backend.apps.agents.manager.session.history_compaction import build_history_prefix, get_branch_messages
 from backend.apps.agents.manager.prompt.compose_turn_system_prompt import compose_turn_system_prompt
-from backend.apps.agents.manager.prompt.tool_catalog import get_all_tool_names
+from backend.apps.agents.manager.prompt.tool_catalog import get_all_tool_names, resolve_builtin_tools_option
 from backend.apps.agents.manager.prompt.prompt_context import resolve_mode
 from backend.apps.agents.manager.run.run_options_helpers import (
     pre_send_context_guard, set_framework_overhead, register_web_mcp_server,
@@ -194,11 +194,8 @@ class RunOptions(AgentManagerProtocol):
             options_kwargs["mcp_servers"] = mcp_servers
             mcp_json_len = len(json.dumps({"mcpServers": mcp_servers}))
             logger.info(f"[MCP-DEBUG] mcp_servers passed to SDK: {list(mcp_servers.keys())}, JSON length={mcp_json_len}")
-        # claude_code preset for BOTH system_prompt and tools so the CLI's deferred-tools scaffolding survives. Raw string would replace it.
-        options_kwargs["tools"] = {
-            "type": "preset",
-            "preset": "claude_code",
-        }
+        # Built-in tool surface (preset vs pruned FULL_TOOLS manifest); see resolve_builtin_tools_option. system_prompt keeps the preset regardless.
+        options_kwargs["tools"] = resolve_builtin_tools_option()
         # exclude_dynamic_sections=True moves cwd/git/OS grounding out of the cached prefix and into the first user message, unlocks Anthropic prompt cache (~80% input-token cut, 13-31% faster TTFT). Trade-off: grounding freezes at turn 1.
         if composed_prompt:
             options_kwargs["system_prompt"] = {
