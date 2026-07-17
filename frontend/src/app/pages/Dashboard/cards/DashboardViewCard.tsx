@@ -132,6 +132,9 @@ const DashboardViewCard: React.FC<Props> = ({
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
   const previewRef = useRef<ViewPreviewHandle>(null);
   const activeViewCardId = useAppSelector((s) => s.dashboardLayout.activeViewCardId);
+  // Agent-driving glow, same treatment as browser cards: an AppAgent session carries browser_id "app:<output_id>", which keys glowingBrowserCards.
+  const appGlow = useAppSelector((s) => s.dashboardLayout.glowingBrowserCards[`app:${cardKeyProp ?? output.id}`]);
+  const showAgentGlow = !!appGlow && !appGlow.fading;
   const interactive = activeViewCardId === cardKey;
 
   // Deselecting the card exits interact mode (click anywhere else on canvas).
@@ -445,22 +448,26 @@ const DashboardViewCard: React.FC<Props> = ({
         borderRadius: `${c.radius.lg}px`,
         border: isHighlighted
           ? `2px solid ${c.accent.primary}`
-          : interactive
+          : showAgentGlow
             ? `2px solid ${c.accent.primary}`
-            : isSelected ? '2px solid #3b82f6' : `1px solid ${c.border.medium}`,
+            : interactive
+              ? `2px solid ${c.accent.primary}`
+              : isSelected ? '2px solid #3b82f6' : `1px solid ${c.border.medium}`,
         bgcolor: c.bg.surface,
         boxShadow: isHighlighted
           ? `0 0 0 3px ${c.accent.primary}50, 0 0 20px ${c.accent.primary}35, 0 0 40px ${c.accent.primary}15`
-          : isDragging || isResizing
-            ? c.shadow.lg
-            : isSelected
-              ? `0 0 0 1px #3b82f6, ${c.shadow.md}`
-              : c.shadow.md,
+          : showAgentGlow
+            ? `0 0 0 2px ${c.accent.primary}40, 0 0 18px ${c.accent.primary}30, 0 0 40px ${c.accent.primary}15, inset 0 0 30px ${c.accent.primary}25`
+            : isDragging || isResizing
+              ? c.shadow.lg
+              : isSelected
+                ? `0 0 0 1px #3b82f6, ${c.shadow.md}`
+                : c.shadow.md,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         zIndex: (isDragging || isResizing) ? 999999 : cardZOrder,
-        transition: noTransition ? 'none' : 'box-shadow 0.2s',
+        transition: noTransition ? 'none' : 'box-shadow 0.4s ease, border 0.3s ease',
         '&:hover .resize-handle': { opacity: 1 },
         ...(isHighlighted && {
           animation: 'card-highlight-pulse 2s ease-out forwards',

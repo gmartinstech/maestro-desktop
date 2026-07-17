@@ -384,6 +384,17 @@ class WebSocketManager {
             store.dispatch(trackAgentNotification(session_id));
           }
 
+          // An AppAgent driving an app card announces itself only via this status event (no card_added like browsers), so light the app card here. Keyed by the parent chat like browser glows, so the same terminal fade below clears it.
+          const p_sess = data.session;
+          if (p_sess && p_sess.mode === 'browser-agent' && typeof p_sess.browser_id === 'string' && p_sess.browser_id.startsWith('app:')
+              && (p_sess.status === 'running' || p_sess.status === 'waiting_approval')) {
+            store.dispatch(setGlowingBrowserCards({
+              browserIds: [p_sess.browser_id],
+              sessionId: p_sess.parent_session_id || p_sess.id,
+              label: 'Use App',
+            }));
+          }
+
           // Fade this session's browser glows on the terminal transition HERE, not only in AgentChat's effect: a collapsed chat is unmounted at finish, and a never-faded glow pins the browser's renderer (exempt from suspend + the webview cap) forever.
           const newStatus = data.status ?? data.session?.status;
           const wasWorking = prevStatus === 'running' || prevStatus === 'waiting_approval';
