@@ -101,8 +101,9 @@ def test_spawn_server_schema_is_prompt_plus_background_only() -> None:
 
 
 def test_spawn_server_speaks_mcp_stdio() -> None:
+    from backend.apps.agents import spawn_agent_mcp_server as srv
     proc = subprocess.Popen(
-        [sys.executable, "backend/apps/agents/spawn_agent_mcp_server.py"],
+        [sys.executable, srv.__file__],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
     )
     try:

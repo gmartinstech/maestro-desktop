@@ -1,6 +1,6 @@
 """The recovery-card wedge fix: when a card is declared dead, its webview must be
 torn down (renderer unmount + layout removal) BEFORE recovery spawns a fresh card,
-so two heavy pages never co-exist and starve the renderer. Pins p_evict_dead_card."""
+so two heavy pages never co-exist and starve the renderer. Pins evict_dead_card."""
 import asyncio
 
 import backend.apps.agents.browser.browser_agent as ba
@@ -36,7 +36,7 @@ def p_patch(monkeypatch, cards):
 def test_evict_broadcasts_unmount_and_removes_from_layout(monkeypatch):
     broadcasts, saved, dash = p_patch(monkeypatch, {"browser-dead": FakeCard("sess-1"), "browser-keep": FakeCard("sess-1")})
     ba.ACTIVE_AGENT_CARDS.add("browser-dead")
-    asyncio.run(ba.p_evict_dead_card("dash-1", "browser-dead"))
+    asyncio.run(ba.evict_dead_card("dash-1", "browser-dead"))
     # the renderer is told to unmount exactly the dead card
     assert ("dashboard:browser_card_evict", {"dashboard_id": "dash-1", "browser_id": "browser-dead"}) in broadcasts
     # it's gone from the persisted layout, its neighbor is untouched
@@ -50,7 +50,7 @@ def test_evict_without_a_dashboard_deletes_nothing(monkeypatch):
     # No dashboard = ownership unverifiable = fail SAFE: never unmount or delete
     # what might be the user's card; the reuse-skip alone handles it.
     broadcasts, saved, _ = p_patch(monkeypatch, {})
-    asyncio.run(ba.p_evict_dead_card("", "browser-x"))
+    asyncio.run(ba.evict_dead_card("", "browser-x"))
     assert not broadcasts and not saved
 
 
@@ -63,6 +63,6 @@ def test_user_card_is_never_evicted(monkeypatch):
     """A wedged USER card (no spawned_by) must never be deleted out from under the
     user; reuse-skip is the whole remedy. Only agent-spawned cards evict."""
     broadcasts, saved, dash = p_patch(monkeypatch, {"browser-user": FakeCard(None)})
-    asyncio.run(ba.p_evict_dead_card("dash-1", "browser-user"))
+    asyncio.run(ba.evict_dead_card("dash-1", "browser-user"))
     assert not broadcasts and not saved
     assert "browser-user" in dash.layout.browser_cards

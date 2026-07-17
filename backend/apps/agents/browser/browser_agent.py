@@ -2015,7 +2015,7 @@ async def run_browser_agent(
                     DEAD_CARDS.add(browser_id)
                     logger.info(f"[browser-agent] {browser_id} marked dead; same-host reuse will skip it")
                     # Tear the wedged webview DOWN now, before recovery spawns a fresh card. Two heavy pages (the dead one + the recovery one) starve the renderer's event loop = the recovery-card wedge; unmounting the dead one frees its renderer so the recovery card is the only heavy neighbor.
-                    await p_evict_dead_card(dashboard_id, browser_id)
+                    await evict_dead_card(dashboard_id, browser_id)
                 break
 
         if cancel_event.is_set():
@@ -2263,7 +2263,7 @@ def find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | Non
 P_EVICT_SETTLE_S = 1.5
 
 
-async def p_evict_dead_card(dashboard_id: str | None, browser_id: str) -> None:
+async def evict_dead_card(dashboard_id: str | None, browser_id: str) -> None:
     """Free a wedged card's webview so the recovery card isn't its heavy neighbor: tell the
     renderer to unmount it (frees the renderer process), drop it from the persisted layout, and
     WAIT for teardown before the caller spawns the recovery card. Fail-open, never raises into the

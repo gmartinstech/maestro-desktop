@@ -179,7 +179,6 @@ const Tools: React.FC = () => {
           </Box>
         </Collapse>
       </Box>
-
       <AgentWorkflowsSection />
 
       <Box sx={{ mb: 2 }}>
