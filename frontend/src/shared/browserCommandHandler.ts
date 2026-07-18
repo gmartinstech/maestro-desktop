@@ -523,18 +523,26 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
     };
 
     // The reveal actions, tried in yield order. Each returns true if it clicked/scrolled.
-    const TRIGGER_SEL = 'button, [role="button"], a[href], summary, [tabindex], div[class*="placeholder" i], span[class*="placeholder" i]';
-    const clickTrigger = () => {
+    // Match id-based placeholders too (YouTube's #placeholder-area "Add a comment...") not just
+    // class-based ones, so a lazy comment box becomes a clickable trigger once it scrolls in.
+    const TRIGGER_SEL = 'button, [role="button"], a[href], summary, [tabindex], [id*="placeholder" i], [class*="placeholder" i]';
+    // inViewOnly confines the pick to what is CURRENTLY on screen: during the scroll phase a
+    // header "Create"/"Reply" (scrolled off the top, so r.top<0) would otherwise outscore the
+    // comment box that just scrolled into view, and clicking it opens/navigates the wrong thing.
+    const clickTrigger = (inViewOnly) => {
       const all = deepMatch(document, TRIGGER_SEL, [], 0);
       let best = null, bestScore = -1;
       for (const el of all) {
         if (!vis(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (inViewOnly && (r.bottom < 0 || r.top > window.innerHeight)) continue;
         const txt = ((el.textContent||'') + ' ' + (el.getAttribute('aria-label')||'') + ' ' + (el.getAttribute('placeholder')||'')).trim();
         if (txt.length > 60 || !OPENER.test(txt) || HARDBLOCK.test(txt)) continue;
-        const r = el.getBoundingClientRect();
-        // Prefer short-labelled, higher-on-page triggers (a real "Start a post" pill beats a
-        // long paragraph that happens to contain "reply").
-        const score = (60 - txt.length) + Math.max(0, 600 - r.top) / 100;
+        // Short-labelled wins; higher-on-page when scanning the whole page, viewport-center when scrolling.
+        const posScore = inViewOnly
+          ? Math.max(0, 300 - Math.abs(r.top - window.innerHeight / 2)) / 100
+          : Math.max(0, 600 - r.top) / 100;
+        const score = (60 - txt.length) + posScore;
         if (score > bestScore) { bestScore = score; best = el; }
       }
       if (!best) return false;
@@ -559,28 +567,32 @@ async function handleFindComposer(wv: BrowserWebview, params: Record<string, any
       }
       return false;
     };
-    const scrollMain = () => {
-      const sc = document.scrollingElement || document.documentElement;
-      const before = sc.scrollTop;
-      sc.scrollBy(0, Math.round(window.innerHeight * 1.1));
-      return sc.scrollTop !== before || true;
-    };
-
     let hit = findBest();
     const acts = [];
     if (!hit && ${reveal}) {
-      const reveals = [
-        ['trigger', clickTrigger, 2000],
-        ['open-first', openFirstItem, 2000],
-        ['scroll', scrollMain, 1200],
-      ];
-      for (const [name, act, waitMs] of reveals) {
-        let did = false; try { did = act(); } catch (e) { did = false; }
-        acts.push(name + (did ? '' : ':noop'));
-        if (!did) continue;
-        hit = await pollFind(waitMs);
-        if (hit) break;
+      // 1. A compose opener visible up top (Gmail "Compose", LinkedIn "Start a post").
+      try { if (clickTrigger(false)) { acts.push('trigger'); hit = await pollFind(2500); } } catch (e) { /* keep going */ }
+      // 2. Progressive scroll for a below-fold / lazy composer: YouTube comments hydrate on
+      //    scroll and start as a placeholder that only becomes editable once clicked, so scroll
+      //    a step, re-scan, and re-click the trigger on whatever just entered the viewport, up to
+      //    a small bound, stopping at page bottom. This is what a human does to reach comments.
+      if (!hit) {
+        const sc = document.scrollingElement || document.documentElement;
+        let scrolled = false;
+        for (let step = 0; step < 6 && !hit; step++) {
+          const before = sc.scrollTop;
+          sc.scrollBy(0, Math.round(window.innerHeight * 0.9));
+          scrolled = true;
+          await sleep(500);
+          hit = findBest();
+          if (!hit) { try { if (clickTrigger(true)) hit = await pollFind(1400); } catch (e) { /* keep going */ } }
+          if (sc.scrollTop === before) break;
+        }
+        if (scrolled) acts.push('scroll');
       }
+      // 3. Last resort: open the first list item (X DMs / chat lists). Navigational, so it runs
+      //    only after trigger+scroll fail, which stops it from yanking YouTube to another video.
+      if (!hit) { let did = false; try { did = openFirstItem(); } catch (e) { did = false; } if (did) { acts.push('open-first'); hit = await pollFind(2000); } }
     }
     if (!hit) return { found: false, reveals: acts };
 
