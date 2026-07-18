@@ -1473,6 +1473,34 @@ async def run_browser_agent(
                 # Clicked but the composer did NOT clear: the send is UNVERIFIED. Leave send_confirmed False so the loop can't shortcut to a "done" it never earned (r264 set it True here and the model then FALSELY claimed delivery). The model gets ONE truthful verify pass, never a blind resend.
                 task = f"{task}\n\n[{p_script['note']}]"
 
+    # Code-side DELETE dispatch: the removal analog of the send-script. A "delete the post that
+    # says X" task auto-fires the same verified remove flow (find the item by its text, open its
+    # overflow menu, Delete, confirm, verify-gone) on the page prestage landed, instead of waiting
+    # for the model to reach for BrowserDeleteItem, which it doesn't: live, it read the post then
+    # claimed it "can only read" and gave up. If the item isn't on the landed page it declines and
+    # the model loop navigates to where it lives. Skipped in dry-run (this is a real destructive act).
+    from backend.apps.agents.browser import browser_delete_script
+    if (browser_delete_script.delete_tool_enabled() and is_removal_task(task) and not app_mode
+            and not done_called and preloaded_perception and not cancel_event.is_set()
+            and os.environ.get("OSW_SENDSCRIPT_DRYRUN") != "1"):
+        p_del_target = browser_send_script.quoted_payload(user_prompt or task)
+        if p_del_target and len(p_del_target) >= browser_delete_script.MIN_TARGET_CHARS:
+            try:
+                p_del_res = await ws_manager.send_browser_command(
+                    uuid4().hex, "evaluate", browser_id,
+                    {"expression": browser_delete_script.delete_item_expression(p_del_target)}, tab_id=tab_id)
+                p_del = browser_delete_script.parse_delete_result(p_del_res)
+            except Exception as p_de:
+                logger.info(f"[browser-deletedispatch] outer skip ({p_de})")
+                p_del = {"removed": False, "stage": "eval", "msg": str(p_de)}
+            logger.info(f"[browser-deletedispatch] target={p_del_target[:40]!r} "
+                        f"removed={p_del['removed']} stage={p_del['stage']}")
+            if p_del["removed"]:
+                done_called = True
+                done_success = True
+                done_message = f'Done, I deleted the item containing "{p_del_target[:60]}" (verified gone).'
+            # not removed: fall through to the model loop, which navigates to where the item lives.
+
     # Dry-run is a measurement mode, so the run ENDS here either way: letting the model loop run would both risk the REAL send the flag exists to avoid and rescue declines the flag exists to attribute. Inert when the flag is off.
     if os.environ.get("OSW_SENDSCRIPT_DRYRUN") == "1" and not done_called:
         p_dr = browser_send_script.dryrun_report(
