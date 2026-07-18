@@ -228,8 +228,11 @@ async def run_send_script(
         else:
             logger.info(f"[browser-sendscript] decline: no composer or opener after poll ({current_url[:50]!r})")
             return None
-    if P_READONLY_RE.search(task) or P_READONLY_RE.search(payload_source or ""):
-        logger.info("[browser-sendscript] decline: read-only directive in task")
+    # Key read-only on the user's OWN words, not the advisory brief composed into `task`: the aux
+    # brief wrote "do not submit/post it" for a plain "start a post", which falsely read-only-flagged
+    # a real send. Fall back to task only when the raw prompt isn't threaded through.
+    if P_READONLY_RE.search(payload_source or task):
+        logger.info("[browser-sendscript] decline: read-only directive in user request")
         return None
     if looks_like_login_wall(current_url, state_text):
         logger.info(f"[browser-sendscript] decline: login/auth wall ({(current_url or '')[:60]!r})")

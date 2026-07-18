@@ -928,7 +928,12 @@ async def run_browser_agent(
     from backend.apps.agents.browser import browser_prestage
     from backend.apps.agents.browser import browser_plan_dispatch
     # Computed here (pure, task-only) so prestage + every dispatch tier below shares one verdict.
-    task_is_send = not deliverable_is_informational("", task)
+    # `task` here is prompt + an aux-written routing brief (compose_task), and the brief's prose
+    # can read informational and wrongly disarm a real send (facebook: the brief tripped the
+    # info-ask gate while the user's own "start a post" is plainly an action). The user's words
+    # are authoritative, so a send stands if EITHER the composed task OR the raw prompt says action.
+    task_is_send = not (deliverable_is_informational("", task)
+                        and deliverable_is_informational("", user_prompt or task))
     if (browser_prestage.prestage_enabled() and not app_mode and not cancel_event.is_set()
             and not p_skip_prestage_for_skill):
         try:
