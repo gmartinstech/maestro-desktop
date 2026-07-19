@@ -920,8 +920,12 @@ async def run_browser_agent(
         except Exception:
             pass
     # A learned skill's replayed prefix does the same navigation prestage would aux-drive (~8-12s): when one exists for this host+task, skip prestage and let the replay own the nav.
+    # Removal tasks never replay a skill (see the record gate): a delete is a destructive one-shot,
+    # not a replayable nav prefix, so a stale delete-"skill" of scrolls must not hijack it.
+    p_task_is_removal = is_removal_task(skill_key_task)
     p_early_host = browser_skills.host_of(initial_url or current_url or next(iter(re.findall(r"https?://\S+", task)), ""))
-    p_skip_prestage_for_skill = bool(p_early_host and browser_skills.find_skill(p_early_host, skill_key_task))
+    p_skip_prestage_for_skill = bool(p_early_host and not p_task_is_removal
+                                     and browser_skills.find_skill(p_early_host, skill_key_task))
     if p_skip_prestage_for_skill:
         logger.info(f"[browser-skills] skill exists for {p_early_host}; skipping prestage (replay owns the nav)")
 
@@ -1391,8 +1395,8 @@ async def run_browser_agent(
             replay_host = browser_skills.host_of(m.group(0))
     # The card might have started on the WRONG host (the orchestrator often opens a fresh card on google and only navigates to the target later); if so, this dispatch check misses and the deferred re-check inside the loop catches it after the first navigation.
     replay_rechecked = False
-    logger.info(f"[browser-skills] dispatch replay check: host={replay_host!r}")
-    p_dispatch_replay = await p_try_replay(replay_host, 0, allow_prefix=True)
+    logger.info(f"[browser-skills] dispatch replay check: host={replay_host!r} removal={p_task_is_removal}")
+    p_dispatch_replay = None if p_task_is_removal else await p_try_replay(replay_host, 0, allow_prefix=True)
     if p_dispatch_replay is not None:
         return p_dispatch_replay
     if replay_prefix_note:
@@ -2407,7 +2411,7 @@ async def run_browser_agent(
                             )
 
                 # Deferred replay re-check: the orchestrator often opens a fresh card on the wrong host, so the dispatch-time replay missed. Once a navigation lands us on a host that DOES have a matching skill, and nothing has dirtied the page yet, switch to replay (still verified per-step, still trust-gated). Fires at most once.
-                if (not replay_rechecked and tu.name == "BrowserNavigate"
+                if (not replay_rechecked and not p_task_is_removal and tu.name == "BrowserNavigate"
                         and replay_recheck_is_safe(action_log)):
                     cur_host = browser_skills.host_of(last_seen_url)
                     if cur_host and cur_host != replay_host:
@@ -2706,8 +2710,14 @@ async def run_browser_agent(
                                     playbook_seeded=pb_seeded)
         # Learn this task ONLY from a genuinely successful run whose deliverable a deterministic replay can actually reproduce. We skip recording when the run was dishonest (ghost) OR when its answer was gathered/judged content (a list/report): replay can redo the clicks but not regenerate the judgment, so recording it would create a thin shortcut that later ghosts.
         informational = deliverable_is_informational(summary, skill_key_task)
-        logger.info(f"[browser-skills] record gate: honest={honest} informational={informational}")
-        if honest and not informational:
+        # A removal run is NOT a recordable skill: the actual delete is a one-shot destructive
+        # dispatch (BrowserEvaluate), not in the replayable action_log, so what gets distilled is
+        # the meaningless scrolling around it. Replaying that bogus "skill" later reports done in 0
+        # turns while deleting nothing (measured live: repeat deletes all ghost-succeeded). Deletes
+        # always run fresh through the delete-dispatch.
+        p_is_removal = is_removal_task(skill_key_task)
+        logger.info(f"[browser-skills] record gate: honest={honest} informational={informational} removal={p_is_removal}")
+        if honest and not informational and not p_is_removal:
             try:
                 rec_host = browser_skills.host_of(last_seen_url)
                 p_distilled = browser_skills.distill_steps(action_log)
