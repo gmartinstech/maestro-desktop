@@ -137,6 +137,8 @@ export interface AgentConfig {
   target_directory?: string;
   dashboard_id?: string;
   selected_app_output_ids?: string[];
+  // Onboarding's unattended audit runs read-only over the user's real files (Edit/Bash hard-blocked).
+  read_only?: boolean;
 }
 
 export interface HistorySession {

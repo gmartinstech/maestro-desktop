@@ -17,6 +17,10 @@ class AgentConfig(BaseModel):
     workflow_edit_id: Optional[str] = None
     # App cards the user picked to edit. When exactly one resolves, launch binds the chat's cwd to that app instead of seeding a new "Untitled App".
     selected_app_output_ids: Optional[list[str]] = None
+    # Onboarding auto-launches an audit over the user's REAL files with nobody watching, so it runs
+    # read-only: Read/Grep/Glob + Write (its one report) allowed, Edit/Bash/NotebookEdit hard-blocked
+    # so "modify or delete an existing file" is unrepresentable, not just discouraged by the prompt.
+    read_only: bool = False
 
 class ApprovalRequest(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex)
@@ -84,6 +88,8 @@ class AgentSession(BaseModel):
     sdk_session_id: Optional[str] = None
     system_prompt: Optional[str] = None
     allowed_tools: list[str] = Field(default_factory=list)
+    # Hard-block the mutation/exec tools for this session (onboarding's unattended audit); see AgentConfig.read_only.
+    read_only: bool = False
     max_turns: Optional[int] = None
     cwd: Optional[str] = None
     # Resolved at session start so resume reattaches to the same repo even after the user cd's elsewhere.

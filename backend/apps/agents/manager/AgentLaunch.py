@@ -110,6 +110,7 @@ class AgentLaunch(AgentManagerProtocol):
             mode=config.mode,
             system_prompt=config.system_prompt,
             allowed_tools=tools,
+            read_only=config.read_only,
             max_turns=config.max_turns,
             cwd=effective_cwd,
             repo_url=repo_url,

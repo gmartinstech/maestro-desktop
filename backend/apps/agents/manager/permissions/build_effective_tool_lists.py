@@ -19,6 +19,10 @@ from backend.apps.tools_lib.tools_lib import (
     sanitize_server_name as sanitize_server_name,
 )
 
+# Mutation/exec tools a read-only session must never reach: Edit (rewrites files), Bash (rm/mv/overwrite),
+# NotebookEdit (rewrites notebooks). Write is intentionally NOT here, the audit needs its one report.
+READ_ONLY_BLOCKED_TOOLS = ("Edit", "Bash", "NotebookEdit")
+
 
 @typechecked
 def build_effective_tool_lists(
@@ -108,4 +112,13 @@ def build_effective_tool_lists(
     # The claude_code preset ships its own bare `Skill` tool that reads ~/.claude/skills directly; always withhold it so skills only ever load through our provider-agnostic mcp__openswarm-skill__Skill (or not at all).
     if "Skill" not in effective_disallowed:
         effective_disallowed.append("Skill")
+    # Read-only session (onboarding's unattended audit over the user's real files): the mutation/exec
+    # tools are HARD-blocked, not just left out of allowed, so a background agent can never modify or
+    # delete an existing file. Write stays permitted for its single report. Also drop them from allowed
+    # in case a preset seeded them, disallowed wins in the SDK but keep the two lists coherent.
+    if getattr(session, "read_only", False):
+        for dt in READ_ONLY_BLOCKED_TOOLS:
+            if dt not in effective_disallowed:
+                effective_disallowed.append(dt)
+        effective_allowed = [t for t in effective_allowed if t not in READ_ONLY_BLOCKED_TOOLS]
     return effective_allowed, effective_disallowed
