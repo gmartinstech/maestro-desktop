@@ -1239,7 +1239,8 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL(`http://localhost:3000`);
+    // OPENSWARM_DEV_URL lets a worktree stack (webpack on an alternate port) run its own Electron.
+    mainWindow.loadURL(process.env.OPENSWARM_DEV_URL || `http://localhost:3000`);
   } else if (frontendServerPort) {
     mainWindow.loadURL(`http://127.0.0.1:${frontendServerPort}/index.html`);
   } else {
