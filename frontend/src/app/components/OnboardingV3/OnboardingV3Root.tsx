@@ -1,15 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { updateSettingsPatch } from '@/shared/state/settingsSlice';
 import { setFlowActive } from '@/shared/state/onboardingV3Slice';
 import { selectSubscriptionConnections } from '@/shared/state/subscriptionsSlice';
-import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { useClaudeTokens, useThemeAccent } from '@/shared/styles/ThemeContext';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { useOnboardingV3Pipeline } from './useOnboardingV3Pipeline';
-import { GRAIN_URL } from './beats/BeatShell';
-import Starburst from './Starburst';
+import { GRAIN_URL } from '@/shared/styles/grainTexture';
+import { ARC_BLUE_BG, ONBOARDING_SANS } from './beats/BeatShell';
+import OnboardingLogo from './OnboardingLogo';
 import BeatConnect from './beats/BeatConnect';
 import BeatApps from './beats/BeatApps';
 import BeatTheme from './beats/BeatTheme';
@@ -19,8 +20,6 @@ type Beat = 'welcome' | 'newos' | 'connect' | 'apps' | 'theme' | 'card';
 
 const V2_STORAGE_KEY = 'openswarm.onboarding.v2';
 const WINDOWED_BEATS: Beat[] = ['welcome', 'newos'];
-// The opening is its own vivid moment (electric blue -> indigo -> violet), deliberately off-brand; the user's picked color takes over from the theme beat on.
-const INTRO = { core: '#93b5ff', mid: '#5b6cff', edge: '#a855f7' };
 
 // Decides whether the v3 full-screen flow owns this launch. Only genuinely fresh installs see it: anyone with the v2 tour key or existing sessions is auto-marked skipped so an update never re-onboards a veteran.
 function useOnboardingV3Gate(): boolean {
@@ -34,52 +33,51 @@ function useOnboardingV3Gate(): boolean {
     try { return localStorage.getItem(V2_STORAGE_KEY) !== null; } catch { return false; }
   }, []);
 
+  // Dev/QA only (stripped from production builds): localStorage 'osw_force_onboarding'='1' replays the
+  // v3 flow on a non-fresh install, since the gate is otherwise first-install-only. Lets us showcase
+  // + live-test the whole flow without a truly clean profile.
+  const forceShow = useMemo(() => {
+    if (process.env.NODE_ENV === 'production') return false;
+    try { return localStorage.getItem('osw_force_onboarding') === '1'; } catch { return false; }
+  }, []);
+
+  // Under the replay flag we open the flow exactly ONCE (a ref, not on every v3State change) so that
+  // finish() setting flowActive=false actually closes the curtain instead of the effect re-opening it.
+  const forcedOpenRef = useRef(false);
   useEffect(() => {
+    if (forceShow) {
+      if (!forcedOpenRef.current) { forcedOpenRef.current = true; dispatch(setFlowActive(true)); }
+      return;
+    }
     if (!settingsLoaded || v3State) return;
     if (hasV2History) {
       dispatch(updateSettingsPatch({ onboarding_v3: 'skipped' }));
       return;
     }
     dispatch(setFlowActive(true));
-  }, [settingsLoaded, v3State, hasV2History, dispatch]);
+  }, [settingsLoaded, v3State, hasV2History, dispatch, forceShow]);
 
-  // Backstop for a veteran who cleared localStorage: real sessions arriving mid-flow means this is not a fresh install.
+  // Backstop for a veteran who cleared localStorage: real sessions arriving mid-flow means this is not a fresh install. (Skipped under the dev replay flag, whose demo dashboard legitimately has sessions.)
   useEffect(() => {
-    if (!flowActive || sessionCount === 0) return;
+    if (forceShow || !flowActive || sessionCount === 0) return;
     dispatch(setFlowActive(false));
     dispatch(updateSettingsPatch({ onboarding_v3: 'skipped' }));
-  }, [flowActive, sessionCount, dispatch]);
+  }, [flowActive, sessionCount, dispatch, forceShow]);
 
-  return flowActive && settingsLoaded && !v3State;
+  // forceShow bypasses the v2/v3 ENTRY block but still respects flowActive, so finish() closes it.
+  return forceShow ? (flowActive && settingsLoaded) : (flowActive && settingsLoaded && !v3State);
 }
 
-// Full-bleed intro room: a soft accent blob drifts once behind giant type, one arrow, nothing else.
+// Full-bleed intro room, Arc's "A browser for you.": giant heavy white type centered on the grained
+// electric-blue gradient, one arrow, nothing else.
 const IntroBeat: React.FC<{ c: ClaudeTokens; line: string; sub?: string; onNext: () => void }> = ({ c, line, sub, onNext }) => (
-  <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: c.bg.inverse, overflow: 'hidden' }}>
-    <motion.div
-      initial={{ scale: 0.35, opacity: 0, x: 0, y: 0 }}
-      animate={{ scale: [0.35, 1, 1.06, 1], opacity: [0, 0.7, 0.62, 0.7], x: [0, 0, 22, 0], y: [0, 0, -14, 0] }}
-      transition={{ duration: 9, times: [0, 0.16, 0.6, 1], ease: 'easeInOut' }}
-      style={{
-        position: 'absolute', width: 620, height: 620, borderRadius: 999,
-        background: `radial-gradient(circle at 42% 38%, ${INTRO.core}, ${INTRO.mid} 46%, ${INTRO.edge} 70%, transparent 82%)`,
-        filter: 'blur(64px)', pointerEvents: 'none',
-      }}
-    />
-    <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.14, pointerEvents: 'none', mixBlendMode: 'overlay' }} />
-    <motion.div
-      initial={{ opacity: 0, scale: 0.4, rotate: -80 }}
-      animate={{ opacity: 1, scale: 1, rotate: 0 }}
-      transition={{ type: 'spring', stiffness: 160, damping: 18, delay: 0.2 }}
-      style={{ position: 'relative', marginBottom: 22 }}
-    >
-      <Starburst size={44} from={INTRO.core} to={INTRO.edge} />
-    </motion.div>
+  <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: ARC_BLUE_BG, overflow: 'hidden', fontFamily: ONBOARDING_SANS }}>
+    <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.32, pointerEvents: 'none' }} />
     <motion.h1
       initial={{ opacity: 0, y: 16, filter: 'blur(8px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{ duration: 0.7, delay: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      style={{ position: 'relative', margin: 0, fontSize: 'clamp(2.4rem, 5vw, 3.8rem)', fontWeight: 600, color: c.text.inverse, letterSpacing: '-0.01em', textAlign: 'center', padding: '0 24px' }}
+      style={{ position: 'relative', margin: 0, fontSize: 'clamp(2.8rem, 5.4vw, 4.4rem)', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textAlign: 'center', padding: '0 24px', fontFamily: 'inherit' }}
     >
       {line}
     </motion.h1>
@@ -88,7 +86,7 @@ const IntroBeat: React.FC<{ c: ClaudeTokens; line: string; sub?: string; onNext:
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.8 }}
-        style={{ position: 'relative', margin: '14px 0 0', fontSize: '1.02rem', color: c.text.inverse + '99' }}
+        style={{ position: 'relative', margin: '14px 0 0', fontSize: '1.02rem', color: 'rgba(255,255,255,0.75)' }}
       >
         {sub}
       </motion.p>
@@ -117,26 +115,37 @@ const OnboardingV3Root: React.FC = () => {
   const dispatch = useAppDispatch();
   const pipeline = useOnboardingV3Pipeline();
   const [beat, setBeat] = useState<Beat>('welcome');
-  const [scanConsent, setScanConsent] = useState(true);
-  const [usageConsent, setUsageConsent] = useState(true);
   const [picks, setPicks] = useState<string[]>([]);
   const connectedProvider = useAppSelector((s) => selectSubscriptionConnections(s).find((cx) => cx.isActive !== false)?.provider ?? null);
   const [finishing, setFinishing] = useState(false);
+  // The curtain wears whatever the user just picked (their gradient under a soft veil), Arc's post-theme rule.
+  const { accent, gradient } = useThemeAccent();
+  const finishStops = gradient ?? (accent ? [accent] : null);
+  const finishBackdrop = finishStops
+    ? `linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)), linear-gradient(160deg, ${finishStops.map((hex, i) => `${hex} ${finishStops.length > 1 ? (i / (finishStops.length - 1)) * 100 : 100}%`).join(', ')})`
+    : ARC_BLUE_BG;
 
   const { kickIdentity, kickScan, kickUsageRead, kickPrep, finish } = pipeline;
 
+  // Start ALL the background work the instant they connect: identity + scan + usage + prep + the
+  // audit/app jobs. They then run through the entire rest of the flow (connect -> apps -> theme ->
+  // card), so the reveal lands on work already well underway. Personalization is default-on (no
+  // opt-in checkbox), so scan + chat-read always fire here. kickPrep is idempotent and awaits the
+  // scan/usage promises just kicked here; picks aren't in yet and prep doesn't gate on them.
   const onConnected = useCallback(() => {
     kickIdentity();
-    kickScan(scanConsent);
-    if (connectedProvider) kickUsageRead(connectedProvider, usageConsent);
-  }, [kickIdentity, kickScan, kickUsageRead, scanConsent, usageConsent, connectedProvider]);
+    kickScan(true);
+    if (connectedProvider) kickUsageRead(connectedProvider, true);
+    kickPrep(picks);
+  }, [kickIdentity, kickScan, kickUsageRead, kickPrep, connectedProvider, picks]);
 
-  // Fire prep + the background jobs at connect-exit (scan/usage/identity are all ready by now), so they run through the apps + theme + card beats (~three beats of runway) and the reveal lands on work well underway, not just-started. kickPrep is idempotent; picks arrive a beat later and feed the reveal's connect suggestions, not the already-launched jobs.
+  // Backstop: onConnected fires prep for subscription/api-key connects; this covers any path where it
+  // didn't (e.g. free trial). Idempotent, so it's a no-op when prep already started at connect.
   const leaveConnect = useCallback(() => {
-    kickScan(scanConsent);
+    kickScan(true);
     kickPrep(picks);
     setBeat('apps');
-  }, [kickScan, kickPrep, scanConsent, picks]);
+  }, [kickScan, kickPrep, picks]);
 
   const leaveApps = useCallback(() => {
     kickPrep(picks);
@@ -149,7 +158,6 @@ const OnboardingV3Root: React.FC = () => {
     await finish('done');
   }, [dispatch, finish]);
 
-  const skipAll = useCallback(() => { void finish('skipped'); }, [finish]);
 
   const windowed = WINDOWED_BEATS.includes(beat);
   const vw = window.innerWidth;
@@ -197,10 +205,6 @@ const OnboardingV3Root: React.FC = () => {
                 <BeatConnect
                   c={c}
                   identity={pipeline.identity}
-                  scanConsent={scanConsent}
-                  setScanConsent={setScanConsent}
-                  usageConsent={usageConsent}
-                  setUsageConsent={setUsageConsent}
                   onConnected={onConnected}
                   onNext={leaveConnect}
                   onBack={() => setBeat('newos')}
@@ -211,40 +215,31 @@ const OnboardingV3Root: React.FC = () => {
               {beat === 'card' && <BeatCard c={c} identity={pipeline.identity} onFinish={(name) => { void leaveCard(name); }} onBack={() => setBeat('theme')} />}
             </motion.div>
           </AnimatePresence>
-          {/* Traffic lights sell the floating window during the intro; they fade as the window takes the screen. */}
+          {/* Traffic lights on every beat: Arc's onboarding is a real window and never hides them. */}
           <motion.div
-            animate={{ opacity: windowed ? 1 : 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            style={{ position: 'absolute', top: 13, left: 14, display: 'flex', gap: 7, pointerEvents: 'none' }}
+            style={{ position: 'absolute', top: 13, left: 14, display: 'flex', gap: 7, pointerEvents: 'none', zIndex: 10 }}
           >
             {['#FF5F57', '#FEBC2E', '#28C840'].map((dot) => (
               <span key={dot} style={{ width: 11, height: 11, borderRadius: 999, background: dot, opacity: 0.9 }} />
             ))}
           </motion.div>
           {finishing && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center', justifyContent: 'center', background: c.bg.page }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center', justifyContent: 'center', background: finishBackdrop, fontFamily: ONBOARDING_SANS }}>
+              <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.3, pointerEvents: 'none' }} />
               <motion.div
                 initial={{ opacity: 0, scale: 0.7 }}
-                animate={{ opacity: [0, 1, 0.55, 1], scale: [0.7, 1, 0.92, 1], rotate: [0, 0, 22, 45] }}
-                transition={{ duration: 4.5, times: [0, 0.2, 0.6, 1], repeat: 3 }}
+                animate={{ opacity: [0.55, 1, 0.55], scale: [0.9, 1.06, 0.9] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ position: 'relative' }}
               >
-                <Starburst size={40} from={c.accent.hover} to={c.accent.pressed} />
+                <OnboardingLogo size={54} />
               </motion.div>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontSize: '1.02rem', color: c.text.tertiary }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ position: 'relative', fontSize: '1.02rem', fontWeight: 600, color: '#fff', textShadow: '0 1px 8px rgba(0,0,0,0.25)' }}>
                 Setting up your canvas...
               </motion.div>
             </div>
-          )}
-          {!finishing && (
-            <button
-              onClick={skipAll}
-              style={{
-                position: 'absolute', bottom: 18, left: 20, border: 'none', background: 'transparent',
-                color: c.text.tertiary, fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', padding: 4,
-              }}
-            >
-              Skip setup
-            </button>
           )}
         </motion.div>
       </motion.div>

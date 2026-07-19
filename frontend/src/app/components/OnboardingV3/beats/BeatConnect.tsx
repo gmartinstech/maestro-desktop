@@ -1,37 +1,31 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE } from '@/shared/config';
 import { fetchModels } from '@/shared/state/modelsSlice';
-import { fetchSubscriptionStatus, markSubscriptionConnected } from '@/shared/state/subscriptionsSlice';
-import { updateSettingsPatch } from '@/shared/state/settingsSlice';
+import { fetchSubscriptionStatus, markSubscriptionConnected, selectSubscriptionConnections } from '@/shared/state/subscriptionsSlice';
 import { hasFreeTrialActive, hasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 import { SUBSCRIPTION_PROVIDERS } from '@/app/pages/Settings/sections/subscription/subscriptionProviders';
 import { runConnectFlow } from '@/app/pages/Settings/sections/subscription/subscriptionConnect';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import type { ProviderIdentity } from '../onboardingV3Api';
+import OnboardingLogo from '../OnboardingLogo';
+import { providerLogo } from '../providerLogos';
 import BeatShell from './BeatShell';
 
-// The single ask of the whole flow, staged as Arc's import list: radio rows, no filler copy. Reuses the proven Settings connect flow verbatim; the scan disclosure is one quiet line, and the scan runs during the OAuth wait.
+// The single ask of the whole flow, staged as Arc's import list: radio rows, no filler copy. Reuses the proven Settings connect flow verbatim. Personalization (local scan + one-time chat read) just happens the moment they connect; it's not an opt-in checkbox anymore.
 const BeatConnect: React.FC<{
   c: ClaudeTokens;
   identity: ProviderIdentity[];
-  scanConsent: boolean;
-  setScanConsent: (v: boolean) => void;
-  usageConsent: boolean;
-  setUsageConsent: (v: boolean) => void;
   onConnected: () => void;
   onNext: () => void;
   onBack: () => void;
-}> = ({ c, identity, scanConsent, setScanConsent, usageConsent, setUsageConsent, onConnected, onNext, onBack }) => {
+}> = ({ c, identity, onConnected, onNext, onBack }) => {
   const dispatch = useAppDispatch();
   const connected = useAppSelector((s) => hasModelConnected(s));
   const freeTrial = useAppSelector((s) => hasFreeTrialActive(s));
   const [connecting, setConnecting] = useState<string | null>(null);
   const [userCode, setUserCode] = useState('');
-  const [showKeys, setShowKeys] = useState(false);
-  const [keyDraft, setKeyDraft] = useState('');
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const connectedOnce = useRef(false);
 
@@ -70,15 +64,14 @@ const BeatConnect: React.FC<{
     }
   }, [dispatch]);
 
-  const saveKey = useCallback(() => {
-    const v = keyDraft.trim();
-    if (!v) return;
-    const field = v.startsWith('sk-ant-') ? 'anthropic_api_key' : v.startsWith('sk-or-') ? 'openrouter_api_key' : v.startsWith('AIza') ? 'google_api_key' : 'openai_api_key';
-    dispatch(updateSettingsPatch({ [field]: v }));
-    setKeyDraft('');
-  }, [keyDraft, dispatch]);
-
-  const connectedIdentity = identity.length > 0 ? identity[0] : null;
+  // Which provider rows are live, so the tab itself shows "Connected", not a floating label below.
+  const connections = useAppSelector(selectSubscriptionConnections);
+  const connectedIds = new Set(connections.filter((cx) => cx.isActive !== false).map((cx) => cx.provider));
+  const identityFor = (pid: string): ProviderIdentity | undefined =>
+    identity.find((id) => id.provider === pid) ?? (pid === 'antigravity' ? identity.find((id) => id.provider === 'gemini') : undefined);
+  // The whole flow leans on a real connection (identity, chat-history read, personalized reveal), so
+  // there is no skip: Continue stays locked until a provider is connected or the free trial is armed.
+  const canContinue = connected || freeTrial;
 
   return (
     <BeatShell
@@ -87,12 +80,16 @@ const BeatConnect: React.FC<{
       body="Use the subscription you already pay for."
       nextLabel="Continue"
       onNext={onNext}
+      nextDisabled={!canContinue}
       onBack={onBack}
+      wide
+      logo={<OnboardingLogo size={52} />}
     >
       <div style={{ width: 'min(440px, 100%)', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {SUBSCRIPTION_PROVIDERS.map((p, i) => {
           const isThis = connecting === p.id;
-          const filled = connected && isThis;
+          const isConnected = connectedIds.has(p.id);
+          const ident = isConnected ? identityFor(p.id) : undefined;
           return (
             <motion.button
               key={p.id}
@@ -101,95 +98,43 @@ const BeatConnect: React.FC<{
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 320, damping: 26, delay: 0.1 + i * 0.08 }}
               style={{
-                display: 'flex', alignItems: 'center', gap: 14, padding: '13px 14px 13px 16px', textAlign: 'left',
-                borderRadius: c.radius.md, border: `1px solid ${filled ? c.accent.primary : c.border.medium}`,
-                background: c.bg.surface, cursor: connected ? 'default' : 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 14, padding: '0 0 0 18px', textAlign: 'left', overflow: 'hidden',
+                borderRadius: 14, border: 'none', boxShadow: isConnected ? '0 0 0 2px #1a9e6a, 0 10px 26px rgba(20,16,80,0.22)' : '0 10px 26px rgba(20,16,80,0.22)',
+                background: '#ffffff', cursor: connected ? 'default' : 'pointer', fontFamily: 'inherit', minHeight: 64,
               }}
             >
               <span style={{
-                width: 18, height: 18, borderRadius: 999, flexShrink: 0, boxSizing: 'border-box',
-                border: `2px solid ${filled ? c.accent.primary : c.border.strong}`,
-                background: filled ? c.accent.primary : 'transparent',
-                boxShadow: filled ? `inset 0 0 0 3px ${c.bg.surface}` : 'none',
+                width: 19, height: 19, borderRadius: 999, flexShrink: 0, boxSizing: 'border-box',
+                border: `1.5px solid ${isConnected ? '#1a9e6a' : '#c9c7c2'}`,
+                background: isConnected ? '#1a9e6a' : 'transparent',
+                boxShadow: isConnected ? 'inset 0 0 0 3px #ffffff' : 'none',
               }} />
-              <span style={{ flex: 1, fontSize: '1rem', fontWeight: 600, color: c.text.primary }}>
-                {p.name}
-                {isThis && !connected && <span style={{ marginLeft: 10, fontSize: '0.8rem', fontWeight: 400, color: c.text.tertiary }}>waiting for sign-in...</span>}
+              <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, padding: '11px 0' }}>
+                <span style={{ fontSize: '0.98rem', fontWeight: 600, color: '#3d3d3a' }}>{p.name}</span>
+                {isConnected
+                  ? <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1a9e6a' }}>Connected{ident?.email ? ` as ${ident.email}` : ''}</span>
+                  : isThis && !connected
+                    ? <span style={{ fontSize: '0.78rem', fontWeight: 400, color: '#8a8a86' }}>waiting for sign-in...</span>
+                    : null}
               </span>
+              {/* Arc's icon tile: a full-height soft-tinted zone on the row's right edge, real brand mark inside. */}
               <span style={{
-                width: 36, height: 36, borderRadius: 9, flexShrink: 0, background: `${p.color}26`,
+                alignSelf: 'stretch', width: 78, flexShrink: 0, background: `linear-gradient(135deg, ${p.color}30, ${p.color}14)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <span style={{ width: 13, height: 13, borderRadius: 999, background: p.color }} />
+                {providerLogo(p.id, 28)}
               </span>
             </motion.button>
           );
         })}
         {userCode && !connected && (
-          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: '0.9rem', color: c.text.secondary }}>
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: '0.9rem', color: 'rgba(255,255,255,0.92)' }}>
             Your code: <strong style={{ fontFamily: c.font.mono, letterSpacing: '0.08em' }}>{userCode}</strong>
           </div>
         )}
-        {connected && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '4px 2px', fontSize: '0.9rem', fontWeight: 500, color: c.status.success }}>
-            Connected{connectedIdentity?.email ? ` as ${connectedIdentity.email}` : ''}
-            {connectedIdentity?.plan ? ` · ${connectedIdentity.label} ${connectedIdentity.plan}` : ''}
-          </motion.div>
-        )}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 8, cursor: 'pointer', fontSize: '0.82rem', color: c.text.tertiary, lineHeight: 1.5 }}>
-          <button
-            onClick={(e) => { e.preventDefault(); setScanConsent(!scanConsent); }}
-            style={{
-              width: 16, height: 16, marginTop: 2, borderRadius: 5, padding: 0, cursor: 'pointer', flexShrink: 0,
-              border: `1.5px solid ${scanConsent ? c.accent.primary : c.border.strong}`,
-              background: scanConsent ? c.accent.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 120ms ease, border-color 120ms ease',
-            }}
-          >
-            {scanConsent && <Check size={11} color="#fff" strokeWidth={3.2} />}
-          </button>
-          <span>Take a quick local look around to personalize my setup. Nothing leaves this Mac.</span>
-        </label>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, cursor: 'pointer', fontSize: '0.82rem', color: c.text.tertiary, lineHeight: 1.5 }}>
-          <button
-            onClick={(e) => { e.preventDefault(); setUsageConsent(!usageConsent); }}
-            style={{
-              width: 16, height: 16, marginTop: 2, borderRadius: 5, padding: 0, cursor: 'pointer', flexShrink: 0,
-              border: `1.5px solid ${usageConsent ? c.accent.primary : c.border.strong}`,
-              background: usageConsent ? c.accent.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 120ms ease, border-color 120ms ease',
-            }}
-          >
-            {usageConsent && <Check size={11} color="#fff" strokeWidth={3.2} />}
-          </button>
-          <span>Learn what I work on from my chats (read once, never stored).</span>
-        </label>
-        <div style={{ display: 'flex', gap: 18, marginTop: 2 }}>
-          <button onClick={() => setShowKeys(!showKeys)} style={{ border: 'none', background: 'transparent', padding: 0, color: c.text.ghost, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
-            Use an API key instead
-          </button>
-          {freeTrial && !connected && (
-            <button onClick={onNext} style={{ border: 'none', background: 'transparent', padding: 0, color: c.text.ghost, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
-              Start free, connect later
-            </button>
-          )}
-        </div>
-        {showKeys && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              value={keyDraft}
-              onChange={(e) => setKeyDraft(e.target.value)}
-              placeholder="Paste an Anthropic, OpenAI, Google, or OpenRouter key"
-              style={{
-                flex: 1, padding: '10px 12px', borderRadius: c.radius.sm, border: `1px solid ${c.border.medium}`,
-                background: c.bg.surface, color: c.text.primary, fontSize: '0.85rem', fontFamily: c.font.mono,
-              }}
-            />
-            <button onClick={saveKey} style={{ padding: '10px 16px', borderRadius: c.radius.sm, border: 'none', background: c.accent.primary, color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Save
-            </button>
+        {!canContinue && (
+          <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>
+            Pick a subscription above to continue.
           </div>
         )}
       </div>
