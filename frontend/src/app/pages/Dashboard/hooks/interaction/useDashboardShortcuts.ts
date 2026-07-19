@@ -32,16 +32,17 @@ export function useDashboardShortcuts({
   useEffect(() => {
     const parts = (newAgentShortcut || '').toLowerCase().split('+');
     const key = parts[parts.length - 1];
-    const needsMeta = parts.includes('meta');
-    const needsCtrl = parts.includes('ctrl');
+    // Cmd on Mac == Ctrl on Windows: collapse both into one "primary" modifier so a shortcut stored
+    // as meta+n still fires when a Windows user presses Ctrl+N (matches the metaKey||ctrlKey idiom used
+    // by every other handler in this file).
+    const needsPrimary = parts.includes('meta') || parts.includes('ctrl');
     const needsShift = parts.includes('shift');
     const needsAlt = parts.includes('alt');
 
     const handleShortcut = (e: KeyboardEvent) => {
       if (!isActive) return;  // Don't fire shortcuts when dashboard is hidden
       if (e.key.toLowerCase() !== key) return;
-      if (needsMeta !== e.metaKey) return;
-      if (needsCtrl !== e.ctrlKey) return;
+      if (needsPrimary !== (e.metaKey || e.ctrlKey)) return;
       if (needsShift !== e.shiftKey) return;
       if (needsAlt !== e.altKey) return;
       e.preventDefault();

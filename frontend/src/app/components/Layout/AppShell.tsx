@@ -21,8 +21,11 @@ import { LayoutDashboard } from 'lucide-react';
 import { LayoutGrid } from 'lucide-react';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Settings as LucideSettings } from 'lucide-react';
-import { ArrowLeft, ArrowRight, Plus, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Clock, Search as SearchGlyph, X as CloseGlyph } from 'lucide-react';
+import ButtonBase from '@mui/material/ButtonBase';
 import { AnimatedPanelLeft } from './animatedIcons';
+
+const SEARCH_HOTKEY_LABEL = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl+K';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import CloseIcon from '@mui/icons-material/Close';
@@ -40,9 +43,10 @@ import { shallowEqual } from 'react-redux';
 import { fetchDashboards, createDashboard, renameDashboard } from '@/shared/state/dashboardsSlice';
 import { Typewriter } from '@/app/components/feedback/Animated';
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
-import { addBrowserCard, addBrowserTab, cycleBrowserTab, reopenLastClosed, addViewCard } from '@/shared/state/dashboardLayoutSlice';
+import { addBrowserCard, addBrowserTab, cycleBrowserTab, reopenLastClosed, addViewCard, selectFullscreenCardId } from '@/shared/state/dashboardLayoutSlice';
 import { setPendingBrowserUrl } from '@/shared/state/tempStateSlice';
-import { fetchOutputs } from '@/shared/state/outputsSlice';
+import { fetchOutputs, deleteOutput, updateOutput } from '@/shared/state/outputsSlice';
+import { removeViewCardCleanly } from '@/shared/viewTeardown';
 import { setInstalling } from '@/shared/state/updateSlice';
 import { findBrowserByWebContentsId } from '@/shared/browserRegistry';
 import { byPreviewRecency } from '@/shared/previewOrder';
@@ -79,9 +83,22 @@ const AppShell: React.FC = () => {
   const [dashboardsExpanded, setDashboardsExpanded] = useState(true);
   const [appsExpanded, setAppsExpanded] = useState(true);
   // Starts collapsed so a fresh boot lands on a clean canvas; the toggle brings it back.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  // Arc/Zen: the sidebar is the primary chrome (search + nav live here), shown by default.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [renamingDashboardId, setRenamingDashboardId] = useState<string | null>(null);
+  const [renamingAppId, setRenamingAppId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Arc-style delete: the row vanishes at once but the real delete waits behind an Undo toast.
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const pendingDeleteRef = useRef<{ id: string; name: string } | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Arc-style peek: hovering an app row (with intent, not a fly-by) floats a preview beside the sidebar.
+  const [peek, setPeek] = useState<{ name: string; description: string; thumbnail: string | null; top: number } | null>(null);
+  const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Arc-style Space switching: a horizontal two-finger swipe over the sidebar flips dashboards. Kept OFF
+  // the canvas (which owns horizontal pan) so the two never fight. accum + cooldown = one flip per swipe.
+  const swipeAccumRef = useRef(0);
+  const swipeCooldownRef = useRef(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
       const stored = localStorage.getItem(SIDEBAR_WIDTH_KEY);
@@ -420,10 +437,60 @@ const AppShell: React.FC = () => {
 
   const isDashboardRoute = location.pathname === '/' || location.pathname.startsWith('/dashboard/');
   const isDashboardViewActive = location.pathname.startsWith('/dashboard/');
+  // macOS full screen: a fullscreen-tiled card owns the window, so every shell chrome piece hides. Gated on the dashboard view so navigating away restores the chrome even mid-fullscreen.
+  const fullscreenCardId = useAppSelector(selectFullscreenCardId);
+  // Zen compact mode: the sidebar is the only chrome now, so whenever it's "away" (user collapsed it,
+  // OR a fullscreen card hides everything) a left-edge hover floats it back in as an overlay.
+  const fsActive = !!fullscreenCardId && isDashboardViewActive;
+  const sidebarAway = (sidebarCollapsed || fsActive) && isDashboardViewActive;
+  const [sidePeek, setSidePeek] = useState(false);
+  useEffect(() => { if (!sidebarAway) setSidePeek(false); }, [sidebarAway]);
+  useEffect(() => {
+    if (!sidePeek) return undefined;
+    const onMove = (e: MouseEvent): void => { if (e.clientX > sidebarWidth + 60) setSidePeek(false); };
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [sidePeek, sidebarWidth]);
+  // Fullscreen still hides the top-center island anchor + banners; the sidebar floats in on peek.
+  const fsHideChrome = fsActive;
+  // In overlay mode the panel stays MOUNTED (so it can slide out, not vanish); sidePeek only drives the slide.
+  const sideOverlay = sidebarAway;
   const isAppsRoute = false;  // /apps route removed; app cards live on the dashboard now.
   const activeDashboardId = location.pathname.startsWith('/dashboard/')
     ? location.pathname.split('/dashboard/')[1]
     : null;
+
+  // Flip to the previous/next dashboard, clamped at the ends (no surprise wrap). Shared by the sidebar
+  // swipe and the Cmd/Ctrl+Alt+arrow keyboard path.
+  const switchDashboard = useCallback((dir: -1 | 1) => {
+    if (dashboardList.length < 2) return;
+    const idx = dashboardList.findIndex((d) => d.id === activeDashboardId);
+    if (idx < 0) return;
+    const next = Math.min(dashboardList.length - 1, Math.max(0, idx + dir));
+    if (next !== idx) navigate(`/dashboard/${dashboardList[next].id}`);
+  }, [dashboardList, activeDashboardId, navigate]);
+
+  const handleSidebarSwipe = useCallback((e: React.WheelEvent) => {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) { swipeAccumRef.current = 0; return; }  // vertical = list scroll
+    if (swipeCooldownRef.current) return;
+    swipeAccumRef.current += e.deltaX;
+    if (Math.abs(swipeAccumRef.current) >= 80) {
+      switchDashboard(swipeAccumRef.current > 0 ? 1 : -1);
+      swipeAccumRef.current = 0;
+      swipeCooldownRef.current = true;
+      setTimeout(() => { swipeCooldownRef.current = false; }, 450);
+    }
+  }, [switchDashboard]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.altKey || e.shiftKey) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); switchDashboard(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); switchDashboard(1); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [switchDashboard]);
 
   const [lastDashboardId, setLastDashboardId] = useLastDashboardId();
   // Apps no longer have a full-page editor; clicking one in the sidebar drops (or focuses) its live card on the current dashboard. Fold-in of the old App Builder.
@@ -433,6 +500,58 @@ const AppShell: React.FC = () => {
       navigate(`/dashboard/${lastDashboardId}`);
     }
   }, [dispatch, navigate, lastDashboardId, location.pathname]);
+  // The real delete, run only once Undo has lapsed: tear the live view card down cleanly (never rip a
+  // webview GPU surface mid-composite), then delete the output for good.
+  const commitDeleteApp = useCallback((id: string) => {
+    void removeViewCardCleanly(id, dispatch);
+    dispatch(deleteOutput(id));
+  }, [dispatch]);
+
+  // Arc-style delete: the row hides immediately and an Undo toast holds for 6s. Undo restores it;
+  // silence commits it. A second delete flushes the first (only one pending at a time).
+  const handleDeleteApp = useCallback((e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    const prev = pendingDeleteRef.current;
+    if (prev && prev.id !== id) commitDeleteApp(prev.id);
+    const entry = { id, name };
+    pendingDeleteRef.current = entry;
+    setPendingDelete(entry);
+    deleteTimerRef.current = setTimeout(() => {
+      commitDeleteApp(id);
+      pendingDeleteRef.current = null;
+      setPendingDelete(null);
+      deleteTimerRef.current = null;
+    }, 6000);
+  }, [commitDeleteApp]);
+
+  const handleUndoDeleteApp = useCallback(() => {
+    if (deleteTimerRef.current) { clearTimeout(deleteTimerRef.current); deleteTimerRef.current = null; }
+    pendingDeleteRef.current = null;
+    setPendingDelete(null);
+  }, []);
+
+  // Leaving the app while a delete is still pending shouldn't strand a half-deleted ghost: commit it.
+  useEffect(() => () => {
+    if (deleteTimerRef.current) { clearTimeout(deleteTimerRef.current); }
+    if (pendingDeleteRef.current) commitDeleteApp(pendingDeleteRef.current.id);
+    if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
+  }, [commitDeleteApp]);
+
+  const handleStartAppRename = (id: string, currentName: string) => {
+    setRenamingDashboardId(null);
+    setRenamingAppId(id);
+    setRenameValue(currentName);
+  };
+
+  const handleAppRenameSubmit = (id: string) => {
+    const trimmed = renameValue.trim();
+    const previousName = outputItems[id]?.name;
+    if (trimmed && trimmed !== previousName) {
+      dispatch(updateOutput({ id, name: trimmed }));
+    }
+    setRenamingAppId(null);
+  };
   // With the /apps route gone, an app row is "active" when its card is open on the dashboard, not from the URL.
   const openViewCardOutputIds = useAppSelector((s) =>
     new Set(Object.values(s.dashboardLayout.viewCards).map((vc) => vc.output_id)),
@@ -453,6 +572,7 @@ const AppShell: React.FC = () => {
   };
 
   const handleStartDashboardRename = (id: string, currentName: string) => {
+    setRenamingAppId(null);
     setRenamingDashboardId(id);
     setRenameValue(currentName);
   };
@@ -480,116 +600,24 @@ const AppShell: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: c.bg.secondary }}>
+      {sidebarAway && !sidePeek && (
+        <Box onMouseEnter={() => setSidePeek(true)} sx={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 14, zIndex: 2147483000, pointerEvents: 'auto' }} />
+      )}
+      {/* Top bar dropped (Arc/Zen): a zero-height anchor left only to float the agent-activity island at top-center; the island renders nothing when idle. */}
       <Box
         sx={{
-          height: 38,
+          height: 0,
           flexShrink: 0,
-          bgcolor: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
           position: 'relative',
           overflow: 'visible',
-          WebkitAppRegion: 'drag',
-          userSelect: 'none',
-          pl: '78px',
-          gap: 0.25,
+          zIndex: 10,
+          display: fsHideChrome ? 'none' : 'block',
         }}
       >
-        <Tooltip title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
-          <IconButton
-            size="small"
-            onClick={() => setSidebarCollapsed((prev) => !prev)}
-            // Onboarding runtime reads aria-expanded to detect a collapsed sidebar.
-            data-onboarding="sidebar-toggle"
-            aria-expanded={!sidebarCollapsed}
-            sx={{
-              WebkitAppRegion: 'no-drag',
-              color: c.text.tertiary,
-              p: 0.5,
-              borderRadius: 1,
-              '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
-            }}
-          >
-            <AnimatedPanelLeft size={18} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Back">
-          {/* span wrapper so a disabled button still shows its Tooltip; lucide
-              glyph + hover-slide kept from the redesign, disabled-state from #68. */}
-          <span>
-            <IconButton
-              size="small"
-              onClick={() => navigate(-1)}
-              disabled={!canGoBack}
-              sx={{
-                WebkitAppRegion: 'no-drag',
-                color: c.text.tertiary,
-                p: 0.5,
-                borderRadius: 1,
-                '& svg': { transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' },
-                '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
-                '&:hover svg': { transform: 'translateX(-2px)' },
-              }}
-            >
-              <ArrowLeft size={18} />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Forward">
-          <span>
-            <IconButton
-              size="small"
-              onClick={() => navigate(1)}
-              disabled={!canGoForward}
-              sx={{
-                WebkitAppRegion: 'no-drag',
-                color: c.text.tertiary,
-                p: 0.5,
-                borderRadius: 1,
-                '& svg': { transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' },
-                '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
-                '&:hover svg': { transform: 'translateX(2px)' },
-              }}
-            >
-              <ArrowRight size={18} />
-            </IconButton>
-          </span>
-        </Tooltip>
-
         <DynamicIsland />
-
-        <Box sx={{ flex: 1 }} />
-
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.75,
-            pr: 1.5,
-            WebkitAppRegion: 'no-drag',
-          }}
-        >
-          <Box
-            component="img"
-            src="./logo.png"
-            alt="OpenSwarm"
-            sx={{ width: 20, height: 20, borderRadius: 0.5, opacity: 0.85 }}
-          />
-          <Typography
-            sx={{
-              color: c.text.secondary,
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              letterSpacing: 0.2,
-              lineHeight: 1,
-            }}
-          >
-            OpenSwarm
-          </Typography>
-        </Box>
       </Box>
 
-      <Collapse in={showWarningBanner} timeout={350} unmountOnExit>
+      <Collapse in={showWarningBanner && !fsHideChrome} timeout={350} unmountOnExit>
         <Box
           sx={{
             display: 'flex',
@@ -634,7 +662,7 @@ const AppShell: React.FC = () => {
         </Box>
       </Collapse>
 
-      <Collapse in={showFreeTrialNudge} timeout={300} unmountOnExit>
+      <Collapse in={showFreeTrialNudge && !fsHideChrome} timeout={300} unmountOnExit>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, flexShrink: 0 }}>
           <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, flex: 1, letterSpacing: '0.01em' }}>
             {freeTrialSpent
@@ -662,7 +690,7 @@ const AppShell: React.FC = () => {
         </Box>
       </Collapse>
 
-      <Collapse in={showUsageNudge} timeout={300} unmountOnExit>
+      <Collapse in={showUsageNudge && !fsHideChrome} timeout={300} unmountOnExit>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, flexShrink: 0 }}>
           {/* the bar is the message: how full your Pro window is. calm accent, never red. */}
           <Box sx={{ width: 132, height: 5, borderRadius: 3, bgcolor: c.border.medium, overflow: 'hidden', flexShrink: 0 }}>
@@ -686,7 +714,7 @@ const AppShell: React.FC = () => {
         </Box>
       </Collapse>
 
-      {showUpdateBanner && (
+      {showUpdateBanner && !fsHideChrome && (
         <Box
           sx={{
             display: 'flex',
@@ -782,17 +810,72 @@ const AppShell: React.FC = () => {
       )}
 
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      {!sidebarCollapsed && (
+      {((!sidebarCollapsed && !fsHideChrome) || sideOverlay) && (
       <>
       <Box
+        onMouseLeave={() => { if (sideOverlay) setSidePeek(false); }}
+        onWheel={handleSidebarSwipe}
         sx={{
           width: sidebarWidth,
           flexShrink: 0,
           bgcolor: c.bg.secondary,
           display: 'flex',
           flexDirection: 'column',
+          // Zen/Arc compact mode: a detached, rounded panel that SLIDES in and out from the left edge
+          // (sidePeek drives the transform both ways; it stays mounted so leaving glides it away, not vanish).
+          ...(sideOverlay ? {
+            position: 'fixed', top: 10, left: 10, bottom: 10, zIndex: 1000002,
+            borderRadius: '14px', overflow: 'hidden',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.34)', border: `1px solid ${c.border.medium}`,
+            transform: sidePeek ? 'translateX(0)' : 'translateX(-118%)',
+            transition: 'transform 240ms cubic-bezier(0.22,1,0.36,1)',
+            pointerEvents: sidePeek ? 'auto' : 'none',
+          } : {}),
         }}
       >
+        {/* Sidebar header = the app's chrome home (Arc/Zen): window-light clearance, back/forward, collapse, then the search command bar. */}
+        <Box sx={{ pt: '30px', px: 1, pb: 0.75, display: 'flex', flexDirection: 'column', gap: 0.75, WebkitAppRegion: 'drag', flexShrink: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, WebkitAppRegion: 'no-drag' }}>
+            <Tooltip title="Back">
+              <span>
+                <IconButton size="small" onClick={() => navigate(-1)} disabled={!canGoBack}
+                  sx={{ color: c.text.tertiary, p: 0.5, borderRadius: 1, '& svg': { transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1)' }, '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` }, '&:hover svg': { transform: 'translateX(-2px)' } }}>
+                  <ArrowLeft size={17} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Forward">
+              <span>
+                <IconButton size="small" onClick={() => navigate(1)} disabled={!canGoForward}
+                  sx={{ color: c.text.tertiary, p: 0.5, borderRadius: 1, '& svg': { transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1)' }, '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` }, '&:hover svg': { transform: 'translateX(2px)' } }}>
+                  <ArrowRight size={17} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title="Hide sidebar">
+              <IconButton size="small" onClick={() => setSidebarCollapsed(true)}
+                data-onboarding="sidebar-toggle" aria-expanded
+                sx={{ color: c.text.tertiary, p: 0.5, borderRadius: 1, '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` } }}>
+                <AnimatedPanelLeft size={17} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <ButtonBase
+            onClick={() => window.dispatchEvent(new CustomEvent('openswarm:open-search'))}
+            sx={{
+              WebkitAppRegion: 'no-drag',
+              display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'flex-start',
+              px: 1.25, py: 0.9, borderRadius: 2, border: `1px solid ${c.border.medium}`, bgcolor: c.bg.surface,
+              color: c.text.tertiary, transition: 'border-color 0.15s, background 0.15s',
+              '&:hover': { borderColor: c.border.strong, bgcolor: c.bg.page },
+            }}
+          >
+            <SearchGlyph size={15} />
+            <Typography sx={{ flex: 1, textAlign: 'left', fontSize: '0.86rem', color: c.text.muted }}>Search</Typography>
+            <Typography sx={{ fontSize: '0.72rem', color: c.text.ghost, fontFamily: c.font.mono }}>{SEARCH_HOTKEY_LABEL}</Typography>
+          </ButtonBase>
+        </Box>
         <Box sx={{
           flex: 1,
           overflow: 'auto',
@@ -1024,44 +1107,99 @@ const AppShell: React.FC = () => {
                 }}
               >
                 {appsList.map((app) => {
+                  if (pendingDelete?.id === app.id) return null;  // hidden while its Undo toast is up
                   const isActive = openViewCardOutputIds.has(app.id);
+                  const isRenamingApp = renamingAppId === app.id;
+                  const appName = app.name || 'Untitled App';
                   return (
                     <Box
                       key={app.id}
-                      onClick={() => navigateToApp(app.id)}
+                      onClick={() => { if (!isRenamingApp) navigateToApp(app.id); }}
+                      onMouseEnter={(e) => {
+                        if (isRenamingApp) return;
+                        const top = e.currentTarget.getBoundingClientRect().top;
+                        if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
+                        peekTimerRef.current = setTimeout(() => setPeek({ name: appName, description: app.description || '', thumbnail: app.thumbnail || null, top }), 350);
+                      }}
+                      onMouseLeave={() => {
+                        if (peekTimerRef.current) { clearTimeout(peekTimerRef.current); peekTimerRef.current = null; }
+                        setPeek(null);
+                      }}
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 0.75,
                         pl: 1.25,
-                        pr: 1,
-                        py: 0.5,
+                        pr: 0.5,
+                        py: isRenamingApp ? 0.25 : 0.5,
                         mx: 0.5,
-                        cursor: 'pointer',
+                        cursor: isRenamingApp ? 'default' : 'pointer',
                         borderRadius: `${c.radius.md}px`,
                         bgcolor: isActive ? `${c.accent.primary}40` : 'transparent',
                         '&:hover': { bgcolor: isActive ? `${c.accent.primary}55` : `${c.text.tertiary}0A` },
+                        '& .app-del-btn': { opacity: 0, transition: 'opacity 0.12s' },
+                        '&:hover .app-del-btn': { opacity: 1 },
                         transition: 'background-color 0.12s',
                       }}
                     >
-                      <Typewriter value={app.name || 'Untitled App'} enabled={!!app.name && app.name !== 'Untitled App'}>
-                        {(t) => (
-                          <Typography
-                            sx={{
-                              color: isActive ? c.text.secondary : c.text.ghost,
-                              fontSize: '0.86rem',
-                              fontWeight: isActive ? 500 : 400,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              flex: 1,
-                              minWidth: 0,
-                            }}
+                      {isRenamingApp ? (
+                        <InputBase
+                          autoFocus
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={() => handleAppRenameSubmit(app.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleAppRenameSubmit(app.id);
+                            if (e.key === 'Escape') setRenamingAppId(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          onFocus={(e) => e.target.select()}
+                          sx={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: '0.86rem',
+                            fontWeight: isActive ? 500 : 400,
+                            color: isActive ? c.text.secondary : c.text.ghost,
+                            py: 0,
+                            px: 0.5,
+                            borderRadius: 0.75,
+                            border: `1px solid ${c.accent.primary}80`,
+                            bgcolor: `${c.bg.page}`,
+                            '& input': { padding: '1px 0' },
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <Typewriter value={appName} enabled={!!app.name && app.name !== 'Untitled App'}>
+                            {(t) => (
+                              <Typography
+                                onDoubleClick={(e) => { e.stopPropagation(); handleStartAppRename(app.id, appName); }}
+                                sx={{
+                                  color: isActive ? c.text.secondary : c.text.ghost,
+                                  fontSize: '0.86rem',
+                                  fontWeight: isActive ? 500 : 400,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  flex: 1,
+                                  minWidth: 0,
+                                }}
+                              >
+                                {t}
+                              </Typography>
+                            )}
+                          </Typewriter>
+                          <IconButton
+                            className="app-del-btn"
+                            size="small"
+                            aria-label={`Delete ${appName}`}
+                            onClick={(e) => handleDeleteApp(e, app.id, appName)}
+                            sx={{ p: 0.25, flexShrink: 0, color: c.text.ghost, '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}18` } }}
                           >
-                            {t}
-                          </Typography>
-                        )}
-                      </Typewriter>
+                            <CloseGlyph size={13} />
+                          </IconButton>
+                        </>
+                      )}
                     </Box>
                   );
                 })}
@@ -1124,6 +1262,8 @@ const AppShell: React.FC = () => {
         onMouseDown={handleResizeStart}
         onDoubleClick={handleResizeDoubleClick}
         sx={{
+          // Hide the resize seam when the sidebar is a floating overlay (nothing to resize against).
+          display: sideOverlay ? 'none' : 'block',
           // 6px hit-target at -3px margin overlaps the seam so the drag region doesn't read as a visible empty strip.
           width: 6,
           marginLeft: '-3px',
@@ -1159,12 +1299,12 @@ const AppShell: React.FC = () => {
         overflow: 'hidden',
         bgcolor: c.bg.page,
         position: 'relative',
-        // Float the content as a rounded inset panel ("column pill"): the chrome (bg.secondary) frames it, so there are no divider lines, just air + radius.
-        mt: '6px',
-        mr: '6px',
-        mb: '6px',
-        ml: '6px',
-        borderRadius: '14px',
+        // Float the content as a rounded inset panel ("column pill"): the chrome (bg.secondary) frames it, so there are no divider lines, just air + radius. Fullscreen drops the frame entirely.
+        mt: fsHideChrome ? 0 : '6px',
+        mr: fsHideChrome ? 0 : '6px',
+        mb: fsHideChrome ? 0 : '6px',
+        ml: fsHideChrome ? 0 : '6px',
+        borderRadius: fsHideChrome ? 0 : '14px',
       }}>
         {/* Hidden (not unmounted) when the dashboard view is active so the persistent Dashboard layered above can take over. */}
         <Box
@@ -1261,6 +1401,72 @@ const AppShell: React.FC = () => {
         >
           {updateStatus === 'available' && `OpenSwarm${verSuffix} is available`}
           {updateStatus === 'downloaded' && `OpenSwarm${verSuffix} downloaded; restart to update`}
+        </Alert>
+      </Snackbar>
+
+      {/* Arc-style peek: a live-thumbnail preview beside the sidebar while hovering an app row. Non-interactive so it never steals the hover. */}
+      {peek && !sidebarCollapsed && (
+        <Box
+          sx={{
+            position: 'fixed',
+            left: sidebarWidth + 8,
+            top: Math.min(Math.max(peek.top - 8, 12), window.innerHeight - 232),
+            width: 264,
+            zIndex: 1400,
+            pointerEvents: 'none',
+            borderRadius: `${c.radius.lg}px`,
+            overflow: 'hidden',
+            bgcolor: c.bg.surface,
+            border: `1px solid ${c.border.medium}`,
+            boxShadow: c.shadow.lg,
+            '@keyframes peekIn': { from: { opacity: 0, transform: 'translateX(-6px)' }, to: { opacity: 1, transform: 'none' } },
+            animation: 'peekIn 0.14s ease-out',
+          }}
+        >
+          {peek.thumbnail ? (
+            <Box component="img" src={peek.thumbnail} alt="" sx={{ width: '100%', height: 150, objectFit: 'cover', objectPosition: 'top left', display: 'block' }} />
+          ) : (
+            <Box sx={{ width: '100%', height: 92, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: `${c.text.tertiary}0A`, color: c.text.ghost, fontSize: '0.78rem' }}>
+              No preview yet
+            </Box>
+          )}
+          <Box sx={{ p: 1.25 }}>
+            <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{peek.name}</Typography>
+            {peek.description && (
+              <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, mt: 0.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {peek.description}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      )}
+
+      {/* Arc-style Undo for a just-deleted app. Open while the delete is pending; our own 6s timer commits it and closes this. */}
+      <Snackbar
+        open={!!pendingDelete}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert
+          severity="info"
+          icon={false}
+          action={
+            <Button
+              size="small"
+              onClick={handleUndoDeleteApp}
+              sx={{ color: c.accent.primary, textTransform: 'none', fontWeight: 700, fontSize: '0.8rem', minWidth: 'auto' }}
+            >
+              Undo
+            </Button>
+          }
+          sx={{
+            bgcolor: c.bg.surface,
+            color: c.text.primary,
+            border: `1px solid ${c.border.medium}`,
+            boxShadow: c.shadow.md,
+            '& .MuiAlert-action': { alignItems: 'center', pt: 0 },
+          }}
+        >
+          {`Deleted "${pendingDelete?.name ?? ''}"`}
         </Alert>
       </Snackbar>
     </Box>
