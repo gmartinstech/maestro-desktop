@@ -227,7 +227,10 @@ class RunOptions(AgentManagerProtocol):
             options_kwargs["extra_args"] = p_ea
 
         # The claude_code preset auto-attaches the user's claude.ai- connected partner MCPs (`mcp__claude_ai_*`). Those bypass our MCPActivate gate, don't share OAuth state with the OpenSwarm Gmail/Calendar/Drive connectors the user actually configured here, and confuse the model into picking the partner shim instead of our vetted server. Hard-block them at the SDK layer so the model can't even attempt the call.
+        # EXTEND, never reassign: a plain assignment here silently discarded every effective_disallowed
+        # entry (read-only sessions could still run Bash). Same fix as eric/dev ce3e67d6.
         options_kwargs["disallowed_tools"] = [
+            *(options_kwargs.get("disallowed_tools") or []),
             "mcp__claude_ai_*",
         ]
 

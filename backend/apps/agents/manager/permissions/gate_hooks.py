@@ -6,6 +6,7 @@ are the claude_agent_sdk hook protocol (hookSpecificOutput), not internal state.
 
 import asyncio
 import logging
+import os
 import time
 from typing import Dict, Optional, Union
 
@@ -66,6 +67,22 @@ async def can_use_tool(
 async def pre_tool_hook(ctx: HookContext, input_data: dict, tool_use_id: Optional[str], context: object) -> Dict[str, object]:
     tool_name = input_data.get("tool_name", "")
     hook_event = input_data.get("hook_event_name", "PreToolUse")
+
+    # Read-only sessions (onboarding's unattended audit) block Edit/Bash/NotebookEdit at the tool-list
+    # level, but Write survives so the audit can drop its ONE report file. Write also CLOBBERS an
+    # existing path, though, so without this a read-only agent could overwrite ~/Downloads/taxes.pdf.
+    # Deny Write when its target already exists: new report file yes, destroying an existing file no.
+    if getattr(ctx.session, "read_only", False) and tool_name == "Write":
+        p = (input_data.get("tool_input") or {}).get("file_path", "")
+        if p and os.path.exists(os.path.expanduser(p)):
+            note_tool_used(ctx.session_id, tool_name, False)
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": hook_event,
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": "This is a read-only audit: it may create a new report but must never overwrite an existing file. Choose a filename that does not exist yet.",
+                }
+            }
 
     # ToolSearch loop-breaker. Gated MCP servers are withheld from the SDK until MCPActivate, so the CLI's native ToolSearch can never find them; small models thrash (empty ToolSearch, retry) for minutes until the user pauses. Let the first couple through, then redirect to the gate. Any non-ToolSearch call is real progress, so the counter resets. Gated-server lookup is deferred behind the threshold so the common (non-looping) path stays free.
     if tool_name == "ToolSearch":
