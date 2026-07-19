@@ -348,12 +348,63 @@ const KEY_NAME_MAP: Record<string, string> = {
   Del: 'Delete',
 };
 
+interface CdpKeyDescriptor { key: string; code: string; vk: number; text?: string }
+
+const CDP_KEYS: Record<string, CdpKeyDescriptor> = {
+  Enter: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
+  Tab: { key: 'Tab', code: 'Tab', vk: 9 },
+  Escape: { key: 'Escape', code: 'Escape', vk: 27 },
+  Backspace: { key: 'Backspace', code: 'Backspace', vk: 8 },
+  Delete: { key: 'Delete', code: 'Delete', vk: 46 },
+  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', vk: 38 },
+  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40 },
+  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', vk: 37 },
+  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', vk: 39 },
+  Home: { key: 'Home', code: 'Home', vk: 36 },
+  End: { key: 'End', code: 'End', vk: 35 },
+  PageUp: { key: 'PageUp', code: 'PageUp', vk: 33 },
+  PageDown: { key: 'PageDown', code: 'PageDown', vk: 34 },
+  ' ': { key: ' ', code: 'Space', vk: 32, text: ' ' },
+};
+
+// Loose names the model actually sends, folded onto the canonical DOM names above.
+const CDP_KEY_ALIASES: Record<string, string> = {
+  Up: 'ArrowUp', Down: 'ArrowDown', Left: 'ArrowLeft', Right: 'ArrowRight',
+  Space: ' ', Spacebar: ' ', Esc: 'Escape', Del: 'Delete', Return: 'Enter',
+};
+
+function cdpKeyDescriptor(rawKey: string): CdpKeyDescriptor | null {
+  const canonical = CDP_KEY_ALIASES[rawKey] || rawKey;
+  const named = CDP_KEYS[canonical];
+  if (named) return named;
+  if (canonical.length === 1) {
+    const upper = canonical.toUpperCase();
+    const code = /[a-z]/i.test(canonical) ? `Key${upper}` : /[0-9]/.test(canonical) ? `Digit${canonical}` : '';
+    return { key: canonical, code, vk: upper.charCodeAt(0), text: canonical };
+  }
+  return null;
+}
+
 async function handlePressKey(wv: BrowserWebview, params: Record<string, any>): Promise<Record<string, any>> {
   const rawKey = (params.key as string) || '';
   if (!rawKey) return { error: 'key parameter is required' };
-  const keyCode = KEY_NAME_MAP[rawKey] || rawKey;
   await evalInPage(wv, 'document.body && document.body.focus && document.body.focus(); true');
-  // Native OS-level key events have isTrusted=true, so hostile sites' keyboard handlers respect them.
+  const desc = cdpKeyDescriptor(rawKey);
+  if (desc) {
+    try {
+      // CDP key events are trusted AND scoped to THIS webview no matter where the user's cursor sits; the sendInputEvent path delivered to whatever had focus, which is the "agent typed into my note" bug. keyDown-with-text inserts the char; bare named keys use rawKeyDown so no stray char lands.
+      const down: Record<string, any> = { type: desc.text ? 'keyDown' : 'rawKeyDown', key: desc.key, windowsVirtualKeyCode: desc.vk, nativeVirtualKeyCode: desc.vk };
+      if (desc.code) down.code = desc.code;
+      if (desc.text) down.text = desc.text;
+      await sendCdp(wv, 'Input.dispatchKeyEvent', down);
+      const up: Record<string, any> = { type: 'keyUp', key: desc.key, windowsVirtualKeyCode: desc.vk, nativeVirtualKeyCode: desc.vk };
+      if (desc.code) up.code = desc.code;
+      await sendCdp(wv, 'Input.dispatchKeyEvent', up);
+      return { text: `Pressed ${rawKey}` };
+    } catch { /* fall through to the legacy path so a CDP hiccup never makes a key dead */ }
+  }
+  // Legacy focus-dependent fallback (exotic keys or CDP unavailable): keeps every key that worked before working.
+  const keyCode = KEY_NAME_MAP[rawKey] || rawKey;
   wv.sendInputEvent({ type: 'keyDown', keyCode });
   wv.sendInputEvent({ type: 'char', keyCode });
   wv.sendInputEvent({ type: 'keyUp', keyCode });
