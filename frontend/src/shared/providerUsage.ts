@@ -5,6 +5,8 @@ export type UsageProvider = 'codex' | 'claude' | 'gemini';
 export interface ProviderUsage {
   ok: boolean;
   total: number;
+  // We stop fetching titles early (prep only needs ~150), so total is a floor when this is set.
+  capped?: boolean;
   titles: string[];
   memories: string[];
 }
@@ -13,7 +15,7 @@ export interface ProviderUsage {
 export function summarizeUsage(u: ProviderUsage | null): string {
   if (!u || !u.ok) return '';
   const parts: string[] = [];
-  if (u.total > 0) parts.push(`They have ${u.total} past AI conversations.`);
+  if (u.total > 0) parts.push(`They have ${u.total}${u.capped ? '+' : ''} past AI conversations.`);
   if (u.memories.length > 0) parts.push('Facts their AI remembers about them: ' + u.memories.join('; '));
   if (u.titles.length > 0) parts.push('Topics they keep coming back to (recent first): ' + u.titles.slice(0, 150).join('; '));
   return parts.join('\n').slice(0, 4000);

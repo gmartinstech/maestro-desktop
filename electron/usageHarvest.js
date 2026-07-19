@@ -36,7 +36,9 @@ function configure(opts) {
 // window, losing everything), a per-fetch abort, and hard page/title caps. The most
 // recent titles are the strongest personalization signal, so a partial is a good result.
 const PREAMBLE = `
-  const BUDGET_MS=14000, PAGE=100, CAP_PAGES=60, CAP_TITLES=1000, GAP_MS=120, FETCH_MS=6000;
+  // Prep reads only ~150 titles, so pulling 1000 just burned onboarding runway (up to the 14s budget)
+  // for signal we throw away. Cap the pull; the count becomes an honest "N+" floor when we stop early.
+  const BUDGET_MS=14000, PAGE=100, CAP_PAGES=60, CAP_TITLES=200, GAP_MS=120, FETCH_MS=6000;
   const startedAt = Date.now();
   const haveTime = () => Date.now() - startedAt < BUDGET_MS;
   const jget = async (url, extra) => {
@@ -66,6 +68,7 @@ const SCRIPT = {
       return {
         ok: true,
         total: seen.size,
+        capped: seen.size >= CAP_TITLES,
         titles: titles.slice(0, CAP_TITLES),
         memories: ((mem && mem.memories) || []).map(m=>m.content).filter(Boolean).slice(0, 40),
       };
@@ -88,7 +91,7 @@ const SCRIPT = {
         offset += PAGE; page++;
         await new Promise(r=>setTimeout(r, GAP_MS));
       }
-      return {ok:true, total:seen.size, titles:titles.slice(0, CAP_TITLES), memories:[]};
+      return {ok:true, total:seen.size, capped:seen.size >= CAP_TITLES, titles:titles.slice(0, CAP_TITLES), memories:[]};
     } catch (e) { return {ok:false, total:0, titles:[], memories:[]}; }
   })()`,
   // Gemini has no clean history JSON (it's the obfuscated batchexecute RPC), so we scrape the

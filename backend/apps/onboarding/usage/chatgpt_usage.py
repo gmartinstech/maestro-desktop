@@ -19,7 +19,9 @@ from backend.apps.onboarding.identity import decode_jwt_payload
 BASE = "https://chatgpt.com/backend-api"
 PAGE = 100
 CAP_PAGES = 40
-CAP_TITLES = 1000
+# Prep only reads ~150 titles; this endpoint is ~4s/page, so fetching 1000 cost 38s of onboarding
+# runway for nothing. Cap the title pull; the real conversation total comes from the API's own count.
+CAP_TITLES = 200
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 
@@ -35,10 +37,10 @@ def p_codex_creds() -> Optional[Tuple[str, Optional[str]]]:
 
 
 @typechecked
-def summarize_chatgpt_usage(total: int, memories: List[str], titles: List[str]) -> str:
+def summarize_chatgpt_usage(total: int, memories: List[str], titles: List[str], capped: bool = False) -> str:
     parts: List[str] = []
     if total > 0:
-        parts.append(f"They have {total} past AI conversations.")
+        parts.append(f"They have {total}{'+' if capped else ''} past AI conversations.")
     if memories:
         parts.append("Facts their AI remembers about them: " + "; ".join(memories))
     if titles:
@@ -96,4 +98,4 @@ async def harvest_chatgpt_usage() -> str:
                 pass
     except Exception:
         return ""
-    return summarize_chatgpt_usage(len(seen), memories, titles)
+    return summarize_chatgpt_usage(len(seen), memories, titles, capped=len(titles) >= CAP_TITLES)
