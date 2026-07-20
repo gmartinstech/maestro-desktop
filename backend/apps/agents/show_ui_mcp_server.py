@@ -67,7 +67,9 @@ TOOLS = [
             "when the choice fits a component. Components: "
             + ", ".join(f"'{name}'" for name in INTERACTIVE_COMPONENTS)
             + ". Props follow the same shapes as ShowUI (props.id is REQUIRED, it correlates the "
-            "answer). The response contains the action taken and the user's selection/values."
+            "answer). The response contains the action taken and the user's selection/values. "
+            "The user may also answer in their own words instead of picking an option; then the "
+            "result is {action: 'free_text', value: {text}}, treat that text as their answer."
         ),
         "inputSchema": {
             "type": "object",

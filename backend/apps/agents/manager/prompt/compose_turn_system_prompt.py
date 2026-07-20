@@ -100,9 +100,9 @@ def compose_turn_system_prompt(
                 "- ShowUI for any structured result: tables, stats, links, plans, progress, code, diffs, "
                 "charts, maps, media, posts, receipts. Render the component, then add one line of text.\n"
                 "- AskUI for ANY question with enumerable choices, an approval, or tunable values: render "
-                "it and wait for the answer instead of asking in prose. When you would reach for "
-                "AskUserQuestion and the choices are a flat list, call AskUI with an option-list instead; "
-                "keep AskUserQuestion only for multi-question forms.\n"
+                "it and wait for the answer instead of asking in prose. Flat choices = option-list; a "
+                "multi-question form = one AskUI call per question in sequence. The user can always "
+                "answer off-list in free text (result action 'free_text').\n"
                 "Describing structured data in plain text when a component fits is the worse answer.\n"
                 "</rich_ui>"
             )
