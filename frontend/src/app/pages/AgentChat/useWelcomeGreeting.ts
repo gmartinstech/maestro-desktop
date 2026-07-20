@@ -25,12 +25,24 @@ export function useWelcomeGreeting(
   const branchId = session?.active_branch_id || 'main';
   // Onboarding v3's prep wrote a greeting about THIS machine; when present it replaces the stock opener.
   const personalized = useAppSelector((s) => s.settings.data.personalized_greeting);
-  const greetingText = personalized?.trim()
-    ? `${personalized.trim()}\n\nWhere do you want to start?`
+  const hasPersonalized = !!personalized?.trim();
+  const greetingText = hasPersonalized
+    ? `${personalized!.trim()}\n\nWhere do you want to start?`
     : WELCOME_GREETING;
 
+  // The curtain now lifts BEFORE prep necessarily finishes, so the personalized greeting may land a
+  // beat later. Hold the stream until it arrives (so we never snapshot the stock opener and freeze the
+  // personal one out), then fall back to stock after a grace so it can't hang if prep failed.
+  const [graceElapsed, setGraceElapsed] = useState(false);
   useEffect(() => {
-    if (!eligible || !sessionId || startedRef.current) return;
+    if (!eligible) return;
+    const t = window.setTimeout(() => setGraceElapsed(true), 18000);
+    return () => window.clearTimeout(t);
+  }, [eligible]);
+  const greetingReady = hasPersonalized || graceElapsed;
+
+  useEffect(() => {
+    if (!eligible || !sessionId || !greetingReady || startedRef.current) return;
     startedRef.current = true;
 
     dispatch(streamStart({ sessionId, messageId: GREETING_MSG_ID, role: 'assistant' }));
@@ -63,7 +75,7 @@ export function useWelcomeGreeting(
 
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eligible, sessionId, branchId, dispatch]);
+  }, [eligible, sessionId, greetingReady, branchId, dispatch]);
 
   return { greetingDone };
 }

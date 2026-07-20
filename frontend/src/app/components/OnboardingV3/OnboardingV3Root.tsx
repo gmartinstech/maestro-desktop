@@ -10,7 +10,6 @@ import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { useOnboardingV3Pipeline } from './useOnboardingV3Pipeline';
 import { GRAIN_URL } from '@/shared/styles/grainTexture';
 import { ARC_BLUE_BG, ONBOARDING_SANS } from './beats/BeatShell';
-import OnboardingLogo from './OnboardingLogo';
 import BeatConnect from './beats/BeatConnect';
 import BeatApps from './beats/BeatApps';
 import BeatTheme from './beats/BeatTheme';
@@ -117,13 +116,7 @@ const OnboardingV3Root: React.FC = () => {
   const [beat, setBeat] = useState<Beat>('welcome');
   const [picks, setPicks] = useState<string[]>([]);
   const connectedProvider = useAppSelector((s) => selectSubscriptionConnections(s).find((cx) => cx.isActive !== false)?.provider ?? null);
-  const [finishing, setFinishing] = useState(false);
-  // The curtain wears whatever the user just picked (their gradient under a soft veil), Arc's post-theme rule.
   const { accent, gradient } = useThemeAccent();
-  const finishStops = gradient ?? (accent ? [accent] : null);
-  const finishBackdrop = finishStops
-    ? `linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)), linear-gradient(160deg, ${finishStops.map((hex, i) => `${hex} ${finishStops.length > 1 ? (i / (finishStops.length - 1)) * 100 : 100}%`).join(', ')})`
-    : ARC_BLUE_BG;
 
   const { kickIdentity, kickScan, kickUsageRead, kickPrep, finish } = pipeline;
 
@@ -152,10 +145,11 @@ const OnboardingV3Root: React.FC = () => {
     setBeat('theme');
   }, [kickPrep, picks]);
 
-  const leaveCard = useCallback(async (name: string | null) => {
+  const leaveCard = useCallback((name: string | null) => {
     if (name) dispatch(updateSettingsPatch({ user_name: name }));
-    setFinishing(true);
-    await finish('done');
+    // finish() is now non-blocking: it stages the reveal + drops flowActive immediately, so the overlay
+    // fades straight onto the live canvas (jobs already in motion). No "Setting up your canvas" spinner.
+    void finish('done');
   }, [dispatch, finish]);
 
 
@@ -225,22 +219,6 @@ const OnboardingV3Root: React.FC = () => {
               <span key={dot} style={{ width: 11, height: 11, borderRadius: 999, background: dot, opacity: 0.9 }} />
             ))}
           </motion.div>
-          {finishing && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center', justifyContent: 'center', background: finishBackdrop, fontFamily: ONBOARDING_SANS }}>
-              <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN_URL, opacity: 0.3, pointerEvents: 'none' }} />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.7 }}
-                animate={{ opacity: [0.55, 1, 0.55], scale: [0.9, 1.06, 0.9] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ position: 'relative' }}
-              >
-                <OnboardingLogo size={54} />
-              </motion.div>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ position: 'relative', fontSize: '1.02rem', fontWeight: 600, color: '#fff', textShadow: '0 1px 8px rgba(0,0,0,0.25)' }}>
-                Setting up your canvas...
-              </motion.div>
-            </div>
-          )}
         </motion.div>
       </motion.div>
       )}

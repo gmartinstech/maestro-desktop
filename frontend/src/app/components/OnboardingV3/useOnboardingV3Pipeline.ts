@@ -50,6 +50,10 @@ export function useOnboardingV3Pipeline() {
   const identityRef = useRef<ProviderIdentity[]>([]);
   const scanRef = useRef<Promise<ScanResult | null> | null>(null);
   const prepRef = useRef<Promise<PrepResponse | null> | null>(null);
+  // The resolved prep, readable SYNCHRONOUSLY at finish() time: lets the reveal seed with the real
+  // jobs/greeting the instant they're ready (the common case, prep finishes during the beats) without
+  // awaiting, so the curtain never blocks behind a spinner.
+  const prepReadyRef = useRef<PrepResponse | null>(null);
   const scanResultRef = useRef<ScanResult | null>(null);
   const usageSummaryRef = useRef<string>('');
   const usageReadRef = useRef<Promise<void> | null>(null);
@@ -133,6 +137,7 @@ export function useOnboardingV3Pipeline() {
       .catch(() => null);
     // Launch the prepped work MID-FLOW (theme/card beats cover the latency): audit + app build, gated to a real connected model so the fragile free trial never carries it.
     void prepRef.current.then((prep) => {
+      prepReadyRef.current = prep;
       if (launchedRef.current || !prep || !prep.greeting || !launchCtxRef.current.connected) return;
       launchedRef.current = true;
       if (prep.starters.length > 0) launchJob(prep.starters[0].title, prep.starters[0].prompt, 'audit', prep.starters[0].reason ?? '');
@@ -153,30 +158,29 @@ export function useOnboardingV3Pipeline() {
       dispatch(updateSettingsPatch({ onboarding_v3: 'skipped', accent_color: accent, accent_gradient: gradient, theme: mode }));
       return;
     }
-    // Cap the wait so a slow aux call degrades to generic starters instead of a hung curtain. Sized
-    // above the real harvest+prep (~17-22s) so a user who rushes the beats still gets the personalized
-    // reveal, not generic; the backend's own 45s aux timeout is the hard backstop behind this.
-    const timeout = new Promise<null>((resolve) => { window.setTimeout(() => resolve(null), 24000); });
-    const prep = await Promise.race([prepRef.current ?? Promise.resolve(null), timeout]);
-    const greeting = prep?.greeting?.trim() || null;
-    const starters = prep?.starters ?? [];
-    const automations = prep?.automations ?? [];
-    // Jobs already launched mid-flow at prep-resolve; the reveal only composes the canvas.
-    const autoPrompt = null;
-    // Await the PATCH so personalized_greeting/starters/automations are IN settings before the reveal seeds the welcome chat; the greeting stream snapshots settings at mount.
-    try {
-      await dispatch(updateSettingsPatch({
-        onboarding_v3: 'done',
-        accent_color: accent,
-        accent_gradient: gradient,
-        theme: mode,
-        personalized_greeting: greeting,
-        personalized_starters: starters,
-        personalized_automations: automations,
-      })).unwrap();
-    } catch {}
-    dispatch(stageReveal({ greeting, starters, scanSummary: summarizeScan(scanResultRef.current), autoPrompt }));
+    // NEVER block the curtain behind a spinner. The connect head-start means prep has usually resolved
+    // during the beats, so seed with the real jobs/greeting synchronously; if a fast user beat prep to
+    // this point, seed with what we have and let the late-jobs effect + the async patch below fill in.
+    // The whole point of gating on connect is this head start, so the reveal must show it in motion.
+    const ready = prepReadyRef.current;
+    dispatch(updateSettingsPatch({ onboarding_v3: 'done', accent_color: accent, accent_gradient: gradient, theme: mode }));
+    dispatch(stageReveal({
+      greeting: ready?.greeting?.trim() || null,
+      starters: ready?.starters ?? [],
+      scanSummary: summarizeScan(scanResultRef.current),
+      autoPrompt: null,
+    }));
     dispatch(setFlowActive(false));
+    // Personalized fields land the instant prep resolves (often already have): the welcome greeting
+    // waits for personalized_greeting then streams it in, and the starter chips read it live.
+    void (prepRef.current ?? Promise.resolve(null)).then((prep) => {
+      if (!prep) return;
+      dispatch(updateSettingsPatch({
+        personalized_greeting: prep.greeting?.trim() || null,
+        personalized_starters: prep.starters ?? [],
+        personalized_automations: prep.automations ?? [],
+      }));
+    });
   }, [dispatch, accent, gradient, mode]);
 
   return { identity, kickIdentity, kickScan, kickUsageRead, kickPrep, finish };
