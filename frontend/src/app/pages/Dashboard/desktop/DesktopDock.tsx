@@ -4,6 +4,7 @@ import Typography from '@mui/material/Typography';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import LanguageIcon from '@mui/icons-material/Language';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CoPresentIcon from '@mui/icons-material/CoPresent';
@@ -50,6 +51,7 @@ interface DesktopDockProps {
   outputs: Record<string, Output>;
   selectedIds: string[];
   onFocusCard: (id: string, rect: CardRect) => void;
+  onApplications: () => void;
 }
 
 const TILE = 30;
@@ -66,6 +68,7 @@ function DesktopDock({
   outputs,
   selectedIds,
   onFocusCard,
+  onApplications,
 }: DesktopDockProps): React.ReactElement | null {
   const dispatch = useAppDispatch();
   const [hovered, setHovered] = useState<{ id: string; top: number } | null>(null);
@@ -158,8 +161,6 @@ function DesktopDock({
     setLiveShot(null);
   }, []);
 
-  if (entries.length === 0) return null;
-
   const hoveredEntry = hovered ? entries.find((e) => e.id === hovered.id) : undefined;
   const previewImage = hoveredEntry
     ? (liveShot?.id === hoveredEntry.id ? liveShot.dataUrl : hoveredEntry.thumbnail || undefined)
@@ -226,7 +227,9 @@ function DesktopDock({
         );
       })}
 
-      <Box sx={{ width: TILE - 8, height: '1px', background: 'rgba(255,255,255,0.14)' }} />
+      {entries.length > 0 && (
+        <Box sx={{ width: TILE - 8, height: '1px', background: 'rgba(255,255,255,0.14)' }} />
+      )}
       <Box
         onClick={() => dispatch(openSettingsModal(undefined))}
         onMouseEnter={endHover}
@@ -245,6 +248,25 @@ function DesktopDock({
         }}
       >
         <SettingsIcon sx={{ fontSize: 18, color: '#e8e8ee' }} />
+      </Box>
+      <Box
+        onClick={onApplications}
+        onMouseEnter={endHover}
+        sx={{
+          width: TILE,
+          height: TILE,
+          borderRadius: '9px',
+          background: 'linear-gradient(135deg, #3d3d46, #232329)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          flexShrink: 0,
+          transition: 'transform 0.15s ease',
+          '&:hover': { transform: 'scale(1.12)' },
+        }}
+      >
+        <AppsRoundedIcon sx={{ fontSize: 18, color: '#e8e8ee' }} />
       </Box>
 
       {hoveredEntry && (

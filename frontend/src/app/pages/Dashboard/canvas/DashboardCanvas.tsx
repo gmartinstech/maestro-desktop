@@ -10,6 +10,7 @@ import DashboardEmptyState from './DashboardEmptyState';
 import DesktopWallpaper from '../desktop/DesktopWallpaper';
 import DesktopDock from '../desktop/DesktopDock';
 import MinimizedStack from '../desktop/MinimizedStack';
+import ApplicationsWindow from '../desktop/ApplicationsWindow';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { useThemeAccent, useThemeWash } from '@/shared/styles/ThemeContext';
 import { GRAIN_URL } from '@/shared/styles/grainTexture';
@@ -172,6 +173,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   const dispatch = useAppDispatch();
   const fullscreenCardId = useAppSelector(selectFullscreenCardId);
   const [headerRevealed, setHeaderRevealed] = React.useState(false);
+  const [appsWindowOpen, setAppsWindowOpen] = React.useState(false);
   useEffect(() => {
     if (!fullscreenCardId) return undefined;
     const onKey = (e: KeyboardEvent): void => {
@@ -255,7 +257,12 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             canvas.actions.fitToCards([rect], 1.15, true);
             onHighlightCard?.(cardId);
           }}
+          onApplications={() => setAppsWindowOpen((v) => !v)}
         />
+      )}
+
+      {appsWindowOpen && !fullscreenCardId && (
+        <ApplicationsWindow onClose={() => setAppsWindowOpen(false)} />
       )}
 
       {/* Canvas viewport */}

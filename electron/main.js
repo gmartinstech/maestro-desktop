@@ -3054,6 +3054,41 @@ ipcMain.handle('open-external', (_event, url) => {
   }
 });
 
+// Applications launcher support. Names are bare .app basenames from the local scan; both
+// handlers hard-validate the name and resolve strictly inside /Applications so a hostile
+// renderer string can't traverse anywhere else.
+const APP_NAME_RE = /^[\w .&'()+-]{1,80}$/;
+const appIconCache = new Map();
+function resolveApplicationPath(name) {
+  if (typeof name !== 'string' || !APP_NAME_RE.test(name) || name.includes('..')) return null;
+  const path = require('path');
+  const resolved = path.join('/Applications', `${name}.app`);
+  if (path.dirname(resolved) !== '/Applications') return null;
+  return resolved;
+}
+
+ipcMain.handle('get-app-icon', async (_event, name) => {
+  const target = resolveApplicationPath(name);
+  if (!target) return null;
+  if (appIconCache.has(name)) return appIconCache.get(name);
+  try {
+    const icon = await app.getFileIcon(target, { size: 'large' });
+    const dataUrl = icon && !icon.isEmpty() ? icon.toDataURL() : null;
+    appIconCache.set(name, dataUrl);
+    return dataUrl;
+  } catch (_) {
+    appIconCache.set(name, null);
+    return null;
+  }
+});
+
+ipcMain.handle('open-application', (_event, name) => {
+  const target = resolveApplicationPath(name);
+  if (!target) return false;
+  shell.openPath(target);
+  return true;
+});
+
 // Affiliate install state. Returns the persisted install.json contents so
 // the renderer can attach the referral code to authenticated cloud calls
 // (Stripe checkout, sign-in events) for downstream attribution.
