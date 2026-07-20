@@ -1,0 +1,14 @@
+{
+  "name": "maestro-desktop",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Maestro Studio — MartinsTech desktop agent orchestrator (fork of Open Swarm)",
+  "scripts": {
+    "verify": "node scripts/verify.mjs",
+    "check:callhome": "node scripts/check-callhome.mjs",
+    "e2e:golden": "playwright test e2e/golden"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

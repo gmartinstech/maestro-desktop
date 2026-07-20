@@ -1,29 +1,8 @@
-<p align="center">
-  <img src="assets/icon.png" alt="Open Swarm" width="128" height="128">
-</p>
+# Maestro Studio
 
-<h1 align="center">Open Swarm</h1>
-
-<p align="center">
-  <strong>An Army of AI Agents at Your Fingertips</strong>
-  <br>
-  A locally-running orchestrator for managing multiple agents in parallel.
-  <br>
-  Launch, monitor, and coordinate entire swarms of coding agents from a single interface.
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
-  <a href="#"><img src="https://img.shields.io/badge/platform-macOS-lightgrey.svg" alt="Platform"></a>
-  <a href="https://github.com/openswarm-ai/openswarm/stargazers"><img src="https://img.shields.io/github/stars/openswarm-ai/openswarm?style=social" alt="GitHub Stars"></a>
-  <a href="https://github.com/openswarm-ai/openswarm/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
-</p>
-
-<br>
-
-<p align="center">
-  <img src="assets/screenshot.png" alt="Open Swarm Dashboard" width="900">
-</p>
+Maestro Studio is MartinsTech's desktop orchestrator for AI coding agents — a fork of
+[Open Swarm](https://github.com/openswarm-ai/openswarm) (MIT), detached to run on our own
+provedor-ia gateway. See `docs/specs/` for the design and `docs/plans/` for the build plan.
 
 <br>
 
