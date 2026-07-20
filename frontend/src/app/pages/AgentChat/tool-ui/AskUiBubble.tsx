@@ -29,6 +29,7 @@ function parseResultResponse(pair: ToolPair): Record<string, unknown> | null {
 function AskUiBubble({ pair, sessionId, isPending, suppressReveal }: AskUiBubbleProps): React.ReactElement {
   const payload = parseShowUiPayload(pair);
   const [submitted, setSubmitted] = useState(false);
+  const [orphaned, setOrphaned] = useState(false);
   const answered = parseResultResponse(pair);
 
   const componentId = payload && payload.component === 'vendored' ? String(payload.props.id || '') : '';
@@ -41,13 +42,22 @@ function AskUiBubble({ pair, sessionId, isPending, suppressReveal }: AskUiBubble
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
         body: JSON.stringify({ session_id: sessionId, component_id: componentId, response }),
-      }).catch(() => setSubmitted(false));
+      })
+        .then((r) => {
+          if (!r.ok) {
+            // Nothing parked server-side (agent gone or this is a replayed transcript): say so instead of silently swallowing the click.
+            setSubmitted(false);
+            setOrphaned(true);
+          }
+        })
+        .catch(() => setSubmitted(false));
     },
     [submitted, sessionId, componentId],
   );
 
-  // Their embedded-actions contract: onAction(actionId, state) delivers the component's full state;
-  // approval-card uses onConfirm/onCancel instead. Inject a default Send action when none given.
+  // Their embedded-actions contract: onAction(actionId, state) delivers the component's full state,
+  // and the components ship their own footer actions (Clear/Confirm), so we only wire the callback.
+  // 'cancel' is a local clear, never an answer; approval-card uses onConfirm/onCancel instead.
   const extraProps = useMemo(() => {
     if (!payload || payload.component !== 'vendored') return {};
     const waiting = pair.result === null && !submitted;
@@ -60,10 +70,11 @@ function AskUiBubble({ pair, sessionId, isPending, suppressReveal }: AskUiBubble
         : { choice: (answered?.choice as string) || undefined };
     }
     if (waiting) {
-      const hasActions = Array.isArray((payload.props as { actions?: unknown[] }).actions) && (payload.props as { actions?: unknown[] }).actions!.length > 0;
       return {
-        ...(hasActions ? {} : { actions: [{ id: 'submit', label: 'Send' }] }),
-        onAction: (actionId: string, state: unknown) => respond({ action: actionId, value: state ?? null }),
+        onAction: (actionId: string, state: unknown) => {
+          if (actionId === 'cancel') return;
+          respond({ action: actionId, value: state ?? null });
+        },
       };
     }
     return answered && 'value' in answered ? { choice: answered.value } : {};
@@ -80,6 +91,11 @@ function AskUiBubble({ pair, sessionId, isPending, suppressReveal }: AskUiBubble
       <VendoredToolUi name={payload.name} props={payload.props} extraProps={extraProps} />
       {submitted && pair.result === null && (
         <Box sx={{ fontSize: '0.72rem', opacity: 0.55, pt: 0.5 }}>Sent to the agent...</Box>
+      )}
+      {orphaned && (
+        <Box sx={{ fontSize: '0.72rem', opacity: 0.55, pt: 0.5 }}>
+          No agent is waiting for this answer (the request expired or this is an old transcript).
+        </Box>
       )}
     </Box>
   );
