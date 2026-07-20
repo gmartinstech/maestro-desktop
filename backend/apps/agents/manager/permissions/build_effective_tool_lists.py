@@ -122,6 +122,14 @@ def build_effective_tool_lists(
         for wt_name in ("WebSearch", "WebFetch"):
             if wt_name not in effective_disallowed:
                 effective_disallowed.append(wt_name)
+    # With the openswarm-ui server live, the built-in AskUserQuestion is swapped for AskUI (same
+    # Agent->SpawnAgent playbook: prompt nudges lose to the trained prior, a hard deny doesn't).
+    # AskUI's option-list/question-flow cover the flat-choice cases; denying the built-in is what
+    # actually routes questions through the rich components.
+    if "openswarm-ui" in mcp_servers:
+        effective_allowed = [t for t in effective_allowed if t != "AskUserQuestion"]
+        if "AskUserQuestion" not in effective_disallowed:
+            effective_disallowed.append("AskUserQuestion")
     # Claude's internal Cron* scheduler is denied in favour of the visible native one; withhold it from the SDK so the model doesn't even reach for it.
     for bt in path_gate.CLAUDE_INTERNAL_SCHEDULER_TOOLS:
         if bt not in effective_disallowed:

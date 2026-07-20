@@ -9,14 +9,35 @@ interface VendoredToolUiProps {
   extraProps?: Record<string, unknown>;
 }
 
-type Gate = 'pending' | 'ok' | 'bad';
+type Gate =
+  | { state: 'pending' }
+  | { state: 'ok'; parsed: Record<string, unknown> }
+  | { state: 'bad'; problem: string };
+
+/** Models pad payloads with invented keys; strip ONLY unrecognized-key issues and retry once, so
+    sloppiness self-heals while genuinely wrong shapes still fall back loudly. */
+function parseLeniently(schema: { safeParse: (v: unknown) => any }, props: Record<string, unknown>): Gate {
+  let result = schema.safeParse(props);
+  if (!result.success) {
+    const issues: Array<{ code: string; keys?: string[]; path: Array<string | number>; message: string }> = result.error.issues;
+    if (issues.every((i) => i.code === 'unrecognized_keys')) {
+      const cleaned: Record<string, unknown> = { ...props };
+      for (const issue of issues) {
+        for (const key of issue.keys || []) delete cleaned[key];
+      }
+      result = schema.safeParse(cleaned);
+    }
+  }
+  if (result.success) return { state: 'ok', parsed: result.data as Record<string, unknown> };
+  const issues = result.error.issues.slice(0, 2).map((i: { path: Array<string | number>; message: string }) => `${i.path.join('.')}: ${i.message}`).join('; ');
+  return { state: 'bad', problem: issues };
+}
 
 /** Validates against the upstream zod contract, then renders the vendored component inside the scoped theme. */
 function VendoredToolUi({ name, props, extraProps }: VendoredToolUiProps): React.ReactElement | null {
   const { mode } = useThemeMode();
   const entry = TOOL_UI_REGISTRY[name];
-  const [gate, setGate] = useState<Gate>('pending');
-  const [problem, setProblem] = useState<string>('');
+  const [gate, setGate] = useState<Gate>({ state: 'pending' });
 
   useEffect(() => {
     let cancelled = false;
@@ -24,35 +45,28 @@ function VendoredToolUi({ name, props, extraProps }: VendoredToolUiProps): React
     entry
       .loadSchema()
       .then((schema) => {
-        if (cancelled) return;
-        const result = schema.safeParse(props);
-        if (result.success) {
-          setGate('ok');
-        } else {
-          setGate('bad');
-          setProblem(result.error.issues.slice(0, 2).map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-        }
+        if (!cancelled) setGate(parseLeniently(schema, props));
       })
-      .catch(() => { if (!cancelled) { setGate('bad'); setProblem('component failed to load'); } });
+      .catch(() => { if (!cancelled) setGate({ state: 'bad', problem: 'component failed to load' }); });
     return () => { cancelled = true; };
   }, [entry, props]);
 
   if (!entry) return null;
-  if (gate === 'bad') {
+  if (gate.state === 'bad') {
     return (
       <div style={{ fontSize: '0.75rem', opacity: 0.55, padding: '4px 0' }}>
-        {name} payload didn't validate ({problem})
+        {name} payload didn't validate ({gate.problem})
       </div>
     );
   }
-  if (gate === 'pending') {
+  if (gate.state === 'pending') {
     return <div style={{ height: 48, width: 280, borderRadius: 12, background: 'rgba(127,127,127,0.12)' }} />;
   }
   const Component = entry.Component;
   return (
     <div className={`tool-ui-scope${mode === 'dark' ? ' dark' : ''}`}>
       <Suspense fallback={<div style={{ height: 48, width: 280, borderRadius: 12, background: 'rgba(127,127,127,0.12)' }} />}>
-        <Component {...props} {...(extraProps || {})} />
+        <Component {...gate.parsed} {...(extraProps || {})} />
       </Suspense>
     </div>
   );
