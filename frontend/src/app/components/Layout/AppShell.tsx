@@ -445,12 +445,16 @@ const AppShell: React.FC = () => {
   const sidebarAway = (sidebarCollapsed || fsActive) && isDashboardViewActive;
   const [sidePeek, setSidePeek] = useState(false);
   useEffect(() => { if (!sidebarAway) setSidePeek(false); }, [sidebarAway]);
-  useEffect(() => {
-    if (!sidePeek) return undefined;
-    const onMove = (e: MouseEvent): void => { if (e.clientX > sidebarWidth + 60) setSidePeek(false); };
-    window.addEventListener('mousemove', onMove);
-    return () => window.removeEventListener('mousemove', onMove);
-  }, [sidePeek, sidebarWidth]);
+  // Close-on-leave with a grace delay (cancelled on re-enter): a bare mouseLeave closed the peek the
+  // instant the cursor dipped past the panel edge while reaching for an item, so clicks never landed.
+  const peekCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPeekClose = useCallback(() => {
+    if (peekCloseTimerRef.current) { clearTimeout(peekCloseTimerRef.current); peekCloseTimerRef.current = null; }
+  }, []);
+  const schedulePeekClose = useCallback(() => {
+    cancelPeekClose();
+    peekCloseTimerRef.current = setTimeout(() => setSidePeek(false), 260);
+  }, [cancelPeekClose]);
   // Fullscreen still hides the top-center island anchor + banners; the sidebar floats in on peek.
   const fsHideChrome = fsActive;
   // In overlay mode the panel stays MOUNTED (so it can slide out, not vanish); sidePeek only drives the slide.
@@ -601,7 +605,7 @@ const AppShell: React.FC = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: c.bg.secondary }}>
       {sidebarAway && !sidePeek && (
-        <Box onMouseEnter={() => setSidePeek(true)} sx={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 14, zIndex: 2147483000, pointerEvents: 'auto' }} />
+        <Box onMouseEnter={() => { cancelPeekClose(); setSidePeek(true); }} sx={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 14, zIndex: 2147483000, pointerEvents: 'auto' }} />
       )}
       {/* Top bar dropped (Arc/Zen): a zero-height anchor left only to float the agent-activity island at top-center; the island renders nothing when idle. */}
       <Box
@@ -813,7 +817,8 @@ const AppShell: React.FC = () => {
       {((!sidebarCollapsed && !fsHideChrome) || sideOverlay) && (
       <>
       <Box
-        onMouseLeave={() => { if (sideOverlay) setSidePeek(false); }}
+        onMouseEnter={() => { if (sideOverlay) cancelPeekClose(); }}
+        onMouseLeave={() => { if (sideOverlay) schedulePeekClose(); }}
         onWheel={handleSidebarSwipe}
         sx={{
           width: sidebarWidth,
