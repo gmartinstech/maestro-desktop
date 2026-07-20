@@ -1,4 +1,5 @@
 import type { ToolPair } from '../tool-bubbles/ToolCallBubble';
+import { isToolUiComponent } from '@toolui/registry';
 
 export interface WeatherForecastDay {
   day: string;
@@ -53,7 +54,8 @@ export type ShowUiPayload =
   | { component: 'weather'; props: WeatherProps }
   | { component: 'plan'; props: PlanProps }
   | { component: 'stats'; props: StatsProps }
-  | { component: 'links'; props: LinksProps };
+  | { component: 'links'; props: LinksProps }
+  | { component: 'vendored'; name: string; props: Record<string, unknown> };
 
 function num(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);
@@ -89,6 +91,14 @@ export function parseShowUiPayload(pair: ToolPair): ShowUiPayload | null {
 
 function parseShowUiInput(input: unknown): ShowUiPayload | null {
   if (!input || typeof input !== 'object') return null;
+  {
+    const name = String((input as { component?: unknown }).component || '');
+    const rawProps = (input as { props?: unknown }).props;
+    if (isToolUiComponent(name) && rawProps && typeof rawProps === 'object') {
+      // Vendored components carry their own zod contract; deep validation happens at render.
+      return { component: 'vendored', name, props: rawProps as Record<string, unknown> };
+    }
+  }
   const component = String((input as { component?: unknown }).component || '');
   const props = (input as { props?: unknown }).props;
   if (!props || typeof props !== 'object') return null;
