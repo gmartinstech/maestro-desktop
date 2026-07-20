@@ -59,7 +59,8 @@ import MessageActionBar from './shell/MessageActionBar';
 import ToolCallBubble, { ToolPair } from './tool-bubbles/ToolCallBubble';
 import ToolGroupBubble, { RenderItem, ToolGroup, isToolGroup, isToolPair } from './tool-bubbles/ToolGroupBubble';
 import ToolUiBubble from './tool-ui/ToolUiBubble';
-import { isShowUiPair } from './tool-ui/showUiPayload';
+import AskUiBubble from './tool-ui/AskUiBubble';
+import { isShowUiPair, isAskUiPair } from './tool-ui/showUiPayload';
 import ApprovalBar, { BatchApprovalBar } from './shell/ApprovalBar';
 import ForceStopAgentBar from './ForceStopAgentBar';
 import { RateLimitPill } from './shell/RateLimitPill';
@@ -1079,10 +1080,10 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
           result: results[idx] || null,
         }));
 
-        // ShowUI calls render as inline components, never buried inside a collapsed group.
+        // ShowUI/AskUI calls render as inline components, never buried inside a collapsed group.
         // They typically cap a run of work, so the quiet group row stays above the widget.
-        const showUiPairs = allPairs.filter(isShowUiPair);
-        const pairs = allPairs.filter((p) => !isShowUiPair(p));
+        const showUiPairs = allPairs.filter((p) => isShowUiPair(p) || isAskUiPair(p));
+        const pairs = allPairs.filter((p) => !isShowUiPair(p) && !isAskUiPair(p));
         const calls = pairs.map((p) => p.call);
 
         const mcpServers = new Set(
@@ -1607,6 +1608,14 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               }
               if (isToolPair(item)) {
                 const isPending = item.result === null && sessionRunning;
+                if (isAskUiPair(item)) {
+                  return (
+                    <Box key={item.id} data-window-item-id={item.id} ref={isLastVisibleItem ? lastVisibleItemRef : undefined}>
+                      <AskUiBubble pair={item} sessionId={session.id} isPending={isPending} suppressReveal={item.call.id === justStreamedId} />
+                      {compactionChip}
+                    </Box>
+                  );
+                }
                 if (isShowUiPair(item)) {
                   return (
                     <Box key={item.id} data-window-item-id={item.id} ref={isLastVisibleItem ? lastVisibleItemRef : undefined}>

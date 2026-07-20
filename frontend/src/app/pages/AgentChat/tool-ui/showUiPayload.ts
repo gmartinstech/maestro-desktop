@@ -70,6 +70,11 @@ export function isShowUiPair(pair: ToolPair): boolean {
   return /(^|__)ShowUI$/.test(tool);
 }
 
+export function isAskUiPair(pair: ToolPair): boolean {
+  const tool = typeof pair.call.content === 'object' ? String(pair.call.content?.tool || '') : '';
+  return /(^|__)AskUI$/.test(tool);
+}
+
 /** Latest ShowUI payload anywhere in a transcript; the collapsed card pins this artifact under its pill. */
 export function extractLatestShowUi(messages: Array<{ role: string; content: any }>): ShowUiPayload | null {
   for (let i = messages.length - 1; i >= 0; i--) {

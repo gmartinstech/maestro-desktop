@@ -159,16 +159,20 @@ def register_builtin_mcp_servers(
         "type": "stdio",
     }
 
-    # Display-only ShowUI server: renders rich inline components (weather, plan, stats, links)
-    # in the transcript. Pure display, no state mutation; the frontend renders from the
-    # tool_call input, the server only validates. Gated on the ShowUI builtin perm.
+    # ShowUI renders rich inline components from the tool_call input (display only, server just
+    # validates); AskUI renders an interactive component and BLOCKS on /api/ui-requests/wait until
+    # the user answers in the transcript. Gated on the ShowUI builtin perm.
     show_ui_denied = builtin_perms.get("ShowUI", "always_allow") == "deny"
     if not show_ui_denied:
         show_ui_server_path = os.path.join(agents_dir, "show_ui_mcp_server.py")
         mcp_servers["openswarm-ui"] = {
             "command": sys.executable,
             "args": [show_ui_server_path],
-            "env": {},
+            "env": {
+                "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
+                "OPENSWARM_AUTH_TOKEN": get_auth_token(),
+                "OPENSWARM_PARENT_SESSION_ID": session.id,
+            },
             "type": "stdio",
         }
 

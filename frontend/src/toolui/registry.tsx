@@ -11,6 +11,26 @@ export interface ToolUiEntry {
 /* Every entry lazy-loads both the component and its zod contract so the chat bundle only pays
    for components a transcript actually uses. Names mirror upstream tool-ui component slugs. */
 export const TOOL_UI_REGISTRY: Record<string, ToolUiEntry> = {
+  'audio': {
+    Component: lazy(() => import('./components/audio').then((m) => ({ default: m.Audio }))),
+    loadSchema: () => import('./components/audio/schema').then((m) => m.SerializableAudioSchema),
+  },
+  'chart': {
+    Component: lazy(() => import('./components/chart').then((m) => ({ default: m.Chart }))),
+    loadSchema: () => import('./components/chart/schema').then((m) => m.SerializableChartSchema),
+  },
+  'code-block': {
+    Component: lazy(() => import('./components/code-block').then((m) => ({ default: m.CodeBlock }))),
+    loadSchema: () => import('./components/code-block/schema').then((m) => m.SerializableCodeBlockSchema),
+  },
+  'code-diff': {
+    Component: lazy(() => import('./components/code-diff').then((m) => ({ default: m.CodeDiff }))),
+    loadSchema: () => import('./components/code-diff/schema').then((m) => m.SerializableCodeDiffSchema),
+  },
+  'geo-map': {
+    Component: lazy(() => import('./components/geo-map').then((m) => ({ default: m.GeoMap }))),
+    loadSchema: () => import('./components/geo-map/schema').then((m) => m.SerializableGeoMapSchema),
+  },
   'approval-card': {
     Component: lazy(() => import('./components/approval-card').then((m) => ({ default: m.ApprovalCard }))),
     loadSchema: () => import('./components/approval-card/schema').then((m) => m.SerializableApprovalCardSchema),

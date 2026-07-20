@@ -82,10 +82,11 @@ def build_effective_tool_lists(
 
             if name == "openswarm-ui":
                 policy = builtin_perms.get("ShowUI", "always_allow")
-                if policy == "always_allow":
-                    effective_allowed.append("mcp__openswarm-ui__ShowUI")
-                else:
-                    effective_disallowed.append("mcp__openswarm-ui__ShowUI")
+                for ui_tool in ("ShowUI", "AskUI"):
+                    if policy == "always_allow":
+                        effective_allowed.append(f"mcp__openswarm-ui__{ui_tool}")
+                    else:
+                        effective_disallowed.append(f"mcp__openswarm-ui__{ui_tool}")
                 continue
 
             if name == "openswarm-web":

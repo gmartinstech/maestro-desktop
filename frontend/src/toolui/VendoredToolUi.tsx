@@ -5,12 +5,14 @@ import { TOOL_UI_REGISTRY } from './registry';
 interface VendoredToolUiProps {
   name: string;
   props: Record<string, unknown>;
+  /** Non-serializable React props (callbacks, live overrides) merged AFTER validation of the wire props. */
+  extraProps?: Record<string, unknown>;
 }
 
 type Gate = 'pending' | 'ok' | 'bad';
 
 /** Validates against the upstream zod contract, then renders the vendored component inside the scoped theme. */
-function VendoredToolUi({ name, props }: VendoredToolUiProps): React.ReactElement | null {
+function VendoredToolUi({ name, props, extraProps }: VendoredToolUiProps): React.ReactElement | null {
   const { mode } = useThemeMode();
   const entry = TOOL_UI_REGISTRY[name];
   const [gate, setGate] = useState<Gate>('pending');
@@ -50,7 +52,7 @@ function VendoredToolUi({ name, props }: VendoredToolUiProps): React.ReactElemen
   return (
     <div className={`tool-ui-scope${mode === 'dark' ? ' dark' : ''}`}>
       <Suspense fallback={<div style={{ height: 48, width: 280, borderRadius: 12, background: 'rgba(127,127,127,0.12)' }} />}>
-        <Component {...props} />
+        <Component {...props} {...(extraProps || {})} />
       </Suspense>
     </div>
   );
