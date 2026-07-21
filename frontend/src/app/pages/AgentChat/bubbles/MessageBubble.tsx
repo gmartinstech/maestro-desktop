@@ -32,7 +32,6 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { hasModelConnected as selectHasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { SKILL_COLOR } from '@/app/components/editor/richEditorUtils';
-import PlanPickerModal from '@/app/components/overlays/PlanPickerModal';
 import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
 
 const streamingCursorKeyframes = `
@@ -853,7 +852,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const [editText, setEditText] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(false);
   const bubbleRootRef = React.useRef<HTMLDivElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const { role, content } = message;
@@ -1267,9 +1265,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                       variant="outlined"
                       onClick={() => {
                         const api = (window as any).openswarm;
-                        if (openswarmError.ctaAction === 'upgrade') {
-                          setPickerOpen(true);
-                        } else if (openswarmError.ctaAction === 'settings') {
+                        if (openswarmError.ctaAction === 'settings') {
                           dispatch(openSettingsModal('models'));
                         } else if (openswarmError.ctaAction === 'retry_last') {
                           if (activeSessionId) dispatch(retryLastUserMessage({ sessionId: activeSessionId }));
@@ -1332,16 +1328,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
           </Box>
         )}
       </Box>
-
-      <PlanPickerModal
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        title="Upgrade your plan"
-        subtitle="Pick a plan to keep going. Cancel anytime from Stripe."
-        source="upgrade_cta"
-        defaultPlan="pro_plus"
-        onSubscribed={() => setPickerOpen(false)}
-      />
     </Box>
   );
 });
