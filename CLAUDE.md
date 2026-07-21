@@ -1,5 +1,7 @@
 # Maestro Studio — agent guide
 
+**Resuming / new machine? Read `docs/HANDOFF.md` first.**
+
 Fork of openswarm-ai/openswarm. Electron + React/TS (frontend/) + FastAPI/Python (backend/) + bundled 9Router (Node).
 
 ## The one command
