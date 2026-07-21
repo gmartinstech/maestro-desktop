@@ -1545,7 +1545,7 @@ function setupAutoUpdater() {
     // Squirrel.Windows fetches its RELEASES feed from GH /latest/download/. The
     // built-in autoUpdater has no autoDownload/allowPrerelease/allowDowngrade knobs.
     try {
-      autoUpdater.setFeedURL({ url: 'https://github.com/openswarm-ai/openswarm/releases/latest/download/' });
+      autoUpdater.setFeedURL({ url: 'https://github.com/gmartinstech/maestro-desktop/releases/latest/download/' });
     } catch (err) {
       console.warn('[updater] Squirrel setFeedURL failed:', err && err.message);
       return;

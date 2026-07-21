@@ -127,7 +127,7 @@
       }
     },
     "squirrelWindows": {
-      "iconUrl": "https://raw.githubusercontent.com/openswarm-ai/openswarm/main/electron/build/icon.ico"
+      "iconUrl": "https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
@@ -190,8 +190,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "openswarm-ai",
-      "repo": "openswarm"
+      "owner": "gmartinstech",
+      "repo": "maestro-desktop"
     },
     "afterSign": "scripts/notarize.js"
   }
