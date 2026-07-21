@@ -96,20 +96,20 @@ git commit -m "feat(det): repoint auto-update + publish to gmartinstech/maestro-
 **Interfaces:**
 - Produces: no outbound analytics/affiliate; `analytics.openswarm.com` gone from electron.
 
-- [ ] **Step 1: Delete the first-launch affiliate handshake** — remove the `maybeRunFirstLaunchHandshake(...)` call at `electron/main.js:1987`; keep the local-only `resolveInstallId()` (main.js:952).
+- [x] **Step 1: Delete the first-launch affiliate handshake** — remove the `maybeRunFirstLaunchHandshake(...)` call at `electron/main.js:1987`; keep the local-only `resolveInstallId()` (main.js:952).
 
-- [ ] **Step 2: Neutralize the analytics endpoint** — `electron/main.js:935`: delete the line that sets `OPENSWARM_ANALYTICS_URL = 'https://analytics.openswarm.com'` (it then defaults to localhost:6792 → no-op). 
+- [x] **Step 2: Neutralize the analytics endpoint** — `electron/main.js:935`: delete the line that sets `OPENSWARM_ANALYTICS_URL = 'https://analytics.openswarm.com'` (it then defaults to localhost:6792 → no-op). 
 
-- [ ] **Step 3: Remove the affiliate module usage** — delete `electron/affiliateTracking.js` and any import of it in `main.js`.
+- [x] **Step 3: Remove the affiliate module usage** — delete `electron/affiliateTracking.js` and any import of it in `main.js`.
 
-- [ ] **Step 4: Disable the service-sync forwarder** — `backend/apps/service/client.py`: make `p_base_url` / the POST forwarder a no-op unless an explicit `MAESTRO_TELEMETRY_URL` env is set (default off). Do not forward to `api.openswarm.com`.
+- [x] **Step 4: Disable the service-sync forwarder** — `backend/apps/service/client.py`: make `p_base_url` / the POST forwarder a no-op unless an explicit `MAESTRO_TELEMETRY_URL` env is set (default off). Do not forward to `api.openswarm.com`.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `grep -rn "analytics.openswarm\|affiliateTracking\|api.openswarm.com" electron backend/apps/service` — Expected: no live references (only comments/tests acceptable).
 Run: `node scripts/check-callhome.mjs` — Expected: fewer hits than the baseline 8.
 
-- [ ] **Step 6: Golden smoke + review + commit**
+- [x] **Step 6: Golden smoke + review + commit**
 
 Run: `npm run e2e:golden` (on a machine with the build) → PASS. `node harness/review.mjs --base main --head HEAD` → APPROVE.
 ```bash
