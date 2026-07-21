@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 const FORBIDDEN = [/openswarm\.com/i, /api\.openswarm/i, /analytics\.openswarm/i];
-const ROOTS = ['frontend/build', 'electron'];
+const ROOTS = ['frontend/dist', 'electron'];
 let hits = [];
 function walk(p){ for (const e of readdirSync(p)){ const f=join(p,e); const s=statSync(f);
   if (s.isDirectory()){ if(!/node_modules|\.git/.test(f)) walk(f);}
