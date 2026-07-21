@@ -2959,7 +2959,7 @@ async function installDownloadedUpdate() {
     isInstallingUpdate = false;
     try { fs.unlinkSync(CRASH_WATCHDOG_UPDATING_LOCK); } catch (_) {}
     if (BrowserWindow.getAllWindows().length > 0) {
-      sendToRenderer('update-error', 'Update could not be installed. Please download the latest from openswarm.com.');
+      sendToRenderer('update-error', 'Update could not be installed. Please download the latest from github.com/gmartinstech/maestro-desktop/releases.');
     } else if (backendPort && !isCreatingMainWindow) {
       try { recreateMainWindow(); } catch (_) {}
     }
