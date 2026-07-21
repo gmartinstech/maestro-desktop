@@ -54,31 +54,31 @@ Touched (from the detachment inventory — exact anchors):
 **Interfaces:**
 - Produces: no openswarm-ai release URLs anywhere; updater points at `gmartinstech/maestro-desktop`.
 
-- [ ] **Step 1: Repoint the Squirrel feed** — `electron/main.js:1548`
+- [x] **Step 1: Repoint the Squirrel feed** — `electron/main.js:1548`
 
 ```js
 autoUpdater.setFeedURL({ url: 'https://github.com/gmartinstech/maestro-desktop/releases/latest/download/' });
 ```
 
-- [ ] **Step 2: Repoint the electron-builder publish block** — `electron/package.json` `build.publish`
+- [x] **Step 2: Repoint the electron-builder publish block** — `electron/package.json` `build.publish`
 
 ```json
 "publish": { "provider": "github", "owner": "gmartinstech", "repo": "maestro-desktop" }
 ```
 
-- [ ] **Step 3: Repoint the Squirrel icon URL** — `electron/package.json:130` and `scripts/build-app-win.ps1:29`
+- [x] **Step 3: Repoint the Squirrel icon URL** — `electron/package.json:130` and `scripts/build-app-win.ps1:29`
 
 ```
 https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico
 ```
 
-- [ ] **Step 4: Repoint the Windows publish targets** — in `scripts/build-app-win.ps1` change the `--repo openswarm-ai/openswarm` (:563) and the `latest-mac.yml` HEAD-check URL (:517) to `gmartinstech/maestro-desktop`.
+- [x] **Step 4: Repoint the Windows publish targets** — in `scripts/build-app-win.ps1` change the `--repo openswarm-ai/openswarm` (:563) and the `latest-mac.yml` HEAD-check URL (:517) to `gmartinstech/maestro-desktop`.
 
-- [ ] **Step 5: Verify — no openswarm-ai release refs remain**
+- [x] **Step 5: Verify — no openswarm-ai release refs remain**
 
 Run: `grep -rn "openswarm-ai/openswarm" electron scripts` — Expected: no matches.
 
-- [ ] **Step 6: Review + commit**
+- [x] **Step 6: Review + commit**
 
 Run: `node harness/review.mjs --base main --head HEAD` → expect `VERDICT: APPROVE`.
 ```bash
