@@ -11,5 +11,5 @@ if os.environ.get("OPENSWARM_PACKAGED") == "1":
 
 # Base URL for the OAuth helper service. Override via env in dev if needed.
 OPENSWARM_OAUTH_BASE_URL = os.environ.get(
-    "OPENSWARM_OAUTH_BASE_URL", "https://api.openswarm.com"
+    "OPENSWARM_OAUTH_BASE_URL", ""
 ).rstrip("/")
