@@ -16,7 +16,8 @@ for (const [name, cmd] of steps){
 // fail the whole gate. Frontend has no standalone eslint script — lint runs through lint.py.
 try { console.log('\n=== lint (best-effort) ==='); execSync('python3 linter/lint.py --root .', { stdio:'inherit', shell:true }); }
 catch { console.warn('WARN: lint skipped or reported issues (linter toolchain may be unprovisioned)'); }
+// Fatal now that the DET epic is complete: any *.openswarm.com regression must block merge.
 try { console.log('\n=== call-home ==='); execSync('node scripts/check-callhome.mjs', { stdio:'inherit' }); }
-catch { console.warn('WARN: call-home not yet clean (expected until DET epic)'); }
+catch { failed.push('call-home'); }
 if (failed.length){ console.error(`\nVERIFY FAILED: ${failed.join(', ')}`); process.exit(1); }
 console.log('\nVERIFY GREEN');

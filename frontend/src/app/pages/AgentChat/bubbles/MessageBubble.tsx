@@ -78,7 +78,7 @@ interface OpenSwarmErrorInfo {
   title: string;
   detail: string;
   ctaLabel?: string;
-  ctaAction?: 'upgrade' | 'retry' | 'settings' | 'waitlist' | 'retry_last';
+  ctaAction?: 'retry' | 'settings' | 'waitlist' | 'retry_last';
 }
 
 interface OverflowContext {
@@ -100,17 +100,17 @@ function formatTokens(n: number): string {
 /** Parses raw error text into a friendly card; returns null when the error isn't one we recognize. */
 function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErrorInfo | null {
   if (!text) return null;
-  // A real OpenSwarm-side plan cap (has a reset window) -> offer the upgrade.
+  // A usage cap with a reset window -> point at settings (own-key builds have no plan to upgrade).
   if (/reached your OpenSwarm.*plan limit|Usage cap exceeded|Resets in /i.test(text)) {
     const reset = text.match(/Resets in ([\dhms\s]+)/)?.[1];
     return {
       kind: 'cap',
-      title: "You've hit your plan limit",
+      title: "You've hit a usage limit",
       detail: reset
-        ? `Your usage resets in ${reset}. Upgrade to keep going now, or wait for the window to reset.`
-        : 'Upgrade to keep going now, or wait for your usage window to reset.',
-      ctaLabel: 'Upgrade plan',
-      ctaAction: 'upgrade',
+        ? `Your usage resets in ${reset}. Wait for the window to reset, or check your model settings.`
+        : 'Wait for your usage window to reset, or check your model settings.',
+      ctaLabel: 'Open Settings',
+      ctaAction: 'settings',
     };
   }
   if (/provider_rate_limit|account'?s rate limit|session rate limit|This request would exceed your account'?s rate limit/i.test(text)) {
