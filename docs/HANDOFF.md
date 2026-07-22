@@ -2,7 +2,7 @@
 
 **Purpose:** everything needed to resume this implementation on a different machine. This doc lives in the repo, so `git clone` gives you the source of truth. (The dev session's local Claude memory does **not** travel — this file + `docs/specs` + `docs/plans` + `CLAUDE.md` are the portable record.)
 
-Last updated: 2026-07-20.
+Last updated: 2026-07-22.
 
 ---
 
@@ -40,7 +40,9 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 - Repo `gmartinstech/maestro-desktop`; `upstream` = `openswarm-ai/openswarm` (fork base ~v1.5.7; upstream now v1.5.8+).
 - **Merged PRs:** #1 foundation gate scaffolding · #2 `harness/review.mjs` · #3 planning docs.
 - **On main:** `scripts/verify.mjs`, `scripts/check-callhome.mjs`, `harness/review.mjs`, `e2e/golden/{golden-path.spec.ts,fixtures.ts}`, `CLAUDE.md`, `AGENTS.md`, `NOTICE`, root `package.json`, `docs/specs/…design.md`, `docs/plans/{…foundation…,…det-detach}.md`.
-- `check-callhome` is **RED** (still finds `openswarm.com` in `electron/main.js`, `electron/preflight.js`, etc.) — the DET epic turns it green. This is expected, not a bug.
+- **DET epic is implemented on branch `plan/det-detach` (PR open).** `check-callhome` is now **GREEN** (scans both built output *and* production source; positive-control verified). Done + cross-vendor-APPROVED: Tasks 1, 2, 3 (minimal), 5, 6, 7, 9, 10, plus the updater-copy repoint. Task 4 (cloud sign-in) is **left inert** by design (no call-home literal remains; empty proxy default → sign-in just fails harmlessly). Task 8 (Windows signing) is human-only.
+- **Two gate bugs were found + fixed** (Plan-1 scaffolding, never run end-to-end before): `check-callhome` scanned `frontend/build` but webpack emits to `frontend/dist`; and `verify.mjs` ran a nonexistent `npm run lint` (frontend has no ESLint — the repo linter is `linter/lint.py`, now wired best-effort). `harness/review.mjs` also gained a `--task` flag so it stops false-flagging intended detach changes as scope creep.
+- **Verification gaps before merge (need a provisioned machine):** (1) backend tests — Task 3 simplified `proxy_auth`; `test_free_trial` was updated + two `test_v2_invariants` Pro tests skipped, but **no backend pytest was run here** (no Python toolchain), and `test_streaming_harness` / `test_settings_meta_guard` / e2e `settings-pairwise` still reference the removed modes and need a run. (2) **golden smoke never ran** — needs root `npm install` (absent), `npx playwright install chromium`, and the one-time selector calibration. `tsc --noEmit` + webpack `build` both pass.
 - LICENSE (MIT © 2026 Haik Decie) retained; `NOTICE` adds MartinsTech.
 - Root `CLAUDE.md` was un-ignored (upstream `.gitignore` had `/CLAUDE.md`).
 
@@ -69,14 +71,14 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 - `ollama run` emits TTY spinner escape codes even when piped — `review.mjs` strips them.
 - Windows-first. In git-bash plain `node` works, but `pi`/`codex` launchers don't.
 
-## 6. Next work — Plan 2: DET (Detach)
+## 6. Next work — DET is done; here's what remains + what's after
 
-`docs/plans/2026-07-20-det-detach.md` — 10 tasks, each with exact file:line anchors, gated by `check-callhome` + golden smoke + `harness/review.mjs`.
+`docs/plans/2026-07-20-det-detach.md` — all task checkboxes marked; implemented on `plan/det-detach`.
 
-- **Start with Task 1** (repoint auto-update/publish to `gmartinstech/maestro-desktop`) — pure file edits, no build, verifiable via `grep` + `review.mjs`.
-- **Acceptance for the whole epic:** `node scripts/check-callhome.mjs` exits 0, golden smoke passes, and a runtime network capture shows zero `*.openswarm.com` traffic.
-- **Human-only tasks:** DET-2 (Windows signing — needs Azure Trusted Signing creds), DET-6 (macOS signing — deferred until a Mac target).
-- **After DET**, author + execute (in order): **BRD** (rebrand — needs the design-system assets from §3), **PRV** (provedor-ia + Keycloak JWT), **DOM** (domain modes/workflows/skills/tools), **LOC** (pt-BR i18n). Scope for each is in the spec (§5) and the board.
+- **To close DET (on a provisioned machine):** merge `plan/det-detach` after (a) `pytest backend/tests` passes with the Task-3 test updates (see §7), and (b) `npm run verify` runs the golden smoke green (needs root `npm install` + `npx playwright install chromium` + selector calibration). Acceptance otherwise met: `node scripts/check-callhome.mjs` exits 0 (source + built); confirm with a runtime network capture showing zero `*.openswarm.com` traffic.
+- **Deferred within DET:** Task 4 cloud sign-in UI teardown (left inert — do in a cleanup/BRD pass); Task 8 Windows signing (human — Azure Trusted Signing creds); DET-6 macOS signing (until a Mac target).
+- **After DET**, author + execute (in order): **BRD** (rebrand — needs the design-system assets from §3; also sweep leftover "OpenSwarm"/"Open Swarm" UI strings, e.g. `index.html <title>`, the ModelsTab marketing copy, installer artifact names), **PRV** (provedor-ia + Keycloak JWT — also add the Keycloak origin to the `index.html` CSP, deferred here), **DOM** (domain modes/workflows/skills/tools), **LOC** (pt-BR i18n). Scope for each is in the spec (§5) and the board.
+- **Follow-up cleanup epic:** many now-inert `connection_mode == "openswarm-pro"` / `"free-trial"` dead branches were intentionally left across ~30 backend + ~20 frontend files (minimal-detach choice); a dedicated pass can delete them.
 
 ## 7. Open follow-ups / not-yet-done
 
