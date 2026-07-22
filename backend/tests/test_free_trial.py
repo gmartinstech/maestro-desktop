@@ -15,23 +15,16 @@ from backend.apps.subscription import free_trial as ft
 from backend.apps.subscription.free_trial import has_own_model, arm_free_trial, clear_free_trial
 
 
-def test_proxy_auth_for_each_mode():
+def test_proxy_auth_is_disabled_after_detach():
+    # Detached fork: no cloud-proxy connection modes remain, so proxy_auth never
+    # returns a proxy regardless of the (now-inert) mode/token fields.
     assert proxy_auth(AppSettings()) == (None, None)
-
-    pro = AppSettings(
-        connection_mode="openswarm-pro",
-        openswarm_bearer_token="bear",
-        openswarm_proxy_url="https://api.openswarm.com",
-    )
-    assert proxy_auth(pro) == ("bear", "https://api.openswarm.com")
-
-    free = AppSettings(
-        connection_mode="free-trial",
-        free_trial_token="ftk",
-        openswarm_proxy_url="https://api.openswarm.com",
-    )
-    # Free-trial carries the /free segment so the same SDK lands on the metered route.
-    assert proxy_auth(free) == ("ftk", "https://api.openswarm.com/free")
+    assert proxy_auth(
+        AppSettings(connection_mode="openswarm-pro", openswarm_bearer_token="bear")
+    ) == (None, None)
+    assert proxy_auth(
+        AppSettings(connection_mode="free-trial", free_trial_token="ftk")
+    ) == (None, None)
 
 
 def test_free_trial_resolves_to_a_bare_anthropic_id():
