@@ -32,7 +32,6 @@ async def router_available(global_settings: AppSettings) -> bool:
         getattr(global_settings, "openai_api_key", None),
         getattr(global_settings, "google_api_key", None),
         getattr(global_settings, "openrouter_api_key", None),
-        getattr(global_settings, "connection_mode", "own_key") in ("openswarm-pro", "free-trial"),
         bool(getattr(global_settings, "custom_providers", None) or []),
         has_persisted_connections(),
     ])
@@ -158,26 +157,6 @@ async def configure_provider_env(
         env["ENABLE_TOOL_SEARCH"] = "auto"
         options_kwargs["env"] = env
         logger.info(f"[MCP-DEBUG] Using OpenRouter for {session.model}")
-    elif api_type == "anthropic" and not resolved_is_9router and getattr(global_settings, "connection_mode", "own_key") in ("openswarm-pro", "free-trial"):
-        from backend.apps.settings.credentials import proxy_auth
-        bearer, proxy_url = proxy_auth(global_settings)
-        bearer = bearer or ""
-        options_kwargs["env"] = {
-            "ANTHROPIC_AUTH_TOKEN": bearer,
-            "ANTHROPIC_BASE_URL": proxy_url,
-            # Pin subagents; Pro rejects CLI's default haiku as "No credentials for provider: anthropic".
-            "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
-            "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
-            "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
-            # auto: tengu_defer_all_bn4 defers every tool, which collides with cache_control and 400s the first tool-laden request.
-            "ENABLE_TOOL_SEARCH": "auto",
-        }
-        # Tag every call (subagents inherit env) + aux calls with the task id so a query plus its title-gen meter as ONE free run; base goes straight to cloud (no 9Router) so the header rides.
-        if getattr(global_settings, "connection_mode", "own_key") == "free-trial":
-            options_kwargs["env"]["ANTHROPIC_CUSTOM_HEADERS"] = f"X-Openswarm-Task-Id: {session.id}"
-            # Cloud serves every free run as Haiku; keep the subagent on Haiku too (sonnet adds `effort`, Haiku 400s).
-            options_kwargs["env"]["CLAUDE_CODE_SUBAGENT_MODEL"] = "claude-haiku-4-5-20251001"
-        logger.info(f"[MCP-DEBUG] Using OpenSwarm cloud proxy at {proxy_url}")
     elif api_type == "anthropic" and not resolved_is_9router and global_settings.anthropic_api_key:
         options_kwargs["env"] = {"ANTHROPIC_API_KEY": global_settings.anthropic_api_key}
         logger.info("[MCP-DEBUG] Using direct Anthropic API key")

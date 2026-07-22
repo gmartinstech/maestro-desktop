@@ -31,14 +31,6 @@ export const step01: OnboardingStep = {
       question: 'How would you like to connect an AI model?',
       options: [
         {
-          id: 'pro',
-          label: 'Open Swarm Pro subscription',
-          thenOps: [
-            { kind: 'move_to', target: S.settingsProSection },
-            { kind: 'popup', text: 'Hit Subscribe and pick a tier.' },
-          ],
-        },
-        {
           id: 'subscription',
           label: 'I already have an AI subscription',
           thenOps: [

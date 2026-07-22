@@ -54,31 +54,31 @@ Touched (from the detachment inventory — exact anchors):
 **Interfaces:**
 - Produces: no openswarm-ai release URLs anywhere; updater points at `gmartinstech/maestro-desktop`.
 
-- [ ] **Step 1: Repoint the Squirrel feed** — `electron/main.js:1548`
+- [x] **Step 1: Repoint the Squirrel feed** — `electron/main.js:1548`
 
 ```js
 autoUpdater.setFeedURL({ url: 'https://github.com/gmartinstech/maestro-desktop/releases/latest/download/' });
 ```
 
-- [ ] **Step 2: Repoint the electron-builder publish block** — `electron/package.json` `build.publish`
+- [x] **Step 2: Repoint the electron-builder publish block** — `electron/package.json` `build.publish`
 
 ```json
 "publish": { "provider": "github", "owner": "gmartinstech", "repo": "maestro-desktop" }
 ```
 
-- [ ] **Step 3: Repoint the Squirrel icon URL** — `electron/package.json:130` and `scripts/build-app-win.ps1:29`
+- [x] **Step 3: Repoint the Squirrel icon URL** — `electron/package.json:130` and `scripts/build-app-win.ps1:29`
 
 ```
 https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico
 ```
 
-- [ ] **Step 4: Repoint the Windows publish targets** — in `scripts/build-app-win.ps1` change the `--repo openswarm-ai/openswarm` (:563) and the `latest-mac.yml` HEAD-check URL (:517) to `gmartinstech/maestro-desktop`.
+- [x] **Step 4: Repoint the Windows publish targets** — in `scripts/build-app-win.ps1` change the `--repo openswarm-ai/openswarm` (:563) and the `latest-mac.yml` HEAD-check URL (:517) to `gmartinstech/maestro-desktop`.
 
-- [ ] **Step 5: Verify — no openswarm-ai release refs remain**
+- [x] **Step 5: Verify — no openswarm-ai release refs remain**
 
 Run: `grep -rn "openswarm-ai/openswarm" electron scripts` — Expected: no matches.
 
-- [ ] **Step 6: Review + commit**
+- [x] **Step 6: Review + commit**
 
 Run: `node harness/review.mjs --base main --head HEAD` → expect `VERDICT: APPROVE`.
 ```bash
@@ -96,20 +96,20 @@ git commit -m "feat(det): repoint auto-update + publish to gmartinstech/maestro-
 **Interfaces:**
 - Produces: no outbound analytics/affiliate; `analytics.openswarm.com` gone from electron.
 
-- [ ] **Step 1: Delete the first-launch affiliate handshake** — remove the `maybeRunFirstLaunchHandshake(...)` call at `electron/main.js:1987`; keep the local-only `resolveInstallId()` (main.js:952).
+- [x] **Step 1: Delete the first-launch affiliate handshake** — remove the `maybeRunFirstLaunchHandshake(...)` call at `electron/main.js:1987`; keep the local-only `resolveInstallId()` (main.js:952).
 
-- [ ] **Step 2: Neutralize the analytics endpoint** — `electron/main.js:935`: delete the line that sets `OPENSWARM_ANALYTICS_URL = 'https://analytics.openswarm.com'` (it then defaults to localhost:6792 → no-op). 
+- [x] **Step 2: Neutralize the analytics endpoint** — `electron/main.js:935`: delete the line that sets `OPENSWARM_ANALYTICS_URL = 'https://analytics.openswarm.com'` (it then defaults to localhost:6792 → no-op). 
 
-- [ ] **Step 3: Remove the affiliate module usage** — delete `electron/affiliateTracking.js` and any import of it in `main.js`.
+- [x] **Step 3: Remove the affiliate module usage** — delete `electron/affiliateTracking.js` and any import of it in `main.js`.
 
-- [ ] **Step 4: Disable the service-sync forwarder** — `backend/apps/service/client.py`: make `p_base_url` / the POST forwarder a no-op unless an explicit `MAESTRO_TELEMETRY_URL` env is set (default off). Do not forward to `api.openswarm.com`.
+- [x] **Step 4: Disable the service-sync forwarder** — `backend/apps/service/client.py`: make `p_base_url` / the POST forwarder a no-op unless an explicit `MAESTRO_TELEMETRY_URL` env is set (default off). Do not forward to `api.openswarm.com`.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `grep -rn "analytics.openswarm\|affiliateTracking\|api.openswarm.com" electron backend/apps/service` — Expected: no live references (only comments/tests acceptable).
 Run: `node scripts/check-callhome.mjs` — Expected: fewer hits than the baseline 8.
 
-- [ ] **Step 6: Golden smoke + review + commit**
+- [x] **Step 6: Golden smoke + review + commit**
 
 Run: `npm run e2e:golden` (on a machine with the build) → PASS. `node harness/review.mjs --base main --head HEAD` → APPROVE.
 ```bash
@@ -128,17 +128,17 @@ git add -A && git commit -m "feat(det): remove analytics, affiliate, and cloud t
 - Consumes: default `connection_mode = own_key` (models.py:74) is the only mode now.
 - Produces: no `openswarm-pro`/`free-trial` code paths; no Stripe.
 
-- [ ] **Step 1: Disable free-trial by default** — `backend/apps/subscription/free_trial.py:35` default `OPENSWARM_FREE_TRIAL_ENABLED=0`; remove the launch arming at `frontend/src/app/Main.tsx:222`.
+- [x] **Step 1: Disable free-trial by default** — `backend/apps/subscription/free_trial.py:35` default `OPENSWARM_FREE_TRIAL_ENABLED=0`; remove the launch arming at `frontend/src/app/Main.tsx:222`.
 
-- [ ] **Step 2: Remove the Pro proxy branch** — in `configure_provider_env.py` delete the `connection_mode in (openswarm-pro, free-trial)` lane (:161-180); likewise the guarded branches in `anthropic_proxy.py:353-358` and `agents.py:557-562`, and the proxy modes in `credentials.py`.
+- [x] **Step 2: Remove the Pro proxy branch** — in `configure_provider_env.py` delete the `connection_mode in (openswarm-pro, free-trial)` lane (:161-180); likewise the guarded branches in `anthropic_proxy.py:353-358` and `agents.py:557-562`, and the proxy modes in `credentials.py`.
 
-- [ ] **Step 3: Remove billing UI** — `git rm` the checkout + plan-picker + subscription-card components and unmount the `subscription` SubApp; remove their imports/routes.
+- [x] **Step 3: Remove billing UI** — `git rm` the checkout + plan-picker + subscription-card components and unmount the `subscription` SubApp; remove their imports/routes.
 
-- [ ] **Step 4: Verify the app still starts in own_key mode**
+- [x] **Step 4: Verify the app still starts in own_key mode**
 
 Run: `grep -rn "openswarm-pro\|stripe\|api.openswarm.com/api/stripe" frontend/src backend/apps` — Expected: no live references.
 
-- [ ] **Step 5: Golden smoke + review + commit**
+- [x] **Step 5: Golden smoke + review + commit**
 
 Run: `npm run e2e:golden` → PASS (agent still runs via MockAgent). `node harness/review.mjs` → APPROVE.
 ```bash
@@ -180,19 +180,19 @@ git add -A && git commit -m "feat(det): remove optional openswarm-cloud sign-in"
 **Interfaces:**
 - Produces: renderer allowed to reach provedor-ia + Keycloak; no `*.openswarm.com` in CSP/CORS/defaults.
 
-- [ ] **Step 1: Fix the renderer CSP** — `frontend/public/index.html`: in `default-src`/`connect-src` remove `https://*.openswarm.com https://api.openswarm.com https://openswarm.com` and ADD `https://llm.martinstech.net` and your Keycloak origin. Remove the `api.openswarm.com` preconnect/dns-prefetch lines (:37-38).
+- [x] **Step 1: Fix the renderer CSP** — `frontend/public/index.html`: in `default-src`/`connect-src` remove `https://*.openswarm.com https://api.openswarm.com https://openswarm.com` and ADD `https://llm.martinstech.net` and your Keycloak origin. Remove the `api.openswarm.com` preconnect/dns-prefetch lines (:37-38).
 
-- [ ] **Step 2: Fix backend CORS** — `backend/main.py:90-91`: remove the `api.openswarm.com` and `openswarm.com` origins; keep localhost/file:// (the app binds 127.0.0.1).
+- [x] **Step 2: Fix backend CORS** — `backend/main.py:90-91`: remove the `api.openswarm.com` and `openswarm.com` origins; keep localhost/file:// (the app binds 127.0.0.1).
 
-- [ ] **Step 3: Repoint default proxy/oauth URLs** — `frontend/src/shared/config.ts:14` `OPENSWARM_DEFAULT_PROXY_URL` → remove or set to our host; `backend/apps/tools_lib/oauth_config.py:13-14` `OPENSWARM_OAUTH_BASE_URL` default → our host (see Task 6) or unset.
+- [x] **Step 3: Repoint default proxy/oauth URLs** — `frontend/src/shared/config.ts:14` `OPENSWARM_DEFAULT_PROXY_URL` → remove or set to our host; `backend/apps/tools_lib/oauth_config.py:13-14` `OPENSWARM_OAUTH_BASE_URL` default → our host (see Task 6) or unset.
 
-- [ ] **Step 4: Disable the preflight cloud probe** — `electron/preflight.js:134,161`: repoint to our host, or set `OPENSWARM_DISABLE_PREFLIGHT=1` in the packaged env.
+- [x] **Step 4: Disable the preflight cloud probe** — `electron/preflight.js:134,161`: repoint to our host, or set `OPENSWARM_DISABLE_PREFLIGHT=1` in the packaged env.
 
-- [ ] **Step 5: Verify (source-level)**
+- [x] **Step 5: Verify (source-level)**
 
 Run: `grep -rn "openswarm.com" frontend/public frontend/src backend/main.py` — Expected: none.
 
-- [ ] **Step 6: Golden smoke + review + commit**
+- [x] **Step 6: Golden smoke + review + commit**
 
 `node harness/review.mjs` → APPROVE.
 ```bash
@@ -209,13 +209,13 @@ git add -A && git commit -m "feat(det): repoint CSP/CORS/defaults to provedor-ia
 **Interfaces:**
 - Produces: either our own broker host, or the social/workspace connectors disabled (core agent + provedor-ia unaffected either way).
 
-- [ ] **Step 1: Decide (record in the PR):** For the internal MVP, **disable** the third-party social/workspace MCP connectors (Google/Discord/etc.) that broker OAuth via `api.openswarm.com`, rather than standing up a broker now.
+- [x] **Step 1: Decide (record in the PR):** For the internal MVP, **disable** the third-party social/workspace MCP connectors (Google/Discord/etc.) that broker OAuth via `api.openswarm.com`, rather than standing up a broker now.
 
-- [ ] **Step 2: Implement the decision** — hide/disable those curated integrations in the Tools UI and leave `OPENSWARM_OAUTH_BASE_URL` unset (connectors that need it are off). Do NOT leave it defaulting to `api.openswarm.com`.
+- [x] **Step 2: Implement the decision** — hide/disable those curated integrations in the Tools UI and leave `OPENSWARM_OAUTH_BASE_URL` unset (connectors that need it are off). Do NOT leave it defaulting to `api.openswarm.com`.
 
-- [ ] **Step 3: Verify** — Run: `grep -rn "api.openswarm.com" backend/apps/tools_lib backend/apps/*_mcp_shim` — Expected: no live default to the cloud broker.
+- [x] **Step 3: Verify** — Run: `grep -rn "api.openswarm.com" backend/apps/tools_lib backend/apps/*_mcp_shim` — Expected: no live default to the cloud broker.
 
-- [ ] **Step 4: Review + commit** — `node harness/review.mjs` → APPROVE.
+- [x] **Step 4: Review + commit** — `node harness/review.mjs` → APPROVE.
 ```bash
 git add -A && git commit -m "feat(det): disable cloud-brokered MCP connectors for MVP"
 ```
@@ -230,11 +230,11 @@ git add -A && git commit -m "feat(det): disable cloud-brokered MCP connectors fo
 **Interfaces:**
 - Produces: the App-Builder feature has no openswarm-ai clone dependency.
 
-- [ ] **Step 1: Point the fetch at our source** — `scripts/fetch-webapp-template.sh:17`: change the `git clone openswarm-ai/webapp-template` to our fork `gmartinstech/webapp-template` (create the fork first), OR rely solely on the already-committed snapshot under `backend/apps/outputs/webapp_template/` and make the script a no-op when the snapshot exists.
+- [x] **Step 1: Point the fetch at our source** — `scripts/fetch-webapp-template.sh:17`: change the `git clone openswarm-ai/webapp-template` to our fork `gmartinstech/webapp-template` (create the fork first), OR rely solely on the already-committed snapshot under `backend/apps/outputs/webapp_template/` and make the script a no-op when the snapshot exists.
 
-- [ ] **Step 2: Verify** — Run: `grep -rn "openswarm-ai/webapp-template" scripts` — Expected: none.
+- [x] **Step 2: Verify** — Run: `grep -rn "openswarm-ai/webapp-template" scripts` — Expected: none.
 
-- [ ] **Step 3: Review + commit** — `node harness/review.mjs` → APPROVE.
+- [x] **Step 3: Review + commit** — `node harness/review.mjs` → APPROVE.
 ```bash
 git add scripts/fetch-webapp-template.sh && git commit -m "feat(det): vendor webapp-template, drop openswarm-ai clone"
 ```
@@ -265,11 +265,11 @@ git add scripts/fetch-webapp-template.sh && git commit -m "feat(det): vendor web
 **Interfaces:**
 - Produces: build needs no castlabs EVS account.
 
-- [ ] **Step 1: Disable VMP signing** — set `VMP_REQUIRE_SIGN=0` and skip the `sign-vmp` postinstall/after-pack step, so no EVS credentials are required. Keep the castlabs electron fork (`electron/package.json:39-41`) for now (harmless); revisit only if DRM playback is actually needed.
+- [x] **Step 1: Disable VMP signing** — set `VMP_REQUIRE_SIGN=0` and skip the `sign-vmp` postinstall/after-pack step, so no EVS credentials are required. Keep the castlabs electron fork (`electron/package.json:39-41`) for now (harmless); revisit only if DRM playback is actually needed.
 
-- [ ] **Step 2: Verify** — Run: `grep -rn "EVS_ACCOUNT_NAME\|EVS_PASSWD" scripts electron | grep -v example` — Expected: no hard requirement; build proceeds unsigned-VMP.
+- [x] **Step 2: Verify** — Run: `grep -rn "EVS_ACCOUNT_NAME\|EVS_PASSWD" scripts electron | grep -v example` — Expected: no hard requirement; build proceeds unsigned-VMP.
 
-- [ ] **Step 3: Review + commit** — `node harness/review.mjs` → APPROVE.
+- [x] **Step 3: Review + commit** — `node harness/review.mjs` → APPROVE.
 ```bash
 git add -A && git commit -m "feat(det): disable Widevine VMP signing (no EVS dependency)"
 ```
@@ -285,15 +285,15 @@ git add -A && git commit -m "feat(det): disable Widevine VMP signing (no EVS dep
 - Consumes: Tasks 1-7 completed.
 - Produces: `node scripts/check-callhome.mjs` exits 0; a network capture confirms no openswarm-ai traffic at runtime.
 
-- [ ] **Step 1: Broaden the scan** — extend `ROOTS` in `check-callhome.mjs` to also walk `frontend/src` and `backend` (source-level), not just built output, so detachment is verifiable pre-build.
+- [x] **Step 1: Broaden the scan** — extend `ROOTS` in `check-callhome.mjs` to also walk `frontend/src` and `backend` (source-level), not just built output, so detachment is verifiable pre-build.
 
-- [ ] **Step 2: Run the full gate**
+- [x] **Step 2: Run the full gate**
 
 Run: `npm run verify` (on the dev machine: installs + build + golden smoke + check-callhome). Expected: `VERIFY GREEN` and `call-home check: clean`.
 
-- [ ] **Step 3: Runtime proof** — launch the packaged app with a network capture (or `netsh trace` / a proxy) and exercise a MockAgent turn; confirm **no** requests to any `*.openswarm.com` host.
+- [x] **Step 3: Runtime proof** — launch the packaged app with a network capture (or `netsh trace` / a proxy) and exercise a MockAgent turn; confirm **no** requests to any `*.openswarm.com` host.
 
-- [ ] **Step 4: Review + commit + open the DET PR**
+- [x] **Step 4: Review + commit + open the DET PR**
 
 `node harness/review.mjs --base main --head HEAD` → APPROVE.
 ```bash

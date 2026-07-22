@@ -14,7 +14,7 @@
     "dist:win": "electron-builder --win --x64 --publish never",
     "dist:win:publish": "electron-builder --win --x64 --publish always",
     "dist:all": "electron-builder --mac --win --linux",
-    "test": "node --test affiliateTracking.test.js",
+    "test": "node --test installId.test.js",
     "test:mouseclamp": "bash native/mouseclamp/run-tests.sh"
   },
   "dependencies": {
@@ -127,7 +127,7 @@
       }
     },
     "squirrelWindows": {
-      "iconUrl": "https://raw.githubusercontent.com/openswarm-ai/openswarm/main/electron/build/icon.ico"
+      "iconUrl": "https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
@@ -190,8 +190,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "openswarm-ai",
-      "repo": "openswarm"
+      "owner": "gmartinstech",
+      "repo": "maestro-desktop"
     },
     "afterSign": "scripts/notarize.js"
   }

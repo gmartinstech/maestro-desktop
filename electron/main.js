@@ -56,7 +56,7 @@ const fs = require('fs');
 const hiddenBrowser = require('./hiddenBrowser');
 const getPort = require('get-port');
 const http = require('http');
-const affiliateTracking = require('./affiliateTracking');
+const installId = require('./installId');
 const cdpRoutes = require('./cdp-routes');
 const workflowsLifecycle = require('./workflowsLifecycle');
 
@@ -931,8 +931,6 @@ async function startBackend() {
     // app_version="unknown". The path-based fallback stays in place so this
     // change is purely additive.
     OPENSWARM_APP_VERSION: app.getVersion(),
-    // Packaged builds send analytics straight to its own public edge (analytics.openswarm.com), bypassing the billing/account core; dev leaves it unset so the backend hits the local ingest. Older shipped builds still point at api.openswarm.com, whose /public/* relay stays in place for them.
-    ...(isPackaged ? { OPENSWARM_ANALYTICS_URL: 'https://analytics.openswarm.com' } : {}),
     // Inject the user's BCP 47 locale + IANA timezone. The Python backend
     // doesn't have reliable APIs for either: locale.getdefaultlocale() is
     // deprecated and inconsistent across OSes, and Python's local-tz string
@@ -949,13 +947,13 @@ async function startBackend() {
   };
 
   try {
-    env.OPENSWARM_INSTALLATION_ID = affiliateTracking.resolveInstallId({
+    env.OPENSWARM_INSTALLATION_ID = installId.resolveInstallId({
       userDataDir: app.getPath('userData'),
       isPackaged,
       projectRoot,
     });
   } catch (err) {
-    console.warn('[affiliate] resolveInstallId failed:', err && err.message);
+    console.warn('[installId] resolveInstallId failed:', err && err.message);
   }
 
   // Tell the backend where to find a real Node binary for 9Router and
@@ -1545,7 +1543,7 @@ function setupAutoUpdater() {
     // Squirrel.Windows fetches its RELEASES feed from GH /latest/download/. The
     // built-in autoUpdater has no autoDownload/allowPrerelease/allowDowngrade knobs.
     try {
-      autoUpdater.setFeedURL({ url: 'https://github.com/openswarm-ai/openswarm/releases/latest/download/' });
+      autoUpdater.setFeedURL({ url: 'https://github.com/gmartinstech/maestro-desktop/releases/latest/download/' });
     } catch (err) {
       console.warn('[updater] Squirrel setFeedURL failed:', err && err.message);
       return;
@@ -1977,21 +1975,6 @@ app.whenReady().then(async () => {
 
     // Don't block on Widevine; it'll resolve in the background. Logged above.
     widevinePromise.catch(() => {});
-
-    // Affiliate / referral handshake. On the very first launch, opens the
-    // landing page's /welcome handler in the user's default browser so the
-    // browser (which holds the install_token from the click on the
-    // download CTA) can pair our app_install_id with the referral code.
-    // No-op on every subsequent launch, no-op in dev unless forced. Fire
-    // and forget, never blocks UI startup. See electron/affiliateTracking.js.
-    affiliateTracking.maybeRunFirstLaunchHandshake({
-      shell,
-      userDataDir: app.getPath('userData'),
-      isDev,
-      isPackaged,
-    }).catch((err) => {
-      console.warn('[affiliate] handshake failed:', err && err.message);
-    });
   } catch (err) {
     console.error('Failed to start:', err);
     // Surface the failure on the splash instead of silently quitting.
@@ -2976,7 +2959,7 @@ async function installDownloadedUpdate() {
     isInstallingUpdate = false;
     try { fs.unlinkSync(CRASH_WATCHDOG_UPDATING_LOCK); } catch (_) {}
     if (BrowserWindow.getAllWindows().length > 0) {
-      sendToRenderer('update-error', 'Update could not be installed. Please download the latest from openswarm.com.');
+      sendToRenderer('update-error', 'Update could not be installed. Please download the latest from github.com/gmartinstech/maestro-desktop/releases.');
     } else if (backendPort && !isCreatingMainWindow) {
       try { recreateMainWindow(); } catch (_) {}
     }
@@ -3020,7 +3003,7 @@ ipcMain.handle('open-external', (_event, url) => {
 // (Stripe checkout, sign-in events) for downstream attribution.
 ipcMain.handle('get-install-state', () => {
   try {
-    return affiliateTracking.readState(app.getPath('userData'));
+    return installId.readState(app.getPath('userData'));
   } catch (_) {
     return {};
   }

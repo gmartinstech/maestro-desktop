@@ -351,11 +351,6 @@ def p_pick_upstream(model: str) -> tuple[str, dict[str, str]]:
     s = load_settings()
 
     if p_is_claude_model(model):
-        if getattr(s, "connection_mode", "own_key") == "openswarm-pro":
-            bearer = getattr(s, "openswarm_bearer_token", "") or ""
-            proxy = (getattr(s, "openswarm_proxy_url", "") or "https://api.openswarm.com").rstrip("/")
-            if bearer and proxy:
-                return (proxy, {"Authorization": f"Bearer {bearer}"})
         ak = getattr(s, "anthropic_api_key", "") or ""
         if ak.strip():
             return ("https://api.anthropic.com", {

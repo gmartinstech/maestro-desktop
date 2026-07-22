@@ -8,10 +8,10 @@ if TYPE_CHECKING:
     import anthropic
     from backend.apps.settings.models import AppSettings
 
-OPENSWARM_DEFAULT_PROXY_URL = "https://api.openswarm.com"
+OPENSWARM_DEFAULT_PROXY_URL = ""
 
 # Connection modes that route Claude traffic through our cloud proxy with a bearer instead of a user-held key. Free-trial is openswarm-pro's cheaper sibling: same proxy, but pointed at the /free sub-path the cloud meters and forces to Haiku.
-PROXY_CONNECTION_MODES = ("openswarm-pro", "free-trial")
+PROXY_CONNECTION_MODES = ()
 
 
 def proxy_auth(settings: AppSettings) -> tuple[str | None, str | None]:
@@ -19,12 +19,6 @@ def proxy_auth(settings: AppSettings) -> tuple[str | None, str | None]:
     (None, None). Consumers append /v1/messages to base_url as usual; for
     free-trial the base carries the /free segment so the same SDK lands on the
     metered route."""
-    mode = getattr(settings, "connection_mode", "own_key")
-    base = (getattr(settings, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL).rstrip("/")
-    if mode == "openswarm-pro":
-        return (getattr(settings, "openswarm_bearer_token", None), base)
-    if mode == "free-trial":
-        return (getattr(settings, "free_trial_token", None), base + "/free")
     return (None, None)
 
 

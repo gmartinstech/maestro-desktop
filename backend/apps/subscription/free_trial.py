@@ -31,8 +31,8 @@ P_FP_SALT = "openswarm-free-trial-v1"
 
 
 def p_enabled() -> bool:
-    # Default ON as of 1.2.80: the cloud free-trial proxy is live on prod (api.openswarm.com) and arming + metered Haiku were verified end to end. Set OPENSWARM_FREE_TRIAL_ENABLED=0 to force it off. The pool-shed gate + daily global budget on the cloud cap total spend; arming only happens for a truly-unconnected user (no key, no sub), so paid users are never touched.
-    return os.environ.get("OPENSWARM_FREE_TRIAL_ENABLED", "1") == "1"
+    # Free trial disabled by default post-detach; OpenSwarm cloud proxy no longer available.
+    return os.environ.get("OPENSWARM_FREE_TRIAL_ENABLED", "0") == "1"
 
 
 def p_raw_hardware_id() -> str | None:

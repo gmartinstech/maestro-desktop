@@ -1,7 +1,7 @@
 """Operational state forwarder.
 
 Single public surface: `submit(kind, payload)`. The desktop hands off
-opaque payload dicts; the cloud at api.openswarm.com is responsible for
+opaque payload dicts; the configured telemetry endpoint is responsible for
 parsing and routing them. The desktop has no schema knowledge.
 
 Three `kind` values are accepted; they're the routing primitive the
@@ -34,7 +34,6 @@ from backend.apps.service.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-P_DEFAULT_BASE = "https://api.openswarm.com"
 P_PATH_BY_KIND = {
     "state": "/api/service/state",
     "session": "/api/service/sync",
@@ -209,18 +208,17 @@ def p_envelope() -> dict:
     return env
 
 
-def p_base_url() -> str:
-    try:
-        from backend.apps.settings.store import load_settings
-        from backend.apps.settings.credentials import OPENSWARM_DEFAULT_PROXY_URL
-        s = load_settings()
-        return (getattr(s, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL).rstrip("/")
-    except Exception:
-        return P_DEFAULT_BASE
+def p_telemetry_base() -> Optional[str]:
+    # Telemetry/service-sync is OFF unless an explicit endpoint is set; never defaults to a cloud host.
+    url = os.environ.get("MAESTRO_TELEMETRY_URL", "").strip()
+    return url.rstrip("/") or None
 
 
 async def p_post(path: str, body: dict) -> int | None:
-    url = f"{p_base_url()}{path}"
+    base = p_telemetry_base()
+    if base is None:
+        return None
+    url = f"{base}{path}"
     try:
         async with httpx.AsyncClient(timeout=P_TIMEOUT_SECONDS) as c:
             r = await c.post(url, json=body)
@@ -247,6 +245,8 @@ async def p_post_or_spool(path: str, body: dict, kind: str) -> None:
         except Exception as e:
             logger.debug("test sink raised: %s", e)
         return
+    if p_telemetry_base() is None:
+        return
     async with p_inflight_lock:
         if p_inflight >= P_MAX_INFLIGHT:
             buffer.enqueue(spool_path(), f"{kind}:{path}", body, now=time.time())
@@ -264,6 +264,8 @@ async def p_post_or_spool(path: str, body: dict, kind: str) -> None:
 
 
 async def drain_spool(batch_size: int = 50) -> int:
+    if p_telemetry_base() is None:
+        return 0
     async with p_drain_lock:
         entries = buffer.drain(spool_path(), batch_size=batch_size)
         if not entries:
