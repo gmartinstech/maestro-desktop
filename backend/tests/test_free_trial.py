@@ -68,6 +68,8 @@ async def test_arm_waits_for_9router_before_shadowing_a_background_started_sub(m
     """The regression: 9Router starts in the background, so at first-boot mint time
     a real Claude sub is invisible. arm() must bring 9Router up (so the sub becomes
     visible) BEFORE deciding, instead of arming the free trial over it."""
+    # Trial is default-OFF after detach; opt in so this test exercises the arm logic.
+    monkeypatch.setenv("OPENSWARM_FREE_TRIAL_ENABLED", "1")
     saved: list = []
     monkeypatch.setattr(ft, "save_settings_async", _record(saved))
     monkeypatch.setattr(ft, "p_sync_routing", _noop)
@@ -98,6 +100,8 @@ async def test_arm_waits_for_9router_before_shadowing_a_background_started_sub(m
 async def test_arm_tolerates_provider_load_lag(monkeypatch):
     """9Router's /api/providers can lag is_running on a cold start. arm must re-check
     a few times so a sub that loads a beat late is still caught, not shadowed."""
+    # Trial is default-OFF after detach; opt in so this test exercises the arm logic.
+    monkeypatch.setenv("OPENSWARM_FREE_TRIAL_ENABLED", "1")
     monkeypatch.setattr(ft, "save_settings_async", _noop)
     monkeypatch.setattr(ft, "p_sync_routing", _noop)
 
@@ -124,6 +128,8 @@ async def test_arm_tolerates_provider_load_lag(monkeypatch):
 async def test_arm_with_no_sub_is_bounded_and_falls_through_to_arm(monkeypatch):
     """The 'don't poll for something that doesn't exist' guarantee: a genuinely
     sub-less user must exhaust the re-checks quickly and PROCEED to arm, never hang."""
+    # Trial is default-OFF after detach; opt in so this test exercises the arm logic.
+    monkeypatch.setenv("OPENSWARM_FREE_TRIAL_ENABLED", "1")
     async def fake_ensure_running():
         return None
     async def never_sub():
