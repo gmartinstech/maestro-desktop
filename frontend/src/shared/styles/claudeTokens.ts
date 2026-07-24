@@ -2,6 +2,9 @@ export interface ClaudeTokens {
   bg: { page: string; surface: string; elevated: string; secondary: string; inverse: string };
   text: { primary: string; secondary: string; tertiary: string; muted: string; inverse: string; ghost: string };
   accent: { primary: string; hover: string; pressed: string };
+  // MartinsTech brand anchors. accent carries navy (contrast-safe on buttons/links);
+  // gold is the highlight color, used with DARK text (logo, active/selection, badges).
+  brand: { navy: string; gold: string };
   border: { subtle: string; medium: string; strong: string; width: string };
   shadow: { sm: string; md: string; lg: string };
   radius: { xs: number; sm: number; md: number; lg: number; xl: number; full: number };
@@ -11,37 +14,40 @@ export interface ClaudeTokens {
   transition: string;
 }
 
+// Maestro Studio (MartinsTech) — navy #003566 / gold #F5CC00, Inter + IBM Plex Mono.
+// Neutrals are tinted toward the navy hue (cool), not the upstream warm cream.
 export const lightTokens: ClaudeTokens = {
   bg: {
-    page: '#F5F5F0',
-    surface: '#FFFFFF',
-    elevated: '#FAF9F5',
-    secondary: '#F5F4ED',
-    inverse: '#141413',
+    page: '#F3F5F8',
+    surface: '#FCFDFE',
+    elevated: '#F8FAFC',
+    secondary: '#E9EEF4',
+    inverse: '#0D1B2A',
   },
   text: {
-    primary: '#1a1a18',
-    secondary: '#3D3D3A',
-    tertiary: '#73726C',
-    muted: '#6b6a68',
+    primary: '#0F1D2B',
+    secondary: '#33414F',
+    tertiary: '#5E6B78',
+    muted: '#6B7682',
     inverse: '#FFFFFF',
-    ghost: 'rgba(115,114,108,0.5)',
+    ghost: 'rgba(94,107,120,0.5)',
   },
   accent: {
-    primary: '#ae5630',
-    hover: '#c4633a',
-    pressed: '#924828',
+    primary: '#003566',
+    hover: '#0A4C8F',
+    pressed: '#002647',
   },
+  brand: { navy: '#003566', gold: '#F5CC00' },
   border: {
-    subtle: 'rgba(0,0,0,0.06)',
-    medium: 'rgba(0,0,0,0.08)',
-    strong: 'rgba(0,0,0,0.15)',
+    subtle: 'rgba(13,27,42,0.07)',
+    medium: 'rgba(13,27,42,0.10)',
+    strong: 'rgba(13,27,42,0.16)',
     width: '0.5px',
   },
   shadow: {
-    sm: '0 1px 3px rgba(0,0,0,0.04)',
-    md: '0 0.25rem 1.25rem rgba(0,0,0,0.035)',
-    lg: '0 0.5rem 2rem rgba(0,0,0,0.08)',
+    sm: '0 1px 3px rgba(13,27,42,0.05)',
+    md: '0 0.25rem 1.25rem rgba(13,27,42,0.05)',
+    lg: '0 0.5rem 2rem rgba(13,27,42,0.10)',
   },
   radius: { xs: 8, sm: 8, md: 8, lg: 8, xl: 8, full: 9999 },
   status: {
@@ -51,42 +57,44 @@ export const lightTokens: ClaudeTokens = {
     warningBg: '#F6EEDF',
     error: '#B53333',
     errorBg: '#FEE2E2',
-    info: '#3266AD',
-    infoBg: '#D6E4F6',
+    info: '#003566',
+    infoBg: '#DCE7F2',
   },
-  user: { bubble: '#DDD9CE' },
+  user: { bubble: '#E4EBF3' },
   font: {
-    sans: '"Anthropic Sans", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-    mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+    sans: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    mono: '"IBM Plex Mono", ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, Menlo, monospace',
   },
   transition: 'all 150ms cubic-bezier(0.165, 0.85, 0.45, 1)',
 };
 
 export const darkTokens: ClaudeTokens = {
   bg: {
-    page: '#1a1918',
-    surface: '#262624',
-    elevated: '#30302E',
-    secondary: '#1f1e1b',
-    inverse: '#FAF9F5',
+    page: '#0D1621',
+    surface: '#14202D',
+    elevated: '#1C2A38',
+    secondary: '#101A25',
+    inverse: '#F3F5F8',
   },
   text: {
-    primary: '#FAF9F5',
-    secondary: '#C2C0B6',
-    tertiary: '#9C9A92',
-    muted: '#85837C',
-    inverse: '#141413',
-    ghost: 'rgba(156,154,146,0.5)',
+    primary: '#F3F6FA',
+    secondary: '#B8C2CE',
+    tertiary: '#8A96A3',
+    muted: '#77828E',
+    inverse: '#0D1621',
+    ghost: 'rgba(138,150,163,0.5)',
   },
   accent: {
-    primary: '#c4633a',
-    hover: '#d47548',
-    pressed: '#ae5630',
+    // Navy is too dark on a dark surface; use a lightened brand-azure for contrast.
+    primary: '#4A90D9',
+    hover: '#6BA6E2',
+    pressed: '#3B7BC0',
   },
+  brand: { navy: '#003566', gold: '#F5CC00' },
   border: {
-    subtle: 'rgba(222,220,209,0.08)',
-    medium: 'rgba(222,220,209,0.12)',
-    strong: 'rgba(222,220,209,0.2)',
+    subtle: 'rgba(180,194,206,0.08)',
+    medium: 'rgba(180,194,206,0.12)',
+    strong: 'rgba(180,194,206,0.2)',
     width: '0.5px',
   },
   shadow: {
@@ -103,12 +111,12 @@ export const darkTokens: ClaudeTokens = {
     error: '#DD5353',
     errorBg: '#3D1515',
     info: '#80AADD',
-    infoBg: '#253E5F',
+    infoBg: '#16324B',
   },
-  user: { bubble: '#393937' },
+  user: { bubble: '#1E2C3A' },
   font: {
-    sans: '"Anthropic Sans", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-    mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+    sans: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    mono: '"IBM Plex Mono", ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, Menlo, monospace',
   },
   transition: 'all 150ms cubic-bezier(0.165, 0.85, 0.45, 1)',
 };

@@ -16,7 +16,7 @@ function dither(gx: number, gy: number): number {
   return v - Math.floor(v);
 }
 
-const ImportDigest = forwardRef<DigestHandle, { color?: string }>(({ color = '#c4633a' }, ref) => {
+const ImportDigest = forwardRef<DigestHandle, { color?: string }>(({ color = '#003566' }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const busyRef = useRef(false);
   const rafRef = useRef(0);

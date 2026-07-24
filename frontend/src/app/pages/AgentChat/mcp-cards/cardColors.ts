@@ -21,7 +21,7 @@ const darkCardColors: CardColors = {
   TC_BODY: '#9C9A92',
   TC_MUTED: '#85837C',
   TC_DIM: 'rgba(156,154,146,0.5)',
-  TC_ACCENT: '#c4633a',
+  TC_ACCENT: '#4A90D9',
   TC_SUCCESS: '#7AB948',
   TC_WARNING: '#D1A041',
 };
@@ -34,7 +34,7 @@ const lightCardColors: CardColors = {
   TC_BODY: '#555550',
   TC_MUTED: '#73726C',
   TC_DIM: 'rgba(115,114,108,0.5)',
-  TC_ACCENT: '#ae5630',
+  TC_ACCENT: '#003566',
   TC_SUCCESS: '#265B19',
   TC_WARNING: '#805C1F',
 };

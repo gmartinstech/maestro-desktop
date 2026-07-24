@@ -93,7 +93,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     };
     const btn: React.CSSProperties = {
-      background: '#c4633a',
+      background: '#003566',
       color: 'white',
       border: 'none',
       borderRadius: 6,

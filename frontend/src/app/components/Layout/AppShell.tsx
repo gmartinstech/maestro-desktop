@@ -569,12 +569,6 @@ const AppShell: React.FC = () => {
             WebkitAppRegion: 'no-drag',
           }}
         >
-          <Box
-            component="img"
-            src="./logo.png"
-            alt="OpenSwarm"
-            sx={{ width: 20, height: 20, borderRadius: 0.5, opacity: 0.85 }}
-          />
           <Typography
             sx={{
               color: c.text.secondary,
@@ -584,7 +578,7 @@ const AppShell: React.FC = () => {
               lineHeight: 1,
             }}
           >
-            OpenSwarm
+            Maestro Studio
           </Typography>
         </Box>
       </Box>
