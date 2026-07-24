@@ -94,3 +94,13 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 - Branding tokens: `frontend/src/shared/styles/claudeTokens.ts`
 - Cloud couplings to remove (DET): `electron/main.js` (feed/analytics/affiliate), `electron/preflight.js`, `backend/apps/{auth,subscription}`, `frontend/public/index.html` (CSP)
 - The gate: `scripts/verify.mjs`, `scripts/check-callhome.mjs`; the reviewer: `harness/review.mjs`; the smoke: `e2e/golden/`
+
+## 9. BRD (rebrand) — first pass done; faithful pass needs assets
+
+A **first-pass** MartinsTech rebrand landed on `main` (commit `feat(brd): first-pass ...`): `claudeTokens.ts` accent → navy `#003566` (azure `#4A90D9` in dark for contrast), neutrals cooled toward navy, fonts → **Inter + IBM Plex Mono** (via Google Fonts; CSP already allows), title + wordmark → "Maestro Studio", orange octopus `logo.png` dropped, hardcoded oranges → navy. A `brand: {navy,gold}` token now exists; **gold `#F5CC00` is NOT used as an accent** (fails contrast on buttons/links) — it belongs on the logo + dark-text badges. Verified: tsc/build green + a live dev launch (Inter loaded, navy buttons, cool bg). NOTE: this pass was **not** cross-vendor-reviewed (ollama cloud was down); re-run `harness/review.mjs` when convenient.
+
+**Faithful pass needs these assets (still NOT in the repo — see §3):**
+- `bot-pixel.svg` → app logo (re-add to `AppShell.tsx`), plus regenerate `electron/build/icon.{ico,icns,png}`, `frontend/public/{favicon.ico,logo.png,apple-touch-icon.png}`, and the splash icon (`electron/splash/icon.png`) so the window/taskbar/installer stop showing the orange octopus.
+- **Self-hosted Inter + IBM Plex Mono woff2** (bundle under `frontend/public/fonts` + `@font-face`) so fonts work offline instead of via Google Fonts.
+- **Gold `#F5CC00` placements**: active/selection states, focus rings, badges (dark text on gold), brand mark — wire the `brand.gold` token into those specific spots.
+- Remaining "OpenSwarm" strings: the model-provider group labels (`Main.tsx` DEFAULT_MODEL_PRIORITY) and any onboarding copy are DOM/BRD-copy cleanup, not visual-token work.
