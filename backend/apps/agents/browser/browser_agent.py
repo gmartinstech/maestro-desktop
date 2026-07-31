@@ -43,6 +43,7 @@ from backend.apps.agents.browser.browser_loop import (
     stagnation_exhausted,
 )
 from backend.apps.agents.browser.browser_validator import adjudicate_stuck
+from backend.apps.agents.browser.humanize_element_rows import humanize_element_rows
 
 # Single actions the model could have folded into one BrowserBatch turn; reads, waits, and the batch tools themselves don't count toward the streak.
 P_BATCHABLE_ACTION_TOOLS = {
@@ -2375,8 +2376,13 @@ async def run_browser_agents(
 
     final = []
     for r in results:
-        if isinstance(r, Exception):
+        # gather(return_exceptions=True) hands back a cancelled child as a bare BaseException too, and that is not a result dict either.
+        if not isinstance(r, dict):
             final.append({"summary": f"Error: {str(r)}", "action_log": [], "final_screenshot": None})
-        else:
-            final.append(r)
+            continue
+        # Last stop before the sub-agent's own words reach a parent agent or, on the fast path, the user verbatim.
+        for p_key in ("summary", "error"):
+            if isinstance(r.get(p_key), str):
+                r[p_key] = humanize_element_rows(r[p_key])
+        final.append(r)
     return final
