@@ -155,12 +155,27 @@ async function handleScreenshot(wv: BrowserWebview, params?: Record<string, any>
   return captureRetry(wv);
 }
 
+// Longest one capturePage attempt may take. Four attempts plus backoff must finish inside the
+// backend's 15s command budget, or the honest error never gets a chance to be sent.
+const CAPTURE_ATTEMPT_MS = 2200;
+// Two, not four: on a wedged page every attempt burns the full leash and none of them ever
+// succeed, so the extra pair only delayed the CDP fallback that does work. Still covers the
+// transient this retry loop exists for, a cold turn-0 capture racing the first paint.
+const CAPTURE_ATTEMPTS = 2;
+
 async function captureRetry(wv: BrowserWebview): Promise<Record<string, any>> {
   // capturePage throws UnknownVizError if the webview hasn't composited a frame yet (the Viz compositor races the first paint, reliably bit turn-0 captures). Retry a few times with a short backoff so a cold first screenshot succeeds instead of burning a whole agent turn on a transient error.
   let lastErr: any;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < CAPTURE_ATTEMPTS; attempt++) {
     try {
-      const nativeImage = await wv.capturePage();
+      // capturePage was the ONE unbounded await left on this path, and on a heavy page it does not
+      // throw, it HANGS: the main process logs "GUEST_VIEW_MANAGER_CALL: UnknownVizError" while the
+      // renderer promise never settles, so handleScreenshot never returns, no result is ever sent,
+      // and the backend kills the command at 15s having learned nothing. Measured on reddit: every
+      // screenshot ERR (one at 244s) while the identical code on a trivial local page is ~170ms.
+      // A per-attempt leash turns a silent wedge into a retry and then an honest error, and costs a
+      // healthy capture nothing.
+      const nativeImage = await _cdpTimeout(wv.capturePage(), CAPTURE_ATTEMPT_MS);
       if (!nativeImage.isEmpty()) {
         // Stable PNG capture. The resize()+toJPEG() variant was reverted: it's the prime suspect for the renderer "V8 Empty MaybeLocal" crash, NativeImage's JPEG codec returns an empty image on some retina captures, which is the shape of that native fault. A stable app beats a faster screenshot.
         const dataUrl = nativeImage.toDataURL();
