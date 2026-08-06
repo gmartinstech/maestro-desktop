@@ -5,6 +5,8 @@ from uuid import uuid4
 
 class AgentConfig(BaseModel):
     name: str = ""
+    # First-turn prompt. Launch used to silently DROP this (pydantic ignores unknown fields), leaving the session claiming "running" forever with zero messages and no error, the ENG-131 ghost hang.
+    prompt: Optional[str] = None
     model: str = "sonnet"
     mode: str = "agent"
     provider: str = "anthropic"

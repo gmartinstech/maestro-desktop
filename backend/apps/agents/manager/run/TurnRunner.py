@@ -122,10 +122,13 @@ class TurnRunner(AgentManagerProtocol):
 
             async def p_connect():
                 p_client = ClaudeSDKClient(options=options)
+                logger.info(f"[SPAWN-PHASE] cli-connect start session={session_id[:8]}")
                 await p_client.connect()
+                logger.info(f"[SPAWN-PHASE] cli-connect done session={session_id[:8]}")
                 return p_client
 
             fp = boot_fingerprint(options_kwargs, session)
+            logger.info(f"[SPAWN-PHASE] client-acquire start session={session_id[:8]}")
             handle = await acquire_client(
                 self.client_pool, session_id, fp, p_connect, force_respawn=force_respawn,
             )
