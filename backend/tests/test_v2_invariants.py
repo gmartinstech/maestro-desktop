@@ -431,6 +431,7 @@ async def test_resolve_aux_model_gemini_api_key_returns_preview_suffix():
             f"Gemini API-key aux must use the -preview suffix; got {model_id}"
 
 
+@pytest.mark.skip(reason="OpenSwarm Pro proxy removed in DET detach; proxy_auth now returns (None, None). Rewrite if proxy-style routing returns (PRV).")
 @pytest.mark.asyncio
 async def test_resolve_aux_model_anthropic_pro_returns_proxy():
     """OpenSwarm Pro mode → bare haiku via proxy."""
@@ -1140,6 +1141,7 @@ async def test_gate_handles_missing_refresh_token_gracefully():
 # =========================================================================== Group P, resolve_aux_model failover logic ===========================================================================
 
 
+@pytest.mark.skip(reason="OpenSwarm Pro proxy removed in DET detach; proxy_auth now returns (None, None). Rewrite if proxy-style routing returns (PRV).")
 @pytest.mark.asyncio
 async def test_aux_failover_anthropic_to_codex():
     """primary_api=codex but codex unreachable → falls through to anthropic-first cascade."""

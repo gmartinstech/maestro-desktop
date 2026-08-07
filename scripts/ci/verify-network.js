@@ -84,7 +84,7 @@ async function main() {
 
     // 4. external (best-effort unless --strict)
     const proxy = await httpsReachable('https://api.openswarm.com/');
-    const feed = await httpsReachable('https://github.com/openswarm-ai/openswarm/releases/latest');
+    const feed = await httpsReachable('https://github.com/gmartinstech/maestro-desktop/releases/latest');
     const noteExternal = (name, code) => {
       const reachable = code > 0;
       process.stdout.write(`  ${name}: ${reachable ? `reachable (HTTP ${code})` : 'unreachable'}\n`);

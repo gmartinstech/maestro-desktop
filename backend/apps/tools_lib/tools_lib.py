@@ -629,6 +629,11 @@ async def oauth_start(tool_id: str):
         "tool_id": tool_id,
         "local_port": p_port,
     }
+    if not OPENSWARM_OAUTH_BASE_URL:
+        raise HTTPException(
+            status_code=503,
+            detail="Cloud-brokered OAuth connectors are disabled in this build.",
+        )
     auth_url = (
         f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/{proxied}/start?"
         f"{urlencode(params)}"
@@ -714,7 +719,7 @@ async def google_oauth_token_proxy(request: Request):
     that minted the refresh_token, so a direct refresh against Google
     returns unauthorized_client. We accept the form-encoded shape,
     discard the (mismatched) local client creds, and forward the
-    refresh_token to api.openswarm.com/api/oauth/google/refresh which
+    refresh_token to the OAuth broker's /api/oauth/google/refresh which
     walks the pool to find the issuing slot. The cloud's JSON envelope
     is reshaped back to Google's native token-endpoint response so
     google-auth keeps working transparently.

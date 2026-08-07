@@ -1,7 +1,7 @@
 """Bounded SQLite spool for offline operational submissions.
 
 When the desktop is offline (laptop closed, no internet, cloud unreachable),
-the service-sync layer can't reach `api.openswarm.com`. Rather than drop
+the service-sync layer can't reach the configured telemetry endpoint. Rather than drop
 data on the floor, we spool submissions to a small SQLite file and replay
 them on the next online tick. The spool is bounded; when full, the oldest
 entries are dropped; so it can never balloon to a problem.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Re-vendor openswarm-ai/webapp-template into backend/apps/outputs/webapp_template/.
+# Re-vendor gmartinstech/webapp-template into backend/apps/outputs/webapp_template/.
 #
 # Idempotent — wipes the existing vendored dir and re-clones at the pinned ref.
 # Strips files we don't want shipped (LICENSE, README.md, .gitignore — we
@@ -14,10 +14,18 @@
 
 set -euo pipefail
 
-REPO="openswarm-ai/webapp-template"
+REPO="gmartinstech/webapp-template"
 REF="main"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="$ROOT/backend/apps/outputs/webapp_template"
+
+# Detached fork: the committed snapshot under $DEST is the source of truth, so the
+# App-Builder feature has no clone dependency. Only re-vendor when explicitly forced.
+if [ -d "$DEST" ] && [ "${1:-}" != "--force" ]; then
+  echo "[fetch-webapp-template] snapshot present at $DEST; skipping clone (pass --force to re-vendor)"
+  exit 0
+fi
+
 TMP="$(mktemp -d)"
 
 cleanup() { rm -rf "$TMP"; }

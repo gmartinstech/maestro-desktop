@@ -87,8 +87,6 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://api.openswarm.com",
-        "https://openswarm.com",
     ],
     allow_origin_regex=r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+)$",
     allow_credentials=True,
@@ -141,7 +139,7 @@ async def p_auth_middleware(request: Request, call_next):
             # This middleware sits OUTSIDE CORSMiddleware, so an early 401 skips its headers and a cross-origin caller (e.g. the vite dev server) sees an opaque "CORS blocked" instead of an honest 401. Echo the origin ONLY when it matches the CORS allow-list (same regex), so the 401 is legible without re-opening CORS to arbitrary origins.
             import re as p_re
             p_origin = headers.get("origin")
-            p_allowed = bool(p_origin) and bool(p_re.match(r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+|https://(api\.)?openswarm\.com)$", p_origin))
+            p_allowed = bool(p_origin) and bool(p_re.match(r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+)$", p_origin))
             p_cors = {"Access-Control-Allow-Origin": p_origin, "Access-Control-Allow-Credentials": "true"} if p_allowed else {}
             return JSONResponse(
                 {"error": "unauthorized", "detail": "missing or invalid token"},

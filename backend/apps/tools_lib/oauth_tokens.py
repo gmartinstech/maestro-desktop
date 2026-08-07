@@ -89,6 +89,8 @@ async def p_refresh_via_proxy(provider: str, tool: ToolDefinition, default_expir
     refresh_token = tool.oauth_tokens.get("refresh_token")
     if not refresh_token:
         return None
+    if not OPENSWARM_OAUTH_BASE_URL:
+        return None
     expiry = tool.oauth_tokens.get("token_expiry", 0)
     if time.time() < expiry - 60:
         return tool.oauth_tokens.get("access_token")

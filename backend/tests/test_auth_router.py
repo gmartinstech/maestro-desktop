@@ -83,10 +83,10 @@ def test_signin_activate_persists_user_id(client, reset_settings):
     assert s.signin_method == "google"
 
 
-def test_signin_activate_paid_user_flips_pro_mode(client, reset_settings):
-    """A signed-in user who already has a Stripe subscription should also
-    flip into openswarm-pro routing, covers the Google-then-Stripe and
-    Stripe-then-Google merge cases."""
+def test_signin_activate_paid_user_records_identity_stays_own_key(client, reset_settings):
+    """A paid sign-in still records identity/subscription metadata, but the
+    detached fork has no cloud-proxy lane: store.migrate_legacy_fields
+    normalizes the (now-dead) openswarm-pro mode to own_key on load."""
     fake_response = AsyncMock()
     fake_response.status_code = 200
     fake_response.json = lambda: {
@@ -111,7 +111,8 @@ def test_signin_activate_paid_user_flips_pro_mode(client, reset_settings):
     from backend.apps.settings.settings import load_settings
     s = load_settings()
     assert s.user_id == "u-paid"
-    assert s.connection_mode == "openswarm-pro"
+    # Detached fork: the dead openswarm-pro mode is normalized to own_key on load.
+    assert s.connection_mode == "own_key"
     assert s.openswarm_subscription_plan == "pro"
     assert s.openswarm_subscription_expires == "2027-01-01T00:00:00.000Z"
 

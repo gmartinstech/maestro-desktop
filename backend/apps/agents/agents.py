@@ -554,12 +554,6 @@ async def probe_model(body: dict):
             client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
         elif route == "api" and api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        elif api_type == "anthropic" and connection_mode == "openswarm-pro":
-            bearer = getattr(settings, "openswarm_bearer_token", "") or ""
-            proxy_url = (getattr(settings, "openswarm_proxy_url", None) or "https://api.openswarm.com").rstrip("/")
-            if not bearer:
-                return {"ok": True, "skipped": True}
-            client = anthropic.AsyncAnthropic(auth_token=bearer, base_url=proxy_url)
         elif api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         else:
@@ -658,10 +652,6 @@ async def list_models():
         return out
 
     has_api_key = bool(getattr(settings, "anthropic_api_key", None))
-    is_openswarm_pro = (
-        getattr(settings, "connection_mode", "own_key") == "openswarm-pro"
-        and bool(getattr(settings, "openswarm_bearer_token", None))
-    )
     has_claude_sub = "claude" in connected
 
     result: dict[str, list[dict]] = {}
@@ -671,18 +661,9 @@ async def list_models():
     cc_variants = [m for m in anthropic_models if m.get("route") == "cc"]
     api_variants = [m for m in anthropic_models if m.get("route") == "api"]
 
-    # Pro mode splits into Pro proxy + Anthropic alternates; own-key collapses to one adaptive group.
+    # Own-key routing now the only mode; no Pro proxy split.
     notes: list[dict] = []
-    if is_openswarm_pro:
-        result["OpenSwarm Pro"] = p_serialize(adaptive)
-        anth_alternates: list[dict] = []
-        if has_claude_sub:
-            anth_alternates += cc_variants
-        if has_api_key:
-            anth_alternates += api_variants
-        if anth_alternates:
-            result["Anthropic"] = p_serialize(anth_alternates)
-    elif has_api_key or has_claude_sub:
+    if has_api_key or has_claude_sub:
         rows = p_serialize(adaptive)
         # When an Anthropic key is set, these adaptive rows run on it: own-key routing prefers the user's key over any sub (agent_manager + anthropic_proxy._pick_upstream), so it holds even with a Claude sub connected. Label + bucket as API key (not 9router-state dependent).
         if has_api_key:

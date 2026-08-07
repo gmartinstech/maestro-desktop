@@ -24,8 +24,10 @@ SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 
 def migrate_legacy_fields(raw: dict) -> dict:
     """Translate deprecated pre-launch field names ('managed', 'openswarm_auth_token') into production schema."""
-    if raw.get("connection_mode") == "managed":
-        raw["connection_mode"] = "openswarm-pro"
+    # Detached fork: the cloud-proxy modes are gone, so any persisted proxy mode
+    # (incl. the legacy "managed" alias) normalizes to own_key.
+    if raw.get("connection_mode") in ("managed", "openswarm-pro", "free-trial"):
+        raw["connection_mode"] = "own_key"
     if "openswarm_auth_token" in raw and "openswarm_bearer_token" not in raw:
         raw["openswarm_bearer_token"] = raw.pop("openswarm_auth_token")
     return raw

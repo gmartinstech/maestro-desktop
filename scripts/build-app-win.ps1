@@ -26,7 +26,7 @@ $ErrorActionPreference = 'Stop'
 if ($Publish) { $Sign = $true }
 # Override only the win target; everything else (signing hook, extraResources,
 # publish config) merges from electron/package.json's build block unchanged.
-$TargetOverride = if ($Squirrel) { @('--config.win.target=squirrel', '--config.squirrelWindows.iconUrl=https://raw.githubusercontent.com/openswarm-ai/openswarm/main/electron/build/icon.ico') } else { @() }
+$TargetOverride = if ($Squirrel) { @('--config.win.target=squirrel', '--config.squirrelWindows.iconUrl=https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico') } else { @() }
 
 $ScriptDir   = Split-Path -Parent $PSCommandPath
 $ProjectRoot = Split-Path -Parent $ScriptDir
@@ -514,7 +514,7 @@ try {
         try {
             $pkgJson = Get-Content -Raw (Join-Path $ProjectRoot 'electron\package.json') | ConvertFrom-Json
             $version = $pkgJson.version
-            $macYmlUrl = "https://github.com/openswarm-ai/openswarm/releases/download/v$version/latest-mac.yml"
+            $macYmlUrl = "https://github.com/gmartinstech/maestro-desktop/releases/download/v$version/latest-mac.yml"
             $null = Invoke-WebRequest -Uri $macYmlUrl -Method Head -UseBasicParsing -ErrorAction Stop -TimeoutSec 10
             Write-Host "  > Mac release v$version detected on GitHub (latest-mac.yml present). OK to proceed."
         } catch {
@@ -560,7 +560,7 @@ if ($Publish) {
     }
     $AliasExe = Join-Path $DistDir 'OpenSwarm-Setup-x64.exe'
     Copy-Item -Force $SetupExe.FullName $AliasExe
-    & gh release upload "v$version" $AliasExe --repo openswarm-ai/openswarm --clobber
+    & gh release upload "v$version" $AliasExe --repo gmartinstech/maestro-desktop --clobber
     if ($LASTEXITCODE -ne 0) { throw "gh release upload of OpenSwarm-Setup-x64.exe failed" }
     Write-Host "Uploaded OpenSwarm-Setup-x64.exe to release v$version."
 }

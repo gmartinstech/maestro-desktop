@@ -10,8 +10,8 @@ const host = window.location.hostname || 'localhost';
 
 export const API_BASE = `http://${host}:${port}/api`;
 export const WS_BASE = `ws://${host}:${port}`;
-// Must match openswarm-cloud's PUBLIC_BASE_URL (fly.toml) and the Google OAuth redirect URI.
-export const OPENSWARM_DEFAULT_PROXY_URL = 'https://api.openswarm.com';
+// Detached fork: no cloud proxy default. Model traffic goes through provedor-ia server-side.
+export const OPENSWARM_DEFAULT_PROXY_URL = '';
 
 // Per-install token from Electron preload; cached after first resolve. Call refreshAuthToken() on 4401.
 let _authTokenCache: string = '';

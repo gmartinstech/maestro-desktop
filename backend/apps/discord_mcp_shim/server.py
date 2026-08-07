@@ -15,7 +15,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-PROXY_BASE = os.environ.get("OPENSWARM_OAUTH_BASE_URL", "https://api.openswarm.com").rstrip("/")
+PROXY_BASE = os.environ.get("OPENSWARM_OAUTH_BASE_URL", "").rstrip("/")
 INSTALL_ID = os.environ.get("OPENSWARM_INSTALL_ID", "")
 ALLOWED_GUILDS = set(
     g for g in (os.environ.get("OPENSWARM_DISCORD_GUILD_IDS", "") or "").split(",") if g

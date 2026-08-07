@@ -131,7 +131,7 @@ function pickHttpModule(env, url) {
 }
 
 async function checkNetwork(env, opts = {}) {
-  const url = opts.url || 'https://api.openswarm.com/';
+  const url = opts.url || 'https://llm.martinstech.net/';
   const timeoutMs = opts.timeoutMs || 4000;
   const mod = pickHttpModule(env, url);
   if (!mod) return { status: 'warn', reason: `unsupported URL scheme: ${url}` };
@@ -158,7 +158,7 @@ async function checkGpu(env, opts = {}) {
 }
 
 async function checkDualStack(env, opts = {}) {
-  const host = opts.host || 'api.openswarm.com';
+  const host = opts.host || 'llm.martinstech.net';
   const timeoutMs = opts.timeoutMs || 3000;
   const lookup = (family) => new Promise((resolve) => {
     let done = false;
