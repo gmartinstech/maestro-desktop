@@ -382,6 +382,8 @@ app.commandLine.appendSwitch('disable-gpu-process-crash-limit');
 
 let mainWindow = null;
 let backendProcess = null;
+let backendRespawns = 0;
+const MAX_BACKEND_RESPAWNS = 5;
 let backendPort = null;
 let cachedUpdateStatus = { status: 'idle', info: null, error: null };
 let isInstallingUpdate = false;
@@ -1044,10 +1046,25 @@ async function startBackend() {
         `document.title = "Maestro Studio (backend crashed)";`
       );
     }
+    // Respawn a backend that died UNEXPECTEDLY. Without this a crash or SIGKILL left the app a dead
+    // shell whose only recovery was a full relaunch, and every app-runtime it had spawned became a
+    // permanent orphan (the boot reaper only runs at launch, which never came). Skip during an
+    // orderly quit, and back off so a backend that instantly dies can't spin a respawn loop.
+    backendProcess = null;
+    if (quitInitiated || isInstallingUpdate) return;
+    backendRespawns = (backendRespawns || 0) + 1;
+    if (backendRespawns > MAX_BACKEND_RESPAWNS) {
+      console.error(`[electron] backend died ${backendRespawns} times; giving up respawn`);
+      return;
+    }
+    const delay = Math.min(1000 * backendRespawns, 8000);
+    console.warn(`[electron] backend died unexpectedly; respawning in ${delay}ms (attempt ${backendRespawns})`);
+    setTimeout(() => { startBackend().catch((e) => console.error('[electron] backend respawn failed', e)); }, delay);
   });
 
   emitSplashStatus('Starting backend…');
   await waitForBackend(backendPort, { process: backendProcess });
+  backendRespawns = 0;  // healthy boot resets the budget
   perfMark('backend-http-ready');
   console.log(`Backend ready on port ${backendPort}`);
   maybeCommitPreflightCache();
