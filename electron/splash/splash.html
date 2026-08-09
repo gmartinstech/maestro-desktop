@@ -44,13 +44,13 @@
     width: 84px; height: 84px;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    filter: drop-shadow(0 0 18px rgba(160, 100, 240, 0.55));
+    filter: drop-shadow(0 0 18px rgba(245, 204, 0, 0.45));
     opacity: 0;
     animation: fadeIn 700ms ease forwards 60ms;
   }
   /* `visibility: hidden` (not display:none) so the layout slot is preserved
      — the shader queries .logo.getBoundingClientRect() to know where to
-     render the dithered octopus, and we want that slot to keep flexbox
+     render the dithered robot, and we want that slot to keep flexbox
      centering the brand text + status text below it. */
   .logo.shader-active { visibility: hidden; }
   .name {
@@ -164,13 +164,13 @@
 
     // Port of the reactbits Dither shader (https://reactbits.dev/backgrounds/dither)
     // — same Perlin noise + fbm + 8×8 Bayer + N-color quantization. Difference
-    // from upstream: we render the wave AND the octopus icon overlay in a
+    // from upstream: we render the wave AND the robot icon overlay in a
     // single fragment program (one draw call), and the per-pixel "downsample
     // to fat pixels then dither" trick is folded into the same pass instead of
     // being a postprocessing EffectComposer chain. Costs the same per pixel
     // as upstream, no postprocess RTT.
     //
-    // Octopus overlay: pixel-art icon sampled at NEAREST (so the dither
+    // Robot overlay: brand icon sampled at NEAREST (so the dither
     // doesn't smear the source pixels into a blur first). Its body color
     // gets quantized through the same dither so it visually belongs in
     // the same stippled world as the background.
@@ -267,11 +267,11 @@
       '  float f = pattern(uv);',
       '  vec3 col = mix(vec3(0.0), u_wave_color, f);',
       '',
-      // ----- Foreground: octopus icon, integrated into the dithered world -----
-      // Goal: the octopus shouldn't look "stuck on top of" the background. It
+      // ----- Foreground: robot icon, integrated into the dithered world -----
+      // Goal: the robot shouldn't look "stuck on top of" the background. It
       // should feel like part of the same dithered terrain — same color
       // grammar, same quantization. We achieve that by:
-      //   (a) Letting some of the bg pattern bleed INTO the octopus body
+      //   (a) Letting some of the bg pattern bleed INTO the robot body
       //       (multiply icon brightness by a subtle pattern factor).
       //   (b) Surrounding the icon with a soft glow that's also dithered
       //       (the glow shares the same palette as the icon body).
@@ -286,14 +286,14 @@
       '  float iconDist = length(iconLocal);',
       // Soft glow ring around the icon — bleeds the icon color into bg waves
       '  float glow = exp(-iconDist * iconDist * 1.8);',
-      '  vec3 glowColor = vec3(1.00, 0.45, 0.32);',  // coral matches octopus body
+      '  vec3 glowColor = vec3(0.96, 0.80, 0.00);',  // brand gold matches the robot's antenna + ears
       '  col = mix(col, glowColor, glow * 0.18);',
       '  if (iconRel.x >= 0.0 && iconRel.x <= 1.0 && iconRel.y >= 0.0 && iconRel.y <= 1.0) {',
       '    vec4 iconTex = texture2D(u_icon, iconRel);',
       '    if (iconTex.a > 0.05) {',
       '      float lum = dot(iconTex.rgb, vec3(0.30, 0.59, 0.11));',
       '      vec3 iconCol = iconTex.rgb;',
-      // Boost coral saturation slightly so the dither doesn\'t mute it.
+      // Boost icon saturation slightly so the dither doesn\'t mute it.
       '      iconCol = mix(vec3(lum), iconCol, 1.15);',
       // Bleed bg pattern into icon body (only on bright pixels, not eyes):
       // multiply the body color by a subtle pattern factor so it shimmers
@@ -344,7 +344,7 @@
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-    // ------ Octopus icon texture (only texture we use; bayer lives inline in shader) ------
+    // ------ Robot icon texture (only texture we use; bayer lives inline in shader) ------
     const iconTex = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, iconTex);
@@ -388,11 +388,10 @@
     const uColorNum   = gl.getUniformLocation(prog, 'u_color_num');
     const uPixelSize  = gl.getUniformLocation(prog, 'u_pixel_size');
     gl.uniform1i(uIcon, 0);
-    // Warm magenta-leaning purple — the orange tilt resonates with the
-    // octopus's coral body, so the icon and bg feel like the same world.
-    // Pure purple (0.52, 0.29, 0.88) was too cool and the octopus looked
-    // pasted on; pure orange would clash with brand. This sits between.
-    gl.uniform3f(uWaveColor, 0.78, 0.32, 0.62);
+    // Azure keyed to the robot's face plate, so icon and bg read as one world.
+    // Brand navy #003566 itself is too dark here: the wave mixes up from black,
+    // so a navy wave crushes to near-invisible. This is navy lifted into range.
+    gl.uniform3f(uWaveColor, 0.16, 0.45, 0.78);
     gl.uniform1f(uWaveSpeed, 0.05);
     gl.uniform1f(uWaveFreq,  3.0);
     gl.uniform1f(uWaveAmp,   0.3);
@@ -402,7 +401,7 @@
     renderFrame = function (tSec) {
       resizeCanvas();
       const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      // Octopus geometry: read the live .logo element's bounding rect so
+      // Robot geometry: read the live .logo element's bounding rect so
       // the shader draws the dithered icon EXACTLY where the (now-hidden)
       // <img> would have appeared. This stays correct if CSS sizing
       // changes or window is resized — no constants to drift.
