@@ -1050,7 +1050,7 @@ async function startBackend() {
     console.log(`Backend exited with code ${code}`);
     if (code !== 0 && code !== null && mainWindow) {
       mainWindow.webContents.executeJavaScript(
-        `document.title = "OpenSwarm (backend crashed)";`
+        `document.title = "Maestro Studio (backend crashed)";`
       );
     }
   });
@@ -1490,8 +1490,8 @@ async function showCrashRecoveryOverlay() {
   try {
     const result = await dialog.showMessageBox({
       type: 'error',
-      title: 'OpenSwarm needs to reload',
-      message: 'OpenSwarm had repeated UI errors and stopped auto-recovering.',
+      title: 'Maestro Studio needs to reload',
+      message: 'Maestro Studio had repeated UI errors and stopped auto-recovering.',
       detail: 'Reload to try again, or quit if this keeps happening.',
       buttons: ['Reload', 'Quit'],
       defaultId: 0,
@@ -2468,7 +2468,7 @@ app.on('web-contents-created', (_event, contents) => {
             };
             var rejected = function() {
               return Promise.reject(new DOMException(
-                'OpenSwarm does not support passkeys. Please use another sign-in method.',
+                'Maestro Studio does not support passkeys. Please use another sign-in method.',
                 'NotAllowedError'
               ));
             };
