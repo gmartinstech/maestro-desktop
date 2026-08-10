@@ -6,13 +6,13 @@
 //   npx electron splash/preview.js
 //
 // Cycle (~26s total, then idles on the error state with action buttons):
-//   0s   "Starting OpenSwarm…"
+//   0s   "Starting Maestro Studio…"
 //   3s   "Connecting to dev backend…"
 //   6s   "Loading components…"
 //   9s   "Almost ready…"
 //  12s   "Still starting (warning, no actions)"
 //  18s   "Backend taking too long" (with View Logs / Restart / Quit buttons)
-//  24s   error state: "OpenSwarm couldn't start" + last lines of stderr
+//  24s   error state: "Maestro Studio couldn't start" + last lines of stderr
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const fs = require('fs');
@@ -54,7 +54,7 @@ app.whenReady().then(() => {
     show: true,
     center: true,
     backgroundColor: '#0a0a10',
-    title: 'OpenSwarm splash preview',
+    title: 'Maestro Studio splash preview',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -67,7 +67,7 @@ app.whenReady().then(() => {
 
   // Cycle through every state with delays so you can see each one.
   splashWindow.webContents.once('did-finish-load', () => {
-    setTimeout(() => emit('Starting OpenSwarm…'),                          0);
+    setTimeout(() => emit('Starting Maestro Studio…'),                          0);
     setTimeout(() => emit('Connecting to dev backend…'),                3000);
     setTimeout(() => emit('Loading components…'),                       6000);
     setTimeout(() => emit('Almost ready…'),                             9000);
@@ -91,7 +91,7 @@ app.whenReady().then(() => {
       logs: '[backend] uvicorn warming up...\n[backend] importing claude_agent_sdk...\n[backend] (still working)',
     }),                                                                18000);
     setTimeout(() => emit({
-      text: "OpenSwarm couldn't start: Backend process exited with code 1 during startup",
+      text: "Maestro Studio couldn't start: Backend process exited with code 1 during startup",
       level: 'error',
       showActions: true,
       logs: '[backend] Traceback (most recent call last):\n[backend]   File "backend/main.py", line 48\n[backend] ImportError: simulated failure for splash preview',

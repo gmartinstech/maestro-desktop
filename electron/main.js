@@ -588,7 +588,7 @@ function createSplashWindow() {
     show: true,
     center: true,
     backgroundColor: '#0a0a10',  // opaque to dodge Windows DWM transparency quirks
-    title: 'OpenSwarm',
+    title: 'Maestro Studio',
     icon: iconPath,
     webPreferences: {
       // Splash content is fully self-contained (data URL, no remote
@@ -1915,7 +1915,7 @@ app.whenReady().then(async () => {
   // of double-clicking. Without this, on a cold-Defender Windows install
   // the dock/taskbar icon flashes for 30-60s with nothing visible.
   splashWindow = createSplashWindow();
-  emitSplashStatus('Starting OpenSwarm…');
+  emitSplashStatus('Starting Maestro Studio…');
 
   // Widevine CDM and backend startup are independent — run them
   // concurrently. Backend is the long pole on Windows (Defender + Python
@@ -2042,7 +2042,7 @@ app.whenReady().then(async () => {
     // The user picks: view logs, restart, or quit. This eliminates the
     // class of "I clicked OpenSwarm and nothing happened" reports.
     emitSplashStatus({
-      text: "OpenSwarm couldn't start: " + (err && err.message ? err.message : String(err)),
+      text: "Maestro Studio couldn't start: " + (err && err.message ? err.message : String(err)),
       level: 'error',
       showActions: true,
       logs: recentBackendStderr.slice(-30).join(''),
