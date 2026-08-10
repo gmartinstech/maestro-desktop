@@ -99,7 +99,6 @@
       "backend/tests/test_swarm_bundle.py",
       "backend/tests/test_v2_invariants.py",
       "backend/tests/test_v2_label_logic.py",
-      "electron/affiliateTracking.test.js",
       "electron/main.js",
       "frontend/src/app/Main.tsx",
       "frontend/src/app/components/editor/CommandPicker.tsx",

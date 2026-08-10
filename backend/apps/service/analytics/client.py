@@ -47,27 +47,14 @@ def p_mode() -> str:
 
 @typechecked
 def get_analytics_client() -> Optional[AnalyticsClient]:
-    # Lazy bootstrap + cache; returns None (callers no-op) when setup fails, e.g. offline first run.
-    global P_CLIENT
-    if P_CLIENT is not None:
-        return P_CLIENT
-    try:
-        from backend.apps.settings.store import load_settings, save_settings
-        s = load_settings()
-        install_id = getattr(s, "installation_id", None)
-        if not install_id:
-            return None
-        base_url = p_base_url()
-        token = getattr(s, "analytics_token", None)
-        if not token:
-            token = AnalyticsClient.register(base_url=base_url, install_id=install_id)
-            s.analytics_token = token
-            save_settings(s)
-        P_CLIENT = AnalyticsClient(base_url=base_url, token=token, mode=p_mode())
-    except Exception as e:
-        logger.debug("analytics setup failed (non-critical): %s", e)
-        return None
-    return P_CLIENT
+    """Always None: product telemetry is removed in this fork.
+
+    Returning None is this module's existing no-op contract, so every track_*
+    call site short-circuits without needing an edit. Killing it here rather
+    than at ~12 call sites means a newly added track_* call cannot silently
+    reintroduce a network sink. Do not restore without an explicit opt-in.
+    """
+    return None
 
 
 @typechecked
