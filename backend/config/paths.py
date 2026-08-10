@@ -1,4 +1,8 @@
-"""Path definitions: dev under backend/data/, packaged under platform app-support."""
+"""Path definitions: dev under backend/data/, packaged under platform app-support.
+
+The app-support folder name MUST match electron-builder's productName: main.js reads
+this same settings.json through app.getPath('userData'), which derives from it.
+"""
 
 import os
 import sys
@@ -9,11 +13,11 @@ p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
 
 if p_is_packaged:
     if sys.platform == "darwin":
-        p_app_support = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "OpenSwarm")
+        p_app_support = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Maestro Studio")
     elif sys.platform == "win32":
-        p_app_support = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "OpenSwarm")
+        p_app_support = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Maestro Studio")
     else:
-        p_app_support = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")), "OpenSwarm")
+        p_app_support = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")), "Maestro Studio")
     DATA_ROOT = os.path.join(p_app_support, "data")
 else:
     DATA_ROOT = os.path.join(P_BACKEND_DIR, "data")

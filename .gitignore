@@ -80,3 +80,8 @@ Thumbs.db
 ehthumbs.db
 desktop.ini
 frontend/tsconfig.tsbuildinfo
+
+# Local dev code-signing certificate (self-signed, never committed)
+*.pfx
+electron/build/dev-signing.pfx
+.env.windows

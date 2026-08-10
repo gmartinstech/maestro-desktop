@@ -10,6 +10,7 @@
 [CmdletBinding()]
 param(
     [switch]$Sign,
+    [switch]$DevSign,
     [switch]$Publish,
     # Fast CI gate path: build only the unpacked win-unpacked\ dir (no NSIS
     # installer, no LZMA compression of the ~1GB tree - the slowest packaging
@@ -49,12 +50,32 @@ if (Test-Path $EnvFile) {
 }
 
 Write-Host "========================================"
-Write-Host "  OpenSwarm Desktop App Builder (Windows)"
+Write-Host "  Maestro Studio Desktop App Builder (Windows)"
 if     ($Publish) { Write-Host "  Mode: PRODUCTION (sign + publish to GitHub Releases)" }
 elseif ($Sign)    { Write-Host "  Mode: SIGNED (sign, no publish)" }
+elseif ($DevSign) { Write-Host "  Mode: DEV-SIGNED (self-signed, internal installs only)" }
 else              { Write-Host "  Mode: LOCAL (unsigned)" }
 Write-Host "========================================"
 Write-Host ""
+
+# --- Dev-signing validation ---
+# Separate from -Sign on purpose: this path deliberately does NOT require the Azure
+# credentials, and must not set VMP_REQUIRE_SIGN (Widevine VMP signing needs castlabs
+# EVS credentials, and hard-failing on it would block every internal build).
+if ($DevSign) {
+    if ($Sign -or $Publish) { Write-Host "ERROR: -DevSign cannot be combined with -Sign or -Publish." -ForegroundColor Red; exit 1 }
+    if (-not $env:WINDOWS_DEV_PFX) {
+        Write-Host "ERROR: -DevSign needs WINDOWS_DEV_PFX (and usually WINDOWS_DEV_PFX_PASSWORD)." -ForegroundColor Red
+        Write-Host "Create one with: pwsh scripts/make-dev-signing-cert.ps1 -Password '<pw>' -Trust"
+        exit 1
+    }
+    if (-not (Test-Path $env:WINDOWS_DEV_PFX)) {
+        Write-Host "ERROR: WINDOWS_DEV_PFX not found at $env:WINDOWS_DEV_PFX" -ForegroundColor Red; exit 1
+    }
+    Write-Host "  Dev cert: $env:WINDOWS_DEV_PFX" -ForegroundColor Yellow
+    Write-Host "  NOTE: self-signed. Trusted only where the cert is in Trusted Root. Not for release." -ForegroundColor Yellow
+    Write-Host ""
+}
 
 # --- Required env validation ---
 if ($Sign) {

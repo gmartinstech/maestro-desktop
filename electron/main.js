@@ -83,7 +83,7 @@ function _squirrelUpdate(args) {
 // NSIS copy so the user isn't left with two installs + two shortcuts. Found via
 // the HKCU Uninstall entry whose UninstallString is the NSIS uninstaller (NOT
 // Squirrel's Update.exe). Deferred to quit so the NSIS uninstaller's taskkill of
-// OpenSwarm.exe can't kill this live session (same exe name). Best-effort +
+// Maestro Studio.exe can't kill this live session (same exe name). Best-effort +
 // detached: a failure just leaves the old install (never bricks); NSIS
 // deleteAppDataOnUninstall=false keeps the user's data across the swap.
 function _removeLegacyNsisInstall() {
@@ -92,7 +92,7 @@ function _removeLegacyNsisInstall() {
     "$ErrorActionPreference='SilentlyContinue';" +
     "$e = Get-ChildItem 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall' |" +
     " ForEach-Object { Get-ItemProperty $_.PSPath } |" +
-    " Where-Object { $_.DisplayName -like 'OpenSwarm*' -and $_.UninstallString -and ($_.UninstallString -notmatch 'Update\\.exe') } |" +
+    " Where-Object { $_.DisplayName -like 'Maestro Studio*' -and $_.UninstallString -and ($_.UninstallString -notmatch 'Update\\.exe') } |" +
     " Select-Object -First 1;" +
     "if ($e) { if ($e.QuietUninstallString) { $u = $e.QuietUninstallString } else { $u = $e.UninstallString + ' /S' };" +
     " Start-Process -FilePath cmd.exe -ArgumentList '/c', $u -WindowStyle Hidden }";

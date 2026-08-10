@@ -15,6 +15,15 @@
 //   SIGNTOOL_PATH                    Absolute path to signtool.exe (default: "signtool", relying on PATH)
 //   AZURE_TIMESTAMP_URL              Timestamp server (default: http://timestamp.acs.microsoft.com)
 //   CSC_IDENTITY_AUTO_DISCOVERY      Set to "false" to skip signing entirely (dev builds)
+//
+// DEV FALLBACK — self-signed, for internal installs only:
+//   WINDOWS_DEV_PFX                  Absolute path to a .pfx code-signing certificate
+//   WINDOWS_DEV_PFX_PASSWORD         Password for that .pfx
+//
+// Used ONLY when the Azure vars above are absent. A self-signed certificate does
+// NOT earn Authenticode trust: SmartScreen still warns unless the certificate has
+// been imported into Trusted Root on the target machine. Never ship a build signed
+// this way to end users. See docs/WINDOWS_INSTALLER.md.
 
 const fs = require('fs');
 const os = require('os');
@@ -49,8 +58,29 @@ exports.default = async function signWindows(configuration) {
     return;
   }
 
+  const signtoolPath = process.env.SIGNTOOL_PATH || 'signtool.exe';
   const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
   if (missing.length) {
+    // No Azure credentials. Fall back to a local self-signed cert if one was supplied,
+    // so an internal Windows install can still be produced; otherwise skip as before.
+    const pfx = process.env.WINDOWS_DEV_PFX;
+    if (pfx) {
+      if (!fs.existsSync(pfx)) {
+        throw new Error(`[sign-windows] WINDOWS_DEV_PFX set but not found at ${pfx}`);
+      }
+      const devArgs = [
+        'sign',
+        '/fd', 'SHA256',
+        '/f', pfx,
+        ...(process.env.WINDOWS_DEV_PFX_PASSWORD ? ['/p', process.env.WINDOWS_DEV_PFX_PASSWORD] : []),
+        targetPath,
+      ];
+      // Deliberately no /tr timestamp: a self-signed dev cert has no trusted chain to
+      // timestamp against, and signtool fails the whole build if the TSA rejects it.
+      console.log(`[sign-windows] DEV self-signed sign (NOT for release): ${targetPath}`);
+      execFileSync(signtoolPath, devArgs, { stdio: 'inherit' });
+      return;
+    }
     console.log(`[sign-windows] Skipping ${targetPath} — missing env: ${missing.join(', ')}`);
     return;
   }
@@ -72,7 +102,7 @@ exports.default = async function signWindows(configuration) {
   const metadataPath = path.join(os.tmpdir(), `ts-metadata-${process.pid}-${Date.now()}.json`);
   fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
 
-  const signtool = process.env.SIGNTOOL_PATH || 'signtool.exe';
+  const signtool = signtoolPath;
   const timestampUrl = process.env.AZURE_TIMESTAMP_URL || 'http://timestamp.acs.microsoft.com';
   const args = [
     'sign',

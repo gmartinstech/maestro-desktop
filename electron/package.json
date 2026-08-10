@@ -1,7 +1,7 @@
 {
-  "name": "openswarm",
+  "name": "maestro-studio",
   "version": "1.5.7",
-  "description": "OpenSwarm — AI Agent Orchestrator",
+  "description": "Maestro Studio — AI Agent Orchestrator",
   "author": "openswarm-ai",
   "main": "main.js",
   "scripts": {
@@ -29,8 +29,8 @@
     "electron-builder-squirrel-windows": "^26.8.1"
   },
   "build": {
-    "appId": "com.clusterlabs.openswarm",
-    "productName": "OpenSwarm",
+    "appId": "net.martinstech.maestro.studio",
+    "productName": "Maestro Studio",
     "afterPack": "./build/after-pack.js",
     "electronLanguages": [
       "en",
@@ -60,7 +60,7 @@
       "hardenedRuntime": true,
       "notarize": false,
       "extendInfo": {
-        "NSFaceIDUsageDescription": "OpenSwarm uses Touch ID to sign you in to websites with passkeys."
+        "NSFaceIDUsageDescription": "Maestro Studio uses Touch ID to sign you in to websites with passkeys."
       },
       "provisioningProfile": "build/embedded.provisionprofile",
       "entitlements": "build/entitlements.mac.plist",
@@ -83,8 +83,8 @@
       ]
     },
     "dmg": {
-      "artifactName": "OpenSwarm-${arch}.${ext}",
-      "title": "OpenSwarm ${version}",
+      "artifactName": "MaestroStudio-${arch}.${ext}",
+      "title": "Maestro Studio ${version}",
       "size": "5000000K",
       "contents": [
         {
@@ -118,7 +118,7 @@
           ]
         }
       ],
-      "artifactName": "OpenSwarm-Setup-${arch}.${ext}",
+      "artifactName": "MaestroStudio-Setup-${arch}.${ext}",
       "signtoolOptions": {
         "sign": "./build/sign-windows.js",
         "signingHashAlgorithms": [
@@ -127,7 +127,7 @@
       }
     },
     "squirrelWindows": {
-      "iconUrl": "https://raw.githubusercontent.com/openswarm-ai/openswarm/main/electron/build/icon.ico"
+      "iconUrl": "https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
@@ -135,9 +135,9 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "OpenSwarm",
+      "shortcutName": "Maestro Studio",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "OpenSwarm-Setup-${arch}.${ext}",
+      "artifactName": "MaestroStudio-Setup-${arch}.${ext}",
       "include": "build/installer-recovery.nsh"
     },
     "extraResources": [
@@ -190,8 +190,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "openswarm-ai",
-      "repo": "openswarm"
+      "owner": "gmartinstech",
+      "repo": "maestro-desktop"
     },
     "afterSign": "scripts/notarize.js"
   }
