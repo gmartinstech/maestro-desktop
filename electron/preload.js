@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('openswarm', {
 
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
+  // Unified title bar. The renderer branches on platform because macOS keeps its
+  // traffic lights (and its real menubar) while Windows/Linux fold both into our bar.
+  platform: process.platform,
+  popupAppMenu: (x, y) => ipcRenderer.invoke('app-menu:popup', x, y),
+  setTitleBarOverlay: (color, symbolColor) => ipcRenderer.send('titlebar:set-overlay', color, symbolColor),
+
   // Phase 2 provenance: { sha, shortSha, builtAt, channel } for the About panel.
   getBuildInfo: () => ipcRenderer.invoke('get-build-info'),
 

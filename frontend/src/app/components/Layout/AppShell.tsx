@@ -21,7 +21,7 @@ import { LayoutDashboard } from 'lucide-react';
 import { LayoutGrid } from 'lucide-react';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Settings as LucideSettings } from 'lucide-react';
-import { ArrowLeft, ArrowRight, Plus, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Clock, Menu as MenuIcon } from 'lucide-react';
 import { AnimatedPanelLeft } from './animatedIcons';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
@@ -48,6 +48,14 @@ import { findBrowserByWebContentsId } from '@/shared/browserRegistry';
 import { byPreviewRecency } from '@/shared/previewOrder';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
+
+// macOS insets its traffic lights into our bar, so the left gutter is reserved there and
+// nowhere else; Windows/Linux instead reserve a right gutter for the native button overlay.
+const IS_MAC = ((window as any).openswarm?.platform ?? 'darwin') === 'darwin';
+const TITLEBAR_HEIGHT = 38;
+const TRAFFIC_LIGHT_GUTTER = 78;
+// Win11's minimise/maximise/close overlay is ~138px; the trailing cluster must clear it.
+const WINDOW_CONTROLS_GUTTER = 138;
 
 const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 400;
@@ -391,6 +399,18 @@ const AppShell: React.FC = () => {
     return () => window.removeEventListener('openswarm:notification-click', handler as EventListener);
   }, [navigate, dispatch]);
 
+  // Anchor the native menu to the button's bottom-left so it drops like a normal menu.
+  const handleOpenAppMenu = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    try { (window as any).openswarm?.popupAppMenu(r.left, r.bottom); } catch {}
+  }, []);
+
+  // The OS paints the window-button strip, so it can't inherit our CSS; push the
+  // resolved chrome tokens whenever the theme flips or it strands on stale colors.
+  useEffect(() => {
+    try { (window as any).openswarm?.setTitleBarOverlay(c.bg.secondary, c.text.secondary); } catch {}
+  }, [c.bg.secondary, c.text.secondary]);
+
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isResizing.current = true;
@@ -482,7 +502,7 @@ const AppShell: React.FC = () => {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: c.bg.secondary }}>
       <Box
         sx={{
-          height: 38,
+          height: TITLEBAR_HEIGHT,
           flexShrink: 0,
           bgcolor: 'transparent',
           display: 'flex',
@@ -491,10 +511,28 @@ const AppShell: React.FC = () => {
           overflow: 'visible',
           WebkitAppRegion: 'drag',
           userSelect: 'none',
-          pl: '78px',
+          pl: IS_MAC ? `${TRAFFIC_LIGHT_GUTTER}px` : '8px',
           gap: 0.25,
         }}
       >
+        {!IS_MAC && (
+          <Tooltip title="Menu">
+            <IconButton
+              size="small"
+              onClick={handleOpenAppMenu}
+              aria-label="Application menu"
+              sx={{
+                WebkitAppRegion: 'no-drag',
+                color: c.text.tertiary,
+                p: 0.5,
+                borderRadius: 1,
+                '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
+              }}
+            >
+              <MenuIcon size={18} />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
           <IconButton
             size="small"
@@ -565,10 +603,17 @@ const AppShell: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 0.75,
-            pr: 1.5,
+            // Clear the native button overlay on Windows/Linux; macOS has nothing here.
+            pr: IS_MAC ? 1.5 : `${WINDOW_CONTROLS_GUTTER}px`,
             WebkitAppRegion: 'no-drag',
           }}
         >
+          <Box
+            component="img"
+            src="./maestro-mark.png"
+            alt=""
+            sx={{ width: 20, height: 20, flexShrink: 0, display: 'block' }}
+          />
           <Typography
             sx={{
               color: c.text.secondary,

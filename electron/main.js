@@ -1179,6 +1179,31 @@ async function loadAuthToken() {
   console.warn(`[auth] FAILED to load auth token from ${tokenPath} after 2s — WS/HTTP will be rejected`);
 }
 
+// The app menu, built from roles so every default accelerator (reload, devtools,
+// zoom, clipboard, quit) keeps working verbatim. On Windows/Linux the strip that
+// would render this is hidden and the unified bar's hamburger pops it instead —
+// so this menu must stay REGISTERED even though it is never shown as a bar.
+// Replacing this with setApplicationMenu(null) silently kills those shortcuts.
+function buildAppMenu() {
+  const isMac = process.platform === 'darwin';
+  return Menu.buildFromTemplate([
+    ...(isMac ? [{ role: 'appMenu' }] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'Maestro Studio on GitHub',
+          click: () => shell.openExternal('https://github.com/gmartinstech/maestro-desktop'),
+        },
+      ],
+    },
+  ]);
+}
+
 function createWindow() {
   isCreatingMainWindow = true;
   console.log('[diag][main] createWindow start');
@@ -1187,9 +1212,20 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: 'OpenSwarm',
+    title: 'Maestro Studio',
     icon: iconPath,
-    titleBarStyle: 'hiddenInset',
+    // One bar, not three. macOS already insets its traffic lights into our own
+    // 38px chrome row; Windows/Linux instead get the native buttons PAINTED into
+    // that same row via titleBarOverlay, so there is no separate OS title bar.
+    // Overlay height must track AppShell's bar height (38). Colors are the light
+    // -theme tokens, matching ThemeContext's light-by-default; the renderer
+    // repaints them via 'titlebar:set-overlay' as soon as it knows the real theme.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' }
+      : {
+          titleBarStyle: 'hidden',
+          titleBarOverlay: { color: '#E9EEF4', symbolColor: '#33414F', height: 38 },
+        }),
     // Stay hidden until the renderer fires `ready-to-show`. The splash
     // is what the user looks at; we swap it out for this window only
     // once React has actually painted, avoiding the white-flash that
@@ -1207,6 +1243,11 @@ function createWindow() {
       ...(process.env.OPENSWARM_E2E === '1' ? { additionalArguments: ['--openswarm-e2e=1'] } : {}),
     },
   });
+
+  // Hide the menu STRIP but leave the menu itself registered (see buildAppMenu):
+  // setApplicationMenu(null) would take every accelerator down with it. autoHideMenuBar
+  // stays off on purpose, so Alt can't pop the strip back over the unified bar.
+  if (process.platform !== 'darwin') mainWindow.setMenuBarVisibility(false);
 
   if (isDev) {
     mainWindow.loadURL(`http://localhost:3000`);
@@ -1714,6 +1755,9 @@ function installMacMouseClamp() {
 }
 
 app.whenReady().then(async () => {
+  // Register before any window exists so the accelerators are live from the first frame.
+  Menu.setApplicationMenu(buildAppMenu());
+
   // We made it here, so any prior update swap finished. Drop a stale updating.lock
   // (the watchdog never deletes it) so a real crash later isn't silently swallowed.
   try { fs.unlinkSync(CRASH_WATCHDOG_UPDATING_LOCK); } catch (_) {}
@@ -2765,6 +2809,26 @@ ipcMain.handle('get-auth-token', async () => {
   } catch (_) {}
   return authToken;
 });
+
+// The unified bar's hamburger. Pops the SAME Menu object the accelerators come
+// from, anchored under the button, so the mouse and keyboard paths can't drift.
+ipcMain.handle('app-menu:popup', (event, x, y) => {
+  const menu = Menu.getApplicationMenu();
+  if (!menu) return;
+  const win = BrowserWindow.fromWebContents(event.sender) || mainWindow || undefined;
+  menu.popup({ window: win, x: Math.round(x), y: Math.round(y) });
+});
+
+// The native window buttons are painted by the OS, so they can't inherit the
+// page's CSS. The renderer pushes the resolved chrome tokens on every theme
+// change to keep that strip from stranding on a stale color. No-op on macOS.
+ipcMain.on('titlebar:set-overlay', (event, color, symbolColor) => {
+  if (process.platform === 'darwin') return;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return;
+  try { win.setTitleBarOverlay({ color, symbolColor, height: 38 }); } catch (_) {}
+});
+
 // Phase 0: renderer fires this once, when it renders the first streamed token
 // of the first agent response. Main owns the timing log (backend.log), so the
 // renderer reports the event and we stamp it against the same APP_LAUNCH_T as
