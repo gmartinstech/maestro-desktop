@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { report } from '@/shared/serviceClient';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -98,19 +100,20 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-/** Parses raw error text into a friendly card; returns null when the error isn't one we recognize. */
-function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErrorInfo | null {
+/** Parses raw error text into a friendly card; returns null when the error isn't one we recognize.
+ *  Matchers stay in English (they match BACKEND-emitted text) — only the displayed title/detail/ctaLabel are translated. */
+function parseOpenSwarmError(text: string, t: TFunction, ctx?: OverflowContext): OpenSwarmErrorInfo | null {
   if (!text) return null;
   // A real OpenSwarm-side plan cap (has a reset window) -> offer the upgrade.
   if (/reached your OpenSwarm.*plan limit|Usage cap exceeded|Resets in /i.test(text)) {
     const reset = text.match(/Resets in ([\dhms\s]+)/)?.[1];
     return {
       kind: 'cap',
-      title: "You've hit your plan limit",
+      title: t('agentChat.errors.planLimit.title'),
       detail: reset
-        ? `Your usage resets in ${reset}. Upgrade to keep going now, or wait for the window to reset.`
-        : 'Upgrade to keep going now, or wait for your usage window to reset.',
-      ctaLabel: 'Upgrade plan',
+        ? t('agentChat.errors.planLimit.detailWithReset', { reset })
+        : t('agentChat.errors.planLimit.detail'),
+      ctaLabel: t('agentChat.errors.planLimit.cta'),
       ctaAction: 'upgrade',
     };
   }
@@ -118,18 +121,18 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
     const reset = text.match(/reset after ([^)\\.]+)/i)?.[1];
     return {
       kind: 'network',
-      title: "You've hit this model's rate limit",
+      title: t('agentChat.errors.modelRateLimit.title'),
       detail: reset
-        ? `This model can send more requests after ${reset}. Wait for that reset window, or switch to another model.`
-        : 'Wait for the reset window shown by your provider, or switch to another model.',
+        ? t('agentChat.errors.modelRateLimit.detailWithReset', { reset })
+        : t('agentChat.errors.modelRateLimit.detail'),
     };
   }
   // Transient throttle: Anthropic's upstream overload or our own pool-shed. Not the user's fault and not a plan cap, so don't say "upgrade", just tell them it's busy. claude.ai-style.
   if (/rate_limit_error|free_pool_busy|overloaded_error|too many requests/i.test(text)) {
     return {
       kind: 'network',
-      title: 'Maestro Studio is busy right now',
-      detail: 'A lot of requests are coming through at once. Wait a few seconds, then send your message again.',
+      title: t('agentChat.errors.busy.title'),
+      detail: t('agentChat.errors.busy.detail'),
     };
   }
   if (/free_trial_exhausted|used your free|free OpenSwarm runs/i.test(text)) {
@@ -137,36 +140,34 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
     if (ctx?.hasModel) {
       return {
         kind: 'cap',
-        title: 'Ready to pick up where you left off',
-        detail: 'Your model is connected. Continue the task you started on the free trial.',
-        ctaLabel: 'Continue',
+        title: t('agentChat.errors.pickUpWhereLeftOff.title'),
+        detail: t('agentChat.errors.pickUpWhereLeftOff.detail'),
+        ctaLabel: t('agentChat.errors.pickUpWhereLeftOff.cta'),
         ctaAction: 'retry_last',
       };
     }
     return {
       kind: 'cap',
-      title: "You've used your free runs",
-      detail:
-        'Connect a model to keep going: your own API key, an AI subscription you already pay for, or OpenSwarm Pro.',
-      ctaLabel: 'Connect a model',
+      title: t('agentChat.errors.freeRunsUsed.title'),
+      detail: t('agentChat.errors.freeRunsUsed.detail'),
+      ctaLabel: t('agentChat.errors.freeRunsUsed.cta'),
       ctaAction: 'settings',
     };
   }
   if (/unknown model|check the model code|\b1211\b|model_not_found/i.test(text)) {
     return {
       kind: 'auth',
-      title: "That model isn't available on your plan",
-      detail:
-        "Your connected subscription doesn't include this model. Add an API key for it in Settings, or pick a different model.",
-      ctaLabel: 'Open Settings',
+      title: t('agentChat.errors.modelNotAvailable.title'),
+      detail: t('agentChat.errors.modelNotAvailable.detail'),
+      ctaLabel: t('agentChat.errors.modelNotAvailable.cta'),
       ctaAction: 'settings',
     };
   }
   if (/at capacity|Try again shortly|503|service unavailable/i.test(text)) {
     return {
       kind: 'network',
-      title: 'Connection hiccup',
-      detail: 'That request timed out after a few retries. Send the message again to continue.',
+      title: t('agentChat.errors.connectionHiccup.title'),
+      detail: t('agentChat.errors.connectionHiccup.detail'),
     };
   }
   if (/Prompt is too long|prompt_too_long|input length and `max_tokens`|context length/i.test(text)) {
@@ -179,12 +180,12 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
     if (isHaiku && mcps >= 5) {
       return {
         kind: 'too_many_tools',
-        title: 'Too many connected apps for Haiku',
-        detail:
-          `Haiku has the smallest memory of the Claude models${win ? ` (${formatTokens(win)} tokens)` : ''}. ` +
-          `Each of the ${mcps} active apps adds instructions Claude has to read before it can answer. ` +
-          'Turn off a few apps (Microsoft 365 is the heaviest), or switch to Sonnet or Opus, both have 5x more room.',
-        ctaLabel: 'Open Settings',
+        title: t('agentChat.errors.tooManyAppsHaiku.title'),
+        detail: t('agentChat.errors.tooManyAppsHaiku.detail', {
+          windowClause: win ? t('agentChat.errors.tooManyAppsHaiku.windowClause', { tokens: formatTokens(win) }) : '',
+          mcps,
+        }),
+        ctaLabel: t('agentChat.errors.tooManyAppsHaiku.cta'),
         ctaAction: 'settings',
       };
     }
@@ -192,34 +193,34 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
     if (win && input) {
       // input is the API-reported total which includes our preset, tool defs, MCP descriptions etc. Subtract those for the user-facing "your content" number so we don't blame the user for our overhead.
       const userContent = Math.max(0, input - fw);
-      lead = `The request totalled ~${formatTokens(input)} of ${formatTokens(win)} tokens this model can hold (your messages + files: ~${formatTokens(userContent)}).`;
+      lead = t('agentChat.errors.contextWindow.leadWithNumbers', {
+        input: formatTokens(input),
+        win: formatTokens(win),
+        userContent: formatTokens(userContent),
+      });
     } else if (win) {
-      lead = `This model holds ${formatTokens(win)} tokens and the request exceeded that.`;
+      lead = t('agentChat.errors.contextWindow.leadWithWindow', { win: formatTokens(win) });
     } else {
-      lead = 'The request exceeded this model\'s context window.';
+      lead = t('agentChat.errors.contextWindow.leadFallback');
     }
     const extras: string[] = [];
-    if (fw) extras.push(`built-in tools + system prompt ~${formatTokens(fw)}`);
-    if (mcps > 0) extras.push(`${mcps} active app${mcps === 1 ? '' : 's'}`);
-    const breakdown = extras.length > 0 ? ` Overhead from OpenSwarm: ${extras.join(', ')}.` : '';
+    if (fw) extras.push(t('agentChat.errors.contextWindow.overheadTools', { tokens: formatTokens(fw) }));
+    if (mcps > 0) extras.push(t('agentChat.errors.contextWindow.overheadApps', { count: mcps }));
+    const breakdown = extras.length > 0 ? t('agentChat.errors.contextWindow.overheadPrefix', { list: extras.join(', ') }) : '';
     return {
       kind: 'too_many_tools',
-      title: 'This chat exceeded the model\'s context window',
-      detail: (
-        lead + breakdown +
-        ' Try detaching large files, running /compact to summarize older turns, ' +
-        'starting a fresh chat, or switching to a model with a larger window.'
-      ),
-      ctaLabel: 'Open Settings',
+      title: t('agentChat.errors.contextWindow.title'),
+      detail: lead + breakdown + t('agentChat.errors.contextWindow.tail'),
+      ctaLabel: t('agentChat.errors.contextWindow.cta'),
       ctaAction: 'settings',
     };
   }
   if (/No active subscription|Subscription canceled|Subscription past_due|Invalid.*token|Missing bearer token/i.test(text)) {
     return {
       kind: 'auth',
-      title: 'Connection needs a refresh',
-      detail: "This model's account isn't active right now. Reconnect it in Settings, or switch to a different model.",
-      ctaLabel: 'Open Settings',
+      title: t('agentChat.errors.connectionNeedsRefresh.title'),
+      detail: t('agentChat.errors.connectionNeedsRefresh.detail'),
+      ctaLabel: t('agentChat.errors.connectionNeedsRefresh.cta'),
       ctaAction: 'settings',
     };
   }
@@ -227,16 +228,16 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
   if (/\b(?:ECONNREFUSED|ENETUNREACH|ENOTFOUND|EAI_AGAIN)\b|Could\s+not\s+reach\s+OpenSwarm|Unable\s+to\s+connect\s+to\s+OpenSwarm/i.test(text)) {
     return {
       kind: 'network',
-      title: 'Connection issue',
-      detail: "We couldn't reach the service. Once your connection is back, send a new message to continue.",
+      title: t('agentChat.errors.connectionIssue.title'),
+      detail: t('agentChat.errors.connectionIssue.detail'),
     };
   }
   // Last resort: a raw API error or SDK traceback we don't have specific copy for. Never let JSON or a stack trace land in the card; give a calm retry instead (the raw text is in the console).
   if (/API Error:|invalid_request_error|"type"\s*:\s*"error"|Command failed with exit code/i.test(text)) {
     return {
       kind: 'network',
-      title: 'That request hit a snag',
-      detail: 'Something went wrong on that one. Send your message again to retry.',
+      title: t('agentChat.errors.requestSnag.title'),
+      detail: t('agentChat.errors.requestSnag.detail'),
     };
   }
   return null;
@@ -850,6 +851,7 @@ interface Props {
 }
 
 const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, onSaveEdit, onCancelEdit, isStreaming, dynamicTurnLabel, viewportHeight = 0, viewportWidth = 0, scrollRoot = null, revealRef }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const [editText, setEditText] = useState('');
@@ -946,7 +948,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     } as OverflowContext;
   }, shallowEqual);
   const activeSessionId = useAppSelector((state) => state.agents.activeSessionId);
-  const openswarmError = !isUser ? parseOpenSwarmError(rawText, overflowCtx) : null;
+  const openswarmError = !isUser ? parseOpenSwarmError(rawText, t, overflowCtx) : null;
 
   // Reports asynchronously, bc without this an oversized message that mounts in view (e.g. scrolling up into the agent's reply) would paint the blank placeholder box for a frame and then pop in the real markdown.
   React.useLayoutEffect(() => {

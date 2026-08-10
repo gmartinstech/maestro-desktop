@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, startTransition, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { getLastInteractedBrowser, getKeepAliveBrowserIds, setLastInteractedBrowser, clearLastInteractedBrowser } from '@/shared/browserFocus';
@@ -65,6 +66,7 @@ const SIDEBAR_WIDTH_KEY = 'openswarm-sidebar-width';
 const UPDATE_DISMISS_KEY = 'openswarm-update-dismissed';
 
 const AppShell: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const navigateRaw = useNavigate();
@@ -516,11 +518,11 @@ const AppShell: React.FC = () => {
         }}
       >
         {!IS_MAC && (
-          <Tooltip title="Menu">
+          <Tooltip title={t('appShell.menuTooltip')}>
             <IconButton
               size="small"
               onClick={handleOpenAppMenu}
-              aria-label="Application menu"
+              aria-label={t('appShell.applicationMenuAriaLabel')}
               sx={{
                 WebkitAppRegion: 'no-drag',
                 color: c.text.tertiary,
@@ -533,7 +535,7 @@ const AppShell: React.FC = () => {
             </IconButton>
           </Tooltip>
         )}
-        <Tooltip title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+        <Tooltip title={sidebarCollapsed ? t('appShell.showSidebar') : t('appShell.hideSidebar')}>
           <IconButton
             size="small"
             onClick={() => setSidebarCollapsed((prev) => !prev)}
@@ -551,7 +553,7 @@ const AppShell: React.FC = () => {
             <AnimatedPanelLeft size={18} />
           </IconButton>
         </Tooltip>
-        <Tooltip title="Back">
+        <Tooltip title={t('appShell.back')}>
           {/* span wrapper so a disabled button still shows its Tooltip; lucide
               glyph + hover-slide kept from the redesign, disabled-state from #68. */}
           <span>
@@ -573,7 +575,7 @@ const AppShell: React.FC = () => {
             </IconButton>
           </span>
         </Tooltip>
-        <Tooltip title="Forward">
+        <Tooltip title={t('appShell.forward')}>
           <span>
             <IconButton
               size="small"
@@ -623,7 +625,7 @@ const AppShell: React.FC = () => {
               lineHeight: 1,
             }}
           >
-            Maestro Studio
+            {t('appShell.appTitle')}
           </Typography>
         </Box>
       </Box>
@@ -649,10 +651,10 @@ const AppShell: React.FC = () => {
           <ErrorSlime size={22} />
           <Typography sx={{ fontSize: '0.86rem', color: '#ef4444', flex: 1, fontWeight: 500, letterSpacing: '0.01em' }}>
             {!isOnline
-              ? 'No internet connection; agents cannot reach AI models or external services'
+              ? t('appShell.offlineWarning')
               : (
                 <>
-                  No AI model connected.{' '}
+                  {t('appShell.noModelConnected')}{' '}
                   <Box
                     component="span"
                     onClick={() => dispatch(openSettingsModal('models'))}
@@ -664,9 +666,9 @@ const AppShell: React.FC = () => {
                       transition: 'opacity 0.15s',
                     }}
                   >
-                    Configure models
+                    {t('appShell.configureModels')}
                   </Box>
-                  {' '}to get started
+                  {' '}{t('appShell.toGetStarted')}
                 </>
               )}
           </Typography>
@@ -677,21 +679,21 @@ const AppShell: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, flexShrink: 0 }}>
           <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, flex: 1, letterSpacing: '0.01em' }}>
             {freeTrialSpent
-              ? (refillLabel ? `Out of free runs, fresh ones in ${refillLabel}. ` : "You're out of free runs for now. ")
-              : "Nice, you're rolling. "}
+              ? (refillLabel ? t('appShell.outOfFreeRunsWithRefill', { refillLabel }) : t('appShell.outOfFreeRunsForNow'))
+              : t('appShell.rollingNudge')}
             <Box
               component="span"
               onClick={() => dispatch(openSettingsModal('models'))}
               sx={{ color: c.accent.primary, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
             >
-              Connect the Claude or ChatGPT you already have
+              {t('appShell.connectYourOwnModel')}
             </Box>
-            {freeTrialSpent ? '.' : ' to keep going unlimited.'}
+            {freeTrialSpent ? '.' : t('appShell.toKeepGoingUnlimited')}
           </Typography>
           {!freeTrialSpent && (
             <Box
               role="button"
-              aria-label="Dismiss"
+              aria-label={t('common.dismiss')}
               onClick={() => { try { localStorage.setItem('os_ft_nudge_dismissed', '1'); } catch {} setFtNudgeDismissed(true); }}
               sx={{ color: c.text.muted, cursor: 'pointer', fontSize: '0.95rem', lineHeight: 1, px: 0.5, '&:hover': { color: c.text.secondary } }}
             >
@@ -719,7 +721,7 @@ const AppShell: React.FC = () => {
               onClick={() => dispatch(openSettingsModal('models'))}
               sx={{ color: c.accent.primary, cursor: 'pointer', fontSize: '0.8rem', '&:hover': { textDecoration: 'underline' } }}
             >
-              Upgrade
+              {t('common.upgrade')}
             </Box>
           )}
         </Box>
@@ -740,9 +742,9 @@ const AppShell: React.FC = () => {
         >
           <SystemUpdateAltIcon sx={{ fontSize: 16, color: c.accent.primary, flexShrink: 0 }} />
           <Typography sx={{ fontSize: '0.8rem', color: c.text.secondary, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {updateStatus === 'available' && `Maestro Studio${verSuffix} is available`}
-            {updateStatus === 'downloading' && `Downloading Maestro Studio${verSuffix}…`}
-            {updateStatus === 'downloaded' && `Maestro Studio${verSuffix} is ready to install`}
+            {updateStatus === 'available' && t('appShell.updateAvailable', { verSuffix })}
+            {updateStatus === 'downloading' && t('appShell.updateDownloading', { verSuffix })}
+            {updateStatus === 'downloaded' && t('appShell.updateDownloaded', { verSuffix })}
           </Typography>
           {updateStatus === 'downloading' && (
             <LinearProgress
@@ -782,7 +784,7 @@ const AppShell: React.FC = () => {
                 flexShrink: 0,
               }}
             >
-              Download
+              {t('common.download')}
             </Button>
           )}
           {updateStatus === 'downloaded' && (
@@ -807,7 +809,7 @@ const AppShell: React.FC = () => {
                 flexShrink: 0,
               }}
             >
-              {installing ? 'Restarting…' : 'Restart & Update'}
+              {installing ? t('common.restarting') : t('common.restartAndUpdate')}
             </Button>
           )}
           <IconButton
@@ -869,7 +871,7 @@ const AppShell: React.FC = () => {
                 <LayoutDashboard size={18} />
               </ListItemIcon>
               <ListItemText
-                primary="Dashboards"
+                primary={t('appShell.dashboards')}
                 sx={{
                   '& .MuiListItemText-primary': {
                     color: isDashboardRoute ? c.text.primary : c.text.muted,
@@ -878,7 +880,7 @@ const AppShell: React.FC = () => {
                   },
                 }}
               />
-              <Tooltip title="New dashboard" placement="right">
+              <Tooltip title={t('appShell.newDashboard')} placement="right">
                 <IconButton
                   size="small"
                   onClick={handleCreateDashboard}
@@ -1026,7 +1028,7 @@ const AppShell: React.FC = () => {
                 <LayoutGrid size={18} />
               </ListItemIcon>
               <ListItemText
-                primary="Apps"
+                primary={t('appShell.apps')}
                 sx={{
                   '& .MuiListItemText-primary': {
                     color: isAppsRoute ? c.text.primary : c.text.muted,
@@ -1147,7 +1149,7 @@ const AppShell: React.FC = () => {
               )}
             </ListItemIcon>
             <ListItemText
-              primary="Settings"
+              primary={t('common.settings')}
               sx={{
                 '& .MuiListItemText-primary': {
                   color: c.text.muted,
@@ -1249,7 +1251,7 @@ const AppShell: React.FC = () => {
                 onClick={() => setSnackbarDismissed(true)}
                 sx={{ color: c.text.muted, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto' }}
               >
-                Dismiss
+                {t('common.dismiss')}
               </Button>
               {updateStatus === 'available' && (
                 <Button
@@ -1265,7 +1267,7 @@ const AppShell: React.FC = () => {
                     minWidth: 'auto',
                   }}
                 >
-                  Download
+                  {t('common.download')}
                 </Button>
               )}
               {updateStatus === 'downloaded' && (
@@ -1285,7 +1287,7 @@ const AppShell: React.FC = () => {
                     minWidth: 'auto',
                   }}
                 >
-                  {installing ? 'Restarting…' : 'Restart & Update'}
+                  {installing ? t('common.restarting') : t('common.restartAndUpdate')}
                 </Button>
               )}
             </Box>
@@ -1298,8 +1300,8 @@ const AppShell: React.FC = () => {
             '& .MuiAlert-icon': { color: c.accent.primary },
           }}
         >
-          {updateStatus === 'available' && `Maestro Studio${verSuffix} is available`}
-          {updateStatus === 'downloaded' && `Maestro Studio${verSuffix} downloaded; restart to update`}
+          {updateStatus === 'available' && t('appShell.updateAvailable', { verSuffix })}
+          {updateStatus === 'downloaded' && t('appShell.updateDownloadedSnackbar', { verSuffix })}
         </Alert>
       </Snackbar>
     </Box>

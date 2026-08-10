@@ -1,0 +1,208 @@
+{
+  "common": {
+    "dismiss": "Descartar",
+    "download": "Baixar",
+    "restartAndUpdate": "Reiniciar e atualizar",
+    "restarting": "Reiniciando…",
+    "upgrade": "Fazer upgrade",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "close": "Fechar",
+    "settings": "Configurações",
+    "submit": "Enviar"
+  },
+  "appShell": {
+    "appTitle": "Maestro Studio",
+    "menuTooltip": "Menu",
+    "applicationMenuAriaLabel": "Menu do aplicativo",
+    "showSidebar": "Mostrar barra lateral",
+    "hideSidebar": "Ocultar barra lateral",
+    "back": "Voltar",
+    "forward": "Avançar",
+    "newDashboard": "Novo painel",
+    "dashboards": "Painéis",
+    "apps": "Apps",
+    "offlineWarning": "Sem conexão com a internet; os agentes não conseguem acessar modelos de IA nem serviços externos",
+    "noModelConnected": "Nenhum modelo de IA conectado.",
+    "configureModels": "Configurar modelos",
+    "toGetStarted": "para começar",
+    "outOfFreeRunsWithRefill": "Suas execuções gratuitas acabaram, novas chegam em {{refillLabel}}. ",
+    "outOfFreeRunsForNow": "Suas execuções gratuitas acabaram por agora. ",
+    "rollingNudge": "Boa, você está avançando bem. ",
+    "connectYourOwnModel": "Conecte o Claude ou ChatGPT que você já tem",
+    "toKeepGoingUnlimited": " para continuar sem limites.",
+    "updateAvailable": "O Maestro Studio{{verSuffix}} está disponível",
+    "updateDownloading": "Baixando o Maestro Studio{{verSuffix}}…",
+    "updateDownloaded": "O Maestro Studio{{verSuffix}} está pronto para instalar",
+    "updateDownloadedSnackbar": "Maestro Studio{{verSuffix}} baixado; reinicie para atualizar"
+  },
+  "settings": {
+    "interface": {
+      "sectionTitle": "Interface",
+      "language": "Idioma",
+      "languageDesc": "Idioma usado em todo o app.",
+      "theme": "Tema",
+      "themeDesc": "Esquema de cores do aplicativo.",
+      "light": "Claro",
+      "dark": "Escuro",
+      "zoomSensitivity": "Sensibilidade do zoom",
+      "zoomSensitivityDesc": "Resposta do zoom ao rolar. Menor para trackpads, maior para mouses com scroll.",
+      "zoomLow": "Baixa",
+      "zoomDefault": "Padrão",
+      "zoomHigh": "Alta",
+      "newAgentShortcut": "Atalho para novo agente",
+      "newAgentShortcutDesc": "Atalho de teclado para criar um agente.",
+      "pressShortcut": "Pressione o atalho…",
+      "autoSelectMode": "Ativar seleção de elementos automaticamente",
+      "autoSelectModeDesc": "Entra automaticamente no modo de seleção de elementos ao criar um novo agente.",
+      "expandNewChats": "Estado inicial dos agentes no painel",
+      "expandNewChatsDesc": "Quando ativado, novos agentes aparecem expandidos em vez de recolhidos.",
+      "autoRevealSubAgents": "Mostrar sub-agentes automaticamente no painel",
+      "autoRevealSubAgentsDesc": "Mostra automaticamente os cartões de sub-agentes (de CreateAgent / InvokeAgent) conectados ao agente principal no painel.",
+      "browserSectionTitle": "Navegador",
+      "defaultHomepage": "Página inicial padrão",
+      "defaultHomepageDesc": "URL carregada ao abrir um novo cartão de navegador no painel."
+    }
+  },
+  "onboarding": {
+    "stageLabels": {
+      "get_started": "Comece por aqui",
+      "learn_features": "Conheça os recursos"
+    },
+    "finishSetup": "Concluir configuração",
+    "continue": "Continuar",
+    "skip": "Pular",
+    "skipAriaLabel": "Pular a configuração (reabra depois em Configurações, Reiniciar tour)",
+    "minimizeAriaLabel": "Minimizar",
+    "showMe": "Me mostre",
+    "seeAllTodos": "Ver todas as tarefas",
+    "moreInfoAriaLabel": "Mais informações",
+    "done": "Concluído",
+    "loadingNextStep": "Carregando próxima etapa…",
+    "allSetTitle": "Tudo pronto",
+    "allSetDesc": "Você concluiu o tour do Maestro Studio. Pode refazer quando quiser em Configurações → Geral.",
+    "moreInfoHeading": "Mais informações",
+    "moreInfoFallback": "Mais informações em breve.",
+    "closeVideoAriaLabel": "Fechar vídeo",
+    "closeRoadmapAriaLabel": "Fechar roteiro",
+    "yourRoadmap": "Seu roteiro",
+    "milestonesReached": "{{done}}/{{total}} etapas concluídas",
+    "inProgress": "EM ANDAMENTO",
+    "complete": "CONCLUÍDO",
+    "stageOf": "ETAPA {{number}} · {{label}}",
+    "current": "atual",
+    "jumpToCurrentTodo": "Ir para a tarefa atual",
+    "steps": {
+      "welcome_open": { "title": "Bem-vindo", "description": "" },
+      "connect_model": { "title": "Continue: conecte seu modelo", "description": "Suas execuções gratuitas são limitadas. Adicione seu próprio modelo para continuar construindo." },
+      "launch_agent": { "title": "Inicie seu primeiro Agente", "description": "Diga ao chat o que você quer feito e uma equipe entra em ação." },
+      "use_browser": { "title": "Use o navegador integrado", "description": "Sem precisar alternar entre apps. Você e seus agentes trabalham no mesmo lugar." },
+      "agent_use_browser": { "title": "Faça um agente usar o navegador", "description": "Deixe um agente assumir o controle do seu navegador." },
+      "agent_control_agents": { "title": "Faça um agente controlar outros agentes", "description": "Deixe um agente orquestrar outros agentes." },
+      "make_app": { "title": "Crie um App", "description": "Peça e veja aplicações interativas surgirem." }
+    },
+    "infoByStepId": {
+      "connect_model": "O Open Swarm funciona com qualquer modelo de IA.\n\nSe você já tem uma assinatura do ChatGPT, Claude ou Gemini, conecte ela direto no Open Swarm.\n\nTambém oferecemos uma assinatura Open Swarm que dá o mesmo uso desses provedores.\n\nOu use suas próprias chaves de API.",
+      "enable_actions": "Ações são as capacidades disponíveis para seus agentes de IA.\n\nToda ferramenta que um agente usa (ler um arquivo, enviar um e-mail, pesquisar na web) é uma ação.\n\nToda ação tem uma política de permissão. Ela decide se um agente pode usá-la por conta própria ou se precisa da sua aprovação primeiro.\n\nA página Ações é onde você ativa integrações, faz login e ajusta essas permissões.",
+      "launch_agent": "Um agente no Open Swarm pode fazer qualquer coisa que você faria no seu computador.\n\nEle pode ler e escrever arquivos, executar comandos, pesquisar na web, controlar um navegador, enviar e-mails, gerenciar sua agenda e cuidar de tarefas longas e com várias etapas por conta própria.\n\nPense em cada agente como um colega de equipe que você orienta sobre uma tarefa e deixa trabalhar, enquanto acompanha tudo em tempo real.",
+      "use_browser": "O Open Swarm tem navegadores integrados para você nunca precisar alternar entre apps. Um só lugar, um só espaço de trabalho, para você e seus agentes.\n\nOs navegadores não são só para você. Seus agentes também podem usá-los. Por padrão, um agente pode abrir e usar seu próprio navegador sempre que precisar.\n\nNa próxima etapa vamos ver como passar um navegador que você está usando para um agente.",
+      "agent_use_browser": "Isso mostra como dar a um agente o controle de um navegador que já está no seu painel. Os agentes também podem abrir seus próprios navegadores sempre que precisarem.\n\nNesta demonstração você passou um único navegador, mas também pode passar vários de uma vez.\n\nPor trás dos panos, cada navegador é operado por um agente especializado que se reporta ao agente para quem você o passou.",
+      "agent_control_agents": "Assim como os navegadores, você pode escolher quais agentes trabalham juntos. Ou um agente pode criar seus próprios ajudantes sempre que precisar.\n\nQuando uma tarefa fica grande demais para um agente, ele cria sub-agentes para dividir o trabalho.\n\nQuando um sub-agente termina, ele se recolhe de volta ao agente principal. Você pode reabri-lo a qualquer momento pelo chat principal, clicando em \"Reveal in dashboard\".",
+      "install_skill": "Um agente por conta própria já é um ótimo raciocinador de uso geral. Ele consegue fazer muita coisa, mas não conhece os detalhes dos seus fluxos de trabalho, formatos de saída ou domínio.\n\nAs Skills preenchem essa lacuna.\n\nUma skill é um conjunto de instruções que ensina um agente a lidar com um tipo específico de tarefa. Quando uma skill está ativa, o agente segue as orientações dela e produz resultados melhores e mais consistentes nessa área.",
+      "make_app": "Apps são aplicações web interativas geradas por IA que vivem dentro do Maestro Studio.\n\nEm vez de pagar por software ou passar semanas construindo uma interface, você descreve o que quer e um agente escreve para você. Um app funcional aparece em segundos.\n\nDepois de criado, você pode colocar o App no seu painel junto com agentes e navegadores."
+    }
+  },
+  "agentChat": {
+    "approvalBar": {
+      "emptyCommand": "(comando vazio)",
+      "inPath": "em {{path}}",
+      "agentHasQuestion": "O agente tem uma pergunta",
+      "questionFallback": "(pergunta)",
+      "other": "Outro…",
+      "typeOwnAnswer": "Digite sua própria resposta...",
+      "typeAnswer": "Digite sua resposta...",
+      "sensitiveFile": "Arquivo sensível",
+      "permissionRequired": "Permissão necessária",
+      "fileIsSensitive": "Este arquivo é sensível: {{label}}",
+      "sensitiveWhySuffix": "O Maestro Studio pergunta sempre porque uma mudança ruim aqui é difícil de desfazer. Aprove só se foi você que pediu isso.",
+      "alwaysAllowFilesLike": "Sempre permitir arquivos como este",
+      "changeLaterInSettings": "Você pode mudar isso depois em Configurações → Padrões de arquivo confiáveis.",
+      "approve": "Aprovar",
+      "alwaysApprove": "Sempre aprovar",
+      "deny": "Negar",
+      "pendingApprovals": "{{count}} aprovações pendentes",
+      "alwaysAllowAll": "Sempre permitir tudo",
+      "justOnce": "Só esta vez",
+      "denyAll": "Negar tudo",
+      "approveCount": "Aprovar {{count}}",
+      "denyCount": "Negar {{count}}"
+    },
+    "errors": {
+      "planLimit": {
+        "title": "Você atingiu o limite do seu plano",
+        "detailWithReset": "Seu uso reseta em {{reset}}. Faça upgrade para continuar agora, ou espere a janela resetar.",
+        "detail": "Faça upgrade para continuar agora, ou espere sua janela de uso resetar.",
+        "cta": "Fazer upgrade do plano"
+      },
+      "modelRateLimit": {
+        "title": "Você atingiu o limite de uso deste modelo",
+        "detailWithReset": "Este modelo pode enviar mais solicitações depois de {{reset}}. Espere essa janela resetar, ou troque para outro modelo.",
+        "detail": "Espere a janela de reset mostrada pelo seu provedor, ou troque para outro modelo."
+      },
+      "busy": {
+        "title": "O Maestro Studio está ocupado agora",
+        "detail": "Muitas solicitações estão chegando de uma vez. Espere alguns segundos e envie sua mensagem de novo."
+      },
+      "pickUpWhereLeftOff": {
+        "title": "Pronto para continuar de onde parou",
+        "detail": "Seu modelo está conectado. Continue a tarefa que você começou no teste gratuito.",
+        "cta": "Continuar"
+      },
+      "freeRunsUsed": {
+        "title": "Você usou suas execuções gratuitas",
+        "detail": "Conecte um modelo para continuar: sua própria chave de API, uma assinatura de IA que você já paga, ou o OpenSwarm Pro.",
+        "cta": "Conectar um modelo"
+      },
+      "modelNotAvailable": {
+        "title": "Esse modelo não está disponível no seu plano",
+        "detail": "Sua assinatura conectada não inclui esse modelo. Adicione uma chave de API para ele em Configurações, ou escolha outro modelo.",
+        "cta": "Abrir Configurações"
+      },
+      "connectionHiccup": {
+        "title": "Falha de conexão",
+        "detail": "Essa solicitação expirou depois de algumas tentativas. Envie a mensagem de novo para continuar."
+      },
+      "tooManyAppsHaiku": {
+        "title": "Muitos apps conectados para o Haiku",
+        "windowClause": " ({{tokens}} tokens)",
+        "detail": "O Haiku tem a menor memória entre os modelos Claude{{windowClause}}. Cada um dos {{mcps}} apps ativos adiciona instruções que o Claude precisa ler antes de responder. Desative alguns apps (o Microsoft 365 é o mais pesado), ou troque para o Sonnet ou o Opus, que têm 5x mais espaço.",
+        "cta": "Abrir Configurações"
+      },
+      "contextWindow": {
+        "title": "Esta conversa excedeu a janela de contexto do modelo",
+        "leadWithNumbers": "A solicitação totalizou ~{{input}} de {{win}} tokens que este modelo suporta (suas mensagens + arquivos: ~{{userContent}}).",
+        "leadWithWindow": "Este modelo suporta {{win}} tokens e a solicitação excedeu isso.",
+        "leadFallback": "A solicitação excedeu a janela de contexto deste modelo.",
+        "overheadTools": "ferramentas integradas + prompt do sistema ~{{tokens}}",
+        "overheadApps_one": "{{count}} app ativo",
+        "overheadApps_other": "{{count}} apps ativos",
+        "overheadPrefix": " Overhead do OpenSwarm: {{list}}.",
+        "tail": " Tente remover arquivos grandes, executar /compact para resumir turnos antigos, iniciar uma conversa nova, ou trocar para um modelo com janela maior.",
+        "cta": "Abrir Configurações"
+      },
+      "connectionNeedsRefresh": {
+        "title": "A conexão precisa ser renovada",
+        "detail": "A conta deste modelo não está ativa agora. Reconecte em Configurações, ou troque para outro modelo.",
+        "cta": "Abrir Configurações"
+      },
+      "connectionIssue": {
+        "title": "Problema de conexão",
+        "detail": "Não conseguimos acessar o serviço. Quando sua conexão voltar, envie uma nova mensagem para continuar."
+      },
+      "requestSnag": {
+        "title": "Essa solicitação teve um problema",
+        "detail": "Algo deu errado nessa tentativa. Envie sua mensagem de novo para tentar outra vez."
+      }
+    }
+  }
+}

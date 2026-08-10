@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
@@ -21,17 +22,51 @@ const GeneralInterface: React.FC<{
   styles: SettingsStyles;
 }> = ({ form, setForm, styles }) => {
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
   const [recordingShortcut, setRecordingShortcut] = useState(false);
   const { fieldSx, sectionSx, rowSx, rowLastSx, inlineRowSx, inlineRowLastSx, labelSx, descSx } = styles;
 
   return (
     <>
-      <Typography sx={{ ...sectionSx, mt: 3 }}>Interface</Typography>
+      <Typography sx={{ ...sectionSx, mt: 3 }}>{t('settings.interface.sectionTitle')}</Typography>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('theme', 'Theme', 'Interface', 'Application color scheme.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('language', t('settings.interface.language'), 'Interface', t('settings.interface.languageDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Theme</Typography>
-          <Typography sx={descSx}>Application color scheme.</Typography>
+          <Typography sx={labelSx}>{t('settings.interface.language')}</Typography>
+          <Typography sx={descSx}>{t('settings.interface.languageDesc')}</Typography>
+        </Box>
+        <ToggleButtonGroup
+          value={i18n.resolvedLanguage ?? i18n.language}
+          exclusive
+          onChange={(_, v) => { if (v) i18n.changeLanguage(v); }}
+          size="small"
+          sx={{
+            '& .MuiToggleButton-root': {
+              color: c.text.muted,
+              borderColor: c.border.medium,
+              textTransform: 'none',
+              px: 2,
+              py: 0.5,
+              gap: 0.5,
+              fontSize: '0.8rem',
+              '&.Mui-selected': {
+                bgcolor: `${c.accent.primary}15`,
+                color: c.accent.primary,
+                borderColor: c.accent.primary,
+                '&:hover': { bgcolor: `${c.accent.primary}20` },
+              },
+            },
+          }}
+        >
+          <ToggleButton value="pt-BR">Português (Brasil)</ToggleButton>
+          <ToggleButton value="en">English</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      <Box sx={inlineRowSx} {...settingSelectAttrs('theme', t('settings.interface.theme'), 'Interface', t('settings.interface.themeDesc'))}>
+        <Box sx={{ mr: 3 }}>
+          <Typography sx={labelSx}>{t('settings.interface.theme')}</Typography>
+          <Typography sx={descSx}>{t('settings.interface.themeDesc')}</Typography>
         </Box>
         <ToggleButtonGroup
           value={form.theme}
@@ -57,18 +92,18 @@ const GeneralInterface: React.FC<{
           }}
         >
           <ToggleButton value="light">
-            <LightModeIcon sx={{ fontSize: 16 }} /> Light
+            <LightModeIcon sx={{ fontSize: 16 }} /> {t('settings.interface.light')}
           </ToggleButton>
           <ToggleButton value="dark">
-            <DarkModeIcon sx={{ fontSize: 16 }} /> Dark
+            <DarkModeIcon sx={{ fontSize: 16 }} /> {t('settings.interface.dark')}
           </ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
-      <Box sx={rowSx} {...settingSelectAttrs('zoom_sensitivity', 'Zoom sensitivity', 'Interface', 'Scroll-to-zoom responsiveness.')}>
-        <Typography sx={labelSx}>Zoom sensitivity</Typography>
+      <Box sx={rowSx} {...settingSelectAttrs('zoom_sensitivity', t('settings.interface.zoomSensitivity'), 'Interface', t('settings.interface.zoomSensitivityDesc'))}>
+        <Typography sx={labelSx}>{t('settings.interface.zoomSensitivity')}</Typography>
         <Typography sx={{ ...descSx, mb: 1 }}>
-          Scroll-to-zoom responsiveness. Lower for trackpads, higher for mouse wheels.
+          {t('settings.interface.zoomSensitivityDesc')}
         </Typography>
         <Box sx={{ px: 1 }}>
           <Slider
@@ -79,9 +114,9 @@ const GeneralInterface: React.FC<{
             step={1}
             valueLabelDisplay="auto"
             marks={[
-              { value: 1, label: 'Low' },
-              { value: 50, label: 'Default' },
-              { value: 100, label: 'High' },
+              { value: 1, label: t('settings.interface.zoomLow') },
+              { value: 50, label: t('settings.interface.zoomDefault') },
+              { value: 100, label: t('settings.interface.zoomHigh') },
             ]}
             sx={{
               color: c.accent.primary,
@@ -92,10 +127,10 @@ const GeneralInterface: React.FC<{
         </Box>
       </Box>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('new_agent_shortcut', 'New agent shortcut', 'Interface', 'Keyboard shortcut to create an agent.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('new_agent_shortcut', t('settings.interface.newAgentShortcut'), 'Interface', t('settings.interface.newAgentShortcutDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>New agent shortcut</Typography>
-          <Typography sx={descSx}>Keyboard shortcut to create an agent.</Typography>
+          <Typography sx={labelSx}>{t('settings.interface.newAgentShortcut')}</Typography>
+          <Typography sx={descSx}>{t('settings.interface.newAgentShortcutDesc')}</Typography>
         </Box>
         <Box
           tabIndex={0}
@@ -131,7 +166,7 @@ const GeneralInterface: React.FC<{
           <KeyboardIcon sx={{ fontSize: 16, color: recordingShortcut ? c.accent.primary : c.text.tertiary }} />
           {recordingShortcut ? (
             <Typography sx={{ fontSize: '0.8rem', color: c.accent.primary, fontWeight: 500 }}>
-              Press shortcut…
+              {t('settings.interface.pressShortcut')}
             </Typography>
           ) : (
             <Typography sx={{ fontSize: '0.8rem', color: c.text.primary, fontFamily: c.font.mono, fontWeight: 500 }}>
@@ -150,10 +185,10 @@ const GeneralInterface: React.FC<{
         </Box>
       </Box>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('auto_select_mode_on_new_agent', 'Auto-enable element selection', 'Interface', 'Enter element selection mode when creating a new agent.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('auto_select_mode_on_new_agent', t('settings.interface.autoSelectMode'), 'Interface', t('settings.interface.autoSelectModeDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Auto-enable element selection</Typography>
-          <Typography sx={descSx}>Automatically enter element selection mode when creating a new agent.</Typography>
+          <Typography sx={labelSx}>{t('settings.interface.autoSelectMode')}</Typography>
+          <Typography sx={descSx}>{t('settings.interface.autoSelectModeDesc')}</Typography>
         </Box>
         <Switch
           checked={form.auto_select_mode_on_new_agent}
@@ -165,10 +200,10 @@ const GeneralInterface: React.FC<{
         />
       </Box>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('expand_new_chats_in_dashboard', 'Default agent spawn state in dashboard', 'Interface', 'New agents spawn expanded instead of collapsed.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('expand_new_chats_in_dashboard', t('settings.interface.expandNewChats'), 'Interface', t('settings.interface.expandNewChatsDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Default agent spawn state in dashboard</Typography>
-          <Typography sx={descSx}>When enabled, new agents spawn expanded instead of collapsed.</Typography>
+          <Typography sx={labelSx}>{t('settings.interface.expandNewChats')}</Typography>
+          <Typography sx={descSx}>{t('settings.interface.expandNewChatsDesc')}</Typography>
         </Box>
         <Switch
           checked={form.expand_new_chats_in_dashboard}
@@ -180,10 +215,10 @@ const GeneralInterface: React.FC<{
         />
       </Box>
 
-      <Box sx={inlineRowLastSx} {...settingSelectAttrs('auto_reveal_sub_agents', 'Auto-reveal sub-agents on dashboard', 'Interface', 'Show sub-agent cards tethered to their parent on the dashboard.')}>
+      <Box sx={inlineRowLastSx} {...settingSelectAttrs('auto_reveal_sub_agents', t('settings.interface.autoRevealSubAgents'), 'Interface', t('settings.interface.autoRevealSubAgentsDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Auto-reveal sub-agents on dashboard</Typography>
-          <Typography sx={descSx}>Automatically show sub-agent cards (from CreateAgent / InvokeAgent) tethered to their parent on the dashboard.</Typography>
+          <Typography sx={labelSx}>{t('settings.interface.autoRevealSubAgents')}</Typography>
+          <Typography sx={descSx}>{t('settings.interface.autoRevealSubAgentsDesc')}</Typography>
         </Box>
         <Switch
           checked={form.auto_reveal_sub_agents}
@@ -195,12 +230,12 @@ const GeneralInterface: React.FC<{
         />
       </Box>
 
-      <Typography sx={{ ...sectionSx, mt: 3 }}>Browser</Typography>
+      <Typography sx={{ ...sectionSx, mt: 3 }}>{t('settings.interface.browserSectionTitle')}</Typography>
 
-      <Box sx={rowLastSx} {...settingSelectAttrs('browser_homepage', 'Default homepage', 'Browser', 'URL loaded when opening a new browser card.')}>
-        <Typography sx={labelSx}>Default homepage</Typography>
+      <Box sx={rowLastSx} {...settingSelectAttrs('browser_homepage', t('settings.interface.defaultHomepage'), 'Browser', t('settings.interface.defaultHomepageDesc'))}>
+        <Typography sx={labelSx}>{t('settings.interface.defaultHomepage')}</Typography>
         <Typography sx={{ ...descSx, mb: 1.5 }}>
-          URL loaded when opening a new browser card on the dashboard.
+          {t('settings.interface.defaultHomepageDesc')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <LanguageIcon sx={{ fontSize: 18, color: c.text.tertiary, flexShrink: 0 }} />

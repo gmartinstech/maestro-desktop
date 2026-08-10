@@ -1,6 +1,7 @@
 /** 10-step roadmap modal opened from the panel's "See all todos"; Stage 2 unlocks once Stage 1 is fully complete. */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Box, Typography, IconButton, Button } from '@mui/material';
 import { motion, AnimatePresence } from './_motionWin';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
@@ -11,11 +12,11 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useOnboardingProgress } from './hooks/useOnboardingProgress';
 import { STAGE_GROUPS, STEPS, findStepById } from './steps';
 import { useUnlockedStepIds, unlockHintFor } from './steps/stepUnlock';
-import { STAGE_LABELS } from './steps/types';
 import { onboardingDirector } from './OnboardingDirector';
 import { report } from './telemetry';
 
 const OnboardingRoadmapModal: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const progress = useOnboardingProgress();
   const open = progress.panelMode === 'roadmap';
@@ -104,17 +105,17 @@ const OnboardingRoadmapModal: React.FC = () => {
                 fontFamily: '"Charter", Georgia, serif',
               }}
             >
-              Your roadmap
+              {t('onboarding.yourRoadmap')}
             </Typography>
             <Typography sx={{ fontSize: 12, color: c.text.muted, mt: 0.2 }}>
-              {totalDone}/{total} milestones reached
+              {t('onboarding.milestonesReached', { done: totalDone, total })}
             </Typography>
           </Box>
           <IconButton
             size="small"
             onClick={close}
             sx={{ color: c.text.tertiary }}
-            aria-label="Close roadmap"
+            aria-label={t('onboarding.closeRoadmapAriaLabel')}
           >
             <CloseIcon sx={{ fontSize: 18 }} />
           </IconButton>
@@ -126,7 +127,7 @@ const OnboardingRoadmapModal: React.FC = () => {
               progress.completedSteps.includes(s.id),
             ).length;
             const isInProgress = stageDone < group.steps.length;
-            const stageLabel = isInProgress ? 'IN PROGRESS' : 'COMPLETE';
+            const stageLabel = isInProgress ? t('onboarding.inProgress') : t('onboarding.complete');
             return (
               <Box key={group.stage} sx={{ mb: 2 }}>
                 <Box
@@ -146,7 +147,7 @@ const OnboardingRoadmapModal: React.FC = () => {
                         color: isInProgress ? c.accent.primary : c.text.secondary,
                       }}
                     >
-                      STAGE {gi + 1} · {stageLabel}
+                      {t('onboarding.stageOf', { number: gi + 1, label: stageLabel })}
                     </Typography>
                   </Box>
                   <Typography sx={{ fontSize: 11, color: c.text.muted }}>
@@ -161,7 +162,7 @@ const OnboardingRoadmapModal: React.FC = () => {
                     color: c.text.primary,
                   }}
                 >
-                  {STAGE_LABELS[group.stage]}
+                  {t(`onboarding.stageLabels.${group.stage}`)}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
                   {group.steps.map((step) => {
@@ -228,7 +229,7 @@ const OnboardingRoadmapModal: React.FC = () => {
                             flexGrow: 1,
                           }}
                         >
-                          {step.title}
+                          {t(`onboarding.steps.${step.id}.title`, step.title)}
                         </Typography>
                         {isCurrent ? (
                           <Typography
@@ -240,7 +241,7 @@ const OnboardingRoadmapModal: React.FC = () => {
                               textTransform: 'uppercase',
                             }}
                           >
-                            current
+                            {t('onboarding.current')}
                           </Typography>
                         ) : lockHint ? (
                           <Typography
@@ -281,7 +282,7 @@ const OnboardingRoadmapModal: React.FC = () => {
               '&:hover': { bgcolor: c.accent.hover ?? c.accent.primary },
             }}
           >
-            Jump to current todo
+            {t('onboarding.jumpToCurrentTodo')}
           </Button>
         </Box>
       </Box>

@@ -1,6 +1,7 @@
 /** Docked top-right panel; states: pill, expanded, roadmap, hidden. */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from './_motionWin';
 import { Box, Typography, IconButton, Button, ButtonBase } from '@mui/material';
@@ -16,7 +17,6 @@ import { hasAnyAgentCompleted } from './steps/skipPredicates';
 import { clearJustCompleted } from '@/shared/state/onboardingProgressSlice';
 import { STEPS, findStepById } from './steps';
 import { useUnlockedStepIds } from './steps/stepUnlock';
-import { STAGE_LABELS } from './steps/types';
 import { S } from './selectors';
 import { onboardingDirector } from './OnboardingDirector';
 import { report } from './telemetry';
@@ -51,6 +51,7 @@ const CursorIconSmall: React.FC<{ size?: number; color: string }> = ({
 );
 
 const OnboardingPanel: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const progress = useOnboardingProgress();
@@ -197,7 +198,7 @@ const OnboardingPanel: React.FC = () => {
                 }}
               >
                 <Typography sx={{ fontSize: 14.5, fontWeight: 600, color: c.text.primary }}>
-                  Finish setup
+                  {t('onboarding.finishSetup')}
                 </Typography>
                 <Box sx={{ flexGrow: 1, minWidth: 12 }} />
                 <Typography
@@ -210,7 +211,7 @@ const OnboardingPanel: React.FC = () => {
                     gap: 0.45,
                   }}
                 >
-                  Continue
+                  {t('onboarding.continue')}
                   <ArrowForwardIcon sx={{ fontSize: 15.5 }} />
                 </Typography>
               </ButtonBase>
@@ -254,7 +255,7 @@ const OnboardingPanel: React.FC = () => {
                       <Typography
                         sx={{ fontSize: 12.5, fontWeight: 600, color: c.text.primary }}
                       >
-                        {STAGE_LABELS[stageOf]}
+                        {t(`onboarding.stageLabels.${stageOf}`)}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
@@ -273,9 +274,9 @@ const OnboardingPanel: React.FC = () => {
                           transition: 'color 0.15s, background 0.15s',
                           '&:hover': { color: c.text.primary, bgcolor: `${c.text.tertiary}0A` },
                         }}
-                        aria-label="Skip setup (reopen later from Settings, Restart tour)"
+                        aria-label={t('onboarding.skipAriaLabel')}
                       >
-                        Skip
+                        {t('onboarding.skip')}
                       </ButtonBase>
                       <IconButton
                         size="small"
@@ -284,7 +285,7 @@ const OnboardingPanel: React.FC = () => {
                           progress.setPanelMode('pill');
                         }}
                         sx={{ color: c.text.tertiary, p: 0.4 }}
-                        aria-label="Minimize"
+                        aria-label={t('onboarding.minimizeAriaLabel')}
                       >
                         <RemoveIcon sx={{ fontSize: 16 }} />
                       </IconButton>
@@ -410,6 +411,7 @@ const StepCardBody: React.FC<StepCardProps> = ({
   onToggleInfo,
   running,
 }) => {
+  const { t } = useTranslation();
   // Auto-collapses on step change so a leftover overlay from step N doesn't linger into step N+1.
   const [videoExpanded, setVideoExpanded] = useState(false);
   useEffect(() => {
@@ -428,7 +430,7 @@ const StepCardBody: React.FC<StepCardProps> = ({
           fontFamily: '"Charter", Georgia, serif',
         }}
       >
-        {step.title}
+        {t(`onboarding.steps.${step.id}.title`, step.title)}
       </Typography>
       <Typography
         sx={{
@@ -438,7 +440,7 @@ const StepCardBody: React.FC<StepCardProps> = ({
           lineHeight: 1.4,
         }}
       >
-        {step.description}
+        {t(`onboarding.steps.${step.id}.description`, step.description)}
       </Typography>
 
       <Box
@@ -514,7 +516,7 @@ const StepCardBody: React.FC<StepCardProps> = ({
             gap: 0.7,
           }}
         >
-          Show me
+          {t('onboarding.showMe')}
           <Box
             component="span"
             ref={cursorIconRef}
@@ -537,7 +539,7 @@ const StepCardBody: React.FC<StepCardProps> = ({
             '&:hover': { color: c.text.primary },
           }}
         >
-          See all todos
+          {t('onboarding.seeAllTodos')}
         </ButtonBase>
         <IconButton
           size="small"
@@ -549,7 +551,7 @@ const StepCardBody: React.FC<StepCardProps> = ({
             ml: 'auto',
             '&:hover': { color: c.text.secondary },
           }}
-          aria-label="More info"
+          aria-label={t('onboarding.moreInfoAriaLabel')}
         >
           <HelpOutlineIcon sx={{ fontSize: 16 }} />
         </IconButton>
@@ -603,7 +605,7 @@ const StepCardBody: React.FC<StepCardProps> = ({
               />
               <IconButton
                 onClick={() => setVideoExpanded(false)}
-                aria-label="Close video"
+                aria-label={t('onboarding.closeVideoAriaLabel')}
                 sx={{
                   position: 'absolute',
                   top: 10,
@@ -630,6 +632,7 @@ interface CelebrationProps {
 }
 
 const CelebrationView: React.FC<CelebrationProps> = ({ step, accent }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   // Self-clearing timer fires once per celebration; cannot be cancelled by parent re-renders.
@@ -660,7 +663,7 @@ const CelebrationView: React.FC<CelebrationProps> = ({ step, accent }) => {
             textTransform: 'uppercase',
           }}
         >
-          Done
+          {t('onboarding.done')}
         </Typography>
       </Box>
       <Box sx={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
@@ -674,7 +677,7 @@ const CelebrationView: React.FC<CelebrationProps> = ({ step, accent }) => {
             display: 'inline-block',
           }}
         >
-          {step.title}
+          {t(`onboarding.steps.${step.id}.title`, step.title)}
           <motion.span
             initial={{ width: 0 }}
             animate={{ width: '100%' }}
@@ -698,7 +701,7 @@ const CelebrationView: React.FC<CelebrationProps> = ({ step, accent }) => {
           lineHeight: 1.4,
         }}
       >
-        Loading next step…
+        {t('onboarding.loadingNextStep')}
       </Typography>
     </Box>
   );
@@ -707,7 +710,9 @@ const CelebrationView: React.FC<CelebrationProps> = ({ step, accent }) => {
 const AllDoneView: React.FC<{ accent: string; tokens: ReturnType<typeof useClaudeTokens> }> = ({
   accent,
   tokens: c,
-}) => (
+}) => {
+  const { t } = useTranslation();
+  return (
   <Box sx={{ px: 1.6, pt: 2, pb: 2, textAlign: 'center' }}>
     <motion.div
       initial={{ scale: 0.5, opacity: 0 }}
@@ -726,13 +731,14 @@ const AllDoneView: React.FC<{ accent: string; tokens: ReturnType<typeof useClaud
         fontFamily: '"Charter", Georgia, serif',
       }}
     >
-      You're all set up
+      {t('onboarding.allSetTitle')}
     </Typography>
     <Typography sx={{ mt: 0.4, fontSize: 12.5, color: c.text.secondary }}>
-      You've finished the Maestro Studio tour. You can re-run it anytime from Settings → General.
+      {t('onboarding.allSetDesc')}
     </Typography>
   </Box>
-);
+  );
+};
 
 interface InfoPopoverProps {
   stepId: string;
@@ -742,6 +748,7 @@ interface InfoPopoverProps {
 }
 
 const InfoPopover: React.FC<InfoPopoverProps> = ({ stepId, anchorRef, onClose, tokens: c }) => {
+  const { t } = useTranslation();
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   useEffect(() => {
     const calc = () => {
@@ -771,7 +778,7 @@ const InfoPopover: React.FC<InfoPopoverProps> = ({ stepId, anchorRef, onClose, t
   }, [anchorRef, onClose]);
 
   if (!pos) return null;
-  const text = INFO_BY_STEP_ID[stepId] ?? 'More information coming soon.';
+  const text = t(`onboarding.infoByStepId.${stepId}`, INFO_BY_STEP_ID[stepId] ?? t('onboarding.moreInfoFallback'));
   return (
     <motion.div
       id="onboarding-info-popover"
@@ -808,7 +815,7 @@ const InfoPopover: React.FC<InfoPopoverProps> = ({ stepId, anchorRef, onClose, t
               letterSpacing: '0.04em',
             }}
           >
-            More info
+            {t('onboarding.moreInfoHeading')}
           </Typography>
         </Box>
         <Typography

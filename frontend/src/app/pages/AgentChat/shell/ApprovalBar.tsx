@@ -1,4 +1,5 @@
 import React, { useCallback, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -223,6 +224,7 @@ const CodeBlock: React.FC<{ tokens: ReturnType<typeof useClaudeTokens>; children
 );
 
 const ToolPreview: React.FC<ToolPreviewProps> = ({ request, tokens: c }) => {
+  const { t } = useTranslation();
   const { tool_name, tool_input } = request;
 
   switch (tool_name) {
@@ -234,7 +236,7 @@ const ToolPreview: React.FC<ToolPreviewProps> = ({ request, tokens: c }) => {
               {tool_input.description}
             </Typography>
           )}
-          <CodeBlock tokens={c}>{tool_input.command || '(empty command)'}</CodeBlock>
+          <CodeBlock tokens={c}>{tool_input.command || t('agentChat.approvalBar.emptyCommand')}</CodeBlock>
         </Box>
       );
     }
@@ -280,7 +282,7 @@ const ToolPreview: React.FC<ToolPreviewProps> = ({ request, tokens: c }) => {
             />
             {path && (
               <Typography sx={{ color: c.text.muted, fontSize: '0.75rem', fontFamily: c.font.mono }}>
-                in {path}
+                {t('agentChat.approvalBar.inPath', { path })}
               </Typography>
             )}
           </Box>
@@ -321,6 +323,7 @@ export interface QuestionFormProps {
 const OTHER_KEY = '__other__';
 
 export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, onDeny, compact }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const questions: any[] = request.tool_input.questions || [];
   const [answers, setAnswers] = useState<Answers>(() => {
@@ -418,7 +421,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
           <QuestionAnswerIcon sx={{ fontSize: '1rem' }} />
         </Box>
         <Typography sx={{ color: c.accent.primary, fontWeight: 700, fontSize: '0.85rem' }}>
-          Agent has a question
+          {t('agentChat.approvalBar.agentHasQuestion')}
         </Typography>
       </Box>
 
@@ -435,7 +438,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
                 </Typography>
               )}
               <Typography sx={{ color: c.text.primary, fontSize: '0.85rem', fontWeight: 500, mb: 0.75 }}>
-                {q.question || q.prompt || q.text || '(question)'}
+                {q.question || q.prompt || q.text || t('agentChat.approvalBar.questionFallback')}
               </Typography>
               {hasOptions ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
@@ -468,7 +471,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
                       );
                     })}
                     <Chip
-                      label="Other…"
+                      label={t('agentChat.approvalBar.other')}
                       size="small"
                       onClick={() => toggleOther(i, multi)}
                       sx={{
@@ -491,7 +494,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
                   </Box>
                   {isOtherActive && (
                     <TextField
-                      placeholder="Type your own answer..."
+                      placeholder={t('agentChat.approvalBar.typeOwnAnswer')}
                       value={otherText[i] || ''}
                       onChange={(e) => setOtherText((prev) => ({ ...prev, [i]: e.target.value }))}
                       fullWidth
@@ -512,7 +515,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
                 </Box>
               ) : (
                 <TextField
-                  placeholder="Type your answer..."
+                  placeholder={t('agentChat.approvalBar.typeAnswer')}
                   value={answers[i] || ''}
                   onChange={(e) => setTextAnswer(i, e.target.value)}
                   fullWidth
@@ -547,7 +550,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
             fontSize: '0.8rem',
           }}
         >
-          Submit
+          {t('common.submit')}
         </Button>
         <Button
           variant="outlined"
@@ -560,7 +563,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
             fontSize: '0.8rem',
           }}
         >
-          Dismiss
+          {t('common.dismiss')}
         </Button>
       </Box>
     </Box>
@@ -568,6 +571,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({ request, onApprove, 
 };
 
 const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [trustPattern, setTrustPattern] = useState(false);
@@ -601,7 +605,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             {getToolIcon(request.tool_name)}
           </Box>
           <Typography sx={{ color: c.status.warning, fontWeight: 700, fontSize: '0.85rem' }}>
-            {isSensitive ? 'Sensitive file' : 'Permission Required'}
+            {isSensitive ? t('agentChat.approvalBar.sensitiveFile') : t('agentChat.approvalBar.permissionRequired')}
           </Typography>
           <Chip
             label={request.tool_name}
@@ -634,11 +638,11 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             <WarningAmberIcon sx={{ fontSize: 18, color: c.status.error, mt: 0.1, flexShrink: 0 }} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ color: c.text.primary, fontWeight: 600, fontSize: '0.82rem', lineHeight: 1.3 }}>
-                This file is sensitive: {request.sensitive_label}
+                {t('agentChat.approvalBar.fileIsSensitive', { label: request.sensitive_label })}
               </Typography>
               {request.sensitive_why && (
                 <Typography sx={{ color: c.text.secondary, fontSize: '0.78rem', lineHeight: 1.35, mt: 0.3 }}>
-                  {request.sensitive_why} Maestro Studio asks every time because a bad change here is hard to undo. Approve only if you asked for this.
+                  {request.sensitive_why} {t('agentChat.approvalBar.sensitiveWhySuffix')}
                 </Typography>
               )}
             </Box>
@@ -667,7 +671,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             }
             label={
               <>
-                Always allow files like this <strong>({request.sensitive_label})</strong>. You can change this later in Settings &rarr; Trusted file patterns.
+                {t('agentChat.approvalBar.alwaysAllowFilesLike')} <strong>({request.sensitive_label})</strong>. {t('agentChat.approvalBar.changeLaterInSettings')}
               </>
             }
           />
@@ -680,7 +684,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             onClick={() => onApprove(request.id, undefined, isSensitive && trustPattern)}
             sx={{ bgcolor: c.status.success, '&:hover': { bgcolor: '#1e4d15' }, fontWeight: 600, fontSize: '0.8rem' }}
           >
-            Approve
+            {t('agentChat.approvalBar.approve')}
           </Button>
           {!isSensitive && (
             <Button
@@ -689,7 +693,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
               onClick={() => onApprove(request.id, undefined, false, true)}
               sx={{ borderColor: c.status.success, color: c.status.success, '&:hover': { borderColor: '#1e4d15', bgcolor: 'rgba(45,122,31,0.06)' }, fontWeight: 600, fontSize: '0.8rem' }}
             >
-              Always approve
+              {t('agentChat.approvalBar.alwaysApprove')}
             </Button>
           )}
           <Button
@@ -698,7 +702,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             onClick={() => onDeny(request.id)}
             sx={{ borderColor: c.status.error, color: c.status.error, '&:hover': { borderColor: '#8f2828', bgcolor: 'rgba(181,51,51,0.04)' }, fontWeight: 600, fontSize: '0.8rem' }}
           >
-            Deny
+            {t('agentChat.approvalBar.deny')}
           </Button>
         </Box>
       </Box>
@@ -825,7 +829,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             px: 2,
           }}
         >
-          Approve
+          {t('agentChat.approvalBar.approve')}
         </Button>
         <Button
           variant="outlined"
@@ -842,7 +846,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             px: 2,
           }}
         >
-          Always approve
+          {t('agentChat.approvalBar.alwaysApprove')}
         </Button>
         <Button
           variant="outlined"
@@ -859,7 +863,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
             px: 2,
           }}
         >
-          Deny
+          {t('agentChat.approvalBar.deny')}
         </Button>
       </Box>
     </Box>
@@ -886,6 +890,7 @@ interface BatchApprovalBarProps {
 }
 
 export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, onApprove, onDeny }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
@@ -958,7 +963,7 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
             }}
           >
             <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: c.status.warning, flex: 1 }}>
-              {nonQuestions.length} pending approvals
+              {t('agentChat.approvalBar.pendingApprovals', { count: nonQuestions.length })}
             </Typography>
             <Button
               variant="contained"
@@ -976,7 +981,7 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
                 minHeight: 30,
               }}
             >
-              Always Allow All
+              {t('agentChat.approvalBar.alwaysAllowAll')}
             </Button>
             <Button
               variant="outlined"
@@ -995,7 +1000,7 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
                 minHeight: 30,
               }}
             >
-              Just Once
+              {t('agentChat.approvalBar.justOnce')}
             </Button>
             <Button
               variant="outlined"
@@ -1014,7 +1019,7 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
                 minHeight: 30,
               }}
             >
-              Deny All
+              {t('agentChat.approvalBar.denyAll')}
             </Button>
           </Box>
 
@@ -1051,6 +1056,7 @@ interface GroupRowProps {
 }
 
 const GroupRow: React.FC<GroupRowProps> = ({ group, expanded, onToggle, onApprove, onDeny, onApproveGroup, onDenyGroup }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const meta = useMcpToolMeta(group.parsed);
   const accentColor = meta.integration?.color || c.status.warning;
@@ -1121,7 +1127,7 @@ const GroupRow: React.FC<GroupRowProps> = ({ group, expanded, onToggle, onApprov
                 minHeight: 24,
               }}
             >
-              Approve {group.requests.length}
+              {t('agentChat.approvalBar.approveCount', { count: group.requests.length })}
             </Button>
             <Button
               variant="text"
@@ -1137,7 +1143,7 @@ const GroupRow: React.FC<GroupRowProps> = ({ group, expanded, onToggle, onApprov
                 minHeight: 24,
               }}
             >
-              Deny {group.requests.length}
+              {t('agentChat.approvalBar.denyCount', { count: group.requests.length })}
             </Button>
           </>
         )}

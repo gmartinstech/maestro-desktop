@@ -4,6 +4,7 @@ import Main from './app/Main';
 import ErrorBoundary from './app/components/feedback/ErrorBoundary';
 import { ensureAuthToken } from './shared/config';
 import { runStartupMigrations } from './shared/migrations';
+import './shared/i18n/i18n';
 
 // Must run before ensureAuthToken reads localStorage; v1.0.31 migration force-clears auth+onboarding so the stale token doesn't survive.
 runStartupMigrations();
