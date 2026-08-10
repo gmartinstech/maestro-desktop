@@ -46,7 +46,7 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 
 ## 3. Bring these over (NOT in the repo)
 
-- **Design-system assets** (needed for the BRD epic): `bot-pixel.svg` (the pixel-art robot app icon) and `App onboarding (N).zip` (contains `am.css` = navy+gold tokens, fonts **Inter** + **IBM Plex Mono**, plus DM Sans/Fira Code). On the dev PC these are in `Downloads/`. Brand palette: navy `#003566` / gold `#F5CC00`.
+- **Design system**: lives at `G:\Shared drives\MartinsTech\.claude\skills\martinstech-design-system\` (`SKILL.md` + `assets/`). Icons are DONE — the robot PNGs are vendored into `assets/brand/maestro/`, so the share is no longer needed for a build. Still to bring over for the faithful BRD pass: `assets/fonts/` (**Inter** + **IBM Plex Mono**) to self-host, and `assets/maestro-tokens.css`. Brand palette: navy `#003566` / gold `#F5CC00`. There is no `bot-pixel.svg` — that filename was wrong; `SKILL.md:269` names `assets/maestro/maestro-*.png` as the product app icon (`mt-logo-*` is the company mark).
 - **Secrets** (never commit): provedor-ia `https://llm.martinstech.net/v1` + API key (`mtok_…`) or Keycloak JWT; Keycloak issuer/client; Windows code-signing (Azure Trusted Signing) for DET-2.
 - **Tooling:** Node 20+ (dev used v25.2.1), npm, git, `gh` CLI (auth as `gmartinstech`), Ollama 0.32+ **with cloud models configured** (see §5), optionally LM Studio (`ornith-1.0-35b`).
 
@@ -99,8 +99,11 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 
 A **first-pass** MartinsTech rebrand landed on `main` (commit `feat(brd): first-pass ...`): `claudeTokens.ts` accent → navy `#003566` (azure `#4A90D9` in dark for contrast), neutrals cooled toward navy, fonts → **Inter + IBM Plex Mono** (via Google Fonts; CSP already allows), title + wordmark → "Maestro Studio", orange octopus `logo.png` dropped, hardcoded oranges → navy. A `brand: {navy,gold}` token now exists; **gold `#F5CC00` is NOT used as an accent** (fails contrast on buttons/links) — it belongs on the logo + dark-text badges. Verified: tsc/build green + a live dev launch (Inter loaded, navy buttons, cool bg). NOTE: this pass was **not** cross-vendor-reviewed (ollama cloud was down); re-run `harness/review.mjs` when convenient.
 
-**Faithful pass needs these assets (still NOT in the repo — see §3):**
-- `bot-pixel.svg` → app logo (re-add to `AppShell.tsx`), plus regenerate `electron/build/icon.{ico,icns,png}`, `frontend/public/{favicon.ico,logo.png,apple-touch-icon.png}`, and the splash icon (`electron/splash/icon.png`) so the window/taskbar/installer stop showing the orange octopus.
+**DONE since:** the orange octopus is gone everywhere. `scripts/gen-icons.py` (backend-venv Pillow, no new deps) regenerates all nine surfaces from `assets/brand/maestro/` — `electron/build/icon.{png,ico,icns}`, `electron/splash/icon.png`, `assets/icon.png`, `frontend/public/{favicon.ico,logo.png,apple-touch-icon.png,maestro-mark.png}`. Rerun it after any brand refresh. The splash shader's coral glow and orange-tilted wave (both tuned to the octopus body) moved to gold + azure. **Also done:** the three stacked Windows bars are now one — `titleBarStyle:'hidden'` + `titleBarOverlay` on Win/Linux, menu kept registered but its strip hidden behind a hamburger in the bar (do NOT "simplify" that to `setApplicationMenu(null)`: it deletes every accelerator, incl. the *View → Reload* that `AppShell.tsx` depends on).
+
+**Still showing the old brand:**
+- `electron/splash/splash.html:6,124` — splash still reads "OpenSwarm", directly above the robot.
+- `electron/package.json:130` — `squirrelWindows.iconUrl` still pulls `icon.ico` from `openswarm-ai/openswarm`, so the Windows installer keeps the octopus until DET Step 3 repoints it.
 - **Self-hosted Inter + IBM Plex Mono woff2** (bundle under `frontend/public/fonts` + `@font-face`) so fonts work offline instead of via Google Fonts.
 - **Gold `#F5CC00` placements**: active/selection states, focus rings, badges (dark text on gold), brand mark — wire the `brand.gold` token into those specific spots.
 - Remaining "OpenSwarm" strings: the model-provider group labels (`Main.tsx` DEFAULT_MODEL_PRIORITY) and any onboarding copy are DOM/BRD-copy cleanup, not visual-token work.
