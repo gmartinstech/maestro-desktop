@@ -35,8 +35,16 @@ try {
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $ArchivePath -UseBasicParsing
 
     Write-Host "Extracting..."
-    # tar is built-in on Windows 10+ (bsdtar) and handles .tar.gz natively.
-    & tar -xzf $ArchivePath -C $TempDir.FullName
+    # Resolve bsdtar by absolute path rather than trusting PATH. A bare `tar` can hit
+    # Git Bash's GNU tar first, which reads the "C:" in a Windows path as a REMOTE HOST
+    # and dies with "Cannot connect to C: resolve failed" — a confusing failure that
+    # looks like a network problem. Windows 10+ always ships bsdtar in System32.
+    $TarExe = Join-Path $env:SystemRoot 'System32\tar.exe'
+    if (-not (Test-Path $TarExe)) {
+        $TarExe = (Get-Command tar -ErrorAction SilentlyContinue).Source
+        if (-not $TarExe) { throw "tar not found: expected $env:SystemRoot\System32\tar.exe (Windows 10+) or tar on PATH" }
+    }
+    & $TarExe -xzf $ArchivePath -C $TempDir.FullName
     if ($LASTEXITCODE -ne 0) { throw "tar extract failed" }
 
     $Extracted = Join-Path $TempDir.FullName 'python'
