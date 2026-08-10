@@ -77,7 +77,7 @@ const ACPopup: React.FC<Props> = ({ text, offset = { x: 0, y: 14 } }) => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    let nx = x - w / 2;
+    const nx = x - w / 2;
     let ny = y - h - offset.y;
     let flipY = true;
     if (ny < SAFE_PAD) {

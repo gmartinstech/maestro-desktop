@@ -96,7 +96,7 @@ export function useWindowedList({ ids, estimateHeight, enabled }: UseWindowedLis
     const curEnd = endRef.current;
     // Hysteresis: must-mount the tight band, but keep already-mounted edges until they drift past the looser band, so rows on the boundary don't flip-flop mount/unmount on every scroll tick.
     let next = Math.max(loose.start, Math.min(curStart, tight.start));
-    let nextEnd = Math.min(loose.end, Math.max(curEnd, tight.end));
+    const nextEnd = Math.min(loose.end, Math.max(curEnd, tight.end));
     next = Math.max(0, Math.min(next, Math.max(0, nextEnd - 1)));
     if (next === curStart && nextEnd === curEnd) return;
     startRef.current = next;

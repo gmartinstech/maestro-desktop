@@ -73,7 +73,7 @@ const CustomToolConnect: React.FC<CustomToolConnectProps> = ({
                               icon={<CheckCircleIcon sx={{ fontSize: 12 }} />}
                               label={tool.connected_account_email ? `Connected · ${tool.connected_account_email}` : 'Connected'}
                               size="small"
-                              onDelete={(ig.credentialFields || ig.authType === 'oauth2' || ig.authType === 'device_code') ? (e: React.SyntheticEvent) => { e.stopPropagation(); ig.authType === 'device_code' ? handleM365Disconnect(tool.id) : handleDisconnectIntegration(tool.id, ig); } : undefined}
+                              onDelete={(ig.credentialFields || ig.authType === 'oauth2' || ig.authType === 'device_code') ? (e: React.SyntheticEvent) => { e.stopPropagation(); if (ig.authType === 'device_code') handleM365Disconnect(tool.id); else handleDisconnectIntegration(tool.id, ig); } : undefined}
                               onClick={(e) => e.stopPropagation()}
                               sx={{ bgcolor: c.status.successBg, color: c.status.success, fontSize: '0.7rem', height: 22, '& .MuiChip-icon': { color: c.status.success }, '& .MuiChip-deleteIcon': { color: c.status.success, '&:hover': { color: c.status.error } }, flexShrink: 0 }}
                             />

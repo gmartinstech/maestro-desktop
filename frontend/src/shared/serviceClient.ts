@@ -13,7 +13,7 @@ function _newSubmissionId(): string {
 }
 
 let _lastTs = Date.now();
-let _appStart = Date.now();
+const _appStart = Date.now();
 
 const _queue: Record<string, unknown>[] = [];
 let _flushTimer: ReturnType<typeof setTimeout> | null = null;
