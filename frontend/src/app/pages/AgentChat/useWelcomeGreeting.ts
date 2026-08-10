@@ -5,7 +5,7 @@ import { addMessage, type AgentSession } from '@/shared/state/agentsSlice';
 
 // The first thing a new user reads. Written as a normal assistant turn (prose, no headings) so it streams in exactly like a real reply. No em-dashes.
 export const WELCOME_GREETING =
-  "Hi, I'm Maestro, your personal AI team. I can do just about anything right on your laptop, " +
+  "Hi, I'm Maestro Studio, your personal AI team. I can do just about anything right on your laptop, " +
   "so bring me anything: a tough problem, a half-formed idea, something you need to write. " +
   "We'll figure it out together.\n\nWhere do you want to start?";
 
