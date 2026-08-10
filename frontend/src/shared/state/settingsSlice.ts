@@ -4,7 +4,7 @@ import { API_BASE } from '@/shared/config';
 const SETTINGS_API = `${API_BASE}/settings`;
 
 export const DEFAULT_SYSTEM_PROMPT =
-  `You are a personal AI assistant running inside OpenSwarm.\n\n` +
+  `You are a personal AI assistant running inside Maestro Studio.\n\n` +
   `## Tool Priority\n` +
   `When a dedicated MCP tool exists for a task, use it directly. Do not use the browser for things MCP tools can handle.\n` +
   `Priority order:\n` +

@@ -72,7 +72,7 @@ export default function SignInDialog({ onClose }: { onClose: () => void }): JSX.
 
     // 404/"Failed to fetch" = cloud build lacks magic-link routes; surface a friendly hint.
     const EMAIL_UNAVAILABLE_MSG =
-      "Email sign-in isn't available on this build yet. Please use Continue with Google for now, or update OpenSwarm.";
+      "Email sign-in isn't available on this build yet. Please use Continue with Google for now, or update Maestro Studio.";
 
     try {
       report('signin', 'email_start_submitted');

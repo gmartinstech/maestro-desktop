@@ -127,7 +127,7 @@ const UsageStats: React.FC = () => {
   const savingsQuips = [
     `You've sidestepped ${formatCost(savedAmt)} in API fees by routing ${sessionsLabel} agent runs through your own subscriptions. The meter never blinked.`,
     `${formatCost(savedAmt)} saved, about ${lattes} oat-milk latte${lattes === 1 ? '' : 's'} you didn't expense to a token meter.`,
-    `Your subscriptions quietly did the work of a ${formatCost(savedAmt)} API bill. OpenSwarm just drove around the toll booth.`,
+    `Your subscriptions quietly did the work of a ${formatCost(savedAmt)} API bill. Maestro Studio just drove around the toll booth.`,
     `${formatCost(savedAmt)} that stayed in your wallet across ${sessionsLabel} sessions. Per-token guilt: zero.`,
   ];
   const savingsQuip = savingsQuips[Math.floor(Date.now() / 86_400_000) % savingsQuips.length];

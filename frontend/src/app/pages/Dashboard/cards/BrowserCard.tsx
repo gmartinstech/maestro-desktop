@@ -1363,7 +1363,7 @@ const BrowserCard: React.FC<Props> = ({
           </DialogTitle>
           <DialogContent sx={{ pb: 1 }}>
             <Typography sx={{ fontSize: '0.85rem', color: c.text.secondary, lineHeight: 1.5 }}>
-              Sorry, OpenSwarm doesn't support passkeys. Please sign in with a password or another method.
+              Sorry, Maestro Studio doesn't support passkeys. Please sign in with a password or another method.
             </Typography>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>

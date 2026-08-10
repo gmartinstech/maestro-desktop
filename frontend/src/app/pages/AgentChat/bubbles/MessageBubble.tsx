@@ -128,7 +128,7 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
   if (/rate_limit_error|free_pool_busy|overloaded_error|too many requests/i.test(text)) {
     return {
       kind: 'network',
-      title: 'OpenSwarm is busy right now',
+      title: 'Maestro Studio is busy right now',
       detail: 'A lot of requests are coming through at once. Wait a few seconds, then send your message again.',
     };
   }

@@ -729,7 +729,7 @@ const AllDoneView: React.FC<{ accent: string; tokens: ReturnType<typeof useClaud
       You're all set up
     </Typography>
     <Typography sx={{ mt: 0.4, fontSize: 12.5, color: c.text.secondary }}>
-      You've finished the OpenSwarm tour. You can re-run it anytime from Settings → General.
+      You've finished the Maestro Studio tour. You can re-run it anytime from Settings → General.
     </Typography>
   </Box>
 );
@@ -866,7 +866,7 @@ When a sub agent finishes, it collapses back into its parent. You can always reo
 Skills fill that gap.
 
 A skill is a set of instructions that teach an agent how to handle a specific kind of task. When a skill is active, the agent follows its guidance and produces better, more consistent results in that area.`,
-  make_app: `Apps are interactive, AI generated web applications that live inside OpenSwarm.
+  make_app: `Apps are interactive, AI generated web applications that live inside Maestro Studio.
 
 Instead of paying for software or spending weeks building a UI, you describe what you want and an agent writes it for you. A live, runnable app appears in seconds.
 

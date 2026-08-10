@@ -22,7 +22,7 @@ export const ContextRecoveredPill: React.FC<{ sessionId: string }> = ({ sessionI
   return (
     <Fade in={!!cr} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
       <Box
-        title="This chat's memory overflowed mid-reply. OpenSwarm recovered it and retried automatically; nothing was lost."
+        title="This chat's memory overflowed mid-reply. Maestro Studio recovered it and retried automatically; nothing was lost."
         sx={{
           display: 'inline-flex',
           alignItems: 'center',

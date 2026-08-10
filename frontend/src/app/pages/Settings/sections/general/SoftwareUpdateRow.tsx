@@ -64,7 +64,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
             {updateStatus === 'downloading' && `Downloading update… ${Math.round(downloadPercent)}%`}
             {updateStatus === 'downloaded' && `Version ${availableVersion} is ready to install.`}
             {updateStatus === 'error' && (updateError || 'Update check failed.')}
-            {updateStatus === 'idle' && 'Check for new versions of OpenSwarm.'}
+            {updateStatus === 'idle' && 'Check for new versions of Maestro Studio.'}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, ml: 2 }}>

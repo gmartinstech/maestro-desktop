@@ -87,7 +87,7 @@ const ImportModal: React.FC<Props> = ({ preflight, open, committing, onConfirm, 
                   boxShadow: 'none',
                 }}
               >
-                Add to OpenSwarm
+                Add to Maestro Studio
               </Button>
             </Box>
           </Box>

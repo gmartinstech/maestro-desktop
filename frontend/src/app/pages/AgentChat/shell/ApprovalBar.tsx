@@ -638,7 +638,7 @@ const GenericApprovalBar: React.FC<Props> = ({ request, onApprove, onDeny }) => 
               </Typography>
               {request.sensitive_why && (
                 <Typography sx={{ color: c.text.secondary, fontSize: '0.78rem', lineHeight: 1.35, mt: 0.3 }}>
-                  {request.sensitive_why} OpenSwarm asks every time because a bad change here is hard to undo. Approve only if you asked for this.
+                  {request.sensitive_why} Maestro Studio asks every time because a bad change here is hard to undo. Approve only if you asked for this.
                 </Typography>
               )}
             </Box>

@@ -133,7 +133,7 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
       <Box sx={rowSx}>
         <Box>
           <Typography sx={{ ...labelSx, color: c.status.error }}>Erase all content and settings</Typography>
-          <Typography sx={descSx}>Removes every chat, app, skill, and setting and restarts OpenSwarm fresh. This can't be undone.</Typography>
+          <Typography sx={descSx}>Removes every chat, app, skill, and setting and restarts Maestro Studio fresh. This can't be undone.</Typography>
         </Box>
         <Button variant="outlined" size="small" onClick={() => { setErr(null); setEraseText(''); setEraseOpen(true); }} sx={eraseBtnSx}>Erase</Button>
       </Box>
@@ -171,7 +171,7 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
       <Dialog open={eraseOpen} onClose={closeAll} PaperProps={{ sx: dialogPaperSx }}>
         <Box sx={{ p: 2.5 }}>
           <Typography sx={titleSx}>Erase all content and settings?</Typography>
-          <Typography sx={bodySx}>This deletes every chat, app, skill, and setting, then restarts OpenSwarm. It can't be undone.</Typography>
+          <Typography sx={bodySx}>This deletes every chat, app, skill, and setting, then restarts Maestro Studio. It can't be undone.</Typography>
           <TextField
             value={eraseText}
             onChange={(e) => setEraseText(e.target.value)}

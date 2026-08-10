@@ -1416,7 +1416,7 @@ async function handlePerformAction(params: Record<string, any>): Promise<Record<
   const domain = String(params.domain || '').toLowerCase().replace(/^\./, '');
   const wv = findWebviewByDomain(domain);
   if (!wv) {
-    return { error: `No ${domain} browser card is open. Open ${domain} in an OpenSwarm browser card and sign in, then retry.` };
+    return { error: `No ${domain} browser card is open. Open ${domain} in a Maestro Studio browser card and sign in, then retry.` };
   }
   const steps = Array.isArray(params.steps) ? params.steps : [];
   const results: Record<string, any>[] = [];

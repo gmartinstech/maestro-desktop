@@ -568,7 +568,7 @@ const agentsSlice = createSlice({
         const { draftId, mode, setActive, targetDirectory, model, provider, thinkingLevel, seededMessages, welcome, dashboardId } = action.payload;
         state.sessions[draftId] = {
           id: draftId,
-          name: welcome === true ? 'First chat with OpenSwarm' : 'New chat',
+          name: welcome === true ? 'First chat with Maestro Studio' : 'New chat',
           status: 'draft',
           provider: provider || 'anthropic',
           model: model || 'sonnet',

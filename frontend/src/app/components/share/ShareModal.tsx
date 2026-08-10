@@ -171,7 +171,7 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
                 false,
                 <LinkIcon sx={{ fontSize: 20 }} />,
                 'Create share link',
-                'A link that opens straight in OpenSwarm.',
+                'A link that opens straight in Maestro Studio.',
                 true,
                 'Coming soon',
               )}

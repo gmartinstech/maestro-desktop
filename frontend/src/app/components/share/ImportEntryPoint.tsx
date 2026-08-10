@@ -179,7 +179,7 @@ const ImportEntryPoint: React.FC = () => {
           >
             <FileDownloadIcon sx={{ fontSize: 40, color: c.accent.primary }} />
             <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: c.text.primary }}>
-              Drop to add to OpenSwarm
+              Drop to add to Maestro Studio
             </Typography>
           </Box>
         </Box>

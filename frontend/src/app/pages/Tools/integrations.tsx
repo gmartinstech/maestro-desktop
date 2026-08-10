@@ -33,7 +33,7 @@ export const INTEGRATIONS: Integration[] = [
     authType: 'browser_login',
     connectLabel: 'Sign in to X',
     loginUrl: 'https://x.com/i/flow/login',
-    connectInstructions: 'Uses your own X account: open x.com in an OpenSwarm browser card and sign in once. Nothing is stored, the integration borrows your live session per request and paces itself to stay within human limits.',
+    connectInstructions: 'Uses your own X account: open x.com in a Maestro Studio browser card and sign in once. Nothing is stored, the integration borrows your live session per request and paces itself to stay within human limits.',
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20">
         <path fill="#000000" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
@@ -50,7 +50,7 @@ export const INTEGRATIONS: Integration[] = [
     authType: 'browser_login',
     connectLabel: 'Sign in to TikTok',
     loginUrl: 'https://www.tiktok.com/login',
-    connectInstructions: 'Uses your own TikTok account: open tiktok.com in an OpenSwarm browser card and sign in once. Nothing is stored. Note: TikTok signs every request, so signed writes and uploads route to the OpenSwarm browser agent (also free, using your real session).',
+    connectInstructions: 'Uses your own TikTok account: open tiktok.com in a Maestro Studio browser card and sign in once. Nothing is stored. Note: TikTok signs every request, so signed writes and uploads route to the Maestro Studio browser agent (also free, using your real session).',
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20">
         <path fill="#FE2C55" d="M16.6 5.82a4.28 4.28 0 0 1-1.05-2.82h-3.2v12.86a2.6 2.6 0 1 1-1.86-2.49V9.9a5.77 5.77 0 1 0 5.06 5.72V9.01a7.45 7.45 0 0 0 4.35 1.4V7.2a4.28 4.28 0 0 1-3.3-1.38z"/>
@@ -67,7 +67,7 @@ export const INTEGRATIONS: Integration[] = [
     authType: 'browser_login',
     connectLabel: 'Sign in to Reddit',
     loginUrl: 'https://www.reddit.com/login',
-    connectInstructions: 'Uses your own Reddit account: open reddit.com in an OpenSwarm browser card and sign in once. Nothing is stored, the integration borrows your live session per request and paces itself to stay within human limits.',
+    connectInstructions: 'Uses your own Reddit account: open reddit.com in a Maestro Studio browser card and sign in once. Nothing is stored, the integration borrows your live session per request and paces itself to stay within human limits.',
     icon: (
       <svg viewBox="0 0 24 24" width="22" height="22">
         <circle cx="12" cy="12" r="12" fill="#FF4500"/>

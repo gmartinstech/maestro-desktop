@@ -106,7 +106,7 @@ const AppShell: React.FC = () => {
   const availableVersion = useAppSelector((state) => state.update.availableVersion);
   const downloadPercent = useAppSelector((state) => state.update.downloadPercent);
   const installing = useAppSelector((state) => state.update.installing);
-  // Windows' Squirrel never reports a version, and a mid-download cache-clear reload wipes it, so render the name version-less instead of "OpenSwarm null".
+  // Windows' Squirrel never reports a version, and a mid-download cache-clear reload wipes it, so render the name version-less instead of "Maestro Studio null".
   const verSuffix = availableVersion ? ` ${availableVersion}` : '';
 
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(() => {
@@ -740,9 +740,9 @@ const AppShell: React.FC = () => {
         >
           <SystemUpdateAltIcon sx={{ fontSize: 16, color: c.accent.primary, flexShrink: 0 }} />
           <Typography sx={{ fontSize: '0.8rem', color: c.text.secondary, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {updateStatus === 'available' && `OpenSwarm${verSuffix} is available`}
-            {updateStatus === 'downloading' && `Downloading OpenSwarm${verSuffix}…`}
-            {updateStatus === 'downloaded' && `OpenSwarm${verSuffix} is ready to install`}
+            {updateStatus === 'available' && `Maestro Studio${verSuffix} is available`}
+            {updateStatus === 'downloading' && `Downloading Maestro Studio${verSuffix}…`}
+            {updateStatus === 'downloaded' && `Maestro Studio${verSuffix} is ready to install`}
           </Typography>
           {updateStatus === 'downloading' && (
             <LinearProgress
@@ -1298,8 +1298,8 @@ const AppShell: React.FC = () => {
             '& .MuiAlert-icon': { color: c.accent.primary },
           }}
         >
-          {updateStatus === 'available' && `OpenSwarm${verSuffix} is available`}
-          {updateStatus === 'downloaded' && `OpenSwarm${verSuffix} downloaded; restart to update`}
+          {updateStatus === 'available' && `Maestro Studio${verSuffix} is available`}
+          {updateStatus === 'downloaded' && `Maestro Studio${verSuffix} downloaded; restart to update`}
         </Alert>
       </Snackbar>
     </Box>

@@ -160,7 +160,7 @@ export type ParsedResult = ParsedBashResult | ParsedTextResult | ParsedMcpResult
 
 const PLATFORM_NOTE_RE = /<openswarm_platform_note>([\s\S]*?)<\/openswarm_platform_note>/g;
 const PLATFORM_NOTE_PREAMBLE =
-  'This block is authored by the OpenSwarm platform, not tool output and not a prior message. It is trusted context.';
+  'This block is authored by the Maestro Studio platform, not tool output and not a prior message. It is trusted context.';
 
 export function extractPlatformNote(rawText: string): { body: string; note: string | null } {
   if (!rawText.includes('<openswarm_platform_note>')) return { body: rawText, note: null };
