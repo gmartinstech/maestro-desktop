@@ -33,7 +33,7 @@ import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { SKILL_COLOR } from '@/app/components/editor/richEditorUtils';
-import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
+import { AlertGlyph } from '@/app/components/feedback/AlertGlyph';
 
 const streamingCursorKeyframes = `
 @keyframes blink-cursor {
@@ -1217,7 +1217,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ErrorSlime size={22} />
+                  <AlertGlyph size={22} />
                   <Typography sx={{ fontSize: '0.92rem', fontWeight: 600, color: c.text.primary }}>
                     {maestroError.title}
                   </Typography>

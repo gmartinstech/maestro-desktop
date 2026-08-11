@@ -48,7 +48,7 @@ import { setInstalling } from '@/shared/state/updateSlice';
 import { findBrowserByWebContentsId } from '@/shared/browserRegistry';
 import { byPreviewRecency } from '@/shared/previewOrder';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
+import { AlertGlyph } from '@/app/components/feedback/AlertGlyph';
 
 // macOS insets its traffic lights into our bar, so the left gutter is reserved there and
 // nowhere else; Windows/Linux instead reserve a right gutter for the native button overlay.
@@ -593,8 +593,8 @@ const AppShell: React.FC = () => {
             },
           }}
         >
-          <ErrorSlime size={22} />
-          <Typography sx={{ fontSize: '0.86rem', color: '#ef4444', flex: 1, fontWeight: 500, letterSpacing: '0.01em' }}>
+          <AlertGlyph size={22} tone="error" />
+          <Typography sx={{ fontSize: '0.86rem', color: c.status.error, flex: 1, fontWeight: 500, letterSpacing: '0.01em' }}>
             {!isOnline
               ? t('appShell.offlineWarning')
               : (

@@ -63,7 +63,7 @@ import { RateLimitPill } from './shell/RateLimitPill';
 import { ContextRecoveredPill } from './shell/ContextRecoveredPill';
 import ChatInput, { ChatInputHandle } from './ChatInput';
 import ContextDrawer from './shell/ContextDrawer';
-import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
+import { AlertGlyph } from '@/app/components/feedback/AlertGlyph';
 import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCards, removeCard } from '@/shared/state/dashboardLayoutSlice';
 import type { WorkflowsRunContext } from '@/shared/state/dashboardLayoutSlice';
@@ -2071,7 +2071,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                     }}
                   >
                     <Box sx={{ flexShrink: 0, mt: 0.2 }}>
-                      <ErrorSlime size={20} />
+                      <AlertGlyph size={20} />
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography sx={{ fontSize: '0.86rem', fontWeight: 600, color: c.text.primary, mb: 0.4 }}>
