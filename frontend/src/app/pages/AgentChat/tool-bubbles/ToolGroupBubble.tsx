@@ -89,7 +89,7 @@ const ToolGroupBubble: React.FC<Props> = React.memo(({ group, isSessionRunning =
     return c2.tool || 'unknown';
   });
   const workflowGroupLabel = (() => {
-    if (group.mcpServer !== 'openswarm-schedule') return null;
+    if (group.mcpServer !== 'maestro-schedule') return null;
     const parsedLabels = Array.from(new Set(toolNames.map((name) => {
       const parsed = parseMcpToolName(name);
       return parsed.isMcp ? getWorkflowToolLabel(parsed.action) : null;

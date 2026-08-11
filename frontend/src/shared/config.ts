@@ -1,17 +1,17 @@
 const _w = window as any;
 // Prefer the preload-injected port; if it's missing (preload raced the backend port being picked), re-query the live value before falling back to 8324. The bare 8324 guess is wrong on any machine where the backend landed on a fallback port (e.g. 8324 was held by a leftover backend); see the self-heal below.
 const port =
-  _w.__OPENSWARM_PORT__ ||
-  (_w.openswarm && typeof _w.openswarm.getBackendPortLive === 'function'
-    ? _w.openswarm.getBackendPortLive()
+  _w.__MAESTRO_PORT__ ||
+  (_w.maestro && typeof _w.maestro.getBackendPortLive === 'function'
+    ? _w.maestro.getBackendPortLive()
     : 0) ||
   8324;
 const host = window.location.hostname || 'localhost';
 
 export const API_BASE = `http://${host}:${port}/api`;
 export const WS_BASE = `ws://${host}:${port}`;
-// Must match openswarm-cloud's PUBLIC_BASE_URL (fly.toml) and the Google OAuth redirect URI.
-export const OPENSWARM_DEFAULT_PROXY_URL = 'https://api.openswarm.com';
+// provedor-ia, the MartinsTech OpenAI-compatible gateway; must match backend MAESTRO_DEFAULT_PROXY_URL.
+export const MAESTRO_DEFAULT_PROXY_URL = 'https://llm.martinstech.net/v1';
 
 // Per-install token from Electron preload; cached after first resolve. Call refreshAuthToken() on 4401.
 let _authTokenCache: string = '';
@@ -22,7 +22,7 @@ export function getAuthToken(): string {
 }
 
 export async function refreshAuthToken(): Promise<string> {
-  const ow = (window as any).openswarm;
+  const ow = (window as any).maestro;
   if (ow && typeof ow.getAuthToken === 'function') {
     try {
       const tok = await ow.getAuthToken();
@@ -57,7 +57,7 @@ let _portHealTried = false;
 function _maybeHealBackendPort(): void {
   if (_portHealTried) return;
   try {
-    const ow = (window as any).openswarm;
+    const ow = (window as any).maestro;
     const live = ow && typeof ow.getBackendPortLive === 'function' ? ow.getBackendPortLive() : null;
     if (typeof live === 'number' && live > 0 && live !== port) {
       _portHealTried = true;
@@ -74,8 +74,8 @@ const _cachedFetches = new Map<string, { resp: Response; expiresAt: number }>();
 const _GET_CACHE_TTL_MS = 1000;
 
 function _installAuthFetchInterceptor() {
-  if ((window as any).__OPENSWARM_FETCH_PATCHED__) return;
-  (window as any).__OPENSWARM_FETCH_PATCHED__ = true;
+  if ((window as any).__MAESTRO_FETCH_PATCHED__) return;
+  (window as any).__MAESTRO_FETCH_PATCHED__ = true;
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async function patchedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

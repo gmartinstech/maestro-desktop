@@ -30,7 +30,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
       dispatch(setUpdateError('Update check timed out. Please try again.'));
     }, 15000);
     try {
-      await (window as any).openswarm?.checkForUpdates();
+      await (window as any).maestro?.checkForUpdates();
     } catch {
       /* error handled via IPC event listener */
     } finally {
@@ -40,7 +40,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
 
   const handleDownloadUpdate = async () => {
     try {
-      await (window as any).openswarm?.downloadUpdate();
+      await (window as any).maestro?.downloadUpdate();
     } catch {
       /* error handled via IPC event listener */
     }
@@ -49,7 +49,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
   const handleInstallUpdate = () => {
     if (installing) return;
     dispatch(setInstalling());
-    (window as any).openswarm?.installUpdate();
+    (window as any).maestro?.installUpdate();
   };
 
   return (

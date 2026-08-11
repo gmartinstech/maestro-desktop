@@ -52,7 +52,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
         borderRadius: `${typeof radius === 'number' ? `${radius}px` : radius}`,
         bgcolor: c.border.subtle,
         opacity: 0.5,
-        animation: reduced ? 'none' : `openswarmPulse ${DURATION_MS.ambient}ms ${EASE.pulse} infinite`,
+        animation: reduced ? 'none' : `maestroPulse ${DURATION_MS.ambient}ms ${EASE.pulse} infinite`,
         ...pulseKeyframes,
       }}
     />

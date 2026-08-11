@@ -160,7 +160,7 @@ export function useToolConnections({ items, setSnackbar, setExpandedToolId }: De
 
   const handleSlackAutoConnect = async () => {
     if (!credDialogToolId || !credDialogIntegration) return;
-    const slackBridge = (window as any).openswarm?.connectSlack;
+    const slackBridge = (window as any).maestro?.connectSlack;
     if (!slackBridge) {
       setSnackbar({ open: true, message: 'Slack auto-connect requires the desktop app', severity: 'error' });
       return;

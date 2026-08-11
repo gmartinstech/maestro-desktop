@@ -25,7 +25,7 @@ export const HIDDEN_PATH_SEGMENTS = new Set<string>([
   '.next',
   '__pycache__',
   '.venv',
-  '.openswarm',
+  '.maestro',
 ]);
 
 export function isHiddenWorkspacePath(p: string): boolean {

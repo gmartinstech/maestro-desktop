@@ -27,7 +27,7 @@ const GeneralAdvanced: React.FC<{
   // Provenance: the exact commit this build was cut from. Surfaced so a support screenshot of Settings is enough to identify the shipped code. Empty in dev / web (no Electron bridge or unknown sha), in which case we hide the row.
   const [buildLabel, setBuildLabel] = React.useState<string | null>(null);
   React.useEffect(() => {
-    const api = (window as { openswarm?: { getBuildInfo?: () => Promise<{ shortSha: string; channel: string }> } }).openswarm;
+    const api = (window as { maestro?: { getBuildInfo?: () => Promise<{ shortSha: string; channel: string }> } }).maestro;
     api?.getBuildInfo?.()
       .then((b) => { if (b?.shortSha && b.shortSha !== 'unknown') setBuildLabel(`${b.shortSha} (${b.channel})`); })
       .catch(() => {});
@@ -111,7 +111,7 @@ const GeneralAdvanced: React.FC<{
           onClick={() => {
             report('onboarding_v2', 'tour_restarted');
             try {
-              window.localStorage.removeItem('openswarm.onboarding.v2');
+              window.localStorage.removeItem('maestro.onboarding.v2');
             } catch { /* ignore */ }
             dispatch(resetTour());
             dispatch(closeSettingsModal());

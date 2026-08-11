@@ -103,9 +103,9 @@ class OnboardingDirector {
       report('step_aborted_user_offscript', { step_id: stepId });
       controller.abort('user-cancel');
     };
-    window.addEventListener('openswarm:onboarding:lost_target', onLost);
+    window.addEventListener('maestro:onboarding:lost_target', onLost);
     window.addEventListener('hashchange', onRouteChange);
-    window.addEventListener('openswarm:onboarding:user_offscript', onUserOffscript);
+    window.addEventListener('maestro:onboarding:user_offscript', onUserOffscript);
 
     try {
       await runStep({
@@ -119,9 +119,9 @@ class OnboardingDirector {
         isDependencySatisfied: this.isDependencySatisfied,
       });
     } finally {
-      window.removeEventListener('openswarm:onboarding:lost_target', onLost);
+      window.removeEventListener('maestro:onboarding:lost_target', onLost);
       window.removeEventListener('hashchange', onRouteChange);
-      window.removeEventListener('openswarm:onboarding:user_offscript', onUserOffscript);
+      window.removeEventListener('maestro:onboarding:user_offscript', onUserOffscript);
       if (this.currentAbort === controller) {
         this.currentAbort = null;
       }

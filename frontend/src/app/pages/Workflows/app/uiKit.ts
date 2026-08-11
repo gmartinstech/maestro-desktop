@@ -30,7 +30,7 @@ export interface WCPalette {
   warn: string;
   warnBg: string;
   trackOff: string;
-  // Structural primitives shared with the rest of OpenSwarm (sourced from claudeTokens in useWC), so the window stops looking built-separate.
+  // Structural primitives shared with the rest of Maestro (sourced from claudeTokens in useWC), so the window stops looking built-separate.
   shadow: ClaudeTokens['shadow'];
   radius: ClaudeTokens['radius'];
   border: ClaudeTokens['border'];

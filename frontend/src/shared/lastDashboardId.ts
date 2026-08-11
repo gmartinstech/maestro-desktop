@@ -1,5 +1,5 @@
 // The dashboard the user is currently on, mirrored to a window global so low-level non-React code (the addBrowserCard reducer) can tag a new browser card with its home dashboard at birth, instead of the card leaking onto every dashboard until the first layout save.
-const WINDOW_KEY = '__openswarm_last_dashboard_id';
+const WINDOW_KEY = '__maestro_last_dashboard_id';
 
 export function setLastDashboardId(id: string | null): void {
   if (typeof window === 'undefined') return;

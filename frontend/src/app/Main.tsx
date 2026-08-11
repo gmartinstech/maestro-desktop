@@ -47,7 +47,7 @@ if (typeof window !== 'undefined') {
     } catch { /* never let the handler itself throw */ }
   });
 
-  (window as any).__openswarmPrefetchRoute = (path: string) => {
+  (window as any).__maestroPrefetchRoute = (path: string) => {
     switch (path) {
       case '/views':
       case '/analytics': void import('./pages/Analytics/Analytics'); return;
@@ -244,7 +244,7 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   useEffect(() => {
     if (!loaded) return;
-    (window as any).openswarm?.setAllowPrerelease?.(allowExperimentalUpdates);
+    (window as any).maestro?.setAllowPrerelease?.(allowExperimentalUpdates);
   }, [loaded, allowExperimentalUpdates]);
   // Hold paint until settings land so the user's theme renders first; Electron's ready-to-show relies on this.
   if (!loaded) return null;
@@ -255,16 +255,12 @@ const DEFAULT_MODEL_PRIORITY: string[] = [
   'Anthropic',
   'OpenAI',
   'Google',
-  'OpenSwarm Pro',
-  'OpenSwarm',
 ];
 
 const DEFAULT_MODEL_PICKS: Record<string, string[]> = {
   Anthropic: ['sonnet-cc', 'sonnet'],
   OpenAI: ['gpt-5.4-mini', 'gpt-5.4'],
   Google: ['gemini-2.5-flash', 'gemini-3-flash', 'gemini-2.5-pro'],
-  'OpenSwarm Pro': ['sonnet', 'opus'],
-  OpenSwarm: ['gpt-5-mini', 'claude-haiku-4.5', 'gpt-4.1'],
 };
 
 function pickFallbackModel(
@@ -375,7 +371,7 @@ const CrashRecoveryChip: React.FC = () => {
   const [show, setShow] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
-    const api = (window as any).openswarm as OpenSwarmAPI | undefined;
+    const api = (window as any).maestro as MaestroAPI | undefined;
     if (!api?.getCrashRecoveryInfo) return;
     api.getCrashRecoveryInfo().then((info) => {
       if (info) { setMounted(true); setShow(true); }
@@ -414,7 +410,7 @@ const UpdateListener: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    const api = (window as any).openswarm as OpenSwarmAPI | undefined;
+    const api = (window as any).maestro as MaestroAPI | undefined;
     if (!api?.getAppVersion) return;
 
     api.getAppVersion().then((v: string) => dispatch(setAppVersion(v)));
@@ -435,9 +431,9 @@ const UpdateListener: React.FC<{ children: React.ReactNode }> = ({ children }) =
     });
 
     const cleanups = [
-      api.onUpdateAvailable?.((info: OpenSwarmUpdateInfo) => dispatch(setUpdateAvailable(info.version))),
+      api.onUpdateAvailable?.((info: MaestroUpdateInfo) => dispatch(setUpdateAvailable(info.version))),
       api.onUpdateNotAvailable?.(() => dispatch(setUpdateNotAvailable())),
-      api.onDownloadProgress?.((p: OpenSwarmDownloadProgress) => dispatch(setDownloading(p.percent))),
+      api.onDownloadProgress?.((p: MaestroDownloadProgress) => dispatch(setDownloading(p.percent))),
       api.onUpdateDownloaded?.(() => dispatch(setUpdateDownloaded())),
       api.onUpdateError?.((msg: string) => dispatch(setUpdateError(msg))),
     ];

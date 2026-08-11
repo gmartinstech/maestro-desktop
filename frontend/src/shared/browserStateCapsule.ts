@@ -13,7 +13,7 @@ const CAPSULE_CAP = 100;
 const CAPTURE_TIMEOUT_MS = 800;
 const capsules = new Map<string, TabCapsule>();
 
-interface OpenswarmCapsuleBridge {
+interface MaestroCapsuleBridge {
   setSessionCapsule?: (wcId: number, capsule: TabCapsule) => void;
 }
 
@@ -44,7 +44,7 @@ export async function captureTabCapsule(wv: BrowserWebview | null | undefined, t
 export function registerCapsuleForRestore(wv: BrowserWebview, tabId: string): void {
   const capsule = capsules.get(tabId);
   if (!capsule) return;
-  const bridge = (window as unknown as { openswarm?: OpenswarmCapsuleBridge }).openswarm;
+  const bridge = (window as unknown as { maestro?: MaestroCapsuleBridge }).maestro;
   if (!bridge?.setSessionCapsule) return;
   try {
     bridge.setSessionCapsule(wv.getWebContentsId(), capsule);

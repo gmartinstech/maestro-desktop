@@ -4,19 +4,19 @@ import { fetchTools } from '@/shared/state/toolsSlice';
 import { API_BASE } from '@/shared/config';
 import { report } from '@/shared/serviceClient';
 
-/** Subscribe to openswarm://oauth deep-links from Electron main; no-op in browser. */
+/** Subscribe to maestro://oauth deep-links from Electron main; no-op in browser. */
 export function useDeepLink(): void {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    const api = (window as any).openswarm as OpenSwarmAPI | undefined;
+    const api = (window as any).maestro as MaestroAPI | undefined;
     if (!api) return;
 
     let unsubscribeOauth: (() => void) | undefined;
     if (api?.onOauthClaim) {
       unsubscribeOauth = api.onOauthClaim(async (rawUrl: string) => {
         try {
-          // openswarm://oauth/{provider}/complete?session_id=...&tool_id=...
+          // maestro://oauth/{provider}/complete?session_id=...&tool_id=...
           const url = new URL(rawUrl);
           if (url.host !== 'oauth' || !url.pathname.endsWith('/complete')) {
             console.warn('[deep-link] Unexpected oauth-claim URL:', rawUrl);

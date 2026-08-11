@@ -6,7 +6,7 @@ export async function handleSlashCommand(cmd: string, sessionId: string): Promis
   const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
   if (cmd === '/context') {
-    window.dispatchEvent(new CustomEvent('openswarm:context-drawer', { detail: { sessionId, open: true } }));
+    window.dispatchEvent(new CustomEvent('maestro:context-drawer', { detail: { sessionId, open: true } }));
     return true;
   }
   // /compact and /clear mount at /api/agents/sessions/{id}/..., not under the agents SubApp.

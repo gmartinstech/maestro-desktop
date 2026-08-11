@@ -12,7 +12,7 @@ const DETACH_BUDGET_MS = 600;
 
 // Detach the CDP debugger from every webview of a browser card BEFORE React unmounts them. Otherwise a late DevTools notification (a Target child-session message or Network.responseReceivedExtraInfo) lands on a session Chromium has already freed and SIGSEGVs the whole browser process. Bounded + fail-open.
 export async function detachBrowserCdp(browserId: string): Promise<void> {
-  const ow = (window as unknown as { openswarm?: CdpBridge }).openswarm;
+  const ow = (window as unknown as { maestro?: CdpBridge }).maestro;
   if (!ow?.cdpDetachClean) return;
   const detaches: Promise<unknown>[] = [];
   for (const wv of getBrowserWebviews(browserId)) {

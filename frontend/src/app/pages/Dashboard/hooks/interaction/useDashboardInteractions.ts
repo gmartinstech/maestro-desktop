@@ -97,8 +97,8 @@ export function useDashboardInteractions({
       selection.selectCard(browserId, 'browser', false);
       dispatch(bringToFront({ id: browserId, type: 'browser' }));
     };
-    window.addEventListener('openswarm:browser-guest-select', onGuestSelect);
-    return () => window.removeEventListener('openswarm:browser-guest-select', onGuestSelect);
+    window.addEventListener('maestro:browser-guest-select', onGuestSelect);
+    return () => window.removeEventListener('maestro:browser-guest-select', onGuestSelect);
   }, [selection, dispatch]);
 
   // ---- Viewport event handlers (compose pan + marquee) ----

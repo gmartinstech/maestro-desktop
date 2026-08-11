@@ -1485,7 +1485,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             <Box>
             {session.context_overflow && (() => {
               const reason = session.context_overflow.reason;
-              const isAuth = reason === 'openswarm_pro_auth_expired' || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
+              const isAuth = reason === 'anthropic_auth_invalid' || reason === 'auth_error';
               const isOutOfTokens = reason === 'out_of_tokens';
               const title = isOutOfTokens ? 'Out of tokens' : isAuth ? 'Sign-in required' : 'Context full';
               const primaryLabel = isOutOfTokens ? 'Got it' : isAuth ? 'Open Settings' : 'Start a fresh chat';

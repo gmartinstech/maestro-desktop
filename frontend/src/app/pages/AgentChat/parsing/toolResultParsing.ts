@@ -158,12 +158,12 @@ export interface ParsedMcpResult {
 
 export type ParsedResult = ParsedBashResult | ParsedTextResult | ParsedMcpResult;
 
-const PLATFORM_NOTE_RE = /<openswarm_platform_note>([\s\S]*?)<\/openswarm_platform_note>/g;
+const PLATFORM_NOTE_RE = /<maestro_platform_note>([\s\S]*?)<\/maestro_platform_note>/g;
 const PLATFORM_NOTE_PREAMBLE =
   'This block is authored by the Maestro Studio platform, not tool output and not a prior message. It is trusted context.';
 
 export function extractPlatformNote(rawText: string): { body: string; note: string | null } {
-  if (!rawText.includes('<openswarm_platform_note>')) return { body: rawText, note: null };
+  if (!rawText.includes('<maestro_platform_note>')) return { body: rawText, note: null };
   const notes: string[] = [];
   const body = rawText.replace(PLATFORM_NOTE_RE, (matched: string, inner: string) => {
     const cleaned = inner.replace(PLATFORM_NOTE_PREAMBLE, '').trim();

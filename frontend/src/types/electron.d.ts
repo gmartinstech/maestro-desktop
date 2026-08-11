@@ -18,20 +18,20 @@ declare global {
     }
   }
 
-  interface OpenSwarmUpdateInfo {
+  interface MaestroUpdateInfo {
     version: string;
     releaseDate?: string;
     releaseNotes?: string | Array<{ version: string; note: string }>;
   }
 
-  interface OpenSwarmDownloadProgress {
+  interface MaestroDownloadProgress {
     bytesPerSecond: number;
     percent: number;
     transferred: number;
     total: number;
   }
 
-  interface OpenSwarmAPI {
+  interface MaestroAPI {
     getBackendPort: () => number;
     getWebviewPreloadPath: () => string;
     getAppVersion: () => Promise<string>;
@@ -41,10 +41,10 @@ declare global {
     checkForUpdates: () => Promise<{ success: boolean; version?: string; error?: string }>;
     downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
     installUpdate: () => Promise<void>;
-    onUpdateAvailable: (cb: (info: OpenSwarmUpdateInfo) => void) => () => void;
-    onUpdateNotAvailable: (cb: (info: OpenSwarmUpdateInfo) => void) => () => void;
-    onDownloadProgress: (cb: (progress: OpenSwarmDownloadProgress) => void) => () => void;
-    onUpdateDownloaded: (cb: (info: OpenSwarmUpdateInfo) => void) => () => void;
+    onUpdateAvailable: (cb: (info: MaestroUpdateInfo) => void) => () => void;
+    onUpdateNotAvailable: (cb: (info: MaestroUpdateInfo) => void) => () => void;
+    onDownloadProgress: (cb: (progress: MaestroDownloadProgress) => void) => () => void;
+    onUpdateDownloaded: (cb: (info: MaestroUpdateInfo) => void) => () => void;
     onUpdateError: (cb: (message: string) => void) => () => void;
     onWebviewNewWindow: (cb: (url: string, webContentsId: number, disposition?: string) => void) => () => void;
     onReloadShortcut?: (cb: () => void) => () => void;
@@ -56,7 +56,7 @@ declare global {
   }
 
   interface Window {
-    __OPENSWARM_PORT__: number;
-    openswarm: OpenSwarmAPI;
+    __MAESTRO_PORT__: number;
+    maestro: MaestroAPI;
   }
 }

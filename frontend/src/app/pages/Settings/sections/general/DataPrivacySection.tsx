@@ -48,7 +48,7 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
   };
 
   const doErase = async () => {
-    const api = window.openswarm;
+    const api = window.maestro;
     if (!api?.hardReset) {
       setErr('This only works in the desktop app.');
       return;
@@ -64,7 +64,7 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
   };
 
   const doClearBrowser = async () => {
-    const api = window.openswarm;
+    const api = window.maestro;
     if (!api?.clearBrowserData) {
       setErr('This only works in the desktop app.');
       return;

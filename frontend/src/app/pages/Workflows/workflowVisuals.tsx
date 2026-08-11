@@ -261,7 +261,7 @@ export function ScheduleChip({ workflow }: { workflow: Workflow }) {
   );
 }
 
-// Classify a workflow's billing route based on its model id + the user's global connection mode. Mirrors the per-session logic in AgentChat so the workflow card tells the same story the chat header does. Returns 'metered' when the user pays per call (Anthropic/OpenAI/Gemini API keys, custom OpenAI-compatible) or 'subscription' when a flat-rate account is doing the work (Claude Pro/Max, ChatGPT Plus/Pro, Gemini Advanced, OpenSwarm Pro proxy). `subLabel` names the plan for tooltips.
+// Classify a workflow's billing route based on its model id + the user's global connection mode. Mirrors the per-session logic in AgentChat so the workflow card tells the same story the chat header does. Returns 'metered' when the user pays per call (Anthropic/OpenAI/Gemini API keys, custom OpenAI-compatible) or 'subscription' when a flat-rate account is doing the work (Claude Pro/Max, ChatGPT Plus/Pro, Gemini Advanced, Maestro Pro proxy). `subLabel` names the plan for tooltips.
 export type RoutingKind = 'metered' | 'subscription';
 export interface Routing {
   kind: RoutingKind;

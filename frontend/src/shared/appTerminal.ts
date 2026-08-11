@@ -1,6 +1,6 @@
 // App terminal plumbing shared by the ViewEditor and dashboard-card Terminal panes:
 // a batched beacon that folds webview console lines into the backend runtime stream
-// (ring buffer -> WS subscribers -> agent-readable .openswarm/terminal.log), and the
+// (ring buffer -> WS subscribers -> agent-readable .maestro/terminal.log), and the
 // stream->TerminalLine mapping for lines arriving back over the runtime logs WS.
 import { API_BASE, getAuthToken } from '@/shared/config';
 

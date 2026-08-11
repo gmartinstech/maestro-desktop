@@ -187,7 +187,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
         const rect = iframe.getBoundingClientRect();
         const iw = win.innerWidth || 1;
         const ih = win.innerHeight || 1;
-        window.dispatchEvent(new CustomEvent('openswarm:canvas-wheel-zoom', {
+        window.dispatchEvent(new CustomEvent('maestro:canvas-wheel-zoom', {
           detail: {
             deltaY: e.deltaY,
             deltaMode: e.deltaMode,
@@ -280,7 +280,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
         const fx = typeof payload.fracX === 'number' ? payload.fracX : 0.5;
         const fy = typeof payload.fracY === 'number' ? payload.fracY : 0.5;
         window.dispatchEvent(
-          new CustomEvent('openswarm:canvas-wheel-zoom', {
+          new CustomEvent('maestro:canvas-wheel-zoom', {
             detail: {
               deltaY: payload.deltaY ?? 0,
               deltaMode: payload.deltaMode ?? 0,
@@ -294,7 +294,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
       if (e?.channel === 'canvas-wheel-pan') {
         const payload = e.args?.[0] || {};
         window.dispatchEvent(
-          new CustomEvent('openswarm:canvas-wheel-pan', {
+          new CustomEvent('maestro:canvas-wheel-pan', {
             detail: {
               deltaX: payload.deltaX ?? 0,
               deltaY: payload.deltaY ?? 0,
@@ -331,7 +331,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
     if (!useWebview) return;
     const wv = webviewRef.current;
     if (!wv) return;
-    try { wv.send?.('openswarm:set-interactive', { interactive }); } catch (_e) {}
+    try { wv.send?.('maestro:set-interactive', { interactive }); } catch (_e) {}
   }, [useWebview, interactive]);
 
   // Webviews use did-finish-load instead of onLoad; did-fail-load retries with 500ms to 5s backoff (Vite may not have bound yet when frontend_url arrives).
@@ -354,7 +354,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
       retryDelay = 500;
       cancelRetry();
       handleNavigationLoad();
-      try { wv.send?.('openswarm:set-interactive', { interactive: interactiveRef.current }); } catch (_) {}
+      try { wv.send?.('maestro:set-interactive', { interactive: interactiveRef.current }); } catch (_) {}
     };
     const onFail = (e: any) => {
       // Guard on isMainFrame (subresource 404s fire too) and ERR_ABORTED (user-cancel).

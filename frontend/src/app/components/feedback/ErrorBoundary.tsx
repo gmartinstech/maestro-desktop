@@ -57,8 +57,8 @@ class ErrorBoundary extends React.Component<Props, State> {
     try {
       const keys = Object.keys(localStorage);
       for (const k of keys) {
-        // Both namespaces exist in the wild: colon (openswarm:foo) and dot (openswarm.onboarding.v2, openswarm.migrations.*). Match either or the reset silently misses onboarding state.
-        if (k.startsWith('openswarm:') || k.startsWith('openswarm.') || k.startsWith('redux-')) {
+        // Both namespaces exist in the wild: colon (maestro:foo) and dot (maestro.onboarding.v2, maestro.migrations.*). Match either or the reset silently misses onboarding state.
+        if (k.startsWith('maestro:') || k.startsWith('maestro.') || k.startsWith('redux-')) {
           localStorage.removeItem(k);
         }
       }

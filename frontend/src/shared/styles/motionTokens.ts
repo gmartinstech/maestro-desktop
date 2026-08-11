@@ -26,7 +26,7 @@ export const EASE = {
 
 /** Shared skeleton/indicator pulse keyframe. */
 export const pulseKeyframes = {
-  '@keyframes openswarmPulse': {
+  '@keyframes maestroPulse': {
     '0%, 100%': { opacity: 0.5 },
     '50%': { opacity: 0.25 },
   },

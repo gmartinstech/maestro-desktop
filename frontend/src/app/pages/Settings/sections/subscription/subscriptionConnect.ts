@@ -137,8 +137,8 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
   // Gemini/Google block embedded browsers; backend sets use_external_browser and exchange happens server-side via /api/subscriptions/callback. Detect via status poller (no postMessage possible).
   const useExternal = !!data.use_external_browser;
   let popup: Window | null = null;
-  if (useExternal && (window as any).openswarm?.openExternal) {
-    (window as any).openswarm.openExternal(data.auth_url);
+  if (useExternal && (window as any).maestro?.openExternal) {
+    (window as any).maestro.openExternal(data.auth_url);
   } else {
     popup = window.open(data.auth_url, 'oauth_connect', 'width=600,height=700');
   }
@@ -226,14 +226,14 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
 
   // Electron IPC fallback; main.js forwards callback params so exchange works when opener postMessage fails.
   let ipcUnsub: (() => void) | null = null;
-  const ow = (window as any).openswarm;
+  const ow = (window as any).maestro;
   if (ow && typeof ow.onOauthCallback === 'function') {
     ipcUnsub = ow.onOauthCallback(async (cb: { code?: string; state?: string; error?: string }) => {
       if (cb?.code) await runExchange(cb.code, cb.state);
     });
   }
 
-  // If the user comes back to openswarm without finishing OAuth (closed the browser, cancelled), 3s of sustained focus + no active connection means abandoned; clear Connecting so they can retry. A blur during the wait cancels, so brief tab-backs to check progress don't false-positive.
+  // If the user comes back to maestro without finishing OAuth (closed the browser, cancelled), 3s of sustained focus + no active connection means abandoned; clear Connecting so they can retry. A blur during the wait cancels, so brief tab-backs to check progress don't false-positive.
   const onBlur = () => {
     if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
   };

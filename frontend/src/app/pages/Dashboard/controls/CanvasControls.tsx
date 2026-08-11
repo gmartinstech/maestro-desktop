@@ -23,7 +23,7 @@ interface Props {
 }
 
 // Default OFF: most users don't have enough cards for the minimap to add value; onboarding tip surfaces the toggle later.
-const MINIMAP_PREF_KEY = 'openswarm.canvas.minimap_open';
+const MINIMAP_PREF_KEY = 'maestro.canvas.minimap_open';
 function readMinimapPref(): boolean {
   if (typeof window === 'undefined') return false;
   try {

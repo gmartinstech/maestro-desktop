@@ -13,14 +13,14 @@ export const PROVIDER_COLORS: Record<string, string> = {
   openrouter: '#64748B',
 };
 
-export const LS_RECENT_MODELS = 'openswarm.picker.recentModels';
-export const LS_RECENT_SEARCHES = 'openswarm.picker.recentSearches';
+export const LS_RECENT_MODELS = 'maestro.picker.recentModels';
+export const LS_RECENT_SEARCHES = 'maestro.picker.recentSearches';
 export const RECENT_MODELS_MAX = 3;
 export const RECENT_SEARCHES_MAX = 4;
 export const OR_AUTO_COLLAPSE_THRESHOLD = 12;
 
-export const LS_FILTERS_EXPANDED = 'openswarm.picker.filtersExpanded';
-export const LS_COLLAPSED_GROUPS = 'openswarm.picker.collapsedGroups';
+export const LS_FILTERS_EXPANDED = 'maestro.picker.filtersExpanded';
+export const LS_COLLAPSED_GROUPS = 'maestro.picker.collapsedGroups';
 
 export const CTX_STEPS = [0, 32_000, 128_000, 200_000, 500_000, 1_000_000];
 export const CTX_LABELS = ['Any', '32K+', '128K+', '200K+', '500K+', '1M+'];

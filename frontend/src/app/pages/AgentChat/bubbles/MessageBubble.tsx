@@ -74,7 +74,7 @@ const ELEMENT_SEPARATOR = '\n\n---\nSelected UI Elements:\n';
 // Remembered full-render content height per oversized message id. Module-scoped so it survives the transcript window unmounting/remounting the bubble: when a big message goes off-screen we reserve the exact height it had when rendered, so its box doesn't collapse and the scrollbar doesn't jump as it crosses the viewport.
 const oversizedContentHeights = new Map<string, number>();
 
-interface OpenSwarmErrorInfo {
+interface MaestroErrorInfo {
   kind: 'cap' | 'auth' | 'network' | 'too_many_tools';
   title: string;
   detail: string;
@@ -99,7 +99,7 @@ function formatTokens(n: number): string {
 
 /** Parses raw error text into a friendly card; returns null when the error isn't one we recognize.
  *  Matchers stay in English (they match BACKEND-emitted text) — only the displayed title/detail/ctaLabel are translated. */
-function parseOpenSwarmError(text: string, t: TFunction, ctx?: OverflowContext): OpenSwarmErrorInfo | null {
+function parseMaestroError(text: string, t: TFunction, ctx?: OverflowContext): MaestroErrorInfo | null {
   if (!text) return null;
   if (/provider_rate_limit|account'?s rate limit|session rate limit|This request would exceed your account'?s rate limit/i.test(text)) {
     const reset = text.match(/reset after ([^)\\.]+)/i)?.[1];
@@ -190,7 +190,7 @@ function parseOpenSwarmError(text: string, t: TFunction, ctx?: OverflowContext):
     };
   }
   // Strict matchers only; bare "network" false-matched Python tracebacks.
-  if (/\b(?:ECONNREFUSED|ENETUNREACH|ENOTFOUND|EAI_AGAIN)\b|Could\s+not\s+reach\s+OpenSwarm|Unable\s+to\s+connect\s+to\s+OpenSwarm/i.test(text)) {
+  if (/\b(?:ECONNREFUSED|ENETUNREACH|ENOTFOUND|EAI_AGAIN)\b|Could\s+not\s+reach\s+Maestro|Unable\s+to\s+connect\s+to\s+Maestro/i.test(text)) {
     return {
       kind: 'network',
       title: t('agentChat.errors.connectionIssue.title'),
@@ -911,7 +911,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     } as OverflowContext;
   }, shallowEqual);
   const activeSessionId = useAppSelector((state) => state.agents.activeSessionId);
-  const openswarmError = !isUser ? parseOpenSwarmError(rawText, t, overflowCtx) : null;
+  const maestroError = !isUser ? parseMaestroError(rawText, t, overflowCtx) : null;
 
   // Reports asynchronously, bc without this an oversized message that mounts in view (e.g. scrolling up into the agent's reply) would paint the blank placeholder box for a frame and then pop in the real markdown.
   React.useLayoutEffect(() => {
@@ -964,17 +964,17 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
 
   // (message.id, kind) keys so cap card analytics fire once, not on edits.
   React.useEffect(() => {
-    if (openswarmError?.kind === 'cap') {
+    if (maestroError?.kind === 'cap') {
       report('subscription', 'rate_limit_hit', { message_id: message.id });
     }
-  }, [message.id, openswarmError?.kind]);
+  }, [message.id, maestroError?.kind]);
 
   // A run that failed on a subscription/connection error means the card may be showing a stale "Connected" (the optimistic mark, or a token that went stale mid-session); re-pull the real 9Router/cloud status so it flips to Reconnect.
   React.useEffect(() => {
-    if (openswarmError?.kind === 'auth') {
+    if (maestroError?.kind === 'auth') {
       dispatch(fetchSubscriptionStatus());
     }
-  }, [message.id, openswarmError?.kind, dispatch]);
+  }, [message.id, maestroError?.kind, dispatch]);
 
   React.useEffect(() => {
     if (editing) setEditText(rawText);
@@ -1203,7 +1203,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
               '& a': { color: c.accent.primary },
             }}
           >
-            {openswarmError ? (
+            {maestroError ? (
               <Box
                 sx={{
                   mt: 0.5,
@@ -1219,24 +1219,24 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ErrorSlime size={22} />
                   <Typography sx={{ fontSize: '0.92rem', fontWeight: 600, color: c.text.primary }}>
-                    {openswarmError.title}
+                    {maestroError.title}
                   </Typography>
                 </Box>
                 <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, lineHeight: 1.5 }}>
-                  {openswarmError.detail}
+                  {maestroError.detail}
                 </Typography>
-                {openswarmError.ctaLabel && (
+                {maestroError.ctaLabel && (
                   <Box sx={{ mt: 0.4 }}>
                     <Button
                       size="small"
                       variant="outlined"
                       onClick={() => {
-                        const api = (window as any).openswarm;
-                        if (openswarmError.ctaAction === 'settings') {
+                        const api = (window as any).maestro;
+                        if (maestroError.ctaAction === 'settings') {
                           dispatch(openSettingsModal('models'));
-                        } else if (openswarmError.ctaAction === 'retry_last') {
+                        } else if (maestroError.ctaAction === 'retry_last') {
                           if (activeSessionId) dispatch(retryLastUserMessage({ sessionId: activeSessionId }));
-                        } else if (openswarmError.ctaAction === 'waitlist') {
+                        } else if (maestroError.ctaAction === 'waitlist') {
                           const url = 'https://discord.com/channels/1486442924391796896/1486442927554170892';
                           if (api?.openExternal) api.openExternal(url);
                           else window.open(url, '_blank');
@@ -1251,7 +1251,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                         '&:hover': { borderColor: c.accent.primary },
                       }}
                     >
-                      {openswarmError.ctaLabel}
+                      {maestroError.ctaLabel}
                     </Button>
                   </Box>
                 )}

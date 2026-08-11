@@ -87,7 +87,7 @@ class OnboardingBus {
 
 export const onboardingBus = new OnboardingBus();
 
-// Window-exposed for console debugging: __OPENSWARM_ONBOARDING_BUS__.emit('browser:spawned').
+// Window-exposed for console debugging: __MAESTRO_ONBOARDING_BUS__.emit('browser:spawned').
 if (typeof window !== 'undefined') {
-  (window as any).__OPENSWARM_ONBOARDING_BUS__ = onboardingBus;
+  (window as any).__MAESTRO_ONBOARDING_BUS__ = onboardingBus;
 }

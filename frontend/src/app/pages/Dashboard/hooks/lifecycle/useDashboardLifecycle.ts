@@ -188,7 +188,7 @@ export function useDashboardLifecycle({
 
   useEffect(() => {
     if (!dashboardId) return;
-    (window as any).__openswarm_last_dashboard_id = dashboardId;
+    (window as any).__maestro_last_dashboard_id = dashboardId;
   }, [dashboardId]);
 
   useEffect(() => {

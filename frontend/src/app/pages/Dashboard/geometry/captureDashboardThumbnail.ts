@@ -12,8 +12,8 @@ export async function captureDashboardThumbnail(
   _contentEl: HTMLDivElement,
   _allCards: AllCards,
 ): Promise<string | null> {
-  const openswarm = (window as any).openswarm;
-  if (!openswarm?.capturePage) return null;
+  const maestro = (window as any).maestro;
+  if (!maestro?.capturePage) return null;
 
   const vRect = viewportEl.getBoundingClientRect();
   if (vRect.width === 0 || vRect.height === 0) return null;
@@ -27,7 +27,7 @@ export async function captureDashboardThumbnail(
       height: Math.round(vRect.height * dpr),
     };
 
-    const dataUrl: string = await openswarm.capturePage(captureRect);
+    const dataUrl: string = await maestro.capturePage(captureRect);
     return dataUrl || null;
   } catch (err) {
     console.warn('Dashboard thumbnail capture failed:', err);

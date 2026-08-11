@@ -1,8 +1,8 @@
 // Type into input/textarea/contentEditable using React-prototype native setters so onChange fires.
 
-// Bundle-version marker; check window.__OPENSWARM_TYPEINTO__ to confirm dev-reload landed.
+// Bundle-version marker; check window.__MAESTRO_TYPEINTO__ to confirm dev-reload landed.
 if (typeof window !== 'undefined') {
-  (window as any).__OPENSWARM_TYPEINTO__ = 'v2-dom-direct-2026-05-12';
+  (window as any).__MAESTRO_TYPEINTO__ = 'v2-dom-direct-2026-05-12';
 }
 
 const INPUT_PROTO_VALUE_DESC =

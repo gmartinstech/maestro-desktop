@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { setLastDashboardId } from '@/shared/lastDashboardId';
 
-const STORAGE_KEY = 'openswarm_last_dashboard_id';
+const STORAGE_KEY = 'maestro_last_dashboard_id';
 
 /** Sticky last-visited dashboard id so Dashboard stays mounted across non-dashboard nav. */
 export function useLastDashboardId(): [string | null, (id: string | null) => void] {

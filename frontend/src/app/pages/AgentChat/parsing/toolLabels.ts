@@ -300,12 +300,12 @@ const MCP_SERVER_BRAND: Record<string, string> = {
   'asana': 'Asana',
   'figma': 'Figma',
   'stripe': 'Stripe',
-  'openswarm-browser-agent': 'browser',
-  'openswarm-invoke-agent': 'helper',
-  'openswarm-mcp-meta': 'tools',
-  'openswarm-outputs-meta': 'views',
-  'openswarm-settings-meta': 'settings',
-  'openswarm-web': 'the web',
+  'maestro-browser-agent': 'browser',
+  'maestro-invoke-agent': 'helper',
+  'maestro-mcp-meta': 'tools',
+  'maestro-outputs-meta': 'views',
+  'maestro-settings-meta': 'settings',
+  'maestro-web': 'the web',
 };
 
 // Order matters: most specific verb pattern wins.
@@ -432,7 +432,7 @@ function _labelForMcpTool(toolName: string, seed?: string): ToolLabel | null {
   const brand = MCP_SERVER_BRAND[server] || _humanizeName(server);
 
   // Internal meta-MCPs route through VARIANTS so we don't render "tools: Mcpsearch".
-  if (server.startsWith('openswarm-')) {
+  if (server.startsWith('maestro-')) {
     const builtin = VARIANTS[action];
     if (builtin) return _pick(builtin, seed);
   }
@@ -456,8 +456,8 @@ function _labelForMcpTool(toolName: string, seed?: string): ToolLabel | null {
   }
 
   const human = _humanizeName(actionRaw.replace(/^_+|_+$/g, ''));
-  // Internal openswarm-* tools read as a plain action with no brand prefix ("Settings read", not "settings: Settings read"); external connectors keep the brand so the user knows which app it touched ("Gmail: Send email").
-  if (server.startsWith('openswarm-')) {
+  // Internal maestro-* tools read as a plain action with no brand prefix ("Settings read", not "settings: Settings read"); external connectors keep the brand so the user knows which app it touched ("Gmail: Send email").
+  if (server.startsWith('maestro-')) {
     return { present: human, past: human };
   }
   // Avoid "Notion: Notion search" — if the action already names the brand, don't repeat it.

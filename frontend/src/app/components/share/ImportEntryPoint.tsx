@@ -15,7 +15,7 @@ import ImportModal from './ImportModal';
 import { importCommit, importPreflight } from './shareApi';
 import { ImportPreflight } from './shareTypes';
 
-export const IMPORT_OPEN_EVENT = 'openswarm:import-open';
+export const IMPORT_OPEN_EVENT = 'maestro:import-open';
 const ACCEPT = '.swarm,.md,.zip';
 const DIGEST_MS = 820; // keep in step with ImportDigest's wave so the blast reads fully
 

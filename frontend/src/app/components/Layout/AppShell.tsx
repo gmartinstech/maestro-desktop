@@ -52,7 +52,7 @@ import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
 
 // macOS insets its traffic lights into our bar, so the left gutter is reserved there and
 // nowhere else; Windows/Linux instead reserve a right gutter for the native button overlay.
-const IS_MAC = ((window as any).openswarm?.platform ?? 'darwin') === 'darwin';
+const IS_MAC = ((window as any).maestro?.platform ?? 'darwin') === 'darwin';
 const TITLEBAR_HEIGHT = 38;
 const TRAFFIC_LIGHT_GUTTER = 78;
 // Win11's minimise/maximise/close overlay is ~138px; the trailing cluster must clear it.
@@ -62,8 +62,8 @@ const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 400;
 // 260 matches Claude.ai's nav-sidebar width: roomy enough that names don't truncate.
 const SIDEBAR_DEFAULT = 260;
-const SIDEBAR_WIDTH_KEY = 'openswarm-sidebar-width';
-const UPDATE_DISMISS_KEY = 'openswarm-update-dismissed';
+const SIDEBAR_WIDTH_KEY = 'maestro-sidebar-width';
+const UPDATE_DISMISS_KEY = 'maestro-update-dismissed';
 
 const AppShell: React.FC = () => {
   const { t } = useTranslation();
@@ -149,13 +149,13 @@ const AppShell: React.FC = () => {
   }, [availableVersion]);
 
   const handleDownloadUpdate = useCallback(async () => {
-    try { await (window as any).openswarm?.downloadUpdate(); } catch {}
+    try { await (window as any).maestro?.downloadUpdate(); } catch {}
   }, []);
 
   const handleInstallUpdate = useCallback(() => {
     if (installing) return;
     dispatch(setInstalling());
-    (window as any).openswarm?.installUpdate();
+    (window as any).maestro?.installUpdate();
   }, [installing, dispatch]);
 
   // shallowEqual on top-level Immer dicts: nested mutations bump the dict reference, causing AppShell to re-render on every rename/output bump despite identical structure.
@@ -208,7 +208,7 @@ const AppShell: React.FC = () => {
       dispatch(addBrowserCard({ url }));
     } else {
       dispatch(setPendingBrowserUrl(url));
-      const lastId = (window as any).__openswarm_last_dashboard_id as string | undefined;
+      const lastId = (window as any).__maestro_last_dashboard_id as string | undefined;
       const firstDashboard = dashboardList[0];
       const targetId = lastId || firstDashboard?.id;
       if (targetId) {
@@ -252,10 +252,10 @@ const AppShell: React.FC = () => {
 
   useEffect(() => {
     const w = window as any;
-    if (!w.openswarm?.onWebviewNewWindow) return;
+    if (!w.maestro?.onWebviewNewWindow) return;
     let lastUrl = '';
     let lastTime = 0;
-    return w.openswarm.onWebviewNewWindow((url: string, webContentsId: number, disposition?: string) => {
+    return w.maestro.onWebviewNewWindow((url: string, webContentsId: number, disposition?: string) => {
       const now = Date.now();
       if (url === lastUrl && now - lastTime < 1000) return;
       lastUrl = url;
@@ -275,11 +275,11 @@ const AppShell: React.FC = () => {
     return () => document.removeEventListener('pointerdown', onPointerDown, true);
   }, []);
 
-  // Cmd/Ctrl+R: main neutralizes the default-menu reload and hands us the decision. Reload the browser you're in or last used IN PLACE (keeps its login); only when no browser is open at all fall back to a full app reload, since reloading the renderer destroys every webview and wipes its session. To deliberately reload OpenSwarm itself, use View > Reload.
+  // Cmd/Ctrl+R: main neutralizes the default-menu reload and hands us the decision. Reload the browser you're in or last used IN PLACE (keeps its login); only when no browser is open at all fall back to a full app reload, since reloading the renderer destroys every webview and wipes its session. To deliberately reload Maestro itself, use View > Reload.
   useEffect(() => {
     const w = window as any;
-    if (!w.openswarm?.onReloadShortcut) return;
-    return w.openswarm.onReloadShortcut(() => {
+    if (!w.maestro?.onReloadShortcut) return;
+    return w.maestro.onReloadShortcut(() => {
       for (const id of [getLastInteractedBrowser(), ...getKeepAliveBrowserIds()]) {
         const wv = id ? getWebview(id) : undefined;
         if (wv) { try { wv.reload(); return; } catch (_e) { /* torn-down webview; try the next */ } }
@@ -291,8 +291,8 @@ const AppShell: React.FC = () => {
   // Zoom / find / tab-cycle from a focused browser GUEST (keydowns inside a webview can't reach this document, so main forwards them with the guest's id). Targets that exact browser; the host-focused counterparts live in the keydown below + useCanvasControls (zoom).
   useEffect(() => {
     const w = window as any;
-    if (!w.openswarm?.onBrowserShortcut) return;
-    return w.openswarm.onBrowserShortcut((payload: { action: string; webContentsId: number }) => {
+    if (!w.maestro?.onBrowserShortcut) return;
+    return w.maestro.onBrowserShortcut((payload: { action: string; webContentsId: number }) => {
       // Reopen-last-closed is global (no target browser), so handle it before the per-browser id guard.
       if (payload.action === 'reopen-closed') { dispatch(reopenLastClosed()); return; }
       const id = findBrowserByWebContentsId(payload.webContentsId) ?? getLastInteractedBrowser();
@@ -301,7 +301,7 @@ const AppShell: React.FC = () => {
         case 'zoom-in': applyBrowserZoom(id, 1); break;
         case 'zoom-out': applyBrowserZoom(id, -1); break;
         case 'zoom-reset': applyBrowserZoom(id, 0); break;
-        case 'find': window.dispatchEvent(new CustomEvent('openswarm:browser-find', { detail: { browserId: id } })); break;
+        case 'find': window.dispatchEvent(new CustomEvent('maestro:browser-find', { detail: { browserId: id } })); break;
         case 'tab-next': dispatch(cycleBrowserTab({ browserId: id, dir: 1 })); break;
         case 'tab-prev': dispatch(cycleBrowserTab({ browserId: id, dir: -1 })); break;
       }
@@ -318,7 +318,7 @@ const AppShell: React.FC = () => {
       const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || !!t?.isContentEditable;
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key || '').toLowerCase() === 'f' && !typing) {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent('openswarm:browser-find', { detail: { browserId: id } }));
+        window.dispatchEvent(new CustomEvent('maestro:browser-find', { detail: { browserId: id } }));
       } else if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Tab') {
         e.preventDefault();
         dispatch(cycleBrowserTab({ browserId: id, dir: e.shiftKey ? -1 : 1 }));
@@ -342,20 +342,20 @@ const AppShell: React.FC = () => {
       }
       dispatch(setPendingFocusAgentId(sessionId));
     };
-    window.addEventListener('openswarm:notification-click', handler as EventListener);
-    return () => window.removeEventListener('openswarm:notification-click', handler as EventListener);
+    window.addEventListener('maestro:notification-click', handler as EventListener);
+    return () => window.removeEventListener('maestro:notification-click', handler as EventListener);
   }, [navigate, dispatch]);
 
   // Anchor the native menu to the button's bottom-left so it drops like a normal menu.
   const handleOpenAppMenu = useCallback((e: React.MouseEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    try { (window as any).openswarm?.popupAppMenu(r.left, r.bottom); } catch {}
+    try { (window as any).maestro?.popupAppMenu(r.left, r.bottom); } catch {}
   }, []);
 
   // The OS paints the window-button strip, so it can't inherit our CSS; push the
   // resolved chrome tokens whenever the theme flips or it strands on stale colors.
   useEffect(() => {
-    try { (window as any).openswarm?.setTitleBarOverlay(c.bg.secondary, c.text.secondary); } catch {}
+    try { (window as any).maestro?.setTitleBarOverlay(c.bg.secondary, c.text.secondary); } catch {}
   }, [c.bg.secondary, c.text.secondary]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -904,7 +904,7 @@ const AppShell: React.FC = () => {
             <ListItemButton
               onClick={handleAppsClick}
               onMouseEnter={() => {
-                const fn = (window as any).__openswarmPrefetchRoute;
+                const fn = (window as any).__maestroPrefetchRoute;
                 if (typeof fn === 'function') fn('/apps');
               }}
               data-onboarding="sidebar-apps"

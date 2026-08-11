@@ -96,10 +96,10 @@
       "make_app": { "title": "Make an App", "description": "Prompt interactive applications into existence." }
     },
     "infoByStepId": {
-      "connect_model": "Open Swarm works with any AI model.\n\nIf you already have a subscription to ChatGPT, Claude, or Gemini, plug it directly into Open Swarm.\n\nWe also offer an Open Swarm subscription that gives you the same usage as those providers.\n\nOr use your own API keys.",
+      "connect_model": "Maestro Studio works with any AI model.\n\nIf you already have a subscription to ChatGPT, Claude, or Gemini, plug it directly into Maestro Studio.\n\nWe also offer an Maestro Studio subscription that gives you the same usage as those providers.\n\nOr use your own API keys.",
       "enable_actions": "Actions are the capabilities available to your AI agents.\n\nEvery tool an agent uses (reading a file, sending an email, searching the web) is an action.\n\nEvery action has a permission policy. It decides whether an agent can use it on its own or whether it needs your approval first.\n\nThe Actions page is where you turn integrations on, sign in, and tune those permissions.",
-      "launch_agent": "An agent in Open Swarm can do anything you can do on your computer.\n\nIt can read and write files, run commands, search the web, control a browser, send emails, manage your calendar, and handle long, multi step tasks on its own.\n\nThink of each agent as a teammate you can brief on a task and let loose, while you watch it work in real time.",
-      "use_browser": "Open Swarm has built in browsers so you never have to jump between apps. One place, one workspace, for you and your agents.\n\nThe browsers aren't just for you. Your agents can use them too. By default an agent can spin up and use its own browser whenever it needs one.\n\nIn the next step we'll see how to hand off a browser you're using to an agent.",
+      "launch_agent": "An agent in Maestro Studio can do anything you can do on your computer.\n\nIt can read and write files, run commands, search the web, control a browser, send emails, manage your calendar, and handle long, multi step tasks on its own.\n\nThink of each agent as a teammate you can brief on a task and let loose, while you watch it work in real time.",
+      "use_browser": "Maestro Studio has built in browsers so you never have to jump between apps. One place, one workspace, for you and your agents.\n\nThe browsers aren't just for you. Your agents can use them too. By default an agent can spin up and use its own browser whenever it needs one.\n\nIn the next step we'll see how to hand off a browser you're using to an agent.",
       "agent_use_browser": "This shows how to give an agent control of a browser already on your canvas. Agents can also spin up their own browsers whenever they need one.\n\nIn this demo you handed off a single browser, but you can also hand off multiple browsers at once.\n\nUnder the hood, each browser is run by its own specialized agent that talks back to the agent you handed it to.",
       "agent_control_agents": "Just like browsers, you can pick which agents work together. Or an agent can spin up its own helpers whenever it needs to.\n\nWhen a task gets too big for one agent, it spins up sub agents to share the load.\n\nWhen a sub agent finishes, it collapses back into its parent. You can always reopen it from the parent chat by clicking \"Reveal in dashboard\".",
       "install_skill": "An agent on its own is a strong general purpose reasoner. It can do a lot, but it doesn't know the specifics of your workflows, your output formats, or your domain.\n\nSkills fill that gap.\n\nA skill is a set of instructions that teach an agent how to handle a specific kind of task. When a skill is active, the agent follows its guidance and produces better, more consistent results in that area.",
@@ -164,7 +164,7 @@
         "overheadTools": "built-in tools + system prompt ~{{tokens}}",
         "overheadApps_one": "{{count}} active app",
         "overheadApps_other": "{{count}} active apps",
-        "overheadPrefix": " Overhead from OpenSwarm: {{list}}.",
+        "overheadPrefix": " Overhead from Maestro: {{list}}.",
         "tail": " Try detaching large files, running /compact to summarize older turns, starting a fresh chat, or switching to a model with a larger window.",
         "cta": "Open Settings"
       },

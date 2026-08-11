@@ -176,7 +176,6 @@ export const ModelPickerList: React.FC<Props> = ({
                           const provLower = prov.toLowerCase();
                           const providerMap: Record<string, string> = {
                             anthropic: 'anthropic',
-                            'openswarm pro': 'anthropic',
                             openai: 'openai',
                             google: 'gemini',
                           };

@@ -83,10 +83,10 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
   { dir: 'se', sx: { bottom: -EDGE_THICKNESS / 2, right: -EDGE_THICKNESS / 2, width: CORNER_SIZE, height: CORNER_SIZE } },
 ];
 
-// Windows gets the real, agent-controllable <webview> + CDP, same as Mac. History: the <webview> tag mount used to segfault the renderer during Chromium's commit phase on the old CastLabs Electron 40 build (0xC0000005, since 1.1.55, same crash family as the ablated <input type=file> and Framer-Motion subtrees), so Windows fell back to a non-scriptable iframe (no CDP, and most sites send X-Frame-Options) which the agent can't drive. The Electron 42 bump (v42.0.0+wvcus) fixed the segfault: faithful in-process probes on the real 42 binary mount the webview - including two at once inside a transformed/contained canvas, with real HTTPS navigation and reload churn - with zero host-renderer crash. Crash-safe by construction (electron/CLAUDE.md: mitigations must fail quiet in BOTH directions, and crash guards never boot-loop). If some Windows config still segfaults on mount, a pending marker - armed synchronously during the first browser-card render, i.e. before the <webview> commits, see armWindowsWebviewPending - survives the crash. A leftover marker at the next launch means that mount never reached dom-ready, so we count it and stand down to the safe iframe this launch; after WIN_WV_MAX such crashes we stay on the iframe for good. A clean dom-ready clears the marker and the counter. Escape hatch: openswarm_win_webview_off='1' forces the iframe; clear openswarm_win_webview_crashes to retry after a lockout.
-const WIN_WV_OFF = 'openswarm_win_webview_off';
-const WIN_WV_PENDING = 'openswarm_win_webview_pending';
-const WIN_WV_CRASHES = 'openswarm_win_webview_crashes';
+// Windows gets the real, agent-controllable <webview> + CDP, same as Mac. History: the <webview> tag mount used to segfault the renderer during Chromium's commit phase on the old CastLabs Electron 40 build (0xC0000005, since 1.1.55, same crash family as the ablated <input type=file> and Framer-Motion subtrees), so Windows fell back to a non-scriptable iframe (no CDP, and most sites send X-Frame-Options) which the agent can't drive. The Electron 42 bump (v42.0.0+wvcus) fixed the segfault: faithful in-process probes on the real 42 binary mount the webview - including two at once inside a transformed/contained canvas, with real HTTPS navigation and reload churn - with zero host-renderer crash. Crash-safe by construction (electron/CLAUDE.md: mitigations must fail quiet in BOTH directions, and crash guards never boot-loop). If some Windows config still segfaults on mount, a pending marker - armed synchronously during the first browser-card render, i.e. before the <webview> commits, see armWindowsWebviewPending - survives the crash. A leftover marker at the next launch means that mount never reached dom-ready, so we count it and stand down to the safe iframe this launch; after WIN_WV_MAX such crashes we stay on the iframe for good. A clean dom-ready clears the marker and the counter. Escape hatch: maestro_win_webview_off='1' forces the iframe; clear maestro_win_webview_crashes to retry after a lockout.
+const WIN_WV_OFF = 'maestro_win_webview_off';
+const WIN_WV_PENDING = 'maestro_win_webview_pending';
+const WIN_WV_CRASHES = 'maestro_win_webview_crashes';
 const WIN_WV_MAX = 2;
 
 function windowsWebviewEnabled(): boolean {
@@ -127,17 +127,17 @@ const isWindows = navigator.userAgent.includes('Windows');
 const inElectron = navigator.userAgent.includes('Electron');
 const isElectron = inElectron && (!isWindows || windowsWebviewEnabled());
 
-// Keep the openswarm/<ver> product token: Google's sign-in flags a BARE Chrome UA as not-genuine-Chrome and blocks it ("browser may not be secure"), but tolerates a UA carrying a product token. Only the Electron token must go (that one Google hard-blocks).
+// Keep the maestro/<ver> product token: Google's sign-in flags a BARE Chrome UA as not-genuine-Chrome and blocks it ("browser may not be secure"), but tolerates a UA carrying a product token. Only the Electron token must go (that one Google hard-blocks).
 const chromeUserAgent = navigator.userAgent
   .replace(/\s*Electron\/\S+/i, '');
 
 // Persistent partition so browser-card logins/cookies/localStorage outlive a reload or quit. MUST match BROWSER_PARTITION in electron/main.js, which configures permissions + iframe header-strip on this exact partition.
-const BROWSER_PARTITION = 'persist:openswarm-browser';
+const BROWSER_PARTITION = 'persist:maestro-browser';
 
 // Sync exposure set at preload boot; async API fallback for older builds.
 const webviewPreloadPath: string | undefined = isElectron
-  ? ((window as any).__OPENSWARM_WEBVIEW_PRELOAD__
-      || (window as any).openswarm?.getWebviewPreloadPath?.())
+  ? ((window as any).__MAESTRO_WEBVIEW_PRELOAD__
+      || (window as any).maestro?.getWebviewPreloadPath?.())
   : undefined;
 
 
@@ -278,8 +278,8 @@ const BrowserCard: React.FC<Props> = ({
       setFindOpen(true);
       setFindFocusSignal((n) => n + 1);
     };
-    window.addEventListener('openswarm:browser-find', onFind as EventListener);
-    return () => window.removeEventListener('openswarm:browser-find', onFind as EventListener);
+    window.addEventListener('maestro:browser-find', onFind as EventListener);
+    return () => window.removeEventListener('maestro:browser-find', onFind as EventListener);
   }, [browserId]);
 
   // A resumed webview remounts at about:blank; dropping the init markers lets doLoad re-fire.
@@ -347,7 +347,7 @@ const BrowserCard: React.FC<Props> = ({
           const fx = typeof payload.fracX === 'number' ? payload.fracX : 0.5;
           const fy = typeof payload.fracY === 'number' ? payload.fracY : 0.5;
           window.dispatchEvent(
-            new CustomEvent('openswarm:canvas-wheel-zoom', {
+            new CustomEvent('maestro:canvas-wheel-zoom', {
               detail: {
                 deltaY: payload.deltaY ?? 0,
                 deltaMode: payload.deltaMode ?? 0,
@@ -360,7 +360,7 @@ const BrowserCard: React.FC<Props> = ({
           // Plain wheel inside an unselected webview never bubbles out; the preload forwards it here so the dashboard canvas can pan.
           const payload = e.args?.[0] || {};
           window.dispatchEvent(
-            new CustomEvent('openswarm:canvas-wheel-pan', {
+            new CustomEvent('maestro:canvas-wheel-pan', {
               detail: {
                 deltaX: payload.deltaX ?? 0,
                 deltaY: payload.deltaY ?? 0,
@@ -371,7 +371,7 @@ const BrowserCard: React.FC<Props> = ({
         } else if (e?.channel === 'app-clicked') {
           // In-guest mousedown: a page click never reaches the host document, so this IPC is how a webview-content click marks this browser as last-interacted (drives Ctrl+R/zoom/tab targeting) and selected (spawn-beside anchor).
           setLastInteractedBrowser(browserId);
-          window.dispatchEvent(new CustomEvent('openswarm:browser-guest-select', { detail: { browserId } }));
+          window.dispatchEvent(new CustomEvent('maestro:browser-guest-select', { detail: { browserId } }));
         }
       };
 

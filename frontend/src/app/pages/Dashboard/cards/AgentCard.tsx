@@ -54,8 +54,8 @@ function isWorkflowSuggestionTool(toolName: unknown, mcpServer?: unknown): boole
   if (normalizedTool === 'suggestconverttoworkflow') return true;
   if (normalizedTool.endsWith('__suggestconverttoworkflow')) return true;
   return normalizedTool.includes('suggestconverttoworkflow') && (
-    normalizedTool.includes('openswarm-schedule') ||
-    normalizedServer.includes('openswarm-schedule')
+    normalizedTool.includes('maestro-schedule') ||
+    normalizedServer.includes('maestro-schedule')
   );
 }
 
@@ -487,14 +487,14 @@ const AgentCard: React.FC<Props> = ({
     onDragMove?.(dx, dy, clientX, clientY);
   }, [onDragMove, getCanvasState]);
 
-  // Dashboard dispatches openswarm:canvas-pan-changed during edge-pan/wheel-zoom; only subscribed while dragging.
+  // Dashboard dispatches maestro:canvas-pan-changed during edge-pan/wheel-zoom; only subscribed while dragging.
   useEffect(() => {
     if (!isDragging) return;
     const onPanChange = () => {
       if (didDrag.current) recomputeDragPos();
     };
-    window.addEventListener('openswarm:canvas-pan-changed', onPanChange);
-    return () => window.removeEventListener('openswarm:canvas-pan-changed', onPanChange);
+    window.addEventListener('maestro:canvas-pan-changed', onPanChange);
+    return () => window.removeEventListener('maestro:canvas-pan-changed', onPanChange);
   }, [isDragging, recomputeDragPos]);
 
   const handleDragPointerMove = useCallback((e: React.PointerEvent) => {

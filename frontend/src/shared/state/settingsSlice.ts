@@ -50,8 +50,8 @@ export interface AppSettings {
   allow_experimental_updates: boolean;
   /** Server-owned routing state. */
   connection_mode?: 'own_key';
-  openswarm_bearer_token?: string | null;
-  openswarm_proxy_url?: string | null;
+  maestro_bearer_token?: string | null;
+  maestro_proxy_url?: string | null;
   /** Server-owned identity. */
   user_id?: string | null;
   user_email?: string | null;
@@ -164,7 +164,6 @@ export const browseDirectories = createAsyncThunk(
   }
 );
 
-/** POST /api/subscription/activate after catching openswarm://auth deep link; flips UI to Pro. */
 const settingsSlice = createSlice({
   name: 'settings',
   initialState,

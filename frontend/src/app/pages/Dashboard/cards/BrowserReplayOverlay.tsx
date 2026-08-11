@@ -6,7 +6,7 @@
  * the rows are the real extracted records, revealed at once (one API call returns
  * them all), not a fake cursor and not a faked progress counter.
  *
- * Built deliberately cheap, OpenSwarm is memory/compute-sensitive and the webview
+ * Built deliberately cheap, Maestro is memory/compute-sensitive and the webview
  * compositor is fragile:
  *   - NO backdrop-blur. The overlay is OPAQUE, so it fully covers the <webview>
  *     and the compositor can stop painting it while covered. Blur over a webview

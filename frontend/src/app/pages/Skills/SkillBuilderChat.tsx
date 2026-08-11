@@ -116,7 +116,6 @@ const SkillBuilderChat: React.FC<SkillBuilderChatProps> = ({ onSkillPreview, onS
 
     const PROVIDER_MAP: Record<string, string> = {
       anthropic: 'anthropic',
-      'openswarm pro': 'anthropic',
       openai: 'openai',
       google: 'gemini',
       xai: 'openrouter',

@@ -1,7 +1,7 @@
 {
-  "name": "open-swarm",
+  "name": "maestro-studio-frontend",
   "version": "1.0.0",
-  "description": "Open Swarm — Agent Orchestrator frontend built with React",
+  "description": "Maestro Studio — Agent Orchestrator frontend built with React",
   "scripts": {
     "build": "webpack --mode=production",
     "lint": "eslint src",

@@ -320,7 +320,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       };
       scheduleWheelFlush();
     };
-    window.addEventListener('openswarm:canvas-wheel-zoom', onForwardedZoom);
+    window.addEventListener('maestro:canvas-wheel-zoom', onForwardedZoom);
 
     // Plain wheel inside a webview can't bubble out either; the preload forwards horizontal-dominant scrolls as a pan when the guest page has nothing to scroll horizontally, plus middle-mouse drag deltas.
     const onForwardedPan = (e: Event) => {
@@ -335,12 +335,12 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       pendingPanDy += dy;
       scheduleWheelFlush();
     };
-    window.addEventListener('openswarm:canvas-wheel-pan', onForwardedPan);
+    window.addEventListener('maestro:canvas-wheel-pan', onForwardedPan);
 
     return () => {
       el.removeEventListener('wheel', onWheel);
-      window.removeEventListener('openswarm:canvas-wheel-zoom', onForwardedZoom);
-      window.removeEventListener('openswarm:canvas-wheel-pan', onForwardedPan);
+      window.removeEventListener('maestro:canvas-wheel-zoom', onForwardedZoom);
+      window.removeEventListener('maestro:canvas-wheel-pan', onForwardedPan);
       if (wheelRafId != null) cancelAnimationFrame(wheelRafId);
       if (wheelIdleTimer != null) clearTimeout(wheelIdleTimer);
       // Don't leave the flag stuck on if the canvas unmounts mid-gesture.

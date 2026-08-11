@@ -208,7 +208,7 @@ const AgenticCursor = forwardRef<AgenticCursorHandle>((_props, ref) => {
               cancelled = true;
               cancelAnimationFrame(rafId);
               window.dispatchEvent(
-                new CustomEvent('openswarm:onboarding:lost_target', {
+                new CustomEvent('maestro:onboarding:lost_target', {
                   detail: { selector },
                 }),
               );

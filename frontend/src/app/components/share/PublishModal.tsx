@@ -1,4 +1,4 @@
-// Publish an app to {slug}.openswarm.host. Flow: scan the code (AST + an aux-LLM pass, on the user's own creds) -> if findings, show them with Cancel/Fix/Publish Anyway -> build + upload -> show the live link. Already-published apps open straight to the manage view (visit / copy / unpublish).
+// Publish an app to {slug}.maestro.host. Flow: scan the code (AST + an aux-LLM pass, on the user's own creds) -> if findings, show them with Cancel/Fix/Publish Anyway -> build + upload -> show the live link. Already-published apps open straight to the manage view (visit / copy / unpublish).
 import React, { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';

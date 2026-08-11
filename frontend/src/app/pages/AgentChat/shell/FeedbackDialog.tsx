@@ -72,7 +72,7 @@ const FeedbackDialog: React.FC<Props> = ({ open, sentiment, sessionId, messageId
         />
 
         <Typography sx={{ color: c.text.tertiary, fontSize: '0.75rem', fontStyle: 'italic', mt: 1.5 }}>
-          Shared with OpenSwarm to help improve your agents. We send your rating and note, not your conversation.
+          Shared with Maestro to help improve your agents. We send your rating and note, not your conversation.
         </Typography>
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>

@@ -99,7 +99,7 @@ export function useMcpToolMeta(parsed: ParsedTool): McpToolMeta {
     );
 
     if (!toolDef) {
-      if (parsed.serverSlug === 'openswarm-schedule') {
+      if (parsed.serverSlug === 'maestro-schedule') {
         return { integration: null, description: '', serverLabel: 'Workflows' };
       }
       return { integration: null, description: '', serverLabel: parsed.serverSlug };
@@ -117,7 +117,7 @@ function getMcpInputSummary(actionName: string, toolInput: Record<string, any>):
   const lower = actionName.toLowerCase();
 
   if (getWorkflowToolLabel(actionName)) {
-    return getSharedMcpInputSummary(toolInput, actionName, 'openswarm-schedule');
+    return getSharedMcpInputSummary(toolInput, actionName, 'maestro-schedule');
   }
 
   if (lower.includes('gmail') || lower.includes('email') || lower.includes('mail')) {

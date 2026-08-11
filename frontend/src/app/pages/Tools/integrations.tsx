@@ -204,7 +204,7 @@ export const INTEGRATIONS: Integration[] = [
   {
     id: 'discord',
     name: 'Discord',
-    description: 'Read messages, send messages, manage channels, and interact with Discord servers via the OpenSwarm bot.',
+    description: 'Read messages, send messages, manage channels, and interact with Discord servers via the Maestro bot.',
     mcp_config: { type: 'stdio', command: 'python', args: ['-m', 'backend.apps.discord_mcp_shim'] },
     color: '#5865F2',
     website: 'https://github.com/barryyip0625/mcp-discord',

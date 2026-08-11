@@ -20,7 +20,7 @@ export function useDashboardUiState(selection: Selection, cards: Record<string, 
   // Cleanup any leftover walkthrough localStorage from v1, the v2 panel ignores it but it would otherwise hang around forever.
   useEffect(() => {
     try {
-      localStorage.removeItem('openswarm_walkthrough_pending');
+      localStorage.removeItem('maestro_walkthrough_pending');
     } catch { /* ignore */ }
   }, []);
 

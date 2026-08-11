@@ -822,7 +822,7 @@ const DashboardOutputPreview: React.FC<{
     const tok = getAuthToken();
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (tok) headers.Authorization = `Bearer ${tok}`;
-    if (text.includes('[openswarm:app-ready]')) {
+    if (text.includes('[maestro:app-ready]')) {
       fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/report-ready?instance=${instance}`, {
         method: 'POST', headers,
       }).catch(() => {});
@@ -830,9 +830,9 @@ const DashboardOutputPreview: React.FC<{
     }
     // Fold console output into the runtime terminal stream (card Terminal view + agent-readable terminal.log).
     postAppConsoleLine(workspaceId, level, text, instance);
-    if (level !== 'error' || !text.includes('[openswarm:app-error]')) return;
-    const idx = text.indexOf('[openswarm:app-error]');
-    const tail = text.slice(idx + '[openswarm:app-error]'.length).trim();
+    if (level !== 'error' || !text.includes('[maestro:app-error]')) return;
+    const idx = text.indexOf('[maestro:app-error]');
+    const tail = text.slice(idx + '[maestro:app-error]'.length).trim();
     const firstNewline = tail.indexOf('\n');
     const message = firstNewline >= 0 ? tail.slice(0, firstNewline).trim() : tail;
     const componentStack = firstNewline >= 0 ? tail.slice(firstNewline + 1).trim() : '';

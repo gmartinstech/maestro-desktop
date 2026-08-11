@@ -24,7 +24,7 @@ export interface Output {
   workspace_path?: string;
   created_at: string;
   updated_at: string;
-  /** App publishing to {slug}.openswarm.host. Server-managed; mirrored here after a publish/unpublish. */
+  /** App publishing to {slug}.maestro.host. Server-managed; mirrored here after a publish/unpublish. */
   published_slug?: string | null;
   published_url?: string | null;
   publish_status?: 'publishing' | 'published' | 'error' | null;

@@ -127,7 +127,7 @@ export function getWorkflowToolLabel(action: string): string | null {
 
 export function getWorkflowToolInputDisplay(input: any, action?: string, serverSlug?: string): string {
   if (!input || typeof input !== 'object') return '';
-  const isWorkflowTool = serverSlug === 'openswarm-schedule' || (action && getWorkflowToolLabel(action));
+  const isWorkflowTool = serverSlug === 'maestro-schedule' || (action && getWorkflowToolLabel(action));
   if (!isWorkflowTool || !action) return '';
 
   const lower = action.toLowerCase();
@@ -166,7 +166,7 @@ function p_cleanSummaryText(s: string): string {
 
 export function getMcpInputSummary(input: any, action?: string, serverSlug?: string): string {
   if (!input || typeof input !== 'object') return '';
-  if (serverSlug === 'openswarm-schedule' || (action && getWorkflowToolLabel(action))) {
+  if (serverSlug === 'maestro-schedule' || (action && getWorkflowToolLabel(action))) {
     const workflowSummary = compactWorkflowSchedule(input);
     if (workflowSummary) return workflowSummary;
     if (action) {

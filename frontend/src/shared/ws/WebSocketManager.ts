@@ -151,7 +151,7 @@ class WebSocketManager {
     // Phase 0 boot instrumentation: the first streamed agent token is the "app is actually useful" milestone. Report it once to the Electron main process, which owns the timing log. Guarded by a module-level flag so this is a single no-op branch on every subsequent token.
     if (!firstAgentResponseMarked) {
       firstAgentResponseMarked = true;
-      try { (window as any).openswarm?.markFirstAgentResponse?.(); } catch { /* not in Electron */ }
+      try { (window as any).maestro?.markFirstAgentResponse?.(); } catch { /* not in Electron */ }
     }
     store.dispatch(streamDelta({ sessionId, messageId, delta }));
   }
@@ -742,7 +742,7 @@ class WebSocketManager {
           });
         } catch { /* notifications are best-effort */ }
         try {
-          const w: any = (window as any).openswarm;
+          const w: any = (window as any).maestro;
           if (w?.notify) {
             // Seed by workflow id + current minute so multiple workflows pick different copy while a single workflow stays stable within a few minutes.
             const seed = ((data.workflow_id || '').length + Math.floor(Date.now() / 60000)) | 0;
@@ -774,7 +774,7 @@ class WebSocketManager {
                 : data.status === 'failure'
                   ? (isMac ? 'Tap to see what went wrong.' : 'Click to see what went wrong.')
                   : (isMac ? 'Tap to open the run.' : 'Click to open the run.');
-            const deepLink = data.workflow_id ? `openswarm://workflow/${data.workflow_id}/run/${data.run_id || ''}` : undefined;
+            const deepLink = data.workflow_id ? `maestro://workflow/${data.workflow_id}/run/${data.run_id || ''}` : undefined;
             const actions = [
               { text: 'Looks good', outcome: 'ack' },
               { text: 'Re-run', outcome: 'rerun' },
@@ -903,7 +903,7 @@ import { WS_BASE } from '@/shared/config';
 // Bridge native-notification button actions to workflow actions. Subscribe at module import time so we never miss an early callback fired before any component mounts.
 (() => {
   try {
-    const w: any = (typeof window !== 'undefined') ? (window as any).openswarm : null;
+    const w: any = (typeof window !== 'undefined') ? (window as any).maestro : null;
     if (!w?.onNotificationAction) return;
     w.onNotificationAction(({ outcome, runId, workflowId }: { outcome: string; runId?: string; workflowId?: string }) => {
       if (!workflowId) return;
