@@ -4,9 +4,9 @@
 # first-paint ms, backend-http-ready ms. Pipe to a CSV for the metrics table.
 #
 # Usage: bash profile_startup.sh [path-to-backend.log]
-# Default log: AppData/Roaming/openswarm/data/backend.log
+# Default log: AppData/Roaming/Maestro Studio/data/backend.log
 
-LOG="${1:-$HOME/AppData/Roaming/openswarm/data/backend.log}"
+LOG="${1:-$HOME/AppData/Roaming/Maestro Studio/data/backend.log}"
 if [[ ! -f "$LOG" ]]; then
   echo "no backend.log at $LOG" >&2
   exit 1

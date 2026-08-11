@@ -15,7 +15,7 @@ Notion tracking (Todos DB):
 ## How these numbers were measured
 
 Source of truth: the packaged app's own perf markers in
-`AppData/Roaming/openswarm/data/backend.log` (`[perf] app-launch`,
+`AppData/Roaming/Maestro Studio/data/backend.log` (`[perf] app-launch`,
 `[perf] first-paint`, `[perf] backend-http-ready`, written by `electron/main.js`).
 These are wall-clock ms from process start, i.e. exactly what the user feels.
 Raw extract: `baseline_startup.csv`. Re-run with `profile_startup.sh`.
@@ -166,7 +166,7 @@ the end-to-end GUI "create app -> live preview" is the one manual checklist step
 
 ## [DISPROVEN 2026-06-17] hypothesis: residual ~17s cold = swarm-debug DEBUGLETON scan
 
-> UPDATE: this hypothesis was WRONG. The `debug()` -> `OPENSWARM_PACKAGED=1` no-op
+> UPDATE: this hypothesis was WRONG. The `debug()` -> `MAESTRO_PACKAGED=1` no-op
 > shipped (commit 3d6fe483) and was verified live on the signed build ("Scanning
 > Project" count=0, scan confirmed gone), yet **cold backend-http-ready stayed at
 > 21.5s (no change)**. So the DEBUGLETON scan was NOT the cold driver. Kept the
@@ -191,7 +191,7 @@ No-coding investigation (import profile + the app's own timestamped logs) pinned
 - This also explains why items 1+3 (file count) and item 5 (Defender) did nothing:
   the cost is a synchronous scandir tree-walk, not AV scanning or bytecode.
 
-SAFE FIX (proposed): make debug() a no-op when OPENSWARM_PACKAGED=1 (early-return
+SAFE FIX (proposed): make debug() a no-op when MAESTRO_PACKAGED=1 (early-return
 before Debugleton() instantiates), so the scan never runs in the packaged build.
 Dev keeps the debugger. Risk very low (debug() is non-critical logging that already
 swallows errors). Expected cold ~22s -> ~5s (under the 10s goal). Confirm with a
@@ -199,7 +199,7 @@ cold rebuild+measure.
 
 ## #9 item 5 (Defender exclusion) measured: ALSO no cold benefit -> cold is NOT Defender
 
-Applied the Defender exclusion (admin) for all 3 openswarm folders, rebuilt a
+Applied the Defender exclusion (admin) for all 3 app folders, rebuilt a
 fresh-content lean v1.3.86 (so Defender would see new files), installed with the
 exclusion active, measured cold:
 
@@ -281,7 +281,7 @@ validated on a real packaged EXE (Task #10).
 2. [DONE] Ship the webapp_template node_modules archive in the Windows build (build-app-win.ps1 step 4b builds node_modules.<digest>.tar.gz, mirroring the Mac build). Runtime _try_extract_bundled_archive unpacks it into the warm cache, kicked off in the BACKGROUND by warm_cache_in_background at startup so it is off the first-app create path. CORRECTION 2026-06-17: an earlier draft shipped node_modules PRE-EXTRACTED in resources (~30k files) -- that blew the Windows build past 50 min (Squirrel LZMA on tens of thousands of tiny files) and bloated the installer, so it was reverted to the single .tar.gz. The runtime keeps _bundled_extracted_modules() as a harmless preference (returns None when no tree is shipped -> falls back to the tar). Tests: test_bundled_extracted_modules.py still valid (selection + fallback).
 3. [ENABLED + validated] Ship site-packages as sourceless .pyc only (drop .py). scripts/strip-py-to-pyc.ps1, now wired into build-app-win.ps1 step 2b. VALIDATED 2026-06-17 alongside #1 (backend.main imports clean from a transformed copy; 3,352 .py removed). Draft notes: Measured: 3,352 .py (26.9 MB) + 362 __pycache__ dirs strippable from site-packages (keep-list excludes pip/setuptools). compileall -b writes legacy module.pyc next to source; we delete the .py whose .pyc exists and drop __pycache__. Sourceless import proven with the bundled 3.13 interpreter. Scope: site-packages ONLY (NOT backend app code -- the swarm-debug debugger reads our own source for frame annotation). .pyc magic must match the shipped interpreter, so compile with the bundled python. Validate on a packaged EXE (Task #10); some packages use inspect.getsource and may need the keep-list. Combined with #1 + #2 this takes python-env from ~13,554 files toward ~9,300 (~31% fewer for Defender).
 4. [APPLIED, build-gated] Trim app.asar. Inventory (docs/perf/winv2/inspect_asar.js) found the 607 MB asar is almost entirely DUPLICATION: python-env (408 MB, incl. a 242 MB bundled claude.exe) and build-staging (197 MB: node.exe 67 MB, uv.exe 65 MB, mcp-bundles, frontend) are packed into the asar AND already shipped UNPACKED in resources/ via extraResources. The runtime reads from resources/ (confirmed: "Starting backend: ...resources\python-env\python.exe"), never from inside the asar. Source maps were a red herring (0.4 MB). Fix: added a build.files exclusion in electron/package.json ("!python-env/**", "!build-staging/**") so those trees no longer pack into the asar -> ~607 MB -> ~2 MB (just main.js/preload/node_modules). Removes the entire 639 MB cold-read on first launch. Validate on a packaged EXE (Task #10): app still boots (python/node/router resolved from resources), asar size shrunk.
-5. [DRAFTED, opt-in] Defender exclusion for OpenSwarm's dirs -- the nuclear cold-start fix (stops real-time scanning entirely, so it kills BOTH the 54-138s post-update launch and the ~14s extract). Draft: scripts/add-defender-exclusion.ps1 (dry-run by default; -Apply/-Remove need admin; -Status lists). Excludes %LOCALAPPDATA%\openswarm, %APPDATA%\openswarm, ~/.openswarm (verified the paths resolve). SECURITY: reduces AV coverage of those folders, so it must ALWAYS be an explicit user choice -- never auto-run, never a startup prompt. Proposed surface: an OFF-by-default Settings > Advanced toggle ("Faster Windows startup -- adds a Defender exclusion for OpenSwarm; one-time admin approval; reversible"), which on enable spawns an elevated `powershell Start-Process -Verb RunAs` to run the script -Apply (UAC), and -Remove on disable. This is a passive opt-in toggle, NOT a banner/tip/prompt, so it respects the no-user-action-UI rule. Not wired into the frontend yet (design only).
+5. [DRAFTED, opt-in] Defender exclusion for Maestro Studio's dirs -- the nuclear cold-start fix (stops real-time scanning entirely, so it kills BOTH the 54-138s post-update launch and the ~14s extract). Draft: scripts/add-defender-exclusion.ps1 (dry-run by default; -Apply/-Remove need admin; -Status lists). Excludes %LOCALAPPDATA%\maestro-studio, %LOCALAPPDATA%\Programs\Maestro Studio, %APPDATA%\Maestro Studio (verified the paths resolve). SECURITY: reduces AV coverage of those folders, so it must ALWAYS be an explicit user choice -- never auto-run, never a startup prompt. Proposed surface: an OFF-by-default Settings > Advanced toggle ("Faster Windows startup -- adds a Defender exclusion for Maestro Studio; one-time admin approval; reversible"), which on enable spawns an elevated `powershell Start-Process -Verb RunAs` to run the script -Apply (UAC), and -Remove on disable. This is a passive opt-in toggle, NOT a banner/tip/prompt, so it respects the no-user-action-UI rule. Not wired into the frontend yet (design only).
 
 Recommended order: #2 (biggest UX win, lowest risk), then #1 (largest cold win, careful import testing), then #3/#4. Validation: re-run profile_startup.sh + a fresh-extract timing on the packaged EXE after each change, diff vs baseline_startup.csv.
 
@@ -363,6 +363,10 @@ backend/apps/nine_router/process.py:83  is_running()   <- synchronous httpx.get
   <- sync_openswarm_pro_as_claude / sync_custom_providers (settings._boot_router_then_sync)
   <- _ensure_running_impl (ensure_running)
 ```
+
+(Trace quoted verbatim from v1.3.90. HISTORICAL: `sync_openswarm_pro_as_claude` was
+deleted in the OpenSwarm detach, so that frame no longer exists; the remaining
+`sync_custom_providers` caller still reaches `is_running()`.)
 
 ROOT CAUSE: `is_running()` did a synchronous `httpx.get("http://localhost:20128/...")`.
 It is called ~5x on the cold boot path (the settings key-sync sequence + the

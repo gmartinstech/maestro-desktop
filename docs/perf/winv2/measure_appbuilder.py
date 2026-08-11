@@ -97,9 +97,9 @@ async def _bind_once(label, vite_cache_dir):
     ws = os.path.join(TMP, f"ws-{label}")
     vt.seed_webapp_template_workspace(ws, _find_free_port())
     if vite_cache_dir:
-        os.environ["OPENSWARM_VITE_CACHE_DIR"] = vite_cache_dir
+        os.environ["MAESTRO_VITE_CACHE_DIR"] = vite_cache_dir
     else:
-        os.environ.pop("OPENSWARM_VITE_CACHE_DIR", None)
+        os.environ.pop("MAESTRO_VITE_CACHE_DIR", None)
     rt = AppRuntime(f"ws-{label}", ws)
     t = time.perf_counter()
     await rt.start()

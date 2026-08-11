@@ -16,10 +16,10 @@ wins only exist in a packaged EXE.
 
 ## 1. Download + verify the signature (must be real signed bits)
 - `gh release download v1.3.86 --pattern "*Setup*.exe" --dir .` (or from the draft release page).
-- Verify Authenticode: `Get-AuthenticodeSignature .\OpenSwarm-Setup-x64.exe` → Status must be `Valid`, signer = the Azure Trusted Signing cert. NOT "NotSigned"/"UnknownError".
+- Verify Authenticode: `Get-AuthenticodeSignature .\MaestroStudio-Setup-x64.exe` → Status must be `Valid`, signer = the Azure Trusted Signing cert. NOT "NotSigned"/"UnknownError".
 
 ## 2. Install + first (COLD) launch — the headline metric
-- Install the downloaded EXE (Squirrel → `%LOCALAPPDATA%\openswarm`).
+- Install the downloaded EXE (Squirrel → `%LOCALAPPDATA%\maestro-studio`).
 - Launch once and let it fully load. This is the COLD launch (Defender scans fresh files).
 - Then run the automated checker: `pwsh docs/perf/winv2/validate_packaged.ps1`.
 - Acceptance (perf): cold `backend-http-ready` should be **far below the 54-138s baseline**

@@ -8,8 +8,8 @@
   pwsh docs\perf\winv2\validate_packaged.ps1
 #>
 param(
-    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'openswarm'),
-    [string]$BackendLog = (Join-Path $env:APPDATA 'openswarm\data\backend.log')
+    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'maestro-studio'),
+    [string]$BackendLog = (Join-Path $env:APPDATA 'Maestro Studio\data\backend.log')
 )
 $ErrorActionPreference = 'Stop'
 $pass = 0; $fail = 0

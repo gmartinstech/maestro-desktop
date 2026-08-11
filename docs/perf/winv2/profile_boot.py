@@ -13,7 +13,7 @@ import asyncio
 import os
 import time
 
-os.environ.setdefault("OPENSWARM_AUTH_TOKEN", "x")
+os.environ.setdefault("MAESTRO_AUTH_TOKEN", "x")
 
 _t0 = time.perf_counter()
 import backend.main  # noqa: F401  (builds main_app; full import tree)

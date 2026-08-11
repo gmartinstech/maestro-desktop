@@ -31,5 +31,5 @@ if ($sig.Status -ne 'Valid') { Write-Warning "signature is NOT Valid -- stop and
 
 Write-Host ""
 Write-Host "Installer: $($exe.FullName)"
-Write-Host "Next (install timing): note the clock, run the installer, then time until %APPDATA%\openswarm\data\backend.log appears."
+Write-Host "Next (install timing): note the clock, run the installer, then time until %APPDATA%\Maestro Studio\data\backend.log appears."
 Write-Host "Then: pwsh docs\perf\winv2\validate_packaged.ps1   (structural + cold/warm startup)"
