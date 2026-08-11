@@ -1,3 +1,6 @@
+// MUST stay the first import: it carries the pre-rebrand localStorage keys over on import, and
+// modules further down the graph (store slices, i18n, ThemeContext) read those keys at init.
+import './shared/legacyStorageKeys';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Main from './app/Main';

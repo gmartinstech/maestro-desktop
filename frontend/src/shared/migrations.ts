@@ -8,13 +8,13 @@ interface Migration {
 
 const MIGRATIONS: Migration[] = [
   {
-    key: 'openswarm.migrations.v131_force_relogin_and_reonboard',
+    key: 'maestro.migrations.v131_force_relogin_and_reonboard',
     description: '1.0.31: force re-login and re-walk onboarding, regardless of prior state',
     run: () => {
+      // The auth-token and onboarding-seen keys only ever existed under the legacy namespace, and
+      // legacyStorageKeys purges those; only the still-live onboarding state needs clearing here.
       try {
-        window.localStorage.removeItem('openswarm.auth.token');
-        window.localStorage.removeItem('openswarm.onboarding.v2');
-        window.localStorage.removeItem('openswarm_onboarding_seen');
+        window.localStorage.removeItem('maestro.onboarding.v2');
       } catch {
         // localStorage can throw in private mode / quota-exceeded; non-fatal.
       }

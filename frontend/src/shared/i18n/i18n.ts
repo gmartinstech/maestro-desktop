@@ -2,9 +2,10 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import ptBR from './pt-BR.json';
 import en from './en.json';
+import '../legacyStorageKeys';
 
-// New key, distinct from the protected openswarm-* / self-swarm-* localStorage keys; safe to add.
-export const LANGUAGE_STORAGE_KEY = 'self-swarm-language';
+// Renamed from the legacy `self-swarm-language`; legacyStorageKeys carries the old value over.
+export const LANGUAGE_STORAGE_KEY = 'maestro-language';
 
 function getInitialLanguage(): string {
   try {

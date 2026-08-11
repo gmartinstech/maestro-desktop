@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ClaudeTokens, lightTokens, darkTokens } from './claudeTokens';
+import '../legacyStorageKeys';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -10,7 +11,7 @@ interface ThemeContextValue {
   setMode: (mode: ThemeMode) => void;
 }
 
-const STORAGE_KEY = 'self-swarm-theme-mode';
+const STORAGE_KEY = 'maestro-theme-mode';
 
 function getInitialMode(): ThemeMode {
   try {
