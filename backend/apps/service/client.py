@@ -34,7 +34,6 @@ from backend.apps.service.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-P_DEFAULT_BASE = "https://llm.martinstech.net/v1"
 P_PATH_BY_KIND = {
     "state": "/api/service/state",
     "session": "/api/service/sync",
@@ -210,18 +209,21 @@ def p_envelope() -> dict:
     return env
 
 
-def p_base_url() -> str:
-    try:
-        from backend.apps.settings.store import load_settings
-        from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
-        s = load_settings()
-        return (getattr(s, "maestro_proxy_url", None) or MAESTRO_DEFAULT_PROXY_URL).rstrip("/")
-    except Exception:
-        return P_DEFAULT_BASE
+# Off unless MAESTRO_TELEMETRY_URL is set; it used to fall back to the model proxy URL, aiming product payloads at the LLM gateway.
+def p_base_url() -> Optional[str]:
+    base = (os.environ.get("MAESTRO_TELEMETRY_URL") or "").strip()
+    return base.rstrip("/") or None
+
+
+def p_telemetry_configured() -> bool:
+    return p_base_url() is not None
 
 
 async def p_post(path: str, body: dict) -> int | None:
-    url = f"{p_base_url()}{path}"
+    base = p_base_url()
+    if base is None:
+        return None
+    url = f"{base}{path}"
     try:
         async with httpx.AsyncClient(timeout=P_TIMEOUT_SECONDS) as c:
             r = await c.post(url, json=body)
@@ -242,6 +244,9 @@ def p_retryable(status: int | None) -> bool:
 
 async def p_post_or_spool(path: str, body: dict, kind: str) -> None:
     global p_inflight
+    # No endpoint configured: drop rather than spool, or the offline buffer grows unbounded.
+    if test_sink is None and not p_telemetry_configured():
+        return
     if test_sink is not None:
         try:
             test_sink(kind, body)

@@ -24,6 +24,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Some dev shells (Git-for-Windows shims prepended aggressively) drop
+# C:\Windows\System32 from PATH entirely, so robocopy/taskkill/powershell all
+# vanish and the build dies mid-step with "not recognized". Put the system dirs
+# back for this process only — never edit the user's PATH from a build script.
+foreach ($sysDir in @("$env:SystemRoot\System32", "$env:SystemRoot", "$env:SystemRoot\System32\WindowsPowerShell\v1.0")) {
+    if ((Test-Path $sysDir) -and ($env:PATH -split ';' -notcontains $sysDir)) { $env:PATH = "$env:PATH;$sysDir" }
+}
+foreach ($tool in @('robocopy', 'taskkill')) {
+    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool not found even after restoring System32 to PATH. Is this a stripped-down Windows image?" }
+}
+
 if ($Publish) { $Sign = $true }
 # Override only the win target; everything else (signing hook, extraResources,
 # publish config) merges from electron/package.json's build block unchanged.
@@ -319,7 +331,11 @@ $Staging = Join-Path $ProjectRoot 'electron\build-staging'
 if (Test-Path $Staging) { Remove-Item -Recurse -Force $Staging }
 New-Item -ItemType Directory -Force -Path $Staging | Out-Null
 
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot 'scripts\fetch-router.ps1') -Dest (Join-Path $Staging 'router')
+# Re-invoke through THIS host rather than a bare `powershell`: System32's
+# WindowsPowerShell dir is not always on PATH (it is absent under pwsh 7 here),
+# which failed the build at step 3. Same fix as bsdtar in bdc077e6.
+$PSExe = (Get-Process -Id $PID).Path
+& $PSExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot 'scripts\fetch-router.ps1') -Dest (Join-Path $Staging 'router')
 if ($LASTEXITCODE -ne 0) { throw "fetch-router.ps1 failed" }
 
 if (-not (Test-Path (Join-Path $Staging 'router\server.js'))) {
