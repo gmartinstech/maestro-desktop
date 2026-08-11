@@ -28,13 +28,13 @@ from backend.apps.agents.session_credential import (
 from backend.apps.settings.redaction import is_secret_field, redact_settings
 
 
-CONNECTION_MODES = ["own_key", "openswarm-pro", "free-trial"]
+CONNECTION_MODES = ["own_key"]
 
 # Every credential field the settings PUT path already treats as secret. Kept here as the contract the redactor must honor; if PUT's notion of "secret" grows, this list should too, and the drift-seal test fails until the redactor also covers it.
 KNOWN_SECRET_FIELDS = [
     "anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
     "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
-    "openswarm_bearer_token", "free_trial_token", "installation_id",
+    "openswarm_bearer_token", "installation_id",
 ]
 
 
@@ -55,10 +55,6 @@ def p_settings_with(mode: str, keys: set[str], custom: bool = False) -> AppSetti
         s.google_api_key = "goog-live-cccc"
     if "openrouter" in keys:
         s.openrouter_api_key = "or-live-dddd"
-    if mode in ("openswarm-pro", "free-trial"):
-        s.openswarm_bearer_token = "bearer-live-eeee"
-        if mode == "free-trial":
-            s.free_trial_token = "ft-live-ffff"
     if custom:
         s.custom_providers = [CustomProvider(name="LMStudio", base_url="http://localhost:1234/v1", api_key="local")]
     return s
@@ -145,11 +141,10 @@ def test_every_shipped_model_lane_classifies():
     """A new model row that the resolver can't place would silently fall to the
     fail-safe 'unknown' lane (over-blocking every key). Force every shipped row
     to resolve to a real api_key/subscription so new lanes get classified."""
-    s_pro = p_settings_with("openswarm-pro", {"anthropic", "openai", "google", "openrouter"})
     s_key = p_settings_with("own_key", {"anthropic", "openai", "google", "openrouter"})
     for rows in BUILTIN_MODELS.values():
         for m in rows:
-            for s in (s_pro, s_key):
+            for s in (s_key,):
                 p = resolve_powering_credential(m["value"], s)
                 assert p.kind in ("api_key", "subscription"), (
                     f"unclassified model lane {m['value']!r} -> {p.kind}"
@@ -176,7 +171,7 @@ def test_redaction_fail_safe_catches_misnamed_secret_by_value():
 
 
 def test_redact_settings_never_emits_a_raw_secret():
-    s = p_settings_with("openswarm-pro", {"anthropic", "openai", "google", "openrouter"}, custom=True)
+    s = p_settings_with("own_key", {"anthropic", "openai", "google", "openrouter"}, custom=True)
     s.claude_subscription_token = "should-never-appear"
     raw = s.model_dump()
     red = redact_settings(raw)

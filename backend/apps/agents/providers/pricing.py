@@ -312,13 +312,6 @@ def compute_billing_kind(
         return "subscription"
     if route == "cc":
         return "subscription"
-    if (
-        api == "anthropic"
-        and route is None
-        and getattr(settings, "connection_mode", "own_key") == "openswarm-pro"
-        and getattr(settings, "openswarm_bearer_token", None)
-    ):
-        return "subscription"
     if route == "api":
         return "api_key"
     if is_or_free:

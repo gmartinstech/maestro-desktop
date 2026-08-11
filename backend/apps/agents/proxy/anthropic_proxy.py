@@ -342,20 +342,14 @@ def p_pick_upstream(model: str) -> tuple[str, dict[str, str]]:
     """Return (base_url_without_v1, auth_headers) for this model.
 
     Routing for Claude-family models:
-      1. openswarm-pro mode → cloud proxy with bearer
-      2. Direct Anthropic API key set → api.anthropic.com (preferred when
+      1. Direct Anthropic API key set → api.anthropic.com (preferred when
          user has their own key, avoids the 8h OAuth expiry pain)
-      3. Fallback → 9router (cc/ OAuth subscription, may 401 if expired)
+      2. Fallback → 9router (cc/ OAuth subscription, may 401 if expired)
     Everything non-Claude goes to 9router for translation."""
     from backend.apps.settings.settings import load_settings
     s = load_settings()
 
     if p_is_claude_model(model):
-        if getattr(s, "connection_mode", "own_key") == "openswarm-pro":
-            bearer = getattr(s, "openswarm_bearer_token", "") or ""
-            proxy = (getattr(s, "openswarm_proxy_url", "") or "https://api.openswarm.com").rstrip("/")
-            if bearer and proxy:
-                return (proxy, {"Authorization": f"Bearer {bearer}"})
         ak = getattr(s, "anthropic_api_key", "") or ""
         if ak.strip():
             return ("https://api.anthropic.com", {

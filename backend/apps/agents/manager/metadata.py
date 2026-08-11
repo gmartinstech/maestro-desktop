@@ -152,7 +152,6 @@ async def generate_turn_label(
                     f"<request>\n{user_prompt[:2000]}\n</request>"
                 ),
             }],
-            # Binds this aux call to its query's free-trial run; ignored off the free lane.
             extra_headers={"X-Openswarm-Task-Id": session_id},
         ) as stream:
             async for text in stream.text_stream:
@@ -238,7 +237,6 @@ async def generate_group_meta(
             max_tokens=aux_max_tokens_for(aux_model, base=300),
             system=system,
             messages=[{"role": "user", "content": user_content}],
-            # Binds this aux call to its query's free-trial run; ignored off the free lane.
             extra_headers={"X-Openswarm-Task-Id": session_id},
         ) as stream:
             async for text in stream.text_stream:

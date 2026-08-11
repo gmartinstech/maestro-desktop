@@ -1,6 +1,6 @@
 """Cloud client for the publish pipeline: ships the bundle to the host and takes
-it back down. Reads the bearer directly (publish works for any signed-in account,
-not just pro/free-trial), matching the cloud's requireAuthedUser gate."""
+it back down. Reads the bearer directly (publish works for any signed-in
+account), matching the cloud's requireAuthedUser gate."""
 from __future__ import annotations
 
 from typing import Optional

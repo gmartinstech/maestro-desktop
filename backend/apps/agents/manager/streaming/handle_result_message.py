@@ -126,13 +126,6 @@ async def handle_result_message(
             elif resolved_model.startswith("cp-"):
                 # User-configured custom OpenAI-compatible provider (Ollama Cloud, Together, Groq, local LMs, etc.). Pricing is unknowable without per-provider rate tables that would rot fast, zero out instead of showing the SDK's Anthropic-rate estimate, which is meaningless here.
                 free_route = True
-        if api_type == "anthropic":
-            from backend.apps.settings.credentials import proxy_auth as proxy_auth
-            pa_tok, _ = proxy_auth(global_settings)
-            # Pro and free-trial both run server-funded, so per-token cost to the user is 0.
-            if pa_tok:
-                free_route = True
-
         if free_route:
             cost = 0.0
         elif isinstance(resolved_model, str) and resolved_model.startswith("openrouter/"):

@@ -176,16 +176,7 @@ async def service_lifespan():
         if getattr(settings, "user_referral_source", None):
             id_props["referral_source"] = settings.user_referral_source
 
-        mode = getattr(settings, "connection_mode", "own_key")
-        plan = getattr(settings, "openswarm_subscription_plan", None)
-        is_paying = mode == "openswarm-pro" and bool(
-            getattr(settings, "openswarm_bearer_token", None)
-        )
-        id_props["connection_mode"] = mode
-        id_props["plan"] = plan if is_paying else "free"
-        id_props["is_paying_customer"] = is_paying
-        if is_paying and getattr(settings, "openswarm_subscription_expires", None):
-            id_props["subscription_expires"] = settings.openswarm_subscription_expires
+        id_props["connection_mode"] = getattr(settings, "connection_mode", "own_key")
 
         svc.sync({"identity": id_props})
 

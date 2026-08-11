@@ -443,8 +443,6 @@ async def subscriptions_poll(body: dict):
             from backend.apps.service.client import sync as p_sync
             from backend.apps.settings.settings import load_settings
             p_sync(load_settings().model_dump())
-            from backend.apps.subscription.free_trial import clear_free_trial_on_connect
-            await clear_free_trial_on_connect()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -478,9 +476,6 @@ async def subscriptions_exchange(body: dict):
             from backend.apps.service.client import sync as do_sync
             from backend.apps.settings.settings import load_settings
             do_sync(load_settings().model_dump())
-            # A connected subscription takes precedence over the free trial right away.
-            from backend.apps.subscription.free_trial import clear_free_trial_on_connect
-            await clear_free_trial_on_connect()
         return result
     except Exception as e:
         if state and state in completed_oauth:
@@ -537,12 +532,10 @@ async def probe_model(body: dict):
         resolved = resolve_model_id_for_sdk(short_name, settings)
         entry = find_builtin_model(short_name) or {}
         route = entry.get("route")
-        connection_mode = getattr(settings, "connection_mode", "own_key")
 
         import anthropic
         client = None
 
-        # Routing mirrors agent_manager: prefix takes precedence over Pro.
         resolved_is_9router = (
             isinstance(resolved, str)
             and resolved.startswith(NINEROUTER_MODEL_PREFIXES)
@@ -554,12 +547,6 @@ async def probe_model(body: dict):
             client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
         elif route == "api" and api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        elif api_type == "anthropic" and connection_mode == "openswarm-pro":
-            bearer = getattr(settings, "openswarm_bearer_token", "") or ""
-            proxy_url = (getattr(settings, "openswarm_proxy_url", None) or "https://api.openswarm.com").rstrip("/")
-            if not bearer:
-                return {"ok": True, "skipped": True}
-            client = anthropic.AsyncAnthropic(auth_token=bearer, base_url=proxy_url)
         elif api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         else:
@@ -658,10 +645,6 @@ async def list_models():
         return out
 
     has_api_key = bool(getattr(settings, "anthropic_api_key", None))
-    is_openswarm_pro = (
-        getattr(settings, "connection_mode", "own_key") == "openswarm-pro"
-        and bool(getattr(settings, "openswarm_bearer_token", None))
-    )
     has_claude_sub = "claude" in connected
 
     result: dict[str, list[dict]] = {}
@@ -671,18 +654,8 @@ async def list_models():
     cc_variants = [m for m in anthropic_models if m.get("route") == "cc"]
     api_variants = [m for m in anthropic_models if m.get("route") == "api"]
 
-    # Pro mode splits into Pro proxy + Anthropic alternates; own-key collapses to one adaptive group.
     notes: list[dict] = []
-    if is_openswarm_pro:
-        result["OpenSwarm Pro"] = p_serialize(adaptive)
-        anth_alternates: list[dict] = []
-        if has_claude_sub:
-            anth_alternates += cc_variants
-        if has_api_key:
-            anth_alternates += api_variants
-        if anth_alternates:
-            result["Anthropic"] = p_serialize(anth_alternates)
-    elif has_api_key or has_claude_sub:
+    if has_api_key or has_claude_sub:
         rows = p_serialize(adaptive)
         # When an Anthropic key is set, these adaptive rows run on it: own-key routing prefers the user's key over any sub (agent_manager + anthropic_proxy._pick_upstream), so it holds even with a Claude sub connected. Label + bucket as API key (not 9router-state dependent).
         if has_api_key:
@@ -838,16 +811,6 @@ async def list_models():
             })
         if entries:
             result[cp_name] = entries
-
-    # Free lane: nothing of the user's own is connected, so surface the funded Haiku as the free-trial face. The picker shows "Claude Haiku" and the session/default reconcile to it, instead of the picker going empty and the model staying stuck on a dead last-used id (active = it runs; spent = the send is gated by the out-of-runs UI).
-    if not result:
-        haiku_entry = next((m for m in anthropic_models if m.get("value") == "haiku"), None)
-        if haiku_entry:
-            haiku_rows = p_serialize([haiku_entry])
-            for hr in haiku_rows:
-                hr["is_free"] = True
-                hr["billing_kind"] = "free"
-            result["Anthropic"] = haiku_rows
 
     return {"models": result, "notes": notes}
 

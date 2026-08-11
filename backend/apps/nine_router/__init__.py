@@ -12,7 +12,7 @@ the re-exports below.
 - process.py: subprocess lifecycle (the single owner of the process handle),
   constants, ports/URLs, the pinned NPM version, path resolution, stats.
 - sync.py: Gemini/OpenAI/OpenRouter API-key sync.
-- sync_custom.py: custom OpenAI-compatible provider + OpenSwarm Pro sync.
+- sync_custom.py: custom OpenAI-compatible provider sync.
 - oauth.py: OAuth start/poll/exchange + the Codex 1455 callback listener.
 """
 
@@ -34,7 +34,6 @@ from backend.apps.nine_router.process import (
     stop,
 )
 from backend.apps.nine_router.sync import (
-    NINE_ROUTER_CLAUDE_PRO_NAME,
     NINE_ROUTER_KEYED_NAME,
     NINE_ROUTER_OPENAI_KEYED_NAME,
     NINE_ROUTER_OPENAI_KEYED_PREFIX,
@@ -47,8 +46,6 @@ from backend.apps.nine_router.sync_custom import (
     NINE_ROUTER_CUSTOM_NAME_SUFFIX,
     normalize_openai_compat_base_url,
     sync_custom_providers,
-    sync_openswarm_pro_as_claude,
-    sync_pro_routing,
 )
 from backend.apps.nine_router.oauth import (
     exchange_oauth,
@@ -63,7 +60,6 @@ __all__ = [
     "NINE_ROUTER_PORT",
     "NINE_ROUTER_URL",
     "NINE_ROUTER_V1",
-    "NINE_ROUTER_CLAUDE_PRO_NAME",
     "NINE_ROUTER_KEYED_NAME",
     "NINE_ROUTER_OPENAI_KEYED_NAME",
     "NINE_ROUTER_OPENAI_KEYED_PREFIX",
@@ -85,7 +81,5 @@ __all__ = [
     "sync_openai_api_key",
     "sync_openrouter_api_key",
     "sync_custom_providers",
-    "sync_openswarm_pro_as_claude",
-    "sync_pro_routing",
     "normalize_openai_compat_base_url",
 ]

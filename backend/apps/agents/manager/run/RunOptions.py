@@ -129,7 +129,6 @@ class RunOptions(AgentManagerProtocol):
             router_model_id=p_router_model_id,
             api_type=p_api_type_for_session,
             anthropic_api_key=getattr(global_settings, "anthropic_api_key", None),
-            connection_mode=getattr(global_settings, "connection_mode", "own_key"),
         )
         if need_web_mcp:
             # browser_ok gates the search-dead fallback nudge: never tell the model to call CreateBrowserAgent in a session where browser delegation is denied.

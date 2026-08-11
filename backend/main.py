@@ -39,8 +39,6 @@ from backend.apps.outputs.versions_routes import output_versions
 from backend.apps.dashboards.dashboards import dashboards
 from backend.apps.swarm.swarm import swarm
 from backend.apps.service.service import service
-from backend.apps.subscription.router import subscription
-from backend.apps.auth.router import auth
 from backend.apps.web.web import web
 from backend.apps.agents.proxy.anthropic_proxy import anthropic_proxy
 from backend.apps.agents.core.openai_passthrough import openai_passthrough
@@ -49,7 +47,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 
-main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, output_versions, dashboards, swarm, service, subscription, auth, web, anthropic_proxy, workflows, openai_passthrough])
+main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, output_versions, dashboards, swarm, service, web, anthropic_proxy, workflows, openai_passthrough])
 app = main_app.app
 
 # Generate per-install auth token BEFORE we bind the HTTP port. By the time any request lands, the token file exists. See backend/auth.py.
@@ -482,12 +480,6 @@ async def subscriptions_callback(request: Request):
 
     mark_oauth_completed(state)
     logger.info(f"OAuth exchange succeeded for provider={pending.get('provider')}")
-    # A connected subscription takes precedence over the free trial right away.
-    try:
-        from backend.apps.subscription.free_trial import clear_free_trial_on_connect
-        await clear_free_trial_on_connect()
-    except Exception:
-        pass
     return HTMLResponse(P_SUCCESS_HTML)
 
 

@@ -64,7 +64,6 @@ NON_TRANSIENT_PATTERNS = re.compile(
     r"|missing\s+bearer\s+token"
     r"|extra\s+usage\s+is\s+required\s+for\s+long\s+context"
     r"|long\s+context\s+(?:requests?\s+)?(?:requires?|not\s+(?:available|enabled))"
-    r"|free_trial_exhausted|used\s+your\s+free"
     r"|401|403)",
     re.IGNORECASE,
 )
@@ -83,22 +82,6 @@ def is_long_context_error(exc: BaseException, extra_text: str = "") -> bool:
     return bool(re.search(
         r"extra\s+usage\s+is\s+required\s+for\s+long\s+context"
         r"|long\s+context\s+(?:requests?\s+)?(?:requires?|not\s+(?:available|enabled))",
-        combined,
-        re.IGNORECASE,
-    ))
-
-
-@typechecked
-def is_free_trial_exhausted(exc: BaseException, extra_text: str = "") -> bool:
-    """True when the cloud says the machine's free runs are spent (a 402 with
-    type free_trial_exhausted). The catch-all path uses this to flip back to
-    own_key and show a friendly connect-a-model upsell instead of a raw error.
-    """
-    combined = f"{exc!s}\n{extra_text}".strip()
-    if not combined:
-        return False
-    return bool(re.search(
-        r"free_trial_exhausted|used\s+your\s+free\s+(?:openswarm\s+)?runs",
         combined,
         re.IGNORECASE,
     ))
@@ -247,7 +230,7 @@ def is_context_pressure_death(exc: BaseException, compact_boundaries: int, extra
     if "ProcessError" not in type(exc).__name__:
         return False
     for p_claimed_by in (
-        is_long_context_error, is_transient_capacity_error, is_free_trial_exhausted,
+        is_long_context_error, is_transient_capacity_error,
         is_out_of_tokens, is_auth_error, is_unknown_model_error,
     ):
         if p_claimed_by(exc, extra_text=extra_text):

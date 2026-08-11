@@ -1,5 +1,5 @@
 """Friendly error cards for a failed agent run. The run_agent_loop except-handler classifies
-the exception (long-context / capacity / free-trial / auth / unknown-model / unclassified) and
+the exception (long-context / capacity / auth / unknown-model / unclassified) and
 emits the matching system message + WS event. Pulled out of agent_manager so the loop stays under
 the file ceiling; pure relocation, no self (operates on the passed run state)."""
 
@@ -14,7 +14,6 @@ from backend.apps.agents.manager.streaming.state import TurnState
 from backend.apps.agents.core.error_classify import (
     is_long_context_error,
     is_transient_capacity_error,
-    is_free_trial_exhausted,
     is_out_of_tokens,
     extract_reset_hint,
     is_auth_error,
@@ -109,30 +108,8 @@ async def handle_run_error(e: Exception, session: AgentSession, session_id: str,
             "session_id": session_id,
             "retry_after_s": parse_retry_after(e, p_stderr_tail),
         })
-    elif is_free_trial_exhausted(e, extra_text=p_stderr_tail):
-        # Free runs spent. Flip back to own_key and show a friendly "connect a model" upsell instead of a raw 402.
-        try:
-            from backend.apps.subscription.free_trial import clear_free_trial
-            await clear_free_trial(load_settings())
-        except Exception:
-            logger.debug("clear_free_trial after exhaustion failed", exc_info=True)
-        friendly_msg = (
-            "You've used your free runs. Connect a model to keep going: "
-            "your own API key, an AI subscription you already pay for, or "
-            "OpenSwarm Pro."
-        )
-        error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
-        session.messages.append(error_msg)
-        await ws_manager.send_to_session(session_id, "agent:free_trial_exhausted", {
-            "session_id": session_id,
-            "message": friendly_msg,
-        })
-        await ws_manager.send_to_session(session_id, "agent:message", {
-            "session_id": session_id,
-            "message": error_msg.model_dump(mode="json"),
-        })
     elif is_out_of_tokens(e, extra_text=p_stderr_tail):
-        # The user's PROVIDER account is out of credits / over quota, distinct from OpenSwarm free-trial exhaustion above and from a 401 below ("credit balance too low", "insufficient_quota", "usage cap exceeded", OpenSwarm plan limit). Show a friendly card with the provider's reset hint when it gave one, instead of dropping to the raw-error blob in the else branch.
+        # The user's PROVIDER account is out of credits / over quota, distinct from a 401 below ("credit balance too low", "insufficient_quota", "usage cap exceeded"). Show a friendly card with the provider's reset hint when it gave one, instead of dropping to the raw-error blob in the else branch.
         p_reset_hint = extract_reset_hint(f"{e!s}\n{p_stderr_tail}")
         friendly_msg = (
             "Your model provider reports you're out of credits or over your usage "
@@ -177,18 +154,6 @@ async def handle_run_error(e: Exception, session: AgentSession, session_id: str,
                 "of Sonnet 4.6 -cc)."
             )
             reason = "claude_sub_not_connected"
-        elif (
-            "-cc" not in p_model
-            and getattr(load_settings(), "connection_mode", "own_key") == "openswarm-pro"
-        ):
-            friendly_msg = (
-                "OpenSwarm Pro authentication failed. Your subscription "
-                "token may have expired even though the connection still "
-                "shows green. Open Settings → Models and click "
-                "Disconnect / Reconnect on Claude Pro / Max to refresh "
-                "the token."
-            )
-            reason = "openswarm_pro_auth_expired"
         else:
             friendly_msg = (
                 "Anthropic authentication failed. The API key or "

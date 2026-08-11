@@ -219,9 +219,6 @@ def p_antigravity_connected() -> bool:
 
 def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     """Short model name → id string for ClaudeAgentOptions."""
-    # Free trial funds only Haiku via the cloud proxy; force it so a session left on a gpt-*/sub model can't escape to a lane the trial can't fund (which snags as a 401/404).
-    if getattr(settings, "connection_mode", "own_key") == "free-trial":
-        short_name = "haiku"
     entry = find_builtin_model(short_name)
     if entry is None:
         return short_name
@@ -235,9 +232,6 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     if entry.get("route") == "openrouter":
         return entry.get("router_model_id", short_name)
     if entry.get("api") == "anthropic":
-        # openswarm-pro AND free-trial both proxy-route, so resolve to the bare id (the proxy serves it) instead of the cc/-prefixed id that 401s when no Claude subscription is connected. This is the line that otherwise turns a free-trial user's first run into "No AI provider connected".
-        if getattr(settings, "connection_mode", "own_key") in ("openswarm-pro", "free-trial"):
-            return entry.get("model_id", short_name)
         if getattr(settings, "anthropic_api_key", None):
             return entry.get("model_id", short_name)
     # Gemini lane order: Antigravity OAuth (for the models it serves), then AI Studio apikey, then Gemini CLI. AG bypasses the thoughtSignature validator that breaks multi-step Gemini turns AND supports real reasoning, so a connected AG sub is preferred over the AI Studio key, which otherwise silently shadowed it. The map is AG's allowlist; pro variants 404/400 on AG and are deliberately absent, so they fall through to the key.
@@ -300,12 +294,6 @@ async def resolve_aux_model(
     elif primary_api == "openrouter":
         if "openrouter" in connected:
             return (or_aux, base_url)
-
-    if getattr(settings, "connection_mode", "own_key") in ("openswarm-pro", "free-trial"):
-        from backend.apps.settings.credentials import proxy_auth
-        token, base = proxy_auth(settings)
-        if token:
-            return (bare, base)
 
     if getattr(settings, "anthropic_api_key", None):
         return (bare, None)

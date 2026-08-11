@@ -105,7 +105,7 @@ def test_benign_write_applies(client, reset_settings):
 def test_unknown_and_server_owned_fields_are_refused(client, reset_settings):
     r = client.post("/api/settings-meta/write", json={"changes": {
         "not_a_real_field": 1,
-        "connection_mode": "openswarm-pro",
+        "connection_mode": "forged-mode",
         "openswarm_bearer_token": "forged",
     }})
     assert r.status_code == 200, r.text
@@ -115,7 +115,7 @@ def test_unknown_and_server_owned_fields_are_refused(client, reset_settings):
     assert out["openswarm_bearer_token"]["status"] == "refused"
     # And the server-owned field is genuinely untouched on disk.
     from backend.apps.settings.settings import load_settings
-    assert load_settings().connection_mode != "openswarm-pro"
+    assert load_settings().connection_mode != "forged-mode"
 
 
 def test_cannot_suicide_but_disconnects_others(client, reset_settings, session_on_anthropic_key):

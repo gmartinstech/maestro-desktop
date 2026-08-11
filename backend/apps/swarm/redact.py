@@ -16,9 +16,8 @@ P_DENY_SUBSTRINGS = (
 
 # Exact field names that are sensitive or per-install identity (the substring pass alone would miss these).
 P_DENY_EXACT = {
-    "token", "installation_id", "user_id", "free_trial_token",
-    "free_trial_remaining", "free_trial_runs_limit", "openswarm_bearer_token",
-    "openswarm_usage_cached", "connected_account_email", "oauth_tokens",
+    "token", "installation_id", "user_id", "openswarm_bearer_token",
+    "connected_account_email", "oauth_tokens",
     "credentials", "sdk_session_id",
 }
 

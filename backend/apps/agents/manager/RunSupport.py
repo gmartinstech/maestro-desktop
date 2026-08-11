@@ -273,9 +273,6 @@ class RunSupport(AgentManagerProtocol):
 
             from backend.apps.settings.credentials import get_anthropic_client
             global_settings = load_settings()
-            # Free lane rotates pool accounts per call, so a warm ping primes a cache the next call won't hit, and worse it'd burn a metered run at idle (this fires on dashboard mount, not a user query). Skip it on the free trial.
-            if getattr(global_settings, "connection_mode", "own_key") == "free-trial":
-                return
             client = get_anthropic_client(global_settings)
 
             # Single ping with the same system + minimal user message. max_tokens=1 keeps it cheap; we don't care about the output.

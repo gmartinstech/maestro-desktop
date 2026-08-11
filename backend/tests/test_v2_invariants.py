@@ -432,22 +432,6 @@ async def test_resolve_aux_model_gemini_api_key_returns_preview_suffix():
 
 
 @pytest.mark.asyncio
-async def test_resolve_aux_model_anthropic_pro_returns_proxy():
-    """OpenSwarm Pro mode → bare haiku via proxy."""
-    from backend.apps.agents.providers import registry
-    from backend.apps.settings.models import AppSettings
-    settings = AppSettings()
-    settings.connection_mode = "openswarm-pro"
-    settings.openswarm_proxy_url = "https://api.openswarm.test"
-    # A real Pro-connected user carries a bearer token; proxy_auth reads it. Without it the resolver can't see Pro and falls through to the raise, which is what made this test depend on live machine state.
-    settings.openswarm_bearer_token = "test-pro-token"
-    with patch("backend.apps.nine_router.is_running", return_value=False):
-        model_id, base = await registry.resolve_aux_model(settings)
-        assert "haiku" in model_id
-        assert base == "https://api.openswarm.test"
-
-
-@pytest.mark.asyncio
 async def test_resolve_aux_model_codex_subscription():
     """Codex primary with codex connected → cx/gpt-5.4-mini."""
     from backend.apps.agents.providers import registry
@@ -1146,16 +1130,14 @@ async def test_aux_failover_anthropic_to_codex():
     from backend.apps.agents.providers import registry
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
-    settings.connection_mode = "openswarm-pro"  # provides anthropic fallback
-    settings.openswarm_proxy_url = "https://api.openswarm.test"
-    settings.openswarm_bearer_token = "test-pro-token"  # what a real Pro user carries
+    settings.anthropic_api_key = "sk-test-fake"  # provides anthropic fallback
     with patch("backend.apps.nine_router.is_running", return_value=True), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[])):  # nothing connected
-        # primary_api=codex but codex not connected → cascade to Pro/anthropic
+        # primary_api=codex but codex not connected → cascade to anthropic
         model_id, base = await registry.resolve_aux_model(settings, primary_api="codex")
-        assert "haiku" in model_id  # fallthrough hit Anthropic Pro path
-        assert base == "https://api.openswarm.test"
+        assert "haiku" in model_id  # fallthrough hit the Anthropic key path
+        assert base is None
 
 
 @pytest.mark.asyncio

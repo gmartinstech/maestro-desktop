@@ -666,7 +666,7 @@ async def run_browser_agent(
                 "action_log": [],
                 "final_screenshot": None,
             }
-    # Route the client based on the resolved model id, not just connection_mode. Without this, a pinned-route value like "sonnet-cc" resolves to "cc/claude-sonnet-4-6" but the old get_anthropic_client() still returned an OpenSwarm-proxy client (because connection_mode was openswarm-pro), which then rejected the cc/ prefix and surfaced as a misleading "OpenSwarm servers are busy" error.
+    # Route the client based on the resolved model id, not just connection_mode: a pinned-route value like "sonnet-cc" resolves to "cc/claude-sonnet-4-6", which a plain get_anthropic_client() would reject.
     client = get_anthropic_client_for_model(browser_settings, api_model)
 
     # Resume prior conversation on this browser if we have one cached. This lets the sub-agent skip the "take a screenshot to figure out where I am" cycle every time the parent issues a new task. Defensively validate the cache; if it's somehow corrupted (orphaned tool_use_ids), drop it and start fresh rather than crash on the next API call.

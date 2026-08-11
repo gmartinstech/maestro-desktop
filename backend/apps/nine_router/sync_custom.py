@@ -3,8 +3,8 @@
 9Router exposes arbitrary OpenAI-compatible endpoints via "provider nodes"
 (POST /api/provider-nodes, type="openai-compatible"). A model_id of
 <prefix>/<model> routes to that node's baseUrl. This module mirrors the
-user's custom providers, the OpenAI passthrough lane, and OpenSwarm Pro
-into those nodes. Talks to the already-running 9Router over HTTP; never
+user's custom providers and the OpenAI passthrough lane into those
+nodes. Talks to the already-running 9Router over HTTP; never
 spawns the subprocess (that's process.py's job).
 """
 
@@ -12,7 +12,6 @@ import logging
 
 from backend.apps.nine_router.process import NINE_ROUTER_API, cli_auth_headers
 from backend.apps.nine_router.sync import (
-    NINE_ROUTER_CLAUDE_PRO_NAME,
     NINE_ROUTER_OPENAI_KEYED_PREFIX,
     find_keyed_connection,
     nr,
@@ -268,75 +267,3 @@ async def sync_custom_providers(providers: list) -> None:
                 logger.info(f"9Router: removed orphaned custom node {prefix}")
         except Exception as e:
             logger.warning(f"9Router custom node {prefix} delete failed: {e}")
-
-
-async def sync_openswarm_pro_as_claude(bearer_token: str | None, proxy_url: str | None) -> None:
-    """Register OpenSwarm Pro as a `claude` apikey connection in 9Router,
-    pointing at our cloud proxy via `providerSpecificData.baseUrl`.
-
-    This is what makes the CLI's built-in WebSearch work on non-Claude
-    primaries for Pro users: the CLI delegates the search execution to
-    Anthropic via ANTHROPIC_SMALL_FAST_MODEL (claude-haiku). That small-
-    model call hits `ANTHROPIC_BASE_URL` which we've already set to
-    localhost:20128 (9Router). Without this sync, 9Router has no Claude
-    path for openswarm-pro users, so the search fails with
-    "no credentials for provider: claude". With this sync, 9Router sees
-    the OpenSwarm-Pro-backed Claude connection and routes the search
-    call through our cloud; same quota the user's Pro subscription
-    already covers, no extra cost."""
-    if not nr().is_running():
-        return
-
-    # 9Router's POST /api/providers only accepts direct-API provider ids for apikey auth; `claude` is the subscription/IDE id, `anthropic` is the direct-API id. Use `anthropic`.
-    existing = await find_keyed_connection("anthropic", NINE_ROUTER_CLAUDE_PRO_NAME)
-    try:
-        async with nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
-            if bearer_token and proxy_url:
-                payload = {
-                    "provider": "anthropic",
-                    "authType": "apikey",
-                    "name": NINE_ROUTER_CLAUDE_PRO_NAME,
-                    "apiKey": bearer_token,
-                    # Priority 1 so a real user-owned Claude subscription (priority 0) still takes precedence if they have one. Pro is the fallback, not the default.
-                    "priority": 1,
-                    "providerSpecificData": {
-                        "baseUrl": proxy_url.rstrip("/") + "/v1",
-                    },
-                }
-                if existing:
-                    await client.patch(
-                        f"{NINE_ROUTER_API}/providers/{existing['id']}",
-                        json=payload,
-                    )
-                    logger.info("9Router: updated OpenSwarm Pro → Claude connection")
-                else:
-                    r = await client.post(f"{NINE_ROUTER_API}/providers", json=payload)
-                    if r.status_code < 300:
-                        logger.info("9Router: created OpenSwarm Pro → Claude connection")
-                    else:
-                        logger.warning(
-                            f"9Router: failed to create OpenSwarm Pro → Claude connection: {r.status_code} {r.text[:200]}"
-                        )
-            else:
-                if existing:
-                    await client.delete(f"{NINE_ROUTER_API}/providers/{existing['id']}")
-                    logger.info("9Router: removed OpenSwarm Pro → Claude connection")
-    except Exception as e:
-        logger.warning(f"9Router OpenSwarm-Pro Claude sync failed: {e}")
-
-
-async def sync_pro_routing(settings_obj) -> None:
-    """Mirror the settings' cloud-proxy state (openswarm-pro OR free-trial) into
-    the 9Router Claude lane. Call after any flow that changes connection_mode or
-    the bearer (activate, sign-in, sign-out, disconnect, free-trial arm/clear).
-    Never raises."""
-    try:
-        from backend.apps.settings.credentials import proxy_auth
-        bearer, base = proxy_auth(settings_obj)
-        active = bool(bearer)
-        await sync_openswarm_pro_as_claude(
-            bearer if active else None,
-            base if active else None,
-        )
-    except Exception as e:
-        logger.warning(f"OpenSwarm-Pro → Claude sync failed: {e}")

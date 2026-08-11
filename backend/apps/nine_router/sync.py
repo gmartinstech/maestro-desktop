@@ -24,7 +24,6 @@ def nr():
 NINE_ROUTER_KEYED_NAME = "AI Studio (OpenSwarm-managed)"
 NINE_ROUTER_OPENAI_KEYED_NAME = "OpenAI (OpenSwarm-managed)"
 NINE_ROUTER_OPENROUTER_KEYED_NAME = "OpenRouter (OpenSwarm-managed)"
-NINE_ROUTER_CLAUDE_PRO_NAME = "OpenSwarm Pro (OpenSwarm-managed)"
 
 # Reserved prefix that registry.py's gpt-5.*-api router_model_ids depend on. Changing this breaks model resolution for OpenAI own-key users.
 NINE_ROUTER_OPENAI_KEYED_PREFIX = "cp-openai"

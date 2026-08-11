@@ -21,24 +21,20 @@ from backend.apps.agents.tools.ssrf_guard import SSRFBlocked, safe_fetch
 P_MAX_OUTPUT_BYTES = 250 * 1024  # ~250 KB covers ~95% of articles/wikis/docs.
 
 
-def anthropic_web_search_is_reliable(*, uses_direct_anthropic_api: bool,
-                                     is_pro: bool) -> bool:
+def anthropic_web_search_is_reliable(*, uses_direct_anthropic_api: bool) -> bool:
     """Whether the CLI's built-in WebSearch is reliable enough to suppress the
     DuckDuckGo fallback. The built-in tool fires an aux `claude-haiku` call, and
     that call only authenticates when it reaches an ENTITLED Anthropic endpoint:
-
-      - `uses_direct_anthropic_api`: the session is pinned to a direct Anthropic
-        api-route model (base_url = api.anthropic.com with the user's own key),
-        so the haiku call hits Anthropic directly and works.
-      - `is_pro`: OpenSwarm Pro, entitled to the managed `anthropic` pool that
-        9Router's `anthropic/*` route resolves to.
+    `uses_direct_anthropic_api` means the session is pinned to a direct Anthropic
+    api-route model (base_url = api.anthropic.com with the user's own key), so the
+    haiku call hits Anthropic directly and works.
 
     A bare `anthropic_api_key` in settings is NOT sufficient: a SUBSCRIPTION-route
     Claude model (e.g. `opus-4-8`, route=None) still sends the haiku call through
-    9Router to the managed pool, which 401s for non-Pro users ('Invalid bearer
-    token, reset after ~2m'). Only a `*-api` route model talks to Anthropic
-    directly. Everyone else keeps the free, always-working DDG path."""
-    return bool(uses_direct_anthropic_api or is_pro)
+    9Router to a pool that 401s ('Invalid bearer token, reset after ~2m'). Only a
+    `*-api` route model talks to Anthropic directly. Everyone else keeps the free,
+    always-working DDG path."""
+    return bool(uses_direct_anthropic_api)
 
 
 @typechecked
@@ -48,16 +44,14 @@ def should_register_web_mcp(
     router_model_id: object,
     api_type: Optional[str],
     anthropic_api_key: Optional[str],
-    connection_mode: str,
 ) -> bool:
     """True when the agent loop must register the DDG-backed openswarm-web MCP because the
     primary model has NO reliable native Anthropic web-search path. We prefer Anthropic's
     hosted search (return False) whenever it's actually reachable, and cascade through our own
     /api/web/search (Gemini -> OpenAI -> DuckDuckGo) otherwise. The three no-path cases:
     a non-Claude primary, a custom-provider session (ANTHROPIC_BASE_URL points at 9Router with
-    no Claude connection), and a subscription-route Claude model on a non-Pro account (the
-    built-in WebSearch's aux haiku call 401s). Pro pool is deliberately NOT counted for a
-    non-Claude primary: spending it on WebSearch would drain the user's Claude turns."""
+    no Claude connection), and a subscription-route Claude model (the built-in WebSearch's aux
+    haiku call 401s)."""
     from backend.apps.agents.providers.registry import find_builtin_model as find_builtin_model
 
     m = router_model_id if isinstance(router_model_id, str) else ""
@@ -79,7 +73,6 @@ def should_register_web_mcp(
         and primary_is_claude
         and anthropic_web_search_is_reliable(
             uses_direct_anthropic_api=uses_direct_anthropic_api,
-            is_pro=(connection_mode in ("openswarm-pro", "free-trial")),
         )
     )
     return not has_anthropic_path

@@ -104,18 +104,6 @@ def p_capture_env(monkeypatch, settings, api_type, resolved_model, model_entry):
     return captured["options"].env
 
 
-def test_loop_builds_pro_proxy_env(monkeypatch):
-    # OpenSwarm Pro: the run authenticates against the cloud proxy with the server bearer, never the user's own key. Pin that the proxy bearer + base url land in the env.
-    from backend.apps.settings.models import AppSettings
-    import backend.apps.settings.credentials as creds
-    monkeypatch.setattr(creds, "proxy_auth", lambda s: ("pro-bearer-xyz", "https://api.openswarm.com/proxy"), raising=True)
-    settings = AppSettings(connection_mode="openswarm-pro")
-    env = p_capture_env(monkeypatch, settings, "anthropic", "claude-sonnet-4-6", None)
-    assert env["ANTHROPIC_AUTH_TOKEN"] == "pro-bearer-xyz"
-    assert env["ANTHROPIC_BASE_URL"] == "https://api.openswarm.com/proxy"
-    assert "ANTHROPIC_API_KEY" not in env  # Pro never exposes a raw key
-
-
 def test_loop_builds_direct_openai_key_env(monkeypatch):
     # Direct OpenAI api-route key: routes through the local openai-passthrough that fixes the max_tokens->max_completion_tokens rename GPT-5 requires. Pin the key + passthrough base url.
     from backend.apps.settings.models import AppSettings

@@ -74,16 +74,7 @@ class AppSettings(BaseModel):
     connection_mode: str = "own_key"
     openswarm_bearer_token: Optional[str] = None
     openswarm_proxy_url: Optional[str] = None
-    # Zero-config free trial: server-funded runs for a brand-new user with no key and no subscription. connection_mode flips to "free-trial" while armed; the token + remaining count are server-owned (minted by the cloud, sticky per machine). remaining is cached for the onboarding "runs low" nudge.
-    free_trial_token: Optional[str] = None
-    free_trial_remaining: Optional[int] = None
-    free_trial_runs_limit: Optional[int] = None
-    # Epoch seconds when the rolling window refills to a fresh allotment; lets the spent-trial nudge say "fresh runs in ~3h" instead of a vague "for now". Server-owned.
-    free_trial_resets_at: Optional[float] = None
-    openswarm_subscription_plan: Optional[str] = None
-    openswarm_subscription_expires: Optional[str] = None
-    openswarm_usage_cached: Optional[dict] = None
-    # Server-validated identity from /api/auth/signin-activate; user_email above is the self-reported onboarding value.
+    # Server-owned identity; user_email above is the self-reported onboarding value.
     user_id: Optional[str] = None
     signin_method: Optional[Literal["google", "stripe", "email"]] = None
     # Runtime preflight (electron/preflight.js). Default-on; users opt out via this flag, env var OPENSWARM_DISABLE_PREFLIGHT=1, or the cloud-side cohort rollout knocking preflight_rollout_pct down.

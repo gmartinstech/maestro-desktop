@@ -12,10 +12,10 @@ combo and fails until the new lane is classified, so a wrong/forgotten state
 can't ship silently.
 
 Honest scope: only API keys live in writable settings fields, so they're the
-only credential the guard can be asked to protect. Subscriptions (OpenSwarm
-Pro/free-trial, and the 9router OAuth lanes for Claude/Codex/Gemini) are either
-server-owned or live entirely outside settings.json, so the settings-meta tool
-cannot touch them at all, a stronger protection than the guard itself.
+only credential the guard can be asked to protect. Subscriptions (the 9router
+OAuth lanes for Claude/Codex/Gemini) live entirely outside settings.json, so the
+settings-meta tool cannot touch them at all, a stronger protection than the
+guard itself.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class PoweringCredential:
     kind=="api_key"      -> protected_field (or custom slug) names exactly what
                             the guard must keep alive.
     kind=="subscription" -> the live credential isn't a settings field at all
-                            (Pro/free-trial/9router OAuth), so no api-key field
+                            (9router OAuth), so no api-key field
                             needs guarding; clearing OTHER keys stays allowed.
     kind=="unknown"      -> we couldn't classify the run; fail safe by treating
                             ALL credential fields as protected.
@@ -89,7 +89,6 @@ def resolve_powering_credential(model_value: str, settings: AppSettings) -> Powe
     entry = find_builtin_model(model_value)
     api = (entry or {}).get("api") or get_api_type(model_value)
     route = (entry or {}).get("route")
-    mode = getattr(settings, "connection_mode", "own_key")
 
     # Custom provider (LM Studio, Ollama, Together, ...). Local servers use a placeholder key, so suicide is removing the provider ENTRY, not blanking its key; the guard keys off the slug.
     if api == "custom":
@@ -120,16 +119,12 @@ def resolve_powering_credential(model_value: str, settings: AppSettings) -> Powe
                                   protected_field="openrouter_api_key",
                                   label="OpenRouter API key (powers this run)")
 
-    # Default Anthropic rows (route is None): connection_mode picks the lane.
     if api == "anthropic":
-        if mode in ("openswarm-pro", "free-trial"):
-            label = "OpenSwarm Pro" if mode == "openswarm-pro" else "OpenSwarm free trial"
-            return PoweringCredential(kind="subscription", provider="anthropic", label=label)
         if getattr(settings, "anthropic_api_key", None):
             return PoweringCredential(kind="api_key", provider="anthropic",
                                       protected_field="anthropic_api_key",
                                       label="Anthropic API key (powers this run)")
-        # No key, no proxy mode -> the user's Claude subscription via 9router.
+        # No key -> the user's Claude subscription via 9router.
         return PoweringCredential(kind="subscription", provider="anthropic",
                                   label="Claude subscription")
 

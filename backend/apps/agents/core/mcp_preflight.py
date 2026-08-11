@@ -233,7 +233,6 @@ async def p_call_classifier(settings, prompt: str, available: list[CuratedEntry]
         max_tokens=300,
         system=system,
         messages=[{"role": "user", "content": user_turn}],
-        # Rides on its query's free-trial run instead of opening its own; ignored off the free lane.
         extra_headers={"X-Openswarm-Task-Id": task_id} if task_id else {},
     )
 

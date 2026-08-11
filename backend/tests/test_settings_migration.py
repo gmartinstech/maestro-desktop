@@ -29,8 +29,9 @@ def p_write(path, obj):
 
 # ---------------- migrate_legacy_fields ----------------
 
-def test_migrate_managed_to_openswarm_pro():
-    assert store.migrate_legacy_fields({"connection_mode": "managed"})["connection_mode"] == "openswarm-pro"
+def test_migrate_retired_modes_to_own_key():
+    for legacy in ("managed", "openswarm-pro", "free-trial"):
+        assert store.migrate_legacy_fields({"connection_mode": legacy})["connection_mode"] == "own_key"
 
 
 def test_migrate_auth_token_renamed_and_popped():
@@ -70,7 +71,7 @@ def test_minimal_old_file_fills_missing_with_defaults(settings_file):
 def test_legacy_fields_migrated_end_to_end(settings_file):
     p_write(settings_file, {"connection_mode": "managed", "openswarm_auth_token": "tok"})
     s = store.load_settings()
-    assert s.connection_mode == "openswarm-pro"
+    assert s.connection_mode == "own_key"
     assert s.openswarm_bearer_token == "tok"
 
 
