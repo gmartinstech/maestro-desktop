@@ -3046,18 +3046,11 @@ ipcMain.handle('open-external', (_event, url) => {
   }
 });
 
-// Install state. Returns the persisted install.json contents.
-ipcMain.handle('get-install-state', () => {
-  // Affiliate attribution removed with the call-home; nothing to report.
-  return {};
-});
-
 // Factory reset ("Erase all content and settings"). Stop the backend FIRST so
 // nothing rewrites the dir mid-wipe (on Windows a live process even locks the
 // files), wipe everything under userData/data, then relaunch into a clean first
-// run. install.json lives OUTSIDE /data so the install + affiliate identity
-// survives, exactly like a real reinstall would. Best-effort throughout: a
-// failed kill or wipe still relaunches rather than wedging the user.
+// run. Best-effort throughout: a failed kill or wipe still relaunches rather
+// than wedging the user.
 ipcMain.handle('hard-reset', async () => {
   try { killBackend(); } catch (e) { console.error('[hard-reset] killBackend failed', e); }
   try {

@@ -57,8 +57,6 @@ contextBridge.exposeInMainWorld('maestro', {
   markFirstAgentResponse: () => ipcRenderer.send('perf:first-agent-response'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
-  // Returns the persisted install state (app_install_id, ...). Resolves to {} if no state yet.
-  getInstallState: () => ipcRenderer.invoke('get-install-state'),
   // Factory reset: wipes the data dir and relaunches. Never resolves on success (the app exits first).
   hardReset: () => ipcRenderer.invoke('hard-reset'),
   // Clears cookies/cache/localStorage for the browser-card partition only (never the app's defaultSession). Logs you out of sites opened in browser cards.
