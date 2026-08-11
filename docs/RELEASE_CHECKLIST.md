@@ -20,10 +20,10 @@ platform. See `RELEASE_RUNBOOK.md` for the how; this is the gate.
       equals `git rev-parse HEAD` of the release commit (and they equal each other).
 
 ## Artifacts + feeds (promotion gate)
-- [ ] GitHub draft release for `v<version>` has: `OpenSwarm-Setup-x64.exe`,
-      `OpenSwarm-arm64.dmg`, `OpenSwarm-x64.dmg`, `latest.yml`, `latest-mac.yml`.
+- [ ] GitHub draft release for `v<version>` has: `MaestroStudio-Setup-x64.exe`,
+      `MaestroStudio-arm64.dmg`, `MaestroStudio-x64.dmg`, `latest.yml`, `latest-mac.yml`.
 - [ ] Promotion gate passes:
-      `node scripts/release/verify-release.js --dir <downloaded-feeds> --expect-version <version> --base-url https://github.com/openswarm-ai/openswarm/releases/download/v<version>`
+      `node scripts/release/verify-release.js --dir <downloaded-feeds> --expect-version <version> --base-url https://github.com/gmartinstech/maestro-desktop/releases/download/v<version>`
       (both feeds present, versions agree with each other and with package.json,
       every asset HEAD-resolves to 200).
 

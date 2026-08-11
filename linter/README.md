@@ -199,7 +199,7 @@ linter/
   README.md
 ```
 
-## OpenSwarm setup notes
+## Maestro Studio setup notes
 
 ### Which checks are on
 
@@ -252,7 +252,7 @@ are held to the limit. The list splits into two intents:
 
 ### Vulture whitelist
 
-`config/vulture_whitelist.py` carries OpenSwarm additions: intentional false positives
+`config/vulture_whitelist.py` carries Maestro Studio additions: intentional false positives
 (monkey-patches, kept-for-compat aliases, loop counters) and a clearly-labelled block of
 suspected genuinely-dead symbols. The latter are whitelisted only because this tooling
 pass is additive-only and must not edit backend source; a future cleanup should delete

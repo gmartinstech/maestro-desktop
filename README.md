@@ -6,7 +6,7 @@ provedor-ia gateway. See `docs/specs/` for the design and `docs/plans/` for the 
 
 <br>
 
-## Why Open Swarm?
+## Why Maestro Studio?
 
 Running agents in a terminal works fine for one task. But when you're juggling five agents across different branches, approving tool calls in separate windows, and losing track of who's doing what — it falls apart fast.
 
@@ -53,7 +53,7 @@ Running agents in a terminal works fine for one task. But when you're juggling f
 
 ### Desktop App
 
-Download the latest release for macOS from [GitHub Releases](https://github.com/openswarm-ai/openswarm/releases).
+Download the latest release for macOS from [GitHub Releases](https://github.com/gmartinstech/maestro-desktop/releases).
 
 > Windows and Linux builds are planned but not yet available.
 
@@ -62,8 +62,8 @@ Download the latest release for macOS from [GitHub Releases](https://github.com/
 **Prerequisites:** Python 3.11+, Node.js 18+, Git
 
 ```bash
-git clone https://github.com/openswarm-ai/openswarm.git
-cd openswarm
+git clone https://github.com/gmartinstech/maestro-desktop.git
+cd maestro-desktop
 bash run.sh
 ```
 

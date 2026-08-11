@@ -1,6 +1,6 @@
-# Contributing to OpenSwarm
+# Contributing to Maestro Studio
 
-A guide for all OpenSwarm contributors.
+A guide for all Maestro Studio contributors.
 
 ## Branches
 

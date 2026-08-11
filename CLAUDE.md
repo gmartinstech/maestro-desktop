@@ -19,4 +19,4 @@ Fork of openswarm-ai/openswarm. Electron + React/TS (frontend/) + FastAPI/Python
 - Agent loop: backend/apps/agents/manager/run/TurnRunner.py ; MockAgent: backend/apps/agents/manager/MockAgent.py
 - Modes/Workflows/Skills/Tools: backend/apps/{modes,workflows,skills,tools_lib}
 - Branding tokens: frontend/src/shared/styles/claudeTokens.ts
-- Cloud couplings to remove: electron/main.js (feed/analytics/affiliate), backend/apps/{auth,subscription}
+- Cloud couplings: electron/main.js (update feed) — the auth/subscription/Pro surface and the upstream call-home are already deleted (OSR Phase 0 + DET).

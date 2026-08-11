@@ -34,8 +34,8 @@ nvm use 22
 ## 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-org>/self-swarm.git
-cd self-swarm
+git clone https://github.com/<your-org>/maestro-desktop.git
+cd maestro-desktop
 ```
 
 ---
@@ -166,7 +166,7 @@ Your agents can now use Google Calendar, Gmail, Drive, etc. through MCP tools.
 ## Project structure
 
 ```
-self-swarm/
+maestro-desktop/
 ├── backend/
 │   ├── apps/              # FastAPI route modules
 │   │   ├── agents/        # Agent lifecycle, WebSocket, worktree management
@@ -206,7 +206,7 @@ self-swarm/
 ### Backend won't start — `ModuleNotFoundError`
 Make sure you're running from the **project root** (not from `backend/`):
 ```bash
-cd self-swarm
+cd maestro-desktop
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8324 --reload
 ```
 

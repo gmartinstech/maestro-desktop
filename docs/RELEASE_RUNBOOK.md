@@ -1,6 +1,6 @@
 # Release Runbook
 
-How an OpenSwarm desktop release is built, verified, and promoted. The guiding
+How a Maestro Studio desktop release is built, verified, and promoted. The guiding
 rule: **a release is reproducible and provenanced** — anyone can tell exactly
 what commit produced a given DMG/EXE, and rebuilding that commit yields the same
 bits. Distribution stays on GitHub Releases (auto-updater feeds live there).
@@ -46,7 +46,7 @@ Every build writes `electron/build-info.json` (gitignored, regenerated) with the
 `git rev-parse HEAD` sha, build time, channel, and version. It ships in the asar
 and surfaces in two places:
 
-- Startup log line in `backend.log`: `[provenance] OpenSwarm <ver> sha=<short> channel=<...>`
+- Startup log line in `backend.log`: `[provenance] Maestro <ver> sha=<short> channel=<...>`
 - Settings → General → Advanced → About → **Build**
 
 To confirm an artifact's provenance: launch it, open Settings, and compare the

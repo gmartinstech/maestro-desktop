@@ -40,7 +40,7 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 - Repo `gmartinstech/maestro-desktop`; `upstream` = `openswarm-ai/openswarm` (fork base ~v1.5.7; upstream now v1.5.8+).
 - **Merged PRs:** #1 foundation gate scaffolding · #2 `harness/review.mjs` · #3 planning docs.
 - **On main:** `scripts/verify.mjs`, `scripts/check-callhome.mjs`, `harness/review.mjs`, `e2e/golden/{golden-path.spec.ts,fixtures.ts}`, `CLAUDE.md`, `AGENTS.md`, `NOTICE`, root `package.json`, `docs/specs/…design.md`, `docs/plans/{…foundation…,…det-detach}.md`.
-- `check-callhome` is **RED** (still finds `openswarm.com` in `electron/main.js`, `electron/preflight.js`, etc.) — the DET epic turns it green. This is expected, not a bug.
+- `check-callhome` **source is clean** as of DET (`feat(det): remove the openswarm.com call-home and product telemetry`). The check scans *built output*, so it can still go red on stale gitignored artifacts (`electron/build-staging/**`, `electron/dist/win-unpacked/**`) left over from a pre-DET build — rebuild, or delete those dirs, before believing a failure.
 - LICENSE (MIT © 2026 Haik Decie) retained; `NOTICE` adds MartinsTech.
 - Root `CLAUDE.md` was un-ignored (upstream `.gitignore` had `/CLAUDE.md`).
 
@@ -102,8 +102,8 @@ A **first-pass** MartinsTech rebrand landed on `main` (commit `feat(brd): first-
 **DONE since:** the orange octopus is gone everywhere. `scripts/gen-icons.py` (backend-venv Pillow, no new deps) regenerates all nine surfaces from `assets/brand/maestro/` — `electron/build/icon.{png,ico,icns}`, `electron/splash/icon.png`, `assets/icon.png`, `frontend/public/{favicon.ico,logo.png,apple-touch-icon.png,maestro-mark.png}`. Rerun it after any brand refresh. The splash shader's coral glow and orange-tilted wave (both tuned to the octopus body) moved to gold + azure. **Also done:** the three stacked Windows bars are now one — `titleBarStyle:'hidden'` + `titleBarOverlay` on Win/Linux, menu kept registered but its strip hidden behind a hamburger in the bar (do NOT "simplify" that to `setApplicationMenu(null)`: it deletes every accelerator, incl. the *View → Reload* that `AppShell.tsx` depends on).
 
 **Still showing the old brand:**
-- `electron/splash/splash.html:6,124` — splash still reads "OpenSwarm", directly above the robot.
-- `electron/package.json:130` — `squirrelWindows.iconUrl` still pulls `icon.ico` from `openswarm-ai/openswarm`, so the Windows installer keeps the octopus until DET Step 3 repoints it.
+- `electron/splash/splash.html:6,124` — splash wordmark; covered by OSR Phase 1 slice 1B (`electron/**` + `frontend/**`).
+- ~~`electron/package.json` `squirrelWindows.iconUrl`~~ — **RESOLVED**: it now pulls `icon.ico` from `gmartinstech/maestro-desktop`, so the Windows installer shows our icon.
 - **Self-hosted Inter + IBM Plex Mono woff2** (bundle under `frontend/public/fonts` + `@font-face`) so fonts work offline instead of via Google Fonts.
 - **Gold `#F5CC00` placements**: active/selection states, focus rings, badges (dark text on gold), brand mark — wire the `brand.gold` token into those specific spots.
-- Remaining "OpenSwarm" strings: the model-provider group labels (`Main.tsx` DEFAULT_MODEL_PRIORITY) and any onboarding copy are DOM/BRD-copy cleanup, not visual-token work.
+- Remaining old-brand strings (model-provider group labels in `Main.tsx` DEFAULT_MODEL_PRIORITY, onboarding copy) are DOM/BRD-copy cleanup, not visual-token work; the token sweep for them is OSR Phase 1 (`docs/plans/2026-08-10-osr-openswarm-removal.md`).
