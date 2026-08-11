@@ -24,10 +24,6 @@ export interface Output {
   workspace_path?: string;
   created_at: string;
   updated_at: string;
-  /** App publishing to {slug}.maestro.host. Server-managed; mirrored here after a publish/unpublish. */
-  published_slug?: string | null;
-  published_url?: string | null;
-  publish_status?: 'publishing' | 'published' | 'error' | null;
 }
 
 /** One saved point in an app's history. The heavy snapshot lives in a zip on
@@ -41,13 +37,6 @@ export interface OutputVersion {
   source: 'auto' | 'manual' | 'pre_restore';
   parent_id?: string | null;
   thumbnail?: string | null;
-}
-
-export interface PublishStatePatch {
-  id: string;
-  published_slug?: string | null;
-  published_url?: string | null;
-  publish_status?: Output['publish_status'];
 }
 
 export function getFrontendCode(output: Output): string {
@@ -210,14 +199,6 @@ const outputsSlice = createSlice({
       const existing = state.items[incoming.id];
       state.items[incoming.id] = existing ? { ...existing, ...incoming } : incoming;
     },
-    /** Reflect a publish/unpublish result onto an existing Output without a refetch. */
-    setOutputPublishState(state, action: { payload: PublishStatePatch; type: string }) {
-      const o = state.items[action.payload.id];
-      if (!o) return;
-      if ('published_slug' in action.payload) o.published_slug = action.payload.published_slug ?? null;
-      if ('published_url' in action.payload) o.published_url = action.payload.published_url ?? null;
-      if ('publish_status' in action.payload) o.publish_status = action.payload.publish_status ?? null;
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -240,5 +221,5 @@ const outputsSlice = createSlice({
   },
 });
 
-export const { upsertOutput, setOutputPublishState } = outputsSlice.actions;
+export const { upsertOutput } = outputsSlice.actions;
 export default outputsSlice.reducer;

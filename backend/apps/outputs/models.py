@@ -27,11 +27,6 @@ class Output(BaseModel):
     workspace_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-    # App publishing to {slug}.maestro.host. Server-managed: set by the publish endpoint, never accepted from OutputUpdate (so a client can't spoof a live URL).
-    published_slug: Optional[str] = None
-    published_url: Optional[str] = None
-    publish_status: Optional[Literal["publishing", "published", "error"]] = None
-    publish_error: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -216,34 +211,3 @@ class VibeCodeRequest(BaseModel):
     current_schema: str = ""
     name: str = ""
     description: str = ""
-
-
-class PublishReview(BaseModel):
-    # Same JSON shape the frontend shareTypes.ReviewSummary expects.
-    verdict: Literal["clean", "warn", "block"] = "clean"
-    findings: list[str] = Field(default_factory=list)
-    scanned_files: list[str] = Field(default_factory=list)
-
-
-class PublishPreflightRequest(BaseModel):
-    output_id: str
-
-
-class PublishRequest(BaseModel):
-    output_id: str
-    slug: Optional[str] = None
-    force: bool = False
-
-
-class PublishPreflightResponse(BaseModel):
-    review: PublishReview
-
-
-class PublishResult(BaseModel):
-    ok: bool = True
-    published_slug: Optional[str] = None
-    published_url: Optional[str] = None
-    # When the AST safety net blocks a non-force publish, carry the findings so the UI shows the review modal instead of a generic error toast.
-    blocked: bool = False
-    review: Optional[PublishReview] = None
-    error: Optional[str] = None
