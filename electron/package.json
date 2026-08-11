@@ -2,7 +2,7 @@
   "name": "maestro-studio",
   "version": "1.5.7",
   "description": "Maestro Studio — AI Agent Orchestrator",
-  "author": "openswarm-ai",
+  "author": "MartinsTech",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

@@ -5,22 +5,22 @@ console.log('[diag][preload] start, ua=', navigator.userAgent);
 
 // E2E gate: set the renderer flag BEFORE any page script parses so the
 // production-build store-on-window expose fires deterministically when
-// Playwright launches with OPENSWARM_E2E=1. Read from the Chromium switch
+// Playwright launches with MAESTRO_E2E=1. Read from the Chromium switch
 // the main process appended; no-op for normal user launches.
 try {
   const args = (typeof process !== 'undefined' && process.argv) ? process.argv : [];
-  if (args.some((a) => /--openswarm-e2e(=1)?$/.test(a))) {
-    contextBridge.exposeInMainWorld('__OPENSWARM_E2E__', true);
+  if (args.some((a) => /--maestro-e2e(=1)?$/.test(a))) {
+    contextBridge.exposeInMainWorld('__MAESTRO_E2E__', true);
   }
 } catch (e) { console.log('[diag][preload] e2e-flag setup failed:', e && e.message); }
 
-// Synchronous exposure. The previous async IIFE (await ipcRenderer.invoke) raced React mount: any code reading window.openswarm during the gap (BrowserCard's Electron-detection falling back to iframe mode, AgentChat's auth-token call throwing) saw undefined. sendSync blocks the renderer for one IPC round-trip during preload before any user-visible paint, so window.openswarm is guaranteed to exist before the first frontend bundle evaluates.
+// Synchronous exposure. The previous async IIFE (await ipcRenderer.invoke) raced React mount: any code reading window.maestro during the gap (BrowserCard's Electron-detection falling back to iframe mode, AgentChat's auth-token call throwing) saw undefined. sendSync blocks the renderer for one IPC round-trip during preload before any user-visible paint, so window.maestro is guaranteed to exist before the first frontend bundle evaluates.
 const port = ipcRenderer.sendSync('get-backend-port-sync');
 const webviewPreloadPath = ipcRenderer.sendSync('get-webview-preload-path-sync');
 
-contextBridge.exposeInMainWorld('__OPENSWARM_PORT__', port);
+contextBridge.exposeInMainWorld('__MAESTRO_PORT__', port);
 
-contextBridge.exposeInMainWorld('openswarm', {
+contextBridge.exposeInMainWorld('maestro', {
   getBackendPort: () => port,
   // Fresh re-query of the LIVE backend port (not the cached preload value).
   // Used by the renderer to self-heal if its cached port ever resolved wrong
@@ -119,23 +119,23 @@ contextBridge.exposeInMainWorld('openswarm', {
   // Cmd/Ctrl+R, intercepted in main (kills the default-menu reload), so the renderer can reload the focused browser instead of the whole app.
   onReloadShortcut: (cb) => {
     const listener = () => cb();
-    ipcRenderer.on('openswarm:reload-shortcut', listener);
-    return () => ipcRenderer.removeListener('openswarm:reload-shortcut', listener);
+    ipcRenderer.on('maestro:reload-shortcut', listener);
+    return () => ipcRenderer.removeListener('maestro:reload-shortcut', listener);
   },
 
   // In-page browser shortcuts (zoom/find/tab-cycle) from a focused guest webview, carrying the guest's webContents id so the renderer targets that exact browser.
   onBrowserShortcut: (cb) => {
     const listener = (_event, payload) => cb(payload);
-    ipcRenderer.on('openswarm:browser-shortcut', listener);
-    return () => ipcRenderer.removeListener('openswarm:browser-shortcut', listener);
+    ipcRenderer.on('maestro:browser-shortcut', listener);
+    return () => ipcRenderer.removeListener('maestro:browser-shortcut', listener);
   },
 
-  // OAuth claim deep-link channel. Receives openswarm://oauth/{provider}/complete
+  // OAuth claim deep-link channel. Receives maestro://oauth/{provider}/complete
   // after the user finishes an OAuth flow in their browser.
   onOauthClaim: (cb) => {
     const listener = (_event, url) => cb(url);
-    ipcRenderer.on('openswarm:oauth-claim', listener);
-    return () => ipcRenderer.removeListener('openswarm:oauth-claim', listener);
+    ipcRenderer.on('maestro:oauth-claim', listener);
+    return () => ipcRenderer.removeListener('maestro:oauth-claim', listener);
   },
 
   // Window blur/focus events: analytics signal for "user switched to
@@ -144,8 +144,8 @@ contextBridge.exposeInMainWorld('openswarm', {
   // pollute the event stream.
   onWindowFocus: (cb) => {
     const listener = (_event, payload) => cb(payload);
-    ipcRenderer.on('openswarm:window-focus', listener);
-    return () => ipcRenderer.removeListener('openswarm:window-focus', listener);
+    ipcRenderer.on('maestro:window-focus', listener);
+    return () => ipcRenderer.removeListener('maestro:window-focus', listener);
   },
 
   // OAuth popup callback. Fires when any child webContents navigates
@@ -155,7 +155,7 @@ contextBridge.exposeInMainWorld('openswarm', {
   // Anthropic flows that reset the opener chain during redirect).
   onOauthCallback: (cb) => {
     const listener = (_event, data) => cb(data);
-    ipcRenderer.on('openswarm:oauth-callback', listener);
-    return () => ipcRenderer.removeListener('openswarm:oauth-callback', listener);
+    ipcRenderer.on('maestro:oauth-callback', listener);
+    return () => ipcRenderer.removeListener('maestro:oauth-callback', listener);
   },
 });

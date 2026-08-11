@@ -36,7 +36,7 @@ exports.default = async function notarizing(context) {
     console.log(`Notarizing ${appPath} via Apple ID env credentials...`);
     await notarize({
       tool: 'notarytool',
-      appBundleId: 'com.clusterlabs.openswarm',
+      appBundleId: 'net.martinstech.maestro.studio',
       appPath,
       appleId: process.env.APPLE_ID,
       appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,

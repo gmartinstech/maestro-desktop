@@ -25,7 +25,7 @@ function loadSplashDataUrl() {
   const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
   const iconBytes = fs.readFileSync(iconPath);
   const iconDataUrl = 'data:image/png;base64,' + iconBytes.toString('base64');
-  const finalHtml = html.replace('__OPENSWARM_LOGO__', iconDataUrl);
+  const finalHtml = html.replace('__MAESTRO_LOGO__', iconDataUrl);
   return 'data:text/html;charset=utf-8;base64,' + Buffer.from(finalHtml).toString('base64');
 }
 

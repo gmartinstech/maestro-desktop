@@ -135,7 +135,7 @@ function drainOnQuit(maxSeconds = 30) {
 function showNativeNotification({ title, body, deepLink, runId, workflowId, actions }) {
   if (!Notification || !Notification.isSupported()) return null;
   try {
-    const opts = { title: title || 'OpenSwarm', body: body || '', silent: false };
+    const opts = { title: title || 'Maestro Studio', body: body || '', silent: false };
     const platformActions = Array.isArray(actions) && process.platform === 'darwin'
       ? actions.map((a) => ({ type: 'button', text: a.text }))
       : undefined;

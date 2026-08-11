@@ -22,15 +22,15 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const PARENT_PID = parseInt(process.env.OPENSWARM_PARENT_PID || '0', 10);
-const APP_BUNDLE_PATH = process.env.OPENSWARM_APP_BUNDLE_PATH || '';
-const PARENT_START_TIME = parseInt(process.env.OPENSWARM_PARENT_START_TIME || '0', 10);
+const PARENT_PID = parseInt(process.env.MAESTRO_PARENT_PID || '0', 10);
+const APP_BUNDLE_PATH = process.env.MAESTRO_APP_BUNDLE_PATH || '';
+const PARENT_START_TIME = parseInt(process.env.MAESTRO_PARENT_START_TIME || '0', 10);
 
 if (process.platform !== 'darwin' || !PARENT_PID || !APP_BUNDLE_PATH || !PARENT_START_TIME) {
   process.exit(0);
 }
 
-const SUPPORT_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'openswarm');
+const SUPPORT_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'maestro');
 const UPDATING_LOCK = path.join(SUPPORT_DIR, 'updating.lock');
 const CLEAN_QUIT_LOCK = path.join(SUPPORT_DIR, 'clean-quit.lock');
 const RELAUNCH_LOG = path.join(SUPPORT_DIR, 'crash-watchdog-relaunches.log');

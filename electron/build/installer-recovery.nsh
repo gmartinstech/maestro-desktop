@@ -1,10 +1,10 @@
-; Bulletproof install/upgrade recovery for the "OpenSwarm cannot be closed"
+; Bulletproof install/upgrade recovery for the "Maestro Studio cannot be closed"
 ; failure cascade.
 ;
 ; Three layers, each catching a different failure mode:
 ;
 ;   Layer A  pre-extract orphan kill (customInit)
-;            Kills any OpenSwarm.exe + any python.exe / node.exe rooted
+;            Kills any Maestro Studio.exe + any python.exe / node.exe rooted
 ;            inside the install dir. Stops the dialog from EVER firing
 ;            because of subprocess holds.
 ;
@@ -31,7 +31,7 @@
   ; all the process-lock cases observed in the field:
   ;
   ;   1. App is running (user double-clicked installer without quitting)
-  ;      → taskkill /F /IM OpenSwarm.exe /T cascades through children
+  ;      → taskkill /F /IM "Maestro Studio.exe" /T cascades through children
   ;   2. App crashed and left orphan python.exe / node.exe with no parent
   ;      to taskkill via PID → PowerShell finds them by image path under
   ;      the install dir and force-kills them (wmic, the old approach, was
@@ -40,7 +40,7 @@
   ; Both are safe (filter to install-dir-rooted processes only) and
   ; both no-op silently if no matching processes exist.
 
-  nsExec::Exec 'taskkill /F /IM OpenSwarm.exe /T'
+  nsExec::Exec 'taskkill /F /IM "Maestro Studio.exe" /T'
   Pop $0  ; discard exit code; non-fatal if no process matched
 
   ; Kill orphaned node/python whose image lives under the install dir (e.g.
@@ -50,7 +50,7 @@
   ; node/python stay untouched. PowerShell, not wmic, since wmic is gone
   ; from Windows 11 24H2. NSIS escaping: backtick-delimited so the inner "
   ; and ' are literals; $$ yields a literal $ (so $$_ becomes PowerShell $_).
-  nsExec::Exec `powershell -NoProfile -NonInteractive -Command "Get-Process node,python -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\Programs\OpenSwarm\*' } | Stop-Process -Force -ErrorAction SilentlyContinue"`
+  nsExec::Exec `powershell -NoProfile -NonInteractive -Command "Get-Process node,python -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\Programs\Maestro Studio\*' } | Stop-Process -Force -ErrorAction SilentlyContinue"`
   Pop $0
 
   ; Brief pause so Windows kernel releases handles before NSIS tries
@@ -62,7 +62,7 @@
 !macro customInstall
   ; ---- Defender prewarm: scan the heavy binaries while user is still watching the installer, not on first launch ----
   ;
-  ; Right after extraction we spawn OpenSwarm.exe --prewarm, which loads
+  ; Right after extraction we spawn Maestro Studio.exe --prewarm, which loads
   ; python.exe and node.exe just enough to trigger Windows Defender's
   ; on-execute scan against them. Defender then has a cached verdict by
   ; the time the user double-clicks the app, dropping cold-start by
@@ -82,13 +82,13 @@
   ; Skip prewarm on SILENT installs. CI's installer verification AND production
   ; auto-updates both run the installer with /S, and nsExec::Exec is synchronous
   ; with no upper bound - launching the freshly-extracted, not-yet-signed
-  ; OpenSwarm.exe (which loads python.exe + node.exe) provokes a cold Windows
+  ; Maestro Studio.exe (which loads python.exe + node.exe) provokes a cold Windows
   ; Defender scan that can stall the silent install for minutes (it hung the CI
   ; installer check, and would do the same to a user's auto-update). Interactive
   ; first-time installs, where the cold-start win actually lands, still prewarm.
   ${If} ${Silent}
   ${Else}
-    nsExec::Exec '"$INSTDIR\OpenSwarm.exe" --prewarm'
+    nsExec::Exec '"$INSTDIR\Maestro Studio.exe" --prewarm'
     Pop $0  ; discard exit code; prewarm is best-effort
   ${EndIf}
 !macroend
@@ -120,5 +120,5 @@
   RMDir /r /REBOOTOK "$INSTDIR\resources\frontend"
   Delete /REBOOTOK "$INSTDIR\resources\app.asar"
   Delete /REBOOTOK "$INSTDIR\resources\elevate.exe"
-  Delete /REBOOTOK "$INSTDIR\OpenSwarm.exe"
+  Delete /REBOOTOK "$INSTDIR\Maestro Studio.exe"
 !macroend

@@ -8,7 +8,7 @@
 
 // Diagnostic marker so we can confirm the preload actually attached to
 // this webview. Surfaces via main.js's console-message listener.
-try { console.warn('[openswarm:webview-preload] loaded for', window.location.href); } catch (_) {}
+try { console.warn('[maestro:webview-preload] loaded for', window.location.href); } catch (_) {}
 
 // Chrome-style suspend/resume: sync-take a pending sessionStorage capsule (staged by the host right before this load) at document-start, so page scripts wake to their old state and logins survive suspension. Origin-matched in main; null for every ordinary navigation.
 (function restoreSessionCapsule() {
@@ -147,8 +147,8 @@ try {
   // dialog.
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
-    if (event.data && event.data.__openswarm__ === '__openswarm_passkey__') {
-      console.warn('[openswarm:webview-preload] passkey bridge → sendToHost');
+    if (event.data && event.data.__maestro__ === '__maestro_passkey__') {
+      console.warn('[maestro:webview-preload] passkey bridge → sendToHost');
       try { ipcRenderer.sendToHost('passkey-detected', window.location.href); } catch (_) {}
     }
   });
@@ -158,7 +158,7 @@ try {
   // and lets the app handle everything. Host pushes via webview.send.
   let isInteractive = false;
   try {
-    ipcRenderer.on('openswarm:set-interactive', (_event, payload) => {
+    ipcRenderer.on('maestro:set-interactive', (_event, payload) => {
       isInteractive = !!(payload && payload.interactive);
     });
   } catch (_) {}

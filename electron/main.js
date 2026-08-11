@@ -1,22 +1,22 @@
 const { app, components, BrowserWindow, ipcMain, shell, session, dialog, crashReporter, powerMonitor, Menu, clipboard } = require('electron');
 
 // Browser cards live in their own persistent partition so cookies/localStorage/IndexedDB survive reload + quit (Discord etc. stay logged in) and site data stays isolated from the app's defaultSession. The "clear browsing data" wipe nukes only this partition. MUST match BROWSER_PARTITION in frontend BrowserCard.tsx.
-const BROWSER_PARTITION = 'persist:openswarm-browser';
+const BROWSER_PARTITION = 'persist:maestro-browser';
 
-// E2E flag: when OPENSWARM_E2E=1, append a Chromium command-line switch the
-// renderer reads at startup to set window.__OPENSWARM_E2E__ = true BEFORE any
+// E2E flag: when MAESTRO_E2E=1, append a Chromium command-line switch the
+// renderer reads at startup to set window.__MAESTRO_E2E__ = true BEFORE any
 // page script parses, so the production-build store-on-window gate fires
 // deterministically. Normal user launches never set the env var so this is a
 // no-op for them; only Playwright's electron.launch({env}) flips it on.
-if (process.env.OPENSWARM_E2E === '1') {
-  try { app.commandLine.appendSwitch('openswarm-e2e', '1'); } catch {}
+if (process.env.MAESTRO_E2E === '1') {
+  try { app.commandLine.appendSwitch('maestro-e2e', '1'); } catch {}
 }
 
-// Local-only crash reporter. Captures native renderer crashes that escape JS-level error handlers and don't otherwise surface in Crashpad. uploadToServer=false keeps minidumps on disk under %APPDATA%/OpenSwarm/Crashpad so we can inspect them post-mortem without sending anywhere.
+// Local-only crash reporter. Captures native renderer crashes that escape JS-level error handlers and don't otherwise surface in Crashpad. uploadToServer=false keeps minidumps on disk under %APPDATA%/Maestro Studio/Crashpad so we can inspect them post-mortem without sending anywhere.
 try {
   crashReporter.start({
-    productName: 'OpenSwarm',
-    companyName: 'OpenSwarm',
+    productName: 'Maestro Studio',
+    companyName: 'MartinsTech',
     submitURL: 'https://localhost.invalid',
     uploadToServer: false,
     ignoreSystemCrashHandler: false,
@@ -78,7 +78,7 @@ function _squirrelUpdate(args) {
 })();
 
 // NSIS->Squirrel migration cleanup. The first time this Squirrel build runs after
-// an existing NSIS OpenSwarm was updated into it, silently uninstall that legacy
+// an existing NSIS Maestro Studio was updated into it, silently uninstall that legacy
 // NSIS copy so the user isn't left with two installs + two shortcuts. Found via
 // the HKCU Uninstall entry whose UninstallString is the NSIS uninstaller (NOT
 // Squirrel's Update.exe). Deferred to quit so the NSIS uninstaller's taskkill of
@@ -125,7 +125,7 @@ function perfMark(name) {
 let _preflightInfo = {};
 let _preflightVerdict = null;
 
-// Comprehensive preflight (electron/preflight.js): fans out checks under hard per-check timeouts, emits a [preflight2] verdict line, defers cache write until BOTH preflight finished AND backend-http-ready so a mid-boot kill cannot poison the next launch's cached verdict. Kill switch via OPENSWARM_DISABLE_PREFLIGHT=1.
+// Comprehensive preflight (electron/preflight.js): fans out checks under hard per-check timeouts, emits a [preflight2] verdict line, defers cache write until BOTH preflight finished AND backend-http-ready so a mid-boot kill cannot poison the next launch's cached verdict. Kill switch via MAESTRO_DISABLE_PREFLIGHT=1.
 let _preflightPendingCache = null;
 // Cheap deterministic hash of installation_id into [0,99]; used by the cohort gate so the same install always falls in the same bucket regardless of when it boots.
 function installIdBucket(id) {
@@ -135,7 +135,7 @@ function installIdBucket(id) {
 }
 
 function runComprehensivePreflight() {
-  if (process.env.OPENSWARM_DISABLE_PREFLIGHT === '1') { console.log('[preflight2] skipped (OPENSWARM_DISABLE_PREFLIGHT=1)'); return; }
+  if (process.env.MAESTRO_DISABLE_PREFLIGHT === '1') { console.log('[preflight2] skipped (MAESTRO_DISABLE_PREFLIGHT=1)'); return; }
   // Honor settings.preflight_enabled and cohort gate. Read sync from settings.json
   // since the backend isn't up yet; missing/unreadable file just means "use defaults".
   try {
@@ -274,16 +274,16 @@ if (process.argv.includes('--prewarm') && process.platform === 'win32') {
 // (or macOS auto-launch + manual launch overlapping) spawns two independent
 // processes — each with its own backend on a different port — resulting in
 // one populated window and one empty window.
-// Register openswarm:// protocol handler BEFORE any gotLock branching.
+// Register maestro:// protocol handler BEFORE any gotLock branching.
 // Must happen synchronously at the top of main.js so the OS knows this
 // binary is the default handler even before whenReady fires.
 if (process.defaultApp) {
   // Dev run: `electron .` needs the entry-script path to re-launch cleanly.
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('openswarm', process.execPath, [path.resolve(process.argv[1])]);
+    app.setAsDefaultProtocolClient('maestro', process.execPath, [path.resolve(process.argv[1])]);
   }
 } else {
-  app.setAsDefaultProtocolClient('openswarm');
+  app.setAsDefaultProtocolClient('maestro');
 }
 
 // Pending deep-link captured before mainWindow exists (cold-launch case).
@@ -298,7 +298,7 @@ function forwardDeepLinkToRenderer(url) {
   try {
     const u = new URL(url);
     if (u.host === 'oauth' && u.pathname.endsWith('/complete')) {
-      channel = 'openswarm:oauth-claim';
+      channel = 'maestro:oauth-claim';
     }
   } catch (_) {
     // Malformed URL: nothing to route.
@@ -313,8 +313,8 @@ function forwardDeepLinkToRenderer(url) {
   }
 }
 
-function extractOpenswarmUrl(argv) {
-  return argv && argv.find((a) => typeof a === 'string' && a.startsWith('openswarm://'));
+function extractMaestroUrl(argv) {
+  return argv && argv.find((a) => typeof a === 'string' && a.startsWith('maestro://'));
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -322,10 +322,10 @@ if (!gotLock) {
   app.exit(0);
 } else {
   app.on('second-instance', (_event, argv) => {
-    // Windows/Linux: a `openswarm://...` click lands here because the OS
+    // Windows/Linux: a `maestro://...` click lands here because the OS
     // re-launches the app with the URL as an argv. We swallow the second
     // instance, focus the existing window, and forward the URL to renderer.
-    const url = extractOpenswarmUrl(argv);
+    const url = extractMaestroUrl(argv);
     if (url) forwardDeepLinkToRenderer(url);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -334,7 +334,7 @@ if (!gotLock) {
   });
 }
 
-// macOS-only: clicks on openswarm:// links fire this event (instead of
+// macOS-only: clicks on maestro:// links fire this event (instead of
 // relaunching the process).
 app.on('open-url', (event, url) => {
   event.preventDefault();
@@ -486,11 +486,11 @@ const isDev = process.env.ELECTRON_DEV === '1';
 
 // Mac-only crash watchdog. Targets the macOS 26.5 + Electron 42 NSEvent
 // null-deref users have reported (wake-from-sleep mostly). When the parent
-// dies unexpectedly, the watchdog calls `open -n /Applications/OpenSwarm.app`
+// dies unexpectedly, the watchdog calls `open -n /Applications/Maestro Studio.app`
 // to bring the user back in ~2s. Five guards in crash-watchdog.js prevent
 // false-positive relaunches (intentional Cmd+Q, auto-updater swap, startup
 // crash loop, repeat cap). Packaged builds only; never runs in dev.
-const CRASH_WATCHDOG_SUPPORT_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'openswarm');
+const CRASH_WATCHDOG_SUPPORT_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'maestro');
 const CRASH_WATCHDOG_CLEAN_QUIT_LOCK = path.join(CRASH_WATCHDOG_SUPPORT_DIR, 'clean-quit.lock');
 // The watchdog skips a relaunch while this exists (guard 4) so the parent dying
 // mid-swap isn't read as a crash. We write it when an update install starts and
@@ -503,7 +503,7 @@ function spawnCrashWatchdog() {
   try {
     const watchdogScript = path.join(__dirname, 'crash-watchdog.js');
     if (!fs.existsSync(watchdogScript)) return;
-    // .../OpenSwarm.app/Contents/Resources/  ->  .../OpenSwarm.app
+    // .../Maestro Studio.app/Contents/Resources/  ->  .../Maestro Studio.app
     const appBundle = path.join(process.resourcesPath, '..', '..');
     const { spawn: _spawn } = require('child_process');
     const child = _spawn(process.execPath, [watchdogScript], {
@@ -512,9 +512,9 @@ function spawnCrashWatchdog() {
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        OPENSWARM_PARENT_PID: String(process.pid),
-        OPENSWARM_APP_BUNDLE_PATH: appBundle,
-        OPENSWARM_PARENT_START_TIME: String(Date.now()),
+        MAESTRO_PARENT_PID: String(process.pid),
+        MAESTRO_APP_BUNDLE_PATH: appBundle,
+        MAESTRO_PARENT_START_TIME: String(Date.now()),
       },
     });
     child.unref();
@@ -561,7 +561,7 @@ function loadSplashDataUrl() {
     const html = fs.readFileSync(path.join(__dirname, 'splash', 'splash.html'), 'utf8');
     const iconBytes = fs.readFileSync(iconPngPath);
     const iconDataUrl = 'data:image/png;base64,' + iconBytes.toString('base64');
-    const finalHtml = html.replace('__OPENSWARM_LOGO__', iconDataUrl);
+    const finalHtml = html.replace('__MAESTRO_LOGO__', iconDataUrl);
     splashDataUrlCache = 'data:text/html;charset=utf-8;base64,' + Buffer.from(finalHtml).toString('base64');
     return splashDataUrlCache;
   } catch (err) {
@@ -766,7 +766,7 @@ function getPythonPath() {
 
 // Path to a real Node.js binary bundled in extraResources, or null if not
 // shipped (dev mode, or build that skipped the node-fetch step). Backend
-// reads OPENSWARM_NODE_PATH env var to prefer this over both system `node`
+// reads MAESTRO_NODE_PATH env var to prefer this over both system `node`
 // (which fresh user Macs lack) and the ELECTRON_RUN_AS_NODE fallback
 // (which has flaky Dock behavior + slow cold-start). Used by 9Router and
 // MCP bundle spawning.
@@ -856,7 +856,7 @@ function waitForBackend(port, opts = {}) {
 // Race a port-range search against a 3-second wall clock. On most machines
 // `getPort.makeRange(8324, 8424)` returns within milliseconds, but Windows
 // EDR / corp-firewall stacks can intercept the bind() probes and stall each
-// attempt for seconds — 100 attempts × multi-second stalls = "OpenSwarm is
+// attempt for seconds — 100 attempts × multi-second stalls = "Maestro Studio is
 // hung at startup." The fallback `getPort({ port: 0 })` lets the OS pick
 // any free ephemeral port; we don't actually care about staying inside the
 // 8324-range — the renderer reads the port via IPC, no hardcoded assumption.
@@ -897,7 +897,7 @@ async function startBackend() {
   // run-from-source developers in dashboards. Honors a build-time override
   // (set in CI when producing platform installers) before falling back to
   // OS-derived defaults.
-  let installMethod = process.env.OPENSWARM_INSTALL_METHOD;
+  let installMethod = process.env.MAESTRO_INSTALL_METHOD;
   if (!installMethod) {
     if (!isPackaged) {
       installMethod = 'dev';
@@ -917,10 +917,10 @@ async function startBackend() {
   const env = {
     ...process.env,
     PATH: shellPath,
-    OPENSWARM_PACKAGED: isPackaged ? '1' : '0',
-    OPENSWARM_PORT: String(backendPort),
-    OPENSWARM_ELECTRON_PATH: process.execPath,
-    OPENSWARM_INSTALL_METHOD: installMethod,
+    MAESTRO_PACKAGED: isPackaged ? '1' : '0',
+    MAESTRO_PORT: String(backendPort),
+    MAESTRO_ELECTRON_PATH: process.execPath,
+    MAESTRO_INSTALL_METHOD: installMethod,
     // Inject the app version so the Python backend can report it in the
     // analytics envelope. Without this, _read_app_version() in
     // service/service.py tries to read electron/package.json via a relative
@@ -928,15 +928,15 @@ async function startBackend() {
     // packaged dmg/exe builds — which made every shipped install report
     // app_version="unknown". The path-based fallback stays in place so this
     // change is purely additive.
-    OPENSWARM_APP_VERSION: app.getVersion(),
+    MAESTRO_APP_VERSION: app.getVersion(),
     // Inject the user's BCP 47 locale + IANA timezone. The Python backend
     // doesn't have reliable APIs for either: locale.getdefaultlocale() is
     // deprecated and inconsistent across OSes, and Python's local-tz string
     // sometimes returns "PDT" or "Romance (zomertijd)" rather than
     // "America/Los_Angeles". Electron has both in canonical form via
     // app.getLocale() and Intl.DateTimeFormat().resolvedOptions().timeZone.
-    OPENSWARM_LOCALE: app.getLocale(),
-    OPENSWARM_TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    MAESTRO_LOCALE: app.getLocale(),
+    MAESTRO_TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
     PYTHONDONTWRITEBYTECODE: '1',
     // PEP 540 UTF-8 mode: makes open() default to UTF-8 on Windows where
     // the locale is otherwise cp1252. Many backend modules read UTF-8
@@ -946,14 +946,14 @@ async function startBackend() {
 
   // Tell the backend where to find a real Node binary for 9Router and
   // bundled MCP servers. Preferring this over ELECTRON_RUN_AS_NODE avoids
-  // (a) the second OpenSwarm-as-Node process briefly registering in the
+  // (a) the second Maestro-Studio-as-Node process briefly registering in the
   // Dock on fresh Macs, and (b) the slow Electron cold-start tail (~5-15s)
   // that Electron-as-Node adds vs. native node (~1-2s). Falls back to the
   // existing system-node / Electron-as-Node chain in nine_router._find_node()
   // if the env var is unset (dev mode, or build without node fetch).
   const bundledNode = getBundledNodePath();
   if (bundledNode) {
-    env.OPENSWARM_NODE_PATH = bundledNode;
+    env.MAESTRO_NODE_PATH = bundledNode;
   }
 
   if (isPackaged) {
@@ -975,7 +975,7 @@ async function startBackend() {
   // (not in whenReady) because openBackendLog() above just installed the console
   // tee; logging earlier would miss the persistent file.
   const p_buildInfo = getBuildInfo();
-  console.log(`[provenance] OpenSwarm ${app.getVersion()} sha=${p_buildInfo.shortSha} channel=${p_buildInfo.channel} builtAt=${p_buildInfo.builtAt || 'n/a'}`);
+  console.log(`[provenance] Maestro ${app.getVersion()} sha=${p_buildInfo.shortSha} channel=${p_buildInfo.channel} builtAt=${p_buildInfo.builtAt || 'n/a'}`);
   logPreflight(backendPort);
   runComprehensivePreflight();
   // Record what we're about to launch and whether the interpreter is even
@@ -1080,18 +1080,18 @@ function markBackendReady() {
 
 function getAuthTokenFilePath() {
   // Mirrors backend/config/paths.py. On macOS the file lives at
-  // ~/Library/Application Support/OpenSwarm/data/auth.token; on
-  // Windows under %APPDATA%/OpenSwarm/data/; on Linux under
-  // ~/.local/share/OpenSwarm/data/. In dev the backend writes it to
+  // ~/Library/Application Support/Maestro Studio/data/auth.token; on
+  // Windows under %APPDATA%/Maestro Studio/data/; on Linux under
+  // ~/.local/share/Maestro Studio/data/. In dev the backend writes it to
   // backend/data/auth.token instead.
   if (isPackaged) {
     if (process.platform === 'darwin') {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'auth.token');
+      return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'auth.token');
     } else if (process.platform === 'win32') {
-      return path.join(process.env.APPDATA || os.homedir(), 'OpenSwarm', 'data', 'auth.token');
+      return path.join(process.env.APPDATA || os.homedir(), 'Maestro Studio', 'data', 'auth.token');
     } else {
       const xdg = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-      return path.join(xdg, 'OpenSwarm', 'data', 'auth.token');
+      return path.join(xdg, 'Maestro Studio', 'data', 'auth.token');
     }
   }
   // Dev: backend/data/auth.token relative to repo root.
@@ -1226,7 +1226,7 @@ function createWindow() {
       // E2E: additionalArguments lands in the renderer process.argv, which the
       // preload reads to expose the Redux store deterministically. No-op for
       // normal launches (env var unset).
-      ...(process.env.OPENSWARM_E2E === '1' ? { additionalArguments: ['--openswarm-e2e=1'] } : {}),
+      ...(process.env.MAESTRO_E2E === '1' ? { additionalArguments: ['--maestro-e2e=1'] } : {}),
     },
   });
 
@@ -1257,7 +1257,7 @@ function createWindow() {
     // is the user gesture that re-enables it. Scoped to webviews, not the main window.
     webPreferences.autoplayPolicy = 'document-user-activation-required';
     // Force our webview preload to attach for every <webview>, unconditionally.
-    // The alternative (reading window.openswarm.getWebviewPreloadPath() in
+    // The alternative (reading window.maestro.getWebviewPreloadPath() in
     // BrowserCard's React code at module-eval time) raced against the
     // preload's async contextBridge exposure — the resulting attribute on
     // the <webview> element ended up empty, so no preload ran and our
@@ -1266,7 +1266,7 @@ function createWindow() {
     // is what webPreferences expects.
     webPreferences.preload = path.join(__dirname, 'webview-preload.js');
     try {
-      console.log('[openswarm:attach-webview] forced preload=', webPreferences.preload, 'src=', params.src);
+      console.log('[maestro:attach-webview] forced preload=', webPreferences.preload, 'src=', params.src);
     } catch (_) {}
   });
 
@@ -1305,7 +1305,7 @@ function createWindow() {
   }
 
   // Once the renderer has loaded, flush any deep-link URL we captured before
-  // the window existed (cold-launch via openswarm://).
+  // the window existed (cold-launch via maestro://).
   mainWindow.webContents.once('did-finish-load', () => {
     perfMark('first-paint');
     maybeSendBootBeacon();
@@ -1391,7 +1391,7 @@ function createWindow() {
     const now = Date.now();
     if (now - _lastFocusEvent < FOCUS_THROTTLE_MS) return;
     _lastFocusEvent = now;
-    sendToRenderer('openswarm:window-focus', { kind, ts: now });
+    sendToRenderer('maestro:window-focus', { kind, ts: now });
   };
   mainWindow.on('blur', () => sendFocusEvent('blur'));
   mainWindow.on('focus', () => sendFocusEvent('focus'));
@@ -1567,7 +1567,7 @@ function setupAutoUpdater() {
     // Squirrel.Windows fetches its RELEASES feed from GH /latest/download/. The
     // built-in autoUpdater has no autoDownload/allowPrerelease/allowDowngrade knobs.
     try {
-      autoUpdater.setFeedURL({ url: 'https://github.com/openswarm-ai/openswarm/releases/latest/download/' });
+      autoUpdater.setFeedURL({ url: 'https://github.com/gmartinstech/maestro-desktop/releases/latest/download/' });
     } catch (err) {
       console.warn('[updater] Squirrel setFeedURL failed:', err && err.message);
       return;
@@ -1760,11 +1760,11 @@ app.whenReady().then(async () => {
     }
   }
 
-  // Cold-launch: if the OS opened us via openswarm:// (Windows/Linux it's
+  // Cold-launch: if the OS opened us via maestro:// (Windows/Linux it's
   // in argv; macOS fires open-url AFTER whenReady which we handle above)
   // route through forwardDeepLinkToRenderer so the URL gets stashed under
   // the oauth-claim IPC channel.
-  const initialDeepLink = extractOpenswarmUrl(process.argv);
+  const initialDeepLink = extractMaestroUrl(process.argv);
   if (initialDeepLink) forwardDeepLinkToRenderer(initialDeepLink);
 
   if (process.platform === 'darwin' && !isPackaged) {
@@ -1922,7 +1922,7 @@ app.whenReady().then(async () => {
 
   try {
     if (isDev) {
-      backendPort = parseInt(process.env.OPENSWARM_PORT || '8324', 10);
+      backendPort = parseInt(process.env.MAESTRO_PORT || '8324', 10);
       console.log(`Dev mode: using existing backend on port ${backendPort}`);
       emitSplashStatus('Connecting to dev backend…');
       // Load the token before marking ready, same as prod, so the workflow
@@ -2007,7 +2007,7 @@ app.whenReady().then(async () => {
     console.error('Failed to start:', err);
     // Surface the failure on the splash instead of silently quitting.
     // The user picks: view logs, restart, or quit. This eliminates the
-    // class of "I clicked OpenSwarm and nothing happened" reports.
+    // class of "I clicked Maestro Studio and nothing happened" reports.
     emitSplashStatus({
       text: "Maestro Studio couldn't start: " + (err && err.message ? err.message : String(err)),
       level: 'error',
@@ -2038,14 +2038,14 @@ function swallowCloseWindowShortcut(event, input) {
   }
 }
 
-// Cmd/Ctrl+R: the default menu's Reload accelerator reloads the WHOLE app even when a browser webview is focused (the "Ctrl+R reloads OpenSwarm, not the browser" complaint). preventDefault kills that accelerator (same electron#19279 path as Cmd+W, dispatched against whichever webContents is focused, hence both main window AND guests); the renderer then reloads the last-interacted browser, or the app if none. Shift+R (force reload) is left alone.
+// Cmd/Ctrl+R: the default menu's Reload accelerator reloads the WHOLE app even when a browser webview is focused (the "Ctrl+R reloads Maestro Studio, not the browser" complaint). preventDefault kills that accelerator (same electron#19279 path as Cmd+W, dispatched against whichever webContents is focused, hence both main window AND guests); the renderer then reloads the last-interacted browser, or the app if none. Shift+R (force reload) is left alone.
 function routeReloadShortcut(event, input) {
   if (input.type !== 'keyDown') return;
   if (!(input.meta || input.control) || input.shift || input.alt) return;
   if ((input.key || '').toLowerCase() !== 'r') return;
   event.preventDefault();
   try {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openswarm:reload-shortcut');
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('maestro:reload-shortcut');
   } catch (_) {}
 }
 
@@ -2067,7 +2067,7 @@ function routeBrowserShortcut(event, input, webContentsId) {
   if (!action) return;
   event.preventDefault();
   try {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openswarm:browser-shortcut', { action, webContentsId });
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('maestro:browser-shortcut', { action, webContentsId });
   } catch (_) {}
 }
 
@@ -2158,7 +2158,7 @@ app.on('web-contents-created', (_event, contents) => {
   // `Electron/X.Y.Z` token that accounts.google.com blacklists with a
   // "browser not supported" page — and auth.openai.com is similarly picky.
   // Spoofing a current Chrome UA makes those identity providers treat the
-  // popup like a real browser without changing the flow OpenSwarm uses to
+  // popup like a real browser without changing the flow Maestro Studio uses to
   // capture the callback (window.open + postMessage).
   //
   // This check runs synchronously during `new BrowserWindow()` construction.
@@ -2249,7 +2249,7 @@ app.on('web-contents-created', (_event, contents) => {
       const error = u.searchParams.get('error');
       if (!code && !error) return;
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('openswarm:oauth-callback', { code, state, error });
+        mainWindow.webContents.send('maestro:oauth-callback', { code, state, error });
       }
     } catch { /* not a URL we care about */ }
   };
@@ -2263,7 +2263,7 @@ app.on('web-contents-created', (_event, contents) => {
       if (message.includes('widevine') || message.includes('drm') ||
           message.includes('license') || message.includes('MediaKeySession') ||
           message.includes('EME') || message.includes('[drm-diag]') ||
-          message.includes('openswarm') ||
+          message.includes('maestro') ||
           level >= 2) {
         console.log(`[webview:${tag}] ${message}${src ? ` (${src}:${line})` : ''}`);
       }
@@ -2396,7 +2396,7 @@ app.on('web-contents-created', (_event, contents) => {
       contents.executeJavaScript(`
         (function(){
           try {
-            if (window.__openswarm_vis__) return; window.__openswarm_vis__ = true;
+            if (window.__maestro_vis__) return; window.__maestro_vis__ = true;
             var def = function(o, k, v){ try { Object.defineProperty(o, k, { get: function(){ return v; }, configurable: true }); } catch(e){} };
             def(document, 'hidden', false);
             def(document, 'visibilityState', 'visible');
@@ -2425,13 +2425,13 @@ app.on('web-contents-created', (_event, contents) => {
     if (process.platform === 'win32') contents.on('dom-ready', () => {
       contents.executeJavaScript(`
         (function() {
-          if (window.__openswarm_passkey_shim__) return;
-          window.__openswarm_passkey_shim__ = true;
+          if (window.__maestro_passkey_shim__) return;
+          window.__maestro_passkey_shim__ = true;
           try {
-            console.warn('[openswarm:shim] main-world shim installing at', location.href);
+            console.warn('[maestro:shim] main-world shim installing at', location.href);
             var notify = function(kind) {
-              try { console.warn('[openswarm:shim] passkey intercepted:', kind); } catch (_) {}
-              try { window.postMessage({ __openswarm__: '__openswarm_passkey__' }, '*'); } catch (_) {}
+              try { console.warn('[maestro:shim] passkey intercepted:', kind); } catch (_) {}
+              try { window.postMessage({ __maestro__: '__maestro_passkey__' }, '*'); } catch (_) {}
             };
             var rejected = function() {
               return Promise.reject(new DOMException(
@@ -2453,7 +2453,7 @@ app.on('web-contents-created', (_event, contents) => {
                 if (options && options.publicKey) { notify('create'); return rejected(); }
                 return origCreate ? origCreate(options) : Promise.reject(new DOMException('Not supported', 'NotSupportedError'));
               };
-              console.warn('[openswarm:shim] navigator.credentials patched');
+              console.warn('[maestro:shim] navigator.credentials patched');
             }
             if (window.PublicKeyCredential) {
               window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = function() { return Promise.resolve(false); };
@@ -2462,7 +2462,7 @@ app.on('web-contents-created', (_event, contents) => {
               }
             }
           } catch (e) {
-            try { console.warn('[openswarm:shim] error:', e && e.message); } catch (_) {}
+            try { console.warn('[maestro:shim] error:', e && e.message); } catch (_) {}
           }
         })();
       `).catch(() => {});
@@ -2503,9 +2503,9 @@ app.on('web-contents-created', (_event, contents) => {
       }
     });
 
-    // Agent bridge (window.OPENSWARM_APP): app webviews ONLY, all platforms. Gated
+    // Agent bridge (window.MAESTRO_APP): app webviews ONLY, all platforms. Gated
     // off the browser partition so a normal browser card / agent web automation
-    // never carries this global, since a unique window.OPENSWARM_APP is a one-line
+    // never carries this global, since a unique window.MAESTRO_APP is a one-line
     // bot tell on the open web. Shell-injected so a trimmed App-Builder app (its
     // frontend/src + the template's agentBridge.ts deleted) still gets a bridge;
     // idempotent, so a full app that self-installs its own bridge no-ops here. Keep
@@ -2513,7 +2513,7 @@ app.on('web-contents-created', (_event, contents) => {
     if (contents.session !== session.fromPartition(BROWSER_PARTITION)) contents.on('dom-ready', () => {
       contents.executeJavaScript(`
         (function() {
-          if (window.OPENSWARM_APP) return;
+          if (window.MAESTRO_APP) return;
           var registration = null;
           var AUTOPILOT = '__autopilot__';
           var autopilotRAF = 0;
@@ -2542,7 +2542,7 @@ app.on('web-contents-created', (_event, contents) => {
             if (autopilotRAF) { cancelAnimationFrame(autopilotRAF); autopilotRAF = 0; }
           }
           var bridge = {
-            __openswarm: true, __ready: false, __rev: 0,
+            __maestro: true, __ready: false, __rev: 0,
             register: function(api) { stopAutopilot(); autopilotHint = {}; autopilotFrames = 0; registration = api; bridge.__ready = true; bridge.__rev += 1; },
             refresh: function() { bridge.__rev += 1; },
             describe: function() {
@@ -2564,7 +2564,7 @@ app.on('web-contents-created', (_event, contents) => {
               return out;
             },
             invoke: function(name, args) {
-              if (!bridge.__ready || !registration) throw 'OPENSWARM_APP not registered yet';
+              if (!bridge.__ready || !registration) throw 'MAESTRO_APP not registered yet';
               if (name === AUTOPILOT) {
                 if (typeof registration.policy !== 'function') return { error: 'this app registered no autopilot policy' };
                 args = args || {};
@@ -2577,7 +2577,7 @@ app.on('web-contents-created', (_event, contents) => {
               return registration.invoke(name, args || {});
             },
           };
-          window.OPENSWARM_APP = bridge;
+          window.MAESTRO_APP = bridge;
         })();
       `).catch(() => {});
     });
@@ -2614,7 +2614,7 @@ app.on('window-all-closed', () => {
   // that is taskkill /F, which skips uvicorn's graceful stop_all) orphans
   // those children, and an orphaned vite node.exe keeps a lock on its own
   // image at resources\node\x64\node.exe, blocking the next NSIS upgrade
-  // with "OpenSwarm cannot be closed".
+  // with "Maestro Studio cannot be closed".
   app.quit();
 });
 
@@ -2740,9 +2740,9 @@ ipcMain.on('splash:action', (_event, action) => {
 
 // Log every IPC handle entry so the trace shows which main-process call the renderer was making in the seconds before death.
 // The CDP channels fire once PER accessibility-tree node (hundreds per page read), pure noise that buries the useful trace,
-// so skip those by default; OPENSWARM_DIAG_IPC=1 brings them back when you genuinely need the firehose.
+// so skip those by default; MAESTRO_DIAG_IPC=1 brings them back when you genuinely need the firehose.
 const _NOISY_IPC = new Set(['send-cdp-command', 'cdp-cache-get', 'cdp-cache-set', 'cdp-routes-get', 'cdp-child-sessions-get']);
-const _DIAG_IPC_ALL = process.env.OPENSWARM_DIAG_IPC === '1';
+const _DIAG_IPC_ALL = process.env.MAESTRO_DIAG_IPC === '1';
 const _origHandle = ipcMain.handle.bind(ipcMain);
 ipcMain.handle = (channel, handler) => {
   return _origHandle(channel, async (...args) => {
@@ -2757,7 +2757,7 @@ ipcMain.handle = (channel, handler) => {
 };
 
 ipcMain.handle('get-backend-port', () => backendPort);
-// Sync mirrors so preload.js can expose window.openswarm synchronously (no await), closing the race where React renders before the async exposure resolves and window.openswarm is briefly undefined. backendPort is assigned in app.whenReady before any BrowserWindow is created, so it is always set by the time preload runs.
+// Sync mirrors so preload.js can expose window.maestro synchronously (no await), closing the race where React renders before the async exposure resolves and window.maestro is briefly undefined. backendPort is assigned in app.whenReady before any BrowserWindow is created, so it is always set by the time preload runs.
 ipcMain.on('get-backend-port-sync', (event) => { event.returnValue = backendPort; });
 ipcMain.on('get-webview-preload-path-sync', (event) => {
   event.returnValue = `file://${path.join(__dirname, 'webview-preload.js')}`;
@@ -2914,7 +2914,7 @@ let _cachedRecoveryInfo = undefined;
 ipcMain.handle('get-crash-recovery-info', () => {
   if (process.platform !== 'darwin') return null;
   if (_cachedRecoveryInfo !== undefined) return _cachedRecoveryInfo;
-  const markerPath = path.join(os.homedir(), 'Library', 'Application Support', 'openswarm', 'crash-recovery.json');
+  const markerPath = path.join(os.homedir(), 'Library', 'Application Support', 'maestro', 'crash-recovery.json');
   try {
     if (!fs.existsSync(markerPath)) { _cachedRecoveryInfo = null; return null; }
     const raw = fs.readFileSync(markerPath, 'utf-8');
@@ -3076,7 +3076,7 @@ ipcMain.handle('hard-reset', async () => {
 // ---------------------------------------------------------------------------
 // Maintains a per-webContents AX index cache (numeric index → backendNodeId)
 // and serializes CDP commands per target so concurrent calls don't interleave.
-// The renderer calls window.openswarm.sendCdpCommand(wcId, method, params),
+// The renderer calls window.maestro.sendCdpCommand(wcId, method, params),
 // which routes through this handler to webContents.debugger.sendCommand().
 
 const cdpAxIndexCache = new Map(); // wcId -> map of index -> {backendNodeId, sessionId}
