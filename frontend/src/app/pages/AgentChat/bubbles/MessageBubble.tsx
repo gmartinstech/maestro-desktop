@@ -1006,6 +1006,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     <Box
       ref={bubbleRootRef}
       data-select-type="message"
+      data-testid={isUser ? 'user-message' : 'assistant-message'}
       data-select-id={message.id}
       data-select-meta={JSON.stringify({ role, content: truncatedContent })}
       sx={{

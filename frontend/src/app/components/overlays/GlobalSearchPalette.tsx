@@ -125,7 +125,9 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
     const historyPool: HistorySession[] = q ? searchResults : Object.values(history).slice(0, 20);
     for (const h of historyPool) {
       if (sessionMap.has(h.id)) continue;
-      if (q && !(h.name || '').toLowerCase().includes(q)) continue;
+      // No name re-filter here: the server already matched q against name OR transcript
+      // (SessionLifecycle.get_history), so filtering by name again threw away every
+      // content match and reported "No matches" for a query the backend had just answered.
       sessionMap.set(h.id, {
         kind: 'session',
         id: h.id,

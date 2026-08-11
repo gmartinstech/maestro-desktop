@@ -35,6 +35,12 @@ export const EditorSurface: React.FC<Props> = ({
       <div
         ref={editorRef}
         data-onboarding="chat-input"
+        data-testid="chat-input"
+        // A contenteditable div has no implicit textbox role, so assistive tech and
+        // getByRole('textbox') both missed the composer entirely until this was explicit.
+        role="textbox"
+        aria-multiline="true"
+        aria-label={placeholderText}
         contentEditable={!disabled}
         suppressContentEditableWarning
         spellCheck={false}

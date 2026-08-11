@@ -28,5 +28,9 @@ export async function launchMaestro() {
   });
   const win = await mainWindow(app);
   await win.waitForLoadState('domcontentloaded');
+  // domcontentloaded fires on the shell HTML: #root is still empty and stays that way for ~15s
+  // while the backend boots. Waiting for React to actually mount is the difference between
+  // driving the app and driving a blank page that merely has the right title.
+  await win.waitForFunction(() => (document.querySelector('#root')?.childElementCount ?? 0) > 0, undefined, { timeout: 120_000 });
   return { app, win, dataRoot };
 }
