@@ -18,8 +18,43 @@ Provider migrates from `api.openswarm.com` to provedor-ia (`https://llm.martinst
 | `window.openswarm_app`, `window.__openswarm_store__` | `window.maestro_app`, `window.__maestro_store__` |
 | IPC channels `openswarm-*` | `maestro-*` |
 | `openswarm-pro`, `isOpenSwarmPro`, `OpenSwarmProCard` | **deleted**, not renamed |
+| `self-swarm-*` (second legacy namespace — see below) | `maestro-*` |
 
 `MAESTRO_` is the established prefix (`MAESTRO_MOCK_AGENT`, `MAESTRO_TELEMETRY_URL`).
+
+### Second legacy namespace: `self-swarm-*`
+
+A plain `openswarm` grep MISSES this. There is a parallel legacy prefix `self-swarm-*`
+alongside `openswarm-*`, and it must be renamed too or the sweep is incomplete.
+Search both: `git grep -inE '(open|self)-?swarm'`.
+
+Known `self-swarm` sites beyond the localStorage keys below:
+- `backend/apps/tools_lib/mcp_discovery.py:44,92,205` — MCP `clientInfo.name = "self-swarm"`.
+  This is **wire-visible**: it is what we announce to every external MCP server we connect to.
+  Rename to `maestro`, and keep the three occurrences consistent with each other.
+- `backend/apps/settings/settings.py:378` — temp dir `self-swarm-uploads`. Renaming orphans
+  any in-flight uploads in the old tempdir; acceptable (tempdir, not durable state), but the
+  hardcoded path in `backend/tests/test_v2_invariants.py:1451` must be updated in lockstep.
+- `GETTING_STARTED.md:37-38,169,209` — clone instructions still reference a `self-swarm` repo.
+  Repoint to `gmartinstech/maestro-desktop`.
+- `e2e/tests/combinatorial-flows.spec.ts:202` — asserts on `localStorage['self-swarm-theme-mode']`;
+  update together with the key migration or the test silently passes against a dead key.
+
+### localStorage keys — migrate, do not just rename
+
+Renaming these silently discards user state (language choice, theme, layout). Each needs a
+read-old-then-write-new fallback, in one shared helper rather than duplicated per call site:
+
+- `self-swarm-language` (`frontend/src/shared/i18n/i18n.ts`, `LANGUAGE_STORAGE_KEY`)
+- `self-swarm-theme-mode`
+- `openswarm-sidebar-width`
+- `openswarm-update-dismissed`
+- `openswarm-app-theme-override` (inside `webapp_template`'s `ThemeContext.tsx`)
+
+Also rename, but these are transient/derived rather than user state, so no migration needed:
+`openswarm-{browser-agent,invoke-agent,mcp-meta,outputs-meta,settings-meta,schedule,web,e2e}`
+(see `frontend/src/app/pages/AgentChat/parsing/{toolLabels,agentToolParsing}.ts`,
+`electron/main.js:12`, `electron/crash-watchdog.js:33`).
 
 ## DO NOT TOUCH
 
@@ -28,6 +63,11 @@ Provider migrates from `api.openswarm.com` to provedor-ia (`https://llm.martinst
   ("fork of Open Swarm, https://github.com/openswarm-ai/openswarm"). Required by MIT.
   Everything *else* in README/NOTICE gets debranded.
 - `node_modules/`, `backend/mcp-bundles/**/dist/**` and any vendored third-party bundle.
+- `electron/build-staging/**` — **generated build output** (bundled copies of the frontend and
+  backend, e.g. `build-staging/frontend/bundle.js`), regenerated on next build. It is
+  gitignored (`.gitignore:22`) and untracked, so `git grep` already skips it — but a raw
+  `grep -r` does NOT, and will report hundreds of phantom hits from stale bundles. Use
+  `git grep`, or exclude the path explicitly.
 - `docs/plans/*.md` and `docs/specs/*.md` historical records — these describe past work;
   leave their prose alone. (This plan file included.)
 
@@ -95,7 +135,7 @@ Apply the contract. Special care:
 
 ## Phase 2 — verify (sequential, after all slices)
 
-1. `git grep -ic openswarm -- . ':!node_modules' ':!backend/mcp-bundles' ':!docs/plans' ':!docs/specs' ':!LICENSE' ':!NOTICE'` → expect only the README/AGENTS/CLAUDE provenance lines.
+1. `git grep -icE '(open|self)-?swarm' -- . ':!node_modules' ':!backend/mcp-bundles' ':!electron/build-staging' ':!docs/plans' ':!docs/specs' ':!LICENSE' ':!NOTICE'` → expect only the README/AGENTS/CLAUDE provenance lines. Note this catches **both** legacy namespaces; a bare `openswarm` grep gives a false all-clear.
 2. `npm run verify` (build + lint + typecheck + tests + golden smoke + call-home check) → green.
 3. `npm run check:callhome` → exit 0.
 4. Launch the app and confirm: settings load (migration path), an agent turn runs under
