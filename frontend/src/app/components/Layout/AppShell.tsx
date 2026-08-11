@@ -22,7 +22,7 @@ import { LayoutDashboard } from 'lucide-react';
 import { LayoutGrid } from 'lucide-react';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Settings as LucideSettings } from 'lucide-react';
-import { ArrowLeft, ArrowRight, Plus, Clock, Menu as MenuIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Menu as MenuIcon } from 'lucide-react';
 import { AnimatedPanelLeft } from './animatedIcons';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
@@ -130,64 +130,9 @@ const AppShell: React.FC = () => {
   }, []);
 
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
-  // "Connected" = the user's OWN model (key/sub/pro/custom), NOT a non-empty /models list: the free-trial Haiku is always in that list now, so a byProvider-length check would falsely read as connected and hide the out-of-runs banner.
+  // "Connected" = the user's OWN model (key/sub/custom), NOT a non-empty /models list.
   const hasModelConnected = useAppSelector(selectHasModelConnected);
-  // During an active free trial the user CAN run things, so a red "no model connected" warning is misleading and discouraging (it sits right above the working starter chips). The trial flips connection_mode back to own_key the moment it's spent, so this banner returns then, landing the connect-a-model nudge after the win, not before it.
-  const freeTrialActive = useAppSelector((s) => {
-    const d = s.settings.data as any;
-    return !!(d && d.connection_mode === 'free-trial' && d.free_trial_token);
-  });
-  // Trial just ran dry (had an allotment, now 0, off the free lane): a quiet connect nudge, not the red error wall. Runs refill, so it's "for now".
-  const freeTrialSpent = useAppSelector((s) => {
-    const d = s.settings.data as any;
-    return !!(d && (d.free_trial_runs_limit ?? 0) > 0 && d.free_trial_remaining === 0 && d.connection_mode !== 'free-trial');
-  });
-  // Post-wow: on the free lane and already got value (spent >= 1 run); offer the unlimited path they likely already own while they're happy, not when they're blocked.
-  const freeTrialUsed = useAppSelector((s) => {
-    const d = s.settings.data as any;
-    if (!d || d.connection_mode !== 'free-trial' || !d.free_trial_token) return false;
-    const limit = d.free_trial_runs_limit ?? 0;
-    const remaining = d.free_trial_remaining ?? limit;
-    return limit > 0 && (limit - remaining) >= 1;
-  });
-  const freeTrialResetsAt = useAppSelector((s) => (s.settings.data as any)?.free_trial_resets_at ?? null);
-  // Coarse "~3h" / "~20m" label for when the rolling window refills; null when unknown or basically now. Static (not a ticking countdown) on purpose: a per-second timer is needless churn for a 5h window.
-  const refillLabel = React.useMemo(() => {
-    if (!freeTrialResetsAt) return null;
-    const secs = freeTrialResetsAt - Date.now() / 1000;
-    if (secs <= 90) return null;
-    const h = Math.floor(secs / 3600);
-    if (h >= 1) return `~${h}h`;
-    return `~${Math.max(1, Math.round(secs / 60))}m`;
-  }, [freeTrialResetsAt]);
-
-  // Paid (openswarm-pro) usage meter: same calm "you're near/at the cap, here's when it's back" pattern as the free-trial nudge, but the bar IS the message. Only fires in pro mode on real server-owned usage (requests_in_window/plan_limit), and only once near the cap, so it never clutters the normal flow. window_ends_at is unix MS (the trial's resets_at is seconds).
-  const proUsage = useAppSelector((s) => {
-    const d = s.settings.data as any;
-    if (!d || d.connection_mode !== 'openswarm-pro') return null;
-    const u = d.openswarm_usage_cached;
-    return u && u.plan_limit > 0 ? u : null;
-  }, shallowEqual);
-  const proPct = proUsage ? Math.min(1, proUsage.requests_in_window / proUsage.plan_limit) : 0;
-  const proMaxed = !!proUsage && proPct >= 1;
-  const showUsageNudge = isOnline && !!proUsage && proPct >= 0.8;
-  const usageResetLabel = React.useMemo(() => {
-    const endsAt = proUsage?.window_ends_at ?? 0;
-    if (!endsAt) return null;
-    const secs = (endsAt - Date.now()) / 1000;
-    if (secs <= 90) return null;
-    const h = Math.floor(secs / 3600);
-    return h >= 1 ? `~${h}h` : `~${Math.max(1, Math.round(secs / 60))}m`;
-  }, [proUsage]);
-  // Hold the banner until the boot free-trial mint settles, else a brand-new user sees it flash red for the ~1-3s the trial takes to arm. (Offline shows immediately, it's its own signal.)
-  const freeTrialArmSettled = useAppSelector((s) => s.settings.freeTrialArmSettled);
-  // The red wall is for genuine "no way to run" only; the free-trial states get the quiet nudge below.
-  const showWarningBanner = !isOnline || (modelsLoaded && freeTrialArmSettled && !hasModelConnected && !freeTrialActive && !freeTrialSpent);
-  const [ftNudgeDismissed, setFtNudgeDismissed] = useState<boolean>(() => {
-    try { return localStorage.getItem('os_ft_nudge_dismissed') === '1'; } catch { return false; }
-  });
-  // Spent nudge hides the moment they connect a real model; the post-wow nudge only shows on the trial lane (so it already implies no own model) and is dismissible.
-  const showFreeTrialNudge = isOnline && ((freeTrialSpent && !hasModelConnected) || (freeTrialUsed && !ftNudgeDismissed));
+  const showWarningBanner = !isOnline || (modelsLoaded && !hasModelConnected);
 
   const bannerDismissedForVersion = availableVersion != null && dismissedVersion === availableVersion;
   const isUpdateActionable = updateStatus === 'available' || updateStatus === 'downloaded' || updateStatus === 'downloading';
@@ -672,58 +617,6 @@ const AppShell: React.FC = () => {
                 </>
               )}
           </Typography>
-        </Box>
-      </Collapse>
-
-      <Collapse in={showFreeTrialNudge} timeout={300} unmountOnExit>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, flexShrink: 0 }}>
-          <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, flex: 1, letterSpacing: '0.01em' }}>
-            {freeTrialSpent
-              ? (refillLabel ? t('appShell.outOfFreeRunsWithRefill', { refillLabel }) : t('appShell.outOfFreeRunsForNow'))
-              : t('appShell.rollingNudge')}
-            <Box
-              component="span"
-              onClick={() => dispatch(openSettingsModal('models'))}
-              sx={{ color: c.accent.primary, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-            >
-              {t('appShell.connectYourOwnModel')}
-            </Box>
-            {freeTrialSpent ? '.' : t('appShell.toKeepGoingUnlimited')}
-          </Typography>
-          {!freeTrialSpent && (
-            <Box
-              role="button"
-              aria-label={t('common.dismiss')}
-              onClick={() => { try { localStorage.setItem('os_ft_nudge_dismissed', '1'); } catch {} setFtNudgeDismissed(true); }}
-              sx={{ color: c.text.muted, cursor: 'pointer', fontSize: '0.95rem', lineHeight: 1, px: 0.5, '&:hover': { color: c.text.secondary } }}
-            >
-              ×
-            </Box>
-          )}
-        </Box>
-      </Collapse>
-
-      <Collapse in={showUsageNudge} timeout={300} unmountOnExit>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.5, flexShrink: 0 }}>
-          {/* the bar is the message: how full your Pro window is. calm accent, never red. */}
-          <Box sx={{ width: 132, height: 5, borderRadius: 3, bgcolor: c.border.medium, overflow: 'hidden', flexShrink: 0 }}>
-            <Box sx={{ width: `${Math.round(proPct * 100)}%`, height: '100%', bgcolor: c.accent.primary, transition: 'width 0.3s ease' }} />
-          </Box>
-          {usageResetLabel && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, color: c.text.secondary }}>
-              <Clock size={12} style={{ flexShrink: 0 }} />
-              <Typography sx={{ fontSize: '0.8rem', letterSpacing: '0.01em' }}>{usageResetLabel}</Typography>
-            </Box>
-          )}
-          {proMaxed && (
-            <Box
-              component="span"
-              onClick={() => dispatch(openSettingsModal('models'))}
-              sx={{ color: c.accent.primary, cursor: 'pointer', fontSize: '0.8rem', '&:hover': { textDecoration: 'underline' } }}
-            >
-              {t('common.upgrade')}
-            </Box>
-          )}
         </Box>
       </Collapse>
 

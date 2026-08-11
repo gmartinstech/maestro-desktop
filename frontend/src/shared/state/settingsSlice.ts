@@ -27,14 +27,6 @@ export interface CustomProvider {
   models: Array<{ value: string; label: string; context_window?: number }>;
 }
 
-export interface SubscriptionUsage {
-  requests_in_window: number;
-  plan_limit: number;
-  window_hours: number;
-  /** unix ms */
-  window_ends_at: number;
-}
-
 export interface AppSettings {
   default_system_prompt: string | null;
   default_folder: string | null;
@@ -56,37 +48,16 @@ export interface AppSettings {
   auto_reveal_sub_agents: boolean;
   dev_mode: boolean;
   allow_experimental_updates: boolean;
-  /** Managed subscription state; surfaces only when user has subscribed via cloud. */
-  connection_mode?: 'own_key' | 'openswarm-pro' | 'free-trial';
+  /** Server-owned routing state. */
+  connection_mode?: 'own_key';
   openswarm_bearer_token?: string | null;
   openswarm_proxy_url?: string | null;
-  /** Zero-config free trial: server-owned, set by the cloud mint. remaining drives the onboarding "runs low" nudge. */
-  free_trial_token?: string | null;
-  free_trial_remaining?: number | null;
-  free_trial_runs_limit?: number | null;
-  /** Epoch seconds when the rolling window refills; powers the "fresh runs in ~Xh" nudge. */
-  free_trial_resets_at?: number | null;
-  openswarm_subscription_plan?: string | null;
-  openswarm_subscription_expires?: string | null;
-  openswarm_usage_cached?: SubscriptionUsage | null;
-  /** Identity populated by /api/auth/signin-activate; Stripe checkout also fills these. */
+  /** Server-owned identity. */
   user_id?: string | null;
   user_email?: string | null;
   signin_method?: 'google' | 'email' | 'stripe' | null;
   /** Anonymous device id (first-run generated); stitches anon to authed PostHog Persons. */
   installation_id?: string | null;
-}
-
-export interface ActivateSubscriptionPayload {
-  token: string;
-  plan?: string | null;
-  expires?: string | null;
-}
-
-export interface ActivateSigninPayload {
-  token: string;
-  signin_method: 'google' | 'email';
-  email?: string | null;
 }
 
 export interface BrowseResult {
@@ -108,10 +79,8 @@ interface SettingsState {
   /** Tab the user was on when they closed the modal with unsaved edits. */
   draftTab: string | null;
   /** Newest settings-write requestId. A stale GET that resolves after a newer
-   *  fetch/PUT is dropped, so a slow boot fetch can't clobber the free-trial arm. */
+   *  fetch/PUT is dropped, so a slow boot fetch can't clobber a fresh write. */
   latestWriteId: string | null;
-  /** False until the boot free-trial mint attempt settles; gates the no-model banner. */
-  freeTrialArmSettled: boolean;
 }
 
 /** Baseline for every required settings field. Spread under any backend payload so an older saved shape that predates a newer field (e.g. new_agent_shortcut) can't surface as undefined and crash a consumer. */
@@ -143,7 +112,6 @@ const initialState: SettingsState = {
   draft: null,
   draftTab: null,
   latestWriteId: null,
-  freeTrialArmSettled: false,
 };
 
 export const fetchSettings = createAsyncThunk('settings/fetch', async () => {
@@ -197,63 +165,6 @@ export const browseDirectories = createAsyncThunk(
 );
 
 /** POST /api/subscription/activate after catching openswarm://auth deep link; flips UI to Pro. */
-export const activateSubscription = createAsyncThunk(
-  'settings/activateSubscription',
-  async (payload: ActivateSubscriptionPayload, { dispatch }) => {
-    const res = await fetch(`${API_BASE}/subscription/activate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error((await res.text()) || 'Activation failed');
-    await dispatch(fetchSettings());
-    return (await res.json()) as { ok: boolean; plan: string };
-  }
-);
-
-/** POST /api/auth/signin-activate after catching Google OAuth/magic-link bearer; persists identity. */
-export const activateSignin = createAsyncThunk(
-  'settings/activateSignin',
-  async (payload: ActivateSigninPayload, { dispatch }) => {
-    const res = await fetch(`${API_BASE}/auth/signin-activate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error((await res.text()) || 'Sign-in failed');
-    await dispatch(fetchSettings());
-    return (await res.json()) as {
-      ok: boolean;
-      user_id: string;
-      email: string;
-      plan: string;
-      signin_method: 'google' | 'email';
-    };
-  },
-);
-
-/** POST /api/auth/signout; revokes cloud bearer, clears local identity. */
-export const signOut = createAsyncThunk(
-  'settings/signOut',
-  async (_: void, { dispatch }) => {
-    const res = await fetch(`${API_BASE}/auth/signout`, { method: 'POST' });
-    if (!res.ok) throw new Error('Sign-out failed');
-    await dispatch(fetchSettings());
-    return true;
-  },
-);
-
-/** POST /api/subscription/disconnect; clears bearer, reverts to own_key. Doesn't cancel Stripe. */
-export const disconnectSubscription = createAsyncThunk(
-  'settings/disconnectSubscription',
-  async (_: void, { dispatch }) => {
-    const res = await fetch(`${API_BASE}/subscription/disconnect`, { method: 'POST' });
-    if (!res.ok) throw new Error('Disconnect failed');
-    await dispatch(fetchSettings());
-    return true;
-  }
-);
-
 const settingsSlice = createSlice({
   name: 'settings',
   initialState,
@@ -275,11 +186,6 @@ const settingsSlice = createSlice({
       state.draft = null;
       state.draftTab = null;
     },
-    /** Boot sets this once the free-trial mint attempt returns (armed or not). Until then
-     *  we hold the "No AI model connected" banner so a new user never sees it flash. */
-    markFreeTrialArmSettled(state) {
-      state.freeTrialArmSettled = true;
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -290,7 +196,7 @@ const settingsSlice = createSlice({
       .addCase(fetchSettings.fulfilled, (state, action) => {
         state.loading = false;
         state.loaded = true;
-        // Drop a stale response: on boot three fetches race (initial, sub-sync, free-trial mint); if the pre-mint one resolves last it would wipe the armed trial. Newest wins.
+        // Drop a stale response: boot fetches can race, so only the newest write/fetch wins.
         if (state.latestWriteId && action.meta.requestId !== state.latestWriteId) return;
         // Fill any field an older backend shape omitted so no consumer reads undefined; the payload still wins for everything it does send.
         const merged = { ...DEFAULT_SETTINGS, ...action.payload };
@@ -325,5 +231,5 @@ const settingsSlice = createSlice({
   },
 });
 
-export const { openSettingsModal, closeSettingsModal, setDraft, clearDraft, markFreeTrialArmSettled } = settingsSlice.actions;
+export const { openSettingsModal, closeSettingsModal, setDraft, clearDraft } = settingsSlice.actions;
 export default settingsSlice.reducer;

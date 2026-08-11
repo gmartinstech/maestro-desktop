@@ -5,10 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { useAppSelector } from '@/shared/hooks';
-import {
-  hasModelConnected,
-  hasFreeTrialActive,
-} from '@/app/components/Onboarding/steps/skipPredicates';
+import { hasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 import { STARTER_CATEGORIES } from '@/shared/starterCategories';
 
 // Returning-user empty state (the first-run greeting now lives in the auto-popped welcome chat). Quiet: a one-line prompt + the shared starter chips for users who can run, or a connect-a-model hint for users who can't. Two-level: category -> concrete prompts.
@@ -19,7 +16,7 @@ const DashboardEmptyState: React.FC<{
 }> = ({ c, onLaunch, onStarter }) => {
   const model = useAppSelector((s) => s.settings.data.default_model);
   const mode = useAppSelector((s) => s.settings.data.default_mode);
-  const canRun = useAppSelector((s) => hasFreeTrialActive(s) || hasModelConnected(s));
+  const canRun = useAppSelector((s) => hasModelConnected(s));
   const [launching, setLaunching] = React.useState(false);
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const currentCategory = STARTER_CATEGORIES.find((cat) => cat.id === expanded);

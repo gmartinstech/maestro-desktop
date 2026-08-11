@@ -19,7 +19,7 @@ import {
 import AgenticCursor, { type AgenticCursorHandle } from './ac/AgenticCursor';
 import { onboardingDirector } from './OnboardingDirector';
 import { STEPS } from './steps';
-import { hasAnyAgentCompleted, hasFreeTrialActive, hasModelConnected } from './steps/skipPredicates';
+import { hasAnyAgentCompleted, hasModelConnected } from './steps/skipPredicates';
 import OnboardingPanel from './OnboardingPanel';
 import { onboardingBus } from './eventBus';
 import { report } from './telemetry';
@@ -60,7 +60,7 @@ const OnboardingRoot: React.FC = () => {
   const welcomeOpenReady = useAppSelector(
     (s) =>
       s.settings.loaded &&
-      (hasFreeTrialActive(s) || hasModelConnected(s)) &&
+      hasModelConnected(s) &&
       !s.onboardingProgress.welcomeShown &&
       !(s.onboardingProgress.completedSteps ?? []).includes('launch_agent') &&
       Object.keys(s.agents?.sessions ?? {}).length === 0,

@@ -838,8 +838,6 @@ const INFO_BY_STEP_ID: Record<string, string> = {
 
 If you already have a subscription to ChatGPT, Claude, or Gemini, plug it directly into Open Swarm.
 
-We also offer an Open Swarm subscription that gives you the same usage as those providers.
-
 Or use your own API keys.`,
   enable_actions: `Actions are the capabilities available to your AI agents.
 

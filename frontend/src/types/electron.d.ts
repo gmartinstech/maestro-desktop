@@ -52,7 +52,6 @@ declare global {
     openExternal: (url: string) => Promise<void>;
     hardReset?: () => Promise<void>;
     clearBrowserData?: () => Promise<{ ok: boolean }>;
-    onAuthUrl?: (cb: (url: string) => void) => () => void;
     onOauthClaim?: (cb: (url: string) => void) => () => void;
   }
 

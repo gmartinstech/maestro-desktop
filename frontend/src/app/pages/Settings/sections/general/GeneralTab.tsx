@@ -1,8 +1,6 @@
 import React from 'react';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import { AppSettings } from '@/shared/state/settingsSlice';
-import AccountCard from '../subscription/AccountCard';
 import GeneralAgentDefaults from './GeneralAgentDefaults';
 import GeneralInterface from './GeneralInterface';
 import GeneralAdvanced from './GeneralAdvanced';
@@ -19,14 +17,9 @@ const GeneralTab: React.FC<{
   modelOptions: { grouped: Record<string, ModelOption[]>; flat: Array<ModelOption & { provider: string }> };
   modesList: Array<{ id: string; name: string }>;
   providerColors: Record<string, string>;
-  openswarmGradient: string;
-}> = ({ form, setForm, styles, setBrowseOpen, modelOptions, modesList, providerColors, openswarmGradient }) => {
-  const { sectionSx } = styles;
+}> = ({ form, setForm, styles, setBrowseOpen, modelOptions, modesList, providerColors }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', pt: 2.5, pb: 1, animation: 'fadeIn 0.2s ease', '@keyframes fadeIn': { from: { opacity: 0 }, to: { opacity: 1 } } }}>
-
-      <Typography sx={sectionSx}>Account</Typography>
-      <AccountCard />
 
       <GeneralAgentDefaults
         form={form}
@@ -36,7 +29,6 @@ const GeneralTab: React.FC<{
         modelOptions={modelOptions}
         modesList={modesList}
         providerColors={providerColors}
-        openswarmGradient={openswarmGradient}
       />
 
       <GeneralInterface form={form} setForm={setForm} styles={styles} />

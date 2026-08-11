@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { createDraftSession, expandSession } from '@/shared/state/agentsSlice';
 import { placeCard, setCardPosition, DEFAULT_CARD_W, EXPANDED_CARD_MIN_H } from '@/shared/state/dashboardLayoutSlice';
 import { markWelcomeShown } from '@/shared/state/onboardingProgressSlice';
-import { hasFreeTrialActive, hasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
+import { hasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 
 type SpawnOrigin = { x: number; y: number; type?: 'branch' };
 
@@ -25,7 +25,7 @@ export function useWelcomeDraft({
   const reduxEligible = useAppSelector(
     (s) =>
       s.settings.loaded &&
-      (hasFreeTrialActive(s) || hasModelConnected(s)) &&
+      hasModelConnected(s) &&
       !s.onboardingProgress.welcomeShown &&
       !(s.onboardingProgress.completedSteps ?? []).includes('launch_agent'),
   );

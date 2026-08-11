@@ -3,7 +3,6 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { AppSettings } from '@/shared/state/settingsSlice';
-import OpenSwarmProCard from '../subscription/OpenSwarmProCard';
 import SubscriptionCards from '../subscription/SubscriptionCards';
 import ApiKeyCard, { API_KEY_CARDS } from './ApiKeyCard';
 import CustomProvidersEditor from './CustomProvidersEditor';
@@ -27,16 +26,11 @@ const ModelsTab: React.FC<{
         </Typography>
 
         <Typography sx={{ ...descSx, mb: 0 }}>
-          Already paying for Claude, ChatGPT, or Gemini? Connect it here at no extra cost. Or let OpenSwarm Pro cover everything in one subscription.
+          Already paying for Claude, ChatGPT, or Gemini? Connect it here at no extra cost.
         </Typography>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Box data-onboarding="settings-pro-section">
-            <OpenSwarmProCard />
-          </Box>
-          <Box data-onboarding="settings-external-subs">
-            <SubscriptionCards />
-          </Box>
+        <Box data-onboarding="settings-external-subs">
+          <SubscriptionCards />
         </Box>
       </Box>
 

@@ -1,6 +1,6 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
-import { hasAnyAgentLaunched, hasModelConnected, hasFreeTrialActive } from './skipPredicates';
+import { hasAnyAgentLaunched, hasModelConnected } from './skipPredicates';
 
 export const step03: OnboardingStep = {
   id: 'launch_agent',
@@ -11,7 +11,7 @@ export const step03: OnboardingStep = {
   description: 'Tell the chat what you want done and a team gets to work.',
   videoSrc: './onboarding-videos/v2/03.mp4',
   videoDurationLabel: '0:24',
-  skipIf: (s) => hasAnyAgentLaunched(s) || (!hasModelConnected(s) && !hasFreeTrialActive(s)),
+  skipIf: (s) => hasAnyAgentLaunched(s) || !hasModelConnected(s),
   requiresDashboard: true,
   // The cursor opens the chat FOR the user, then asks what they want. No canned prompt and no LLM here: it's a static move + simulated click + a hardcoded line; the user types their own thing and their team runs.
   ops: [

@@ -3,8 +3,6 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
-import { useAppSelector } from '@/shared/hooks';
-import { hasFreeTrialActive, hasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 
 interface Props {
   c: ClaudeTokens;
@@ -15,9 +13,6 @@ interface Props {
 
 // The model-name trigger that opens ModelPickerMenu. Lived inside ModeControl until modes were hidden from the UI; the picker needs its button regardless of modes.
 export const ModelControl: React.FC<Props> = ({ c, setModelAnchor, allModelFlat, model }) => {
-  // On the free trial the model is fixed server-side, so there's nothing to pick: hide the control. The moment a real model is connected we show it again, even if trial state lingers (gate on !hasModelConnected, not just the trial flag).
-  const hideModelPicker = useAppSelector((s) => hasFreeTrialActive(s) && !hasModelConnected(s));
-  if (hideModelPicker) return null;
   return (
     <Box
       onClick={(e) => setModelAnchor(e.currentTarget)}

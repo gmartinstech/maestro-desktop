@@ -268,15 +268,11 @@ export interface Routing {
   subLabel?: string;
 }
 
-export function routingFor(model: string, connectionMode: string | undefined): Routing {
+export function routingFor(model: string): Routing {
   const m = (model || '').toLowerCase();
   if (m.endsWith('-api')) return { kind: 'metered' };
   if (m.endsWith('-cc')) return { kind: 'subscription', subLabel: 'Claude Pro/Max' };
-  const isPlainAnthropic = m === 'sonnet' || m === 'opus' || m === 'haiku';
-  if (isPlainAnthropic && connectionMode === 'openswarm-pro') {
-    return { kind: 'subscription', subLabel: 'OpenSwarm Pro' };
-  }
-  if (isPlainAnthropic) return { kind: 'metered' };
+  if (m === 'sonnet' || m === 'opus' || m === 'haiku') return { kind: 'metered' };
   if (m.startsWith('gpt-5') || m.startsWith('gpt-4') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) {
     return { kind: 'subscription', subLabel: 'ChatGPT Plus/Pro' };
   }
@@ -287,10 +283,10 @@ export function routingFor(model: string, connectionMode: string | undefined): R
   return { kind: 'metered' };
 }
 
-export function CostChip({ workflow, connectionMode }: { workflow: Workflow; connectionMode?: string }) {
+export function CostChip({ workflow }: { workflow: Workflow }) {
   const c = useClaudeTokens();
   const est = workflow.cost_estimate;
-  const route = routingFor(workflow.model, connectionMode);
+  const route = routingFor(workflow.model);
 
   // Subscription-routed workflows have no metered per-call cost. Surface a usage chip instead so the user knows runs are "free" under their existing plan but still sees the projected fire frequency.
   if (route.kind === 'subscription') {

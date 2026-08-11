@@ -36,8 +36,6 @@ const PROVIDER_COLORS: Record<string, string> = {
   qwen: '#A974FF',
   cohere: '#FF7759',
 };
-const OPENSWARM_GRADIENT =
-  'linear-gradient(135deg, #8FB3FF 0%, #E56BC4 45%, #FFA85C 100%)';
 
 // Module-scope: remember the last open tab across modal closes (System Settings style).
 let lastOpenTab: string | null = null;
@@ -67,10 +65,9 @@ const Settings: React.FC = () => {
 
   const modelOptions = useMemo(() => {
     if (!modelsLoaded || Object.keys(modelsByProvider).length === 0) {
-      const key = settings.connection_mode === 'openswarm-pro' ? 'OpenSwarm Pro' : 'Anthropic';
       return {
-        grouped: { [key]: DEFAULT_MODEL_FALLBACK },
-        flat: DEFAULT_MODEL_FALLBACK.map((m) => ({ ...m, provider: key })),
+        grouped: { Anthropic: DEFAULT_MODEL_FALLBACK },
+        flat: DEFAULT_MODEL_FALLBACK.map((m) => ({ ...m, provider: 'Anthropic' })),
       };
     }
     const grouped: Record<string, Array<{ value: string; label: string }>> = {};
@@ -135,7 +132,7 @@ const Settings: React.FC = () => {
     lastOpenTab = activeTab;
   }, [activeTab]);
 
-  // Sync form on modal open + first load only; including `settings` in deps wipes in-flight edits on background fetches (issue #25). baseline = the snapshot the user started editing from, so we can tell user edits apart from fields the backend changed underneath us (OAuth connects, free-trial mints).
+  // Sync form on modal open + first load only; including `settings` in deps wipes in-flight edits on background fetches (issue #25). baseline = the snapshot the user started editing from, so we can tell user edits apart from fields the backend changed underneath us (OAuth connects).
   const baselineRef = useRef<AppSettings>(settings);
   useEffect(() => {
     if (open && loaded) {
@@ -260,7 +257,6 @@ const Settings: React.FC = () => {
           modelOptions={modelOptions}
           modesList={modesList}
           providerColors={PROVIDER_COLORS}
-          openswarmGradient={OPENSWARM_GRADIENT}
         />
       ) : activeTab === 'models' ? (
         <ModelsTab

@@ -31,10 +31,8 @@ import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { fetchSubscriptionStatus } from '@/shared/state/subscriptionsSlice';
 import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { hasModelConnected as selectHasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { SKILL_COLOR } from '@/app/components/editor/richEditorUtils';
-import PlanPickerModal from '@/app/components/overlays/PlanPickerModal';
 import { ErrorSlime } from '@/app/components/feedback/ErrorSlime';
 
 const streamingCursorKeyframes = `
@@ -81,7 +79,7 @@ interface OpenSwarmErrorInfo {
   title: string;
   detail: string;
   ctaLabel?: string;
-  ctaAction?: 'upgrade' | 'retry' | 'settings' | 'waitlist' | 'retry_last';
+  ctaAction?: 'retry' | 'settings' | 'waitlist' | 'retry_last';
 }
 
 interface OverflowContext {
@@ -91,7 +89,6 @@ interface OverflowContext {
   frameworkOverhead?: number;
   activeMcpCount?: number;
   messagesCount?: number;
-  hasModel?: boolean;
 }
 
 function formatTokens(n: number): string {
@@ -104,19 +101,6 @@ function formatTokens(n: number): string {
  *  Matchers stay in English (they match BACKEND-emitted text) — only the displayed title/detail/ctaLabel are translated. */
 function parseOpenSwarmError(text: string, t: TFunction, ctx?: OverflowContext): OpenSwarmErrorInfo | null {
   if (!text) return null;
-  // A real OpenSwarm-side plan cap (has a reset window) -> offer the upgrade.
-  if (/reached your OpenSwarm.*plan limit|Usage cap exceeded|Resets in /i.test(text)) {
-    const reset = text.match(/Resets in ([\dhms\s]+)/)?.[1];
-    return {
-      kind: 'cap',
-      title: t('agentChat.errors.planLimit.title'),
-      detail: reset
-        ? t('agentChat.errors.planLimit.detailWithReset', { reset })
-        : t('agentChat.errors.planLimit.detail'),
-      ctaLabel: t('agentChat.errors.planLimit.cta'),
-      ctaAction: 'upgrade',
-    };
-  }
   if (/provider_rate_limit|account'?s rate limit|session rate limit|This request would exceed your account'?s rate limit/i.test(text)) {
     const reset = text.match(/reset after ([^)\\.]+)/i)?.[1];
     return {
@@ -133,25 +117,6 @@ function parseOpenSwarmError(text: string, t: TFunction, ctx?: OverflowContext):
       kind: 'network',
       title: t('agentChat.errors.busy.title'),
       detail: t('agentChat.errors.busy.detail'),
-    };
-  }
-  if (/free_trial_exhausted|used your free|free OpenSwarm runs/i.test(text)) {
-    // Once a real model is connected, the prompt isn't lost: offer a one-tap pick-up-where-you-left-off that resends the last ask on the new model. Before connecting, the CTA still routes to Settings.
-    if (ctx?.hasModel) {
-      return {
-        kind: 'cap',
-        title: t('agentChat.errors.pickUpWhereLeftOff.title'),
-        detail: t('agentChat.errors.pickUpWhereLeftOff.detail'),
-        ctaLabel: t('agentChat.errors.pickUpWhereLeftOff.cta'),
-        ctaAction: 'retry_last',
-      };
-    }
-    return {
-      kind: 'cap',
-      title: t('agentChat.errors.freeRunsUsed.title'),
-      detail: t('agentChat.errors.freeRunsUsed.detail'),
-      ctaLabel: t('agentChat.errors.freeRunsUsed.cta'),
-      ctaAction: 'settings',
     };
   }
   if (/unknown model|check the model code|\b1211\b|model_not_found/i.test(text)) {
@@ -855,7 +820,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const [editText, setEditText] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(false);
   const bubbleRootRef = React.useRef<HTMLDivElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const { role, content } = message;
@@ -944,7 +908,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
       frameworkOverhead: s.framework_overhead_tokens,
       activeMcpCount: s.active_mcps?.length ?? 0,
       messagesCount: s.messages?.length ?? 0,
-      hasModel: selectHasModelConnected(state),
     } as OverflowContext;
   }, shallowEqual);
   const activeSessionId = useAppSelector((state) => state.agents.activeSessionId);
@@ -1269,9 +1232,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                       variant="outlined"
                       onClick={() => {
                         const api = (window as any).openswarm;
-                        if (openswarmError.ctaAction === 'upgrade') {
-                          setPickerOpen(true);
-                        } else if (openswarmError.ctaAction === 'settings') {
+                        if (openswarmError.ctaAction === 'settings') {
                           dispatch(openSettingsModal('models'));
                         } else if (openswarmError.ctaAction === 'retry_last') {
                           if (activeSessionId) dispatch(retryLastUserMessage({ sessionId: activeSessionId }));
@@ -1335,15 +1296,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
         )}
       </Box>
 
-      <PlanPickerModal
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        title="Upgrade your plan"
-        subtitle="Pick a plan to keep going. Cancel anytime from Stripe."
-        source="upgrade_cta"
-        defaultPlan="pro_plus"
-        onSubscribed={() => setPickerOpen(false)}
-      />
     </Box>
   );
 });

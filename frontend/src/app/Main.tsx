@@ -8,11 +8,10 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { store } from '../shared/state/store';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { fetchSettings, updateSettingsPatch, markFreeTrialArmSettled } from '@/shared/state/settingsSlice';
+import { fetchSettings, updateSettingsPatch } from '@/shared/state/settingsSlice';
 import { fetchSubscriptionStatus } from '@/shared/state/subscriptionsSlice';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { updateSessionModel } from '@/shared/state/agentsSlice';
-import { API_BASE } from '@/shared/config';
 import {
   setAppVersion,
   setUpdateAvailable,
@@ -212,18 +211,6 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
     reportAppOpened();
     // Connected subscriptions live in their own slice; without this the dashboard (and the onboarding gate) think no model is connected until the user opens Settings > Models, so a fresh launch shows a false "connect a model" empty state and the welcome cursor never fires. Refetched after sync + on focus below.
     dispatch(fetchSubscriptionStatus());
-    fetch(`${API_BASE}/subscription/sync`, { method: 'POST' })
-      .then((r) => {
-        if (r.ok) dispatch(fetchSettings());
-      })
-      .catch(() => {})
-      .finally(() => {
-        // Arm the zero-config free trial when nothing is connected so a brand-new user can run an agent immediately. The backend no-ops if a real key or subscription exists, so this is safe to fire on every launch.
-        fetch(`${API_BASE}/subscription/free-trial/mint`, { method: 'POST' })
-          .catch(() => {})
-          // The backend arms server-side regardless of whether the browser can read the mint response (a transient boot-time CORS/timing miss makes `data` unreadable), so refetch unconditionally, the GET is the only reliable signal the UI gets that it armed.
-          .finally(() => { dispatch(fetchSettings()); dispatch(fetchSubscriptionStatus()); dispatch(markFreeTrialArmSettled()); });
-      });
   }, [dispatch]);
 
   useEffect(() => {
@@ -308,10 +295,7 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
   // Until 9Router answers, /models omits subscription models, so the saved default can look "no longer available" when it's really just not loaded yet. Reconciling then would clobber a real sub user's default down to a fallback (and persist it). Only reconcile against the complete list.
   const nineRouterUp = useAppSelector((s) => s.subscriptions.status?.running === true);
   const sessions = useAppSelector((s) => s.agents.sessions);
-  const connectionMode = useAppSelector((s) => s.settings.data.connection_mode);
-  const freeTrialRemaining = useAppSelector((s) => s.settings.data.free_trial_remaining);
-
-  const [sessionSwitch, setSessionSwitch] = useState<{ toFreeTrial: boolean; runs: number | null; toLabel: string } | null>(null);
+  const [sessionSwitch, setSessionSwitch] = useState<{ toLabel: string } | null>(null);
   const pendingRef = useRef(false);
 
   useEffect(() => {
@@ -332,14 +316,13 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
       .finally(() => {
         pendingRef.current = false;
       });
-    setSessionSwitch({ toFreeTrial: connectionMode === 'free-trial', runs: freeTrialRemaining ?? null, toLabel: fallback.label });
-  }, [settingsLoaded, modelsLoaded, nineRouterUp, connectionMode, freeTrialRemaining, byProvider, settings, dispatch]);
+    setSessionSwitch({ toLabel: fallback.label });
+  }, [settingsLoaded, modelsLoaded, nineRouterUp, byProvider, settings, dispatch]);
 
   // Same staleness per session: a session pinned to a now-gone model (e.g. gpt-5.4-api after its key is disconnected) snags on the next send since the send carries that model, so reconcile open sessions to the valid default/fallback and warn once.
   useEffect(() => {
     if (!settingsLoaded || !modelsLoaded) return;
-    // free-trial/pro model lists don't wait on 9Router sub enumeration, so don't gate them on nineRouterUp (often false on the free lane) or a stranded session never recovers.
-    if (!nineRouterUp && connectionMode !== 'free-trial' && connectionMode !== 'openswarm-pro') return;
+    if (!nineRouterUp) return;
     if (Object.keys(byProvider).length === 0) return;
     const flat = Object.values(byProvider).flat();
     const valid = new Set(flat.map((m) => m.value));
@@ -356,9 +339,9 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
     }
     if (switched) {
       const toLabel = flat.find((m) => m.value === target)?.label ?? target;
-      setSessionSwitch({ toFreeTrial: connectionMode === 'free-trial', runs: freeTrialRemaining ?? null, toLabel });
+      setSessionSwitch({ toLabel });
     }
-  }, [settingsLoaded, modelsLoaded, nineRouterUp, connectionMode, freeTrialRemaining, byProvider, sessions, settings, dispatch]);
+  }, [settingsLoaded, modelsLoaded, nineRouterUp, byProvider, sessions, settings, dispatch]);
 
   return (
     <>
@@ -375,11 +358,9 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
           onClose={() => setSessionSwitch(null)}
           sx={{ fontSize: '0.8rem' }}
         >
-          {sessionSwitch && (sessionSwitch.toFreeTrial ? (
-            <>Your model isn't connected, you're on the free trial now{sessionSwitch.runs != null ? <> ({sessionSwitch.runs} runs left)</> : null}.</>
-          ) : (
+          {sessionSwitch && (
             <>Your model isn't available anymore, switched to <b>{sessionSwitch.toLabel}</b>.</>
-          ))}
+          )}
         </Alert>
       </Snackbar>
     </>

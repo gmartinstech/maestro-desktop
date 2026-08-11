@@ -1,6 +1,6 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
-import { hasModelConnected, hasFreeTrialActive, freeRunsLow } from './skipPredicates';
+import { hasModelConnected } from './skipPredicates';
 
 export const step01: OnboardingStep = {
   id: 'connect_model',
@@ -11,7 +11,7 @@ export const step01: OnboardingStep = {
   description: 'Your free runs are limited. Add your own model to keep building.',
   videoSrc: './onboarding-videos/v2/01.mp4',
   videoDurationLabel: '0:24',
-  skipIf: (s) => hasModelConnected(s) || (hasFreeTrialActive(s) && !freeRunsLow(s)),
+  skipIf: (s) => hasModelConnected(s),
   ops: [
     { kind: 'move_to', target: S.sidebarSettingsButton },
     { kind: 'popup', text: 'Pop into Settings.' },
@@ -30,14 +30,6 @@ export const step01: OnboardingStep = {
       opId: 'connect_method',
       question: 'How would you like to connect an AI model?',
       options: [
-        {
-          id: 'pro',
-          label: 'Open Swarm Pro subscription',
-          thenOps: [
-            { kind: 'move_to', target: S.settingsProSection },
-            { kind: 'popup', text: 'Hit Subscribe and pick a tier.' },
-          ],
-        },
         {
           id: 'subscription',
           label: 'I already have an AI subscription',

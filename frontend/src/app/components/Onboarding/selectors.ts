@@ -23,7 +23,6 @@ export const S = {
 
   settingsModelsTab: 'settings-models-tab',
   settingsCloseButton: 'settings-close-button',
-  settingsProSection: 'settings-pro-section',
   settingsExternalSubs: 'settings-external-subs',
   settingsApiKeys: 'settings-api-keys',
   settingsRestartTour: 'settings-restart-tour',

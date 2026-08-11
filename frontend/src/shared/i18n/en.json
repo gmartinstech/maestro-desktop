@@ -4,7 +4,6 @@
     "download": "Download",
     "restartAndUpdate": "Restart & Update",
     "restarting": "Restarting…",
-    "upgrade": "Upgrade",
     "cancel": "Cancel",
     "save": "Save",
     "close": "Close",
@@ -26,11 +25,6 @@
     "noModelConnected": "No AI model connected.",
     "configureModels": "Configure models",
     "toGetStarted": "to get started",
-    "outOfFreeRunsWithRefill": "Out of free runs, fresh ones in {{refillLabel}}. ",
-    "outOfFreeRunsForNow": "You're out of free runs for now. ",
-    "rollingNudge": "Nice, you're rolling. ",
-    "connectYourOwnModel": "Connect the Claude or ChatGPT you already have",
-    "toKeepGoingUnlimited": " to keep going unlimited.",
     "updateAvailable": "Maestro Studio{{verSuffix}} is available",
     "updateDownloading": "Downloading Maestro Studio{{verSuffix}}…",
     "updateDownloaded": "Maestro Studio{{verSuffix}} is ready to install",
@@ -138,12 +132,6 @@
       "denyCount": "Deny {{count}}"
     },
     "errors": {
-      "planLimit": {
-        "title": "You've hit your plan limit",
-        "detailWithReset": "Your usage resets in {{reset}}. Upgrade to keep going now, or wait for the window to reset.",
-        "detail": "Upgrade to keep going now, or wait for your usage window to reset.",
-        "cta": "Upgrade plan"
-      },
       "modelRateLimit": {
         "title": "You've hit this model's rate limit",
         "detailWithReset": "This model can send more requests after {{reset}}. Wait for that reset window, or switch to another model.",
@@ -152,16 +140,6 @@
       "busy": {
         "title": "Maestro Studio is busy right now",
         "detail": "A lot of requests are coming through at once. Wait a few seconds, then send your message again."
-      },
-      "pickUpWhereLeftOff": {
-        "title": "Ready to pick up where you left off",
-        "detail": "Your model is connected. Continue the task you started on the free trial.",
-        "cta": "Continue"
-      },
-      "freeRunsUsed": {
-        "title": "You've used your free runs",
-        "detail": "Connect a model to keep going: your own API key, an AI subscription you already pay for, or OpenSwarm Pro.",
-        "cta": "Connect a model"
       },
       "modelNotAvailable": {
         "title": "That model isn't available on your plan",

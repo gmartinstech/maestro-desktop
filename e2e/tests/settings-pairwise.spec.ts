@@ -40,7 +40,6 @@ const PARAMS: Params = {
   theme: ['light', 'dark'],
   default_model: ['sonnet', 'opus'],
   default_thinking_level: ['auto', 'high'],
-  connection_mode: ['own_key', 'openswarm-pro'],
   analytics_opt_in: [false, true],
 };
 

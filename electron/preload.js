@@ -57,9 +57,7 @@ contextBridge.exposeInMainWorld('openswarm', {
   markFirstAgentResponse: () => ipcRenderer.send('perf:first-agent-response'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
-  // Returns the persisted install state (app_install_id, ref, ...).
-  // Renderer attaches the ref to Stripe checkout + sign-in flows so
-  // the cloud can credit the affiliate. Resolves to {} if no state yet.
+  // Returns the persisted install state (app_install_id, ...). Resolves to {} if no state yet.
   getInstallState: () => ipcRenderer.invoke('get-install-state'),
   // Factory reset: wipes the data dir and relaunches. Never resolves on success (the app exits first).
   hardReset: () => ipcRenderer.invoke('hard-reset'),
@@ -130,14 +128,6 @@ contextBridge.exposeInMainWorld('openswarm', {
     const listener = (_event, payload) => cb(payload);
     ipcRenderer.on('openswarm:browser-shortcut', listener);
     return () => ipcRenderer.removeListener('openswarm:browser-shortcut', listener);
-  },
-
-  // Deep-link callback: fires when the OS opens the app with an
-  // openswarm://auth?token=... URL (after Stripe-hosted checkout).
-  onAuthUrl: (cb) => {
-    const listener = (_event, url) => cb(url);
-    ipcRenderer.on('openswarm:auth-url', listener);
-    return () => ipcRenderer.removeListener('openswarm:auth-url', listener);
   },
 
   // OAuth claim deep-link channel. Receives openswarm://oauth/{provider}/complete

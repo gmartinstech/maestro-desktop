@@ -11,12 +11,10 @@ const FALLBACK_MODELS = [
 export function useChatInputModel(model: string) {
   const modelsByProvider = useAppSelector((state) => state.models.byProvider);
   const modelsLoaded = useAppSelector((state) => state.models.loaded);
-  const connectionMode = useAppSelector((state) => state.settings.data.connection_mode);
 
   const allModelOptions = useMemo(() => {
     if (!modelsLoaded || Object.keys(modelsByProvider).length === 0) {
-      const key = connectionMode === 'openswarm-pro' ? 'OpenSwarm Pro' : 'Anthropic';
-      return { flat: FALLBACK_MODELS.map(m => ({ ...m, provider: key })), grouped: { [key]: FALLBACK_MODELS } };
+      return { flat: FALLBACK_MODELS.map(m => ({ ...m, provider: 'Anthropic' })), grouped: { Anthropic: FALLBACK_MODELS } };
     }
     const flat: Array<any> = [];
     const grouped: Record<string, any[]> = {};
@@ -39,7 +37,7 @@ export function useChatInputModel(model: string) {
       }
     }
     return { flat, grouped };
-  }, [modelsByProvider, modelsLoaded, connectionMode]);
+  }, [modelsByProvider, modelsLoaded]);
 
   const currentModelCtx = useMemo(() => {
     const m = allModelOptions.flat.find((x: any) => x.value === model) as any;

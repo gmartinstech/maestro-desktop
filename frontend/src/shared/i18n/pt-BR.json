@@ -4,7 +4,6 @@
     "download": "Baixar",
     "restartAndUpdate": "Reiniciar e atualizar",
     "restarting": "Reiniciando…",
-    "upgrade": "Fazer upgrade",
     "cancel": "Cancelar",
     "save": "Salvar",
     "close": "Fechar",
@@ -26,11 +25,6 @@
     "noModelConnected": "Nenhum modelo de IA conectado.",
     "configureModels": "Configurar modelos",
     "toGetStarted": "para começar",
-    "outOfFreeRunsWithRefill": "Suas execuções gratuitas acabaram, novas chegam em {{refillLabel}}. ",
-    "outOfFreeRunsForNow": "Suas execuções gratuitas acabaram por agora. ",
-    "rollingNudge": "Boa, você está avançando bem. ",
-    "connectYourOwnModel": "Conecte o Claude ou ChatGPT que você já tem",
-    "toKeepGoingUnlimited": " para continuar sem limites.",
     "updateAvailable": "O Maestro Studio{{verSuffix}} está disponível",
     "updateDownloading": "Baixando o Maestro Studio{{verSuffix}}…",
     "updateDownloaded": "O Maestro Studio{{verSuffix}} está pronto para instalar",
@@ -138,12 +132,6 @@
       "denyCount": "Negar {{count}}"
     },
     "errors": {
-      "planLimit": {
-        "title": "Você atingiu o limite do seu plano",
-        "detailWithReset": "Seu uso reseta em {{reset}}. Faça upgrade para continuar agora, ou espere a janela resetar.",
-        "detail": "Faça upgrade para continuar agora, ou espere sua janela de uso resetar.",
-        "cta": "Fazer upgrade do plano"
-      },
       "modelRateLimit": {
         "title": "Você atingiu o limite de uso deste modelo",
         "detailWithReset": "Este modelo pode enviar mais solicitações depois de {{reset}}. Espere essa janela resetar, ou troque para outro modelo.",
@@ -152,16 +140,6 @@
       "busy": {
         "title": "O Maestro Studio está ocupado agora",
         "detail": "Muitas solicitações estão chegando de uma vez. Espere alguns segundos e envie sua mensagem de novo."
-      },
-      "pickUpWhereLeftOff": {
-        "title": "Pronto para continuar de onde parou",
-        "detail": "Seu modelo está conectado. Continue a tarefa que você começou no teste gratuito.",
-        "cta": "Continuar"
-      },
-      "freeRunsUsed": {
-        "title": "Você usou suas execuções gratuitas",
-        "detail": "Conecte um modelo para continuar: sua própria chave de API, uma assinatura de IA que você já paga, ou o OpenSwarm Pro.",
-        "cta": "Conectar um modelo"
       },
       "modelNotAvailable": {
         "title": "Esse modelo não está disponível no seu plano",
