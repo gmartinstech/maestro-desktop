@@ -1,4 +1,4 @@
-"""App agent: driving an OpenSwarm-built app through its window.OPENSWARM_APP bridge.
+"""App agent: driving an Maestro-built app through its window.MAESTRO_APP bridge.
 
 Pins the wiring that makes an app drivable without touching a real webview or LLM:
   - the three App bridge tools translate to a single BrowserEvaluate against the
@@ -19,23 +19,23 @@ from backend.apps.agents.browser import browser_agent as BA
 # --- bridge expression -------------------------------------------------------
 def test_app_bridge_expression_describe_and_state():
     desc = BA.app_bridge_expression("AppDescribe", {})
-    assert "window.OPENSWARM_APP.describe()" in desc
+    assert "window.MAESTRO_APP.describe()" in desc
     assert "JSON.stringify" in desc  # round-trips as text
     state = BA.app_bridge_expression("AppGetState", {})
-    assert "window.OPENSWARM_APP.getState()" in state
+    assert "window.MAESTRO_APP.getState()" in state
 
 
 def test_app_bridge_expression_invoke_serializes_args():
     expr = BA.app_bridge_expression("AppInvoke", {"name": "addExpr", "args": {"latex": "y=x^2"}})
     # name + args are JSON-encoded into the call
-    assert 'window.OPENSWARM_APP.invoke("addExpr", {"latex": "y=x^2"})' in expr
+    assert 'window.MAESTRO_APP.invoke("addExpr", {"latex": "y=x^2"})' in expr
     # missing bridge is handled inside the expression, never throws
     assert "typeof A.describe!=='function'" in expr
 
 
 def test_app_bridge_expression_invoke_defaults_args_to_empty_object():
     expr = BA.app_bridge_expression("AppInvoke", {"name": "clear"})
-    assert 'window.OPENSWARM_APP.invoke("clear", {})' in expr
+    assert 'window.MAESTRO_APP.invoke("clear", {})' in expr
 
 
 # --- execute_browser_tool routing -------------------------------------------
@@ -52,7 +52,7 @@ def test_execute_browser_tool_app_bridge_routes_to_evaluate(monkeypatch):
     ))
     assert captured["action"] == "evaluate"
     assert captured["browser_id"] == "app:abc"
-    assert "window.OPENSWARM_APP.invoke" in captured["params"]["expression"]
+    assert "window.MAESTRO_APP.invoke" in captured["params"]["expression"]
     assert out["text"]  # result passes straight through
 
 

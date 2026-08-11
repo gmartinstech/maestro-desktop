@@ -8,12 +8,12 @@ if [[ -f "$ROOT_DIR/.env" ]]; then
     set +a
 fi
 
-# Per-instance port overrides: OpenSwarm passes these when the user opens a SECOND instance of the app, so it boots on fresh ports instead of colliding with the primary's .env-pinned ones.
-if [[ -n "${OPENSWARM_FORCE_FRONTEND_PORT:-}" ]]; then
-    export FRONTEND_PORT="$OPENSWARM_FORCE_FRONTEND_PORT"
+# Per-instance port overrides: Maestro passes these when the user opens a SECOND instance of the app, so it boots on fresh ports instead of colliding with the primary's .env-pinned ones.
+if [[ -n "${MAESTRO_FORCE_FRONTEND_PORT:-}" ]]; then
+    export FRONTEND_PORT="$MAESTRO_FORCE_FRONTEND_PORT"
 fi
-if [[ -n "${OPENSWARM_FORCE_BACKEND_PORT:-}" ]]; then
-    export BACKEND_PORT="$OPENSWARM_FORCE_BACKEND_PORT"
+if [[ -n "${MAESTRO_FORCE_BACKEND_PORT:-}" ]]; then
+    export BACKEND_PORT="$MAESTRO_FORCE_BACKEND_PORT"
 fi
 
 # Recursively SIGTERM a pid + all of its descendants. We track FRONTEND_PID
@@ -33,9 +33,9 @@ kill_tree() {
 }
 
 # Previously this was `kill 0`, which SIGTERMs the entire process group.
-# That's fast but propagates UP into OpenSwarm — when this workspace's
+# That's fast but propagates UP into Maestro — when this workspace's
 # cleanup fired on ViewEditor unmount or runtime/stop, it tore down the
-# OpenSwarm dev stack (Terminated: 15) and left port 8324 stuck. Now we
+# Maestro dev stack (Terminated: 15) and left port 8324 stuck. Now we
 # only kill our own tracked subtree, which keeps containment without
 # requiring an OS-level session wall.
 cleanup() {

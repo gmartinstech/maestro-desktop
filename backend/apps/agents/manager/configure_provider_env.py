@@ -1,5 +1,5 @@
 """Configure the SDK environment for the run's provider route: set ANTHROPIC/OPENAI/GOOGLE
-auth env vars (direct key, OpenSwarm Pro proxy, OpenRouter, or 9Router) and pin subagent models,
+auth env vars (direct key, Maestro Pro proxy, OpenRouter, or 9Router) and pin subagent models,
 ensuring 9Router is up where the route needs it. sub_conns is the active-connection list for
 subagent-model fallback (empty today)."""
 
@@ -75,7 +75,7 @@ async def configure_provider_env(
         logger.info(f"[MCP-DEBUG] Using direct Anthropic API key (route=api) for {session.model}")
     elif is_pinned_api_route and api_route_provider == "openai" and getattr(global_settings, "openai_api_key", None):
         # openai-passthrough renames max_tokens->max_completion_tokens before relaying (GPT-5 400s on max_tokens; 9Router 0.3.60, pinned for WebSearch, emits the legacy field).
-        passthrough_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/openai-passthrough/v1"
+        passthrough_url = f"http://127.0.0.1:{os.environ.get('MAESTRO_PORT', '8324')}/api/openai-passthrough/v1"
         options_kwargs["env"] = {
             "OPENAI_API_KEY": global_settings.openai_api_key,
             "OPENAI_BASE_URL": passthrough_url,
@@ -121,7 +121,7 @@ async def configure_provider_env(
         logger.info(f"[MCP-DEBUG] Using custom provider for {session.model} → {resolved_model}")
     elif is_pinned_api_route and api_route_provider == "gemini" and getattr(global_settings, "google_api_key", None):
         # Local anthropic-proxy scrubs JSON-Schema fields Gemini rejects ($schema, additionalProperties, propertyNames, exclusiveMinimum, nested const) that 9Router 0.3.60 misses.
-        proxy_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
+        proxy_url = f"http://127.0.0.1:{os.environ.get('MAESTRO_PORT', '8324')}/api/anthropic-proxy"
         options_kwargs["env"] = {
             "GEMINI_API_KEY": global_settings.google_api_key,
             "GOOGLE_API_KEY": global_settings.google_api_key,
@@ -167,7 +167,7 @@ async def configure_provider_env(
             and resolved_model.startswith(("gemini/", "gc/", "ag/"))
         )
         if is_gemini_bound:
-            base_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
+            base_url = f"http://127.0.0.1:{os.environ.get('MAESTRO_PORT', '8324')}/api/anthropic-proxy"
             env = {
                 "ANTHROPIC_API_KEY": get_auth_token() or "9router",
                 "ANTHROPIC_BASE_URL": base_url,

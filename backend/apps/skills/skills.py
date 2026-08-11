@@ -71,7 +71,7 @@ def save_index(index: dict[str, dict]):
             raise
 
 
-# Built-in skills shipped with OpenSwarm itself. Each entry describes a skill file we copy into ~/.claude/skills/ on first boot and tag with `built_in: true` in the index. Users can edit the content (their changes flow through to the matching agent's prompt on the next turn), but they can't delete the file; the DELETE endpoint refuses with 409.
+# Built-in skills shipped with Maestro itself. Each entry describes a skill file we copy into ~/.claude/skills/ on first boot and tag with `built_in: true` in the index. Users can edit the content (their changes flow through to the matching agent's prompt on the next turn), but they can't delete the file; the DELETE endpoint refuses with 409.
 def p_built_in_skill_registry() -> list[dict]:
     # Imported lazily so this module stays cheap to import from everywhere (the skills outputs module pulls in pydantic+fastapi transitively and we don't want a cycle).
     from backend.apps.outputs.view_builder_templates import (

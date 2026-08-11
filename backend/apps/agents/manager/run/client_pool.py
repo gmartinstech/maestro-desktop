@@ -1,5 +1,5 @@
 """Per-session persistent SDK client pool (lever A of the TTFT work, default ON, kill switch
-OPENSWARM_PERSISTENT_CLIENT=0). One live Claude CLI per session, reused across follow-up turns so
+MAESTRO_PERSISTENT_CLIENT=0). One live Claude CLI per session, reused across follow-up turns so
 the ~0.5s subprocess + MCP boot is paid once, not per message.
 
 Safety model, from the red-teamed plan: reuse is gated on a BOOT FINGERPRINT (a hash of every
@@ -28,8 +28,8 @@ P_NON_BOOT_KEYS = frozenset({"can_use_tool", "stderr", "hooks", "resume", "fork_
 
 
 def persistent_client_enabled() -> bool:
-    """Default ON (soak-proven: warm turns 535ms -> 6ms). Kill switch: OPENSWARM_PERSISTENT_CLIENT=0."""
-    return os.environ.get("OPENSWARM_PERSISTENT_CLIENT", "1") != "0"
+    """Default ON (soak-proven: warm turns 535ms -> 6ms). Kill switch: MAESTRO_PERSISTENT_CLIENT=0."""
+    return os.environ.get("MAESTRO_PERSISTENT_CLIENT", "1") != "0"
 
 
 # Per-session field-level digests from the last fingerprint call; lets a mismatch log WHICH boot field drifted (probe-gated diagnostics only).
@@ -45,8 +45,8 @@ def boot_fingerprint(options_kwargs: Dict, session: AgentSession) -> str:
     frozen = {k: v for k, v in options_kwargs.items() if k not in P_NON_BOOT_KEYS}
     frozen["p_branch"] = session.active_branch_id
     frozen["p_compacted_through"] = session.compacted_through_msg_id
-    # Pool diagnostics (OPENSWARM_POOL_DIAG=1): on a respawn, names WHICH boot field drifted; the tool for debugging respawn churn (e.g. the thinking short/long-prompt flip) in the field.
-    if os.environ.get("OPENSWARM_POOL_DIAG") == "1":
+    # Pool diagnostics (MAESTRO_POOL_DIAG=1): on a respawn, names WHICH boot field drifted; the tool for debugging respawn churn (e.g. the thinking short/long-prompt flip) in the field.
+    if os.environ.get("MAESTRO_POOL_DIAG") == "1":
         digests = {k: hashlib.sha256(json.dumps(v, sort_keys=True, default=str).encode()).hexdigest()[:10] for k, v in frozen.items()}
         prev = p_last_field_digests.get(session.id)
         if prev is not None:

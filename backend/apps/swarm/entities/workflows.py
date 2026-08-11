@@ -96,7 +96,7 @@ class WorkflowExportable:
         model = p_model()
         if store is None or model is None:
             from backend.apps.swarm.ziputil import BundleError
-            raise BundleError("this build doesn't support workflows yet; please update OpenSwarm")
+            raise BundleError("this build doesn't support workflows yet; please update Maestro")
         clean = sanitize_workflow(payload)
         clean.pop("id", None)  # fresh id via the model's default_factory
         wf = model(**clean)

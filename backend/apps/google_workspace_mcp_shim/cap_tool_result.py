@@ -14,8 +14,9 @@ from typing import Any
 
 MAX_RESULT_CHARS = 48_000
 REPORT_DIR = os.environ.get(
-    "OPENSWARM_TOOL_REPORT_DIR",
-    os.path.join(os.path.expanduser("~"), ".openswarm", "tool-reports"),
+    "MAESTRO_TOOL_REPORT_DIR",
+    # Deliberately not via config.state_paths: this file runs as a standalone subprocess with no `backend` on sys.path. Spill reports are write-then-read-within-the-turn, so there is no legacy state to migrate.
+    os.path.join(os.path.expanduser("~"), ".maestro", "tool-reports"),
 )
 P_TRUNCATION_NOTE = (
     "\n\n[Truncated: this tool returned more than {cap} characters, too much to fit "

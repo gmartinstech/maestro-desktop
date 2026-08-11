@@ -27,7 +27,7 @@ class Output(BaseModel):
     workspace_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-    # App publishing to {slug}.openswarm.host. Server-managed: set by the publish endpoint, never accepted from OutputUpdate (so a client can't spoof a live URL).
+    # App publishing to {slug}.maestro.host. Server-managed: set by the publish endpoint, never accepted from OutputUpdate (so a client can't spoof a live URL).
     published_slug: Optional[str] = None
     published_url: Optional[str] = None
     publish_status: Optional[Literal["publishing", "published", "error"]] = None
@@ -180,7 +180,7 @@ class WorkspaceSeedRequest(BaseModel):
     workspace_id: str
     files: Optional[dict[str, str]] = None
     meta: Optional[dict[str, Any]] = None
-    # "webapp_template" (default) → seed the vendored openswarm-ai/webapp-template snapshot (React + Vite + TS frontend with optional FastAPI backend), allocate a free FRONTEND_PORT, leave BACKEND_PORT=NONE. Runtime spawns `bash run.sh`; preview pane points at `http://localhost:{FRONTEND_PORT}/`. "flat" → legacy single-`index.html` workspace, kept for explicit opt-in (migration helper, regression tests). Workspaces predating this flip continue to work in old-mode automatically since the runtime detects mode via the presence of `run.sh`.
+    # "webapp_template" (default) → seed the vendored webapp-template snapshot (React + Vite + TS frontend with optional FastAPI backend), allocate a free FRONTEND_PORT, leave BACKEND_PORT=NONE. Runtime spawns `bash run.sh`; preview pane points at `http://localhost:{FRONTEND_PORT}/`. "flat" → legacy single-`index.html` workspace, kept for explicit opt-in (migration helper, regression tests). Workspaces predating this flip continue to work in old-mode automatically since the runtime detects mode via the presence of `run.sh`.
     template_mode: Literal["flat", "webapp_template"] = "webapp_template"
 
     @model_validator(mode="before")

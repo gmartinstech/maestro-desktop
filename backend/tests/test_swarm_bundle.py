@@ -82,7 +82,7 @@ def test_redaction_drops_denied_keys():
     payload = {
         "name": "ok",
         "anthropic_api_key": "sk-ant-secret",
-        "nested": {"openswarm_bearer_token": "abc", "keep": 1},
+        "nested": {"maestro_bearer_token": "abc", "keep": 1},
         "list": [{"oauth_tokens": {"x": 1}}, {"fine": 2}],
     }
     cleaned = scrub_payload(payload)
@@ -117,7 +117,7 @@ def test_app_export_drops_machine_env(tmp_path, monkeypatch):
 
     ws = tmp_path / "ws"
     (ws / "frontend").mkdir(parents=True)
-    (ws / ".env").write_text("FRONTEND_PORT=5\nOPENSWARM_TEMPLATE_BACKEND_PATH=/Users/SECRET/x\n")
+    (ws / ".env").write_text("FRONTEND_PORT=5\nMAESTRO_TEMPLATE_BACKEND_PATH=/Users/SECRET/x\n")
     (ws / ".env.example").write_text("BACKEND_PORT=NONE\nFRONTEND_PORT=4949\n")
     (ws / "frontend" / "App.tsx").write_text("export default () => null")
     monkeypatch.setattr(appmod, "OUTPUTS_WORKSPACE_DIR", str(tmp_path))
@@ -597,7 +597,7 @@ def test_too_many_entries_rejected():
 
 
 def test_newer_format_version_rejected(skill_store):
-    # A bundle from a future OpenSwarm should fail clearly, not half-import.
+    # A bundle from a future Maestro should fail clearly, not half-import.
     buf = io.BytesIO()
     manifest = {
         "format_version": 999,

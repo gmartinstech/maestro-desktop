@@ -151,10 +151,10 @@ def extract_target_path(tool_name: str, tool_input: object) -> str:
 
 # Native-scheduler MCP tools that commit or mutate a recurring schedule. Always-on MCP servers fall through to the always_allow default, so these would otherwise fire silently; force them through ApprovalBar. The Cron* tools are Claude's own internal scheduler, denied outright in favour of the visible/auditable native one.
 p_SCHEDULE_GATED = {
-    "mcp__openswarm-schedule__ScheduleWorkflow",
-    "mcp__openswarm-schedule__UpdateScheduledWorkflow",
-    "mcp__openswarm-schedule__DeleteScheduledWorkflow",
-    "mcp__openswarm-schedule__PauseAllWorkflows",
+    "mcp__maestro-schedule__ScheduleWorkflow",
+    "mcp__maestro-schedule__UpdateScheduledWorkflow",
+    "mcp__maestro-schedule__DeleteScheduledWorkflow",
+    "mcp__maestro-schedule__PauseAllWorkflows",
 }
 CLAUDE_INTERNAL_SCHEDULER_TOOLS = ("CronCreate", "CronList", "CronDelete")
 

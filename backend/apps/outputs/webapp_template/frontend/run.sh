@@ -20,13 +20,13 @@ cd "$FRONTEND_DIR_ABSPATH"
 
 # Put the bundled Node on PATH so `npm`, `node`, and the vite child
 # processes all resolve even on a machine with no system Node. The
-# packaged Electron shell exports OPENSWARM_NODE_PATH (e.g.
+# packaged Electron shell exports MAESTRO_NODE_PATH (e.g.
 # .../node/x64/node.exe on Windows, .../node/<arch>/bin/node on POSIX);
 # its directory holds node + the npm/npx shims. Dev leaves it unset and
 # falls back to system Node on PATH.
 NPM="npm"
-if [[ -n "${OPENSWARM_NODE_PATH:-}" && -x "${OPENSWARM_NODE_PATH}" ]]; then
-    NODE_DIR="$(dirname "$OPENSWARM_NODE_PATH")"
+if [[ -n "${MAESTRO_NODE_PATH:-}" && -x "${MAESTRO_NODE_PATH}" ]]; then
+    NODE_DIR="$(dirname "$MAESTRO_NODE_PATH")"
     export PATH="$NODE_DIR:$PATH"
     # Windows bundles npm.cmd next to node.exe; POSIX bundles an `npm` shim
     # in the same bin/ dir. Prefer the colocated one, else trust PATH.
@@ -38,7 +38,7 @@ if [[ -n "${OPENSWARM_NODE_PATH:-}" && -x "${OPENSWARM_NODE_PATH}" ]]; then
 fi
 
 # Fast path: the seeder usually symlinks node_modules to a shared warm
-# cache (~/.openswarm/cache/webapp_template_node_modules/<hash>), so the
+# cache (~/.maestro/cache/webapp_template_node_modules/<hash>), so the
 # dependency install has already been done once and we can skip straight
 # to vite. A non-empty node_modules is NOT proof of a finished install
 # (npm links .bin/* last, so a killed install leaves trees but no bin and
@@ -64,9 +64,9 @@ echo "Building with development mode..."
 # so vite's bin is present and this needs no package manager at all.
 if command -v "$NPM" &>/dev/null || [[ "$NPM" != "npm" ]]; then
     "$NPM" run dev
-elif [[ -n "${OPENSWARM_NODE_PATH:-}" && -x "${OPENSWARM_NODE_PATH}" && -f node_modules/vite/bin/vite.js ]]; then
+elif [[ -n "${MAESTRO_NODE_PATH:-}" && -x "${MAESTRO_NODE_PATH}" && -f node_modules/vite/bin/vite.js ]]; then
     echo "npm not found; running vite directly via bundled node."
-    "$OPENSWARM_NODE_PATH" node_modules/vite/bin/vite.js
+    "$MAESTRO_NODE_PATH" node_modules/vite/bin/vite.js
 else
     "$NPM" run dev
 fi

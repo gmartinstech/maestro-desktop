@@ -20,7 +20,7 @@ from backend.apps.nine_router.sync import (
 logger = logging.getLogger(__name__)
 
 # We mirror settings.custom_providers[] with prefix `cp-<slug>` so they don't collide with the user's primary OpenAI key.
-NINE_ROUTER_CUSTOM_NAME_SUFFIX = " (OpenSwarm-managed)"
+NINE_ROUTER_CUSTOM_NAME_SUFFIX = " (Maestro-managed)"
 
 
 async def sync_openai_compat_node(api_key: str | None) -> None:
@@ -29,7 +29,7 @@ async def sync_openai_compat_node(api_key: str | None) -> None:
     if not nr().is_running():
         return
     import os as p_os
-    port = p_os.environ.get("OPENSWARM_PORT", "8324")
+    port = p_os.environ.get("MAESTRO_PORT", "8324")
     base_url = f"http://127.0.0.1:{port}/api/openai-passthrough/v1"
     managed_name = f"OpenAI{NINE_ROUTER_CUSTOM_NAME_SUFFIX}"
 

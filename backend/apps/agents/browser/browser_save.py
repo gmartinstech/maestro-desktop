@@ -10,14 +10,15 @@ workspace subdir. Returns a short receipt for the model, never the data itself.
 import json
 import os
 
+from backend.config.state_paths import home_state_dir
+
 MAX_BYTES = 25 * 1024 * 1024  # a page can't realistically hold more scraped data
 ALLOWED_EXT = {".json", ".ndjson", ".csv", ".tsv", ".txt", ".md"}
 SUBDIR = "browser-data"  # never the workspace root, so we can't clobber project files
 
 
 def p_dest_dir(cwd: str | None, session_id: str) -> str:
-    base = cwd if (cwd and os.path.isdir(cwd)) else os.path.join(
-        os.path.expanduser("~"), ".openswarm", "workspaces", session_id or "browser")
+    base = cwd if (cwd and os.path.isdir(cwd)) else home_state_dir("workspaces", session_id or "browser")
     dest = os.path.join(base, SUBDIR)
     os.makedirs(dest, exist_ok=True)
     return dest

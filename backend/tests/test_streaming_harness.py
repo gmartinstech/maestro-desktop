@@ -217,11 +217,11 @@ def test_loop_with_session_cwd_runs_workspace_git_init(monkeypatch):
 
     mgr = AgentManager()
     from backend.apps.agents.core.models import AgentSession
-    session = AgentSession(name="t", model="sonnet", dashboard_id="d", cwd="/tmp/openswarm-test-ws")
+    session = AgentSession(name="t", model="sonnet", dashboard_id="d", cwd="/tmp/maestro-test-ws")
     mgr.sessions[session.id] = session
     asyncio.run(mgr.run_agent_loop(session.id, "hi"))
 
-    assert called.get("cwd") == "/tmp/openswarm-test-ws"  # the git-init path ran (no NameError)
+    assert called.get("cwd") == "/tmp/maestro-test-ws"  # the git-init path ran (no NameError)
     assert session.status == "completed"
 
 

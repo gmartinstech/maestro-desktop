@@ -35,14 +35,30 @@ def test_migrate_retired_modes_to_own_key():
 
 
 def test_migrate_auth_token_renamed_and_popped():
+    # Two generations of renames chain in one pass: openswarm_auth_token -> openswarm_bearer_token -> maestro_bearer_token.
     out = store.migrate_legacy_fields({"openswarm_auth_token": "tok"})
-    assert out["openswarm_bearer_token"] == "tok"
+    assert out["maestro_bearer_token"] == "tok"
     assert "openswarm_auth_token" not in out
+    assert "openswarm_bearer_token" not in out
+
+
+def test_migrate_one_generation_bearer_rename():
+    out = store.migrate_legacy_fields({"openswarm_bearer_token": "tok", "openswarm_proxy_url": "https://p.example/v1"})
+    assert out["maestro_bearer_token"] == "tok"
+    assert out["maestro_proxy_url"] == "https://p.example/v1"
+    assert "openswarm_bearer_token" not in out
+    assert "openswarm_proxy_url" not in out
 
 
 def test_migrate_does_not_clobber_existing_bearer():
     out = store.migrate_legacy_fields({"openswarm_auth_token": "old", "openswarm_bearer_token": "new"})
-    assert out["openswarm_bearer_token"] == "new"
+    assert out["maestro_bearer_token"] == "new"
+
+
+def test_migrate_prefers_already_renamed_value():
+    out = store.migrate_legacy_fields({"openswarm_bearer_token": "old", "maestro_bearer_token": "new"})
+    assert out["maestro_bearer_token"] == "new"
+    assert "openswarm_bearer_token" not in out
 
 
 def test_migrate_leaves_modern_values_untouched():
@@ -72,7 +88,30 @@ def test_legacy_fields_migrated_end_to_end(settings_file):
     p_write(settings_file, {"connection_mode": "managed", "openswarm_auth_token": "tok"})
     s = store.load_settings()
     assert s.connection_mode == "own_key"
-    assert s.openswarm_bearer_token == "tok"
+    assert s.maestro_bearer_token == "tok"
+
+
+def test_prerebrand_settings_file_roundtrips(settings_file):
+    # A settings.json written by the last openswarm-named build must load with every value intact under the new names.
+    p_write(settings_file, {
+        "theme": "light",
+        "installation_id": "abc-123",
+        "connection_mode": "openswarm-pro",
+        "openswarm_bearer_token": "bearer-abc",
+        "openswarm_proxy_url": "https://api.openswarm.com",
+        "openswarm_subscription_plan": "pro",
+    })
+    s = store.load_settings()
+    assert s.connection_mode == "own_key"
+    assert s.maestro_bearer_token == "bearer-abc"
+    assert s.maestro_proxy_url == "https://api.openswarm.com"
+    assert s.installation_id == "abc-123"
+    store.save_settings(s)
+    with open(settings_file, encoding="utf-8") as fh:
+        written = json.load(fh)
+    assert written["maestro_bearer_token"] == "bearer-abc"
+    assert "openswarm_bearer_token" not in written
+    assert "openswarm_proxy_url" not in written
 
 
 def test_install_id_and_first_opened_continuity(settings_file):

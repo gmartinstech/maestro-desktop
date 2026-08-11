@@ -8,12 +8,12 @@ from typing import Optional
 import httpx
 
 from backend.apps.outputs.publish_common import PublishError
-from backend.apps.settings.credentials import OPENSWARM_DEFAULT_PROXY_URL
+from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
 
 
 def p_cloud_auth(settings) -> tuple[Optional[str], str]:
-    base = (getattr(settings, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL).rstrip("/")
-    token = getattr(settings, "openswarm_bearer_token", None)
+    base = (getattr(settings, "maestro_proxy_url", None) or MAESTRO_DEFAULT_PROXY_URL).rstrip("/")
+    token = getattr(settings, "maestro_bearer_token", None)
     return token, base
 
 
@@ -33,7 +33,7 @@ async def upload_to_cloud(
 ) -> dict:
     token, base = p_cloud_auth(settings)
     if not token:
-        raise PublishError("Sign in to your OpenSwarm account to publish apps.")
+        raise PublishError("Sign in to your Maestro account to publish apps.")
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             r = await client.post(
@@ -53,7 +53,7 @@ async def upload_to_cloud(
 async def unpublish_from_cloud(settings, slug: str) -> None:
     token, base = p_cloud_auth(settings)
     if not token:
-        raise PublishError("Sign in to your OpenSwarm account to manage published apps.")
+        raise PublishError("Sign in to your Maestro account to manage published apps.")
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(

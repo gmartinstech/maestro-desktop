@@ -38,7 +38,7 @@ async def run_browser_fast_path(
     logger.info(f"[browser-fast-path] direct dispatch for session {session_id} ({verdict})")
     text = ""
     # The fast-path skips the orchestrator, so the UI never gets the BrowserAgent tool-call that draws the "Browser Agent" bubble. Emit a synthetic tool_call/ tool_result pair (same shape + mcp__ name the orchestrator uses) so the bubble shows here too. None until we actually dispatch a browser (a pure READ answer has no browser, so no bubble).
-    p_browser_tool = "mcp__openswarm-browser-agent__CreateBrowserAgent"
+    p_browser_tool = "mcp__maestro-browser-agent__CreateBrowserAgent"
     p_bubble_tid: Optional[str] = None
     try:
         from backend.apps.agents.browser.browser_agent import run_browser_agents

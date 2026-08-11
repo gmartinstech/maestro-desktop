@@ -39,7 +39,7 @@ def main():
             p_send(id_, {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "openswarm-reddit", "version": "1.0.0"},
+                "serverInfo": {"name": "maestro-reddit", "version": "1.0.0"},
             })
         elif method == "notifications/initialized":
             pass

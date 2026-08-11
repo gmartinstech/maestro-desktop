@@ -42,8 +42,8 @@ from fastapi.testclient import TestClient
 
 # --------------------------------------------------------------------------- Boot env: route data to a tempdir BEFORE importing backend modules so the persistence dir for terminal events lives under our control. ---------------------------------------------------------------------------
 
-P_TMPROOT = tempfile.mkdtemp(prefix="openswarm-disconnect-test-")
-os.environ.setdefault("OPENSWARM_DATA_DIR", P_TMPROOT)
+P_TMPROOT = tempfile.mkdtemp(prefix="maestro-disconnect-test-")
+os.environ.setdefault("MAESTRO_DATA_DIR", P_TMPROOT)
 
 # Push the seq_log persist dir to a deterministic location too.
 P_SEQ_DIR = os.path.join(P_TMPROOT, "seq_terminals")

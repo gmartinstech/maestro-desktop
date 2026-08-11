@@ -67,7 +67,7 @@ async def generate_title(session: Optional[AgentSession], session_id: str, first
             system=system_prompt,
             messages=[{"role": "user", "content": user_turn}],
             # On the free lane this binds the title-gen to its query's run so it doesn't spend a second one; harmless elsewhere (the paid lane ignores the header).
-            extra_headers={"X-Openswarm-Task-Id": session_id},
+            extra_headers={"X-Maestro-Task-Id": session_id},
         ) as stream:
             async for text in stream.text_stream:
                 chunks.append(text)
@@ -152,7 +152,7 @@ async def generate_turn_label(
                     f"<request>\n{user_prompt[:2000]}\n</request>"
                 ),
             }],
-            extra_headers={"X-Openswarm-Task-Id": session_id},
+            extra_headers={"X-Maestro-Task-Id": session_id},
         ) as stream:
             async for text in stream.text_stream:
                 chunks.append(text)
@@ -237,7 +237,7 @@ async def generate_group_meta(
             max_tokens=aux_max_tokens_for(aux_model, base=300),
             system=system,
             messages=[{"role": "user", "content": user_content}],
-            extra_headers={"X-Openswarm-Task-Id": session_id},
+            extra_headers={"X-Maestro-Task-Id": session_id},
         ) as stream:
             async for text in stream.text_stream:
                 chunks.append(text)

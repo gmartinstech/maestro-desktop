@@ -122,7 +122,7 @@ class RunOptions(AgentManagerProtocol):
         )
 
 
-        # Register the DDG-backed openswarm-web MCP only when the primary has no reliable native Anthropic web path (decided in tools/web.py); p_m feeds the registration log + provider branch just below, so it stays a loop local.
+        # Register the DDG-backed maestro-web MCP only when the primary has no reliable native Anthropic web path (decided in tools/web.py); p_m feeds the registration log + provider branch just below, so it stays a loop local.
         p_m = p_router_model_id if isinstance(p_router_model_id, str) else ""
         need_web_mcp = should_register_web_mcp(
             model=session.model,
@@ -155,7 +155,7 @@ class RunOptions(AgentManagerProtocol):
         api_type = p_api_type_for_session
         session.provider = api_type
 
-        # Capture the Claude CLI's stderr into a buffer so the retry classifier can see the real cause of a process crash (e.g. "No pool capacity available" from the OpenSwarm proxy, or the Anthropic SDK's 429/overloaded error body). Without this the SDK's ProcessError only stringifies to "Command failed with exit code 1 / Check stderr output for details", which masks transient capacity issues.
+        # Capture the Claude CLI's stderr into a buffer so the retry classifier can see the real cause of a process crash (e.g. "No pool capacity available" from the Maestro proxy, or the Anthropic SDK's 429/overloaded error body). Without this the SDK's ProcessError only stringifies to "Command failed with exit code 1 / Check stderr output for details", which masks transient capacity issues.
         # Per-SESSION buffer cleared in place each turn: a persistent client's stderr callback was bound at connect and must keep pointing at this exact list.
         p_stderr_buffer = self.stderr_buffers.setdefault(session_id, [])
         p_stderr_buffer.clear()
@@ -219,13 +219,13 @@ class RunOptions(AgentManagerProtocol):
         # claude.ai partner MCPs (Notion/Google/Gmail). We already hard-block their tools just below,
         # but the CLI still spawned+connected them every turn (~1.5s of pure dead-weight TTFT, measured).
         # Our builtins + any MCPActivate'd server go through mcp_servers, so they're unaffected; this
-        # only stops the already-blocked account MCPs from booting. Kill switch: OPENSWARM_STRICT_MCP=0.
-        if os.environ.get("OPENSWARM_STRICT_MCP", "1") != "0":
+        # only stops the already-blocked account MCPs from booting. Kill switch: MAESTRO_STRICT_MCP=0.
+        if os.environ.get("MAESTRO_STRICT_MCP", "1") != "0":
             p_ea = dict(options_kwargs.get("extra_args") or {})
             p_ea["strict-mcp-config"] = None
             options_kwargs["extra_args"] = p_ea
 
-        # The claude_code preset auto-attaches the user's claude.ai- connected partner MCPs (`mcp__claude_ai_*`). Those bypass our MCPActivate gate, don't share OAuth state with the OpenSwarm Gmail/Calendar/Drive connectors the user actually configured here, and confuse the model into picking the partner shim instead of our vetted server. Hard-block them at the SDK layer so the model can't even attempt the call.
+        # The claude_code preset auto-attaches the user's claude.ai- connected partner MCPs (`mcp__claude_ai_*`). Those bypass our MCPActivate gate, don't share OAuth state with the Maestro Gmail/Calendar/Drive connectors the user actually configured here, and confuse the model into picking the partner shim instead of our vetted server. Hard-block them at the SDK layer so the model can't even attempt the call.
         options_kwargs["disallowed_tools"] = [
             "mcp__claude_ai_*",
         ]

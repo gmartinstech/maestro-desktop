@@ -30,7 +30,7 @@ P_OPENED_FIRED = False
 
 @typechecked
 def p_base_url() -> str:
-    return os.environ.get("OPENSWARM_ANALYTICS_URL", P_DEFAULT_ANALYTICS_URL).rstrip("/")
+    return os.environ.get("MAESTRO_ANALYTICS_URL", P_DEFAULT_ANALYTICS_URL).rstrip("/")
 
 
 @typechecked

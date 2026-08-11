@@ -61,7 +61,7 @@ const _http = require('http');
         try {
           const url = req.url || '';
           if (url.startsWith('/callback?')) {
-            const backendPort = process.env.OPENSWARM_PORT || '8324';
+            const backendPort = process.env.MAESTRO_PORT || '8324';
             const path = '/api/subscriptions/callback' + url.slice('/callback'.length);
             let done = false;
             const finish = () => {
@@ -88,11 +88,11 @@ const _http = require('http');
 })();
 
 const TARGET_HOSTS = new Set(['api.openai.com']);
-const DEBUG = process.env.OPENSWARM_DEBUG_GPT5_PATCH === '1';
+const DEBUG = process.env.MAESTRO_DEBUG_GPT5_PATCH === '1';
 
 function _log(msg) {
   if (DEBUG) {
-    try { process.stderr.write('[openswarm-gpt5-patch] ' + msg + '\n'); } catch (_) {}
+    try { process.stderr.write('[maestro-gpt5-patch] ' + msg + '\n'); } catch (_) {}
   }
 }
 
@@ -233,12 +233,12 @@ function patchHttpRequest(orig) {
   };
 }
 
-if (!_https.__openswarm_gpt5_patched) {
+if (!_https.__maestro_gpt5_patched) {
   try {
     _https.request = patchHttpRequest(_https.request);
     _http.request = patchHttpRequest(_http.request);
-    _https.__openswarm_gpt5_patched = true;
-    _http.__openswarm_gpt5_patched = true;
+    _https.__maestro_gpt5_patched = true;
+    _http.__maestro_gpt5_patched = true;
     _log('installed https.request + http.request interceptors');
   } catch (e) {
     _log('install failed: ' + (e && e.message ? e.message : String(e)));
@@ -246,7 +246,7 @@ if (!_https.__openswarm_gpt5_patched) {
 }
 
 // Node 18+ fetch path; 9router uses fetch in some routes.
-if (typeof globalThis.fetch === 'function' && !globalThis.fetch.__openswarm_gpt5_patched) {
+if (typeof globalThis.fetch === 'function' && !globalThis.fetch.__maestro_gpt5_patched) {
   try {
     const origFetch = globalThis.fetch;
     const patchedFetch = async function (input, init) {
@@ -282,7 +282,7 @@ if (typeof globalThis.fetch === 'function' && !globalThis.fetch.__openswarm_gpt5
         return origFetch.call(this, input, init);
       }
     };
-    patchedFetch.__openswarm_gpt5_patched = true;
+    patchedFetch.__maestro_gpt5_patched = true;
     globalThis.fetch = patchedFetch;
     _log('installed fetch interceptor');
   } catch (e) {

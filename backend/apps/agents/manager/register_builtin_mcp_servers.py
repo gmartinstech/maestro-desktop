@@ -34,23 +34,23 @@ def register_builtin_mcp_servers(
         browser_agent_server_path = os.path.join(
             agents_dir, "browser_agent_mcp_server.py"
         )
-        backend_port = os.environ.get("OPENSWARM_PORT", "8324")
+        backend_port = os.environ.get("MAESTRO_PORT", "8324")
         # Only the card the user actually picked in select-mode gets claimed for the task, so the sub drives that one instead of opening its own duplicate. Passing EVERY dashboard card here (the old behavior) made the sub force-grab a random, usually-parked card and never navigate it, which broke the bulk of browser tasks.
         pre_selected_bids = [b for b in (selected_browser_ids or []) if b]
         # Apps the user selected this turn; the AppAgent tool may only target these (anti-hallucination gate in the MCP server, which reads this at startup).
         selected_app_ids = [a for a in (selected_app_output_ids or []) if a]
         auth_tok = get_auth_token()
-        mcp_servers["openswarm-browser-agent"] = {
+        mcp_servers["maestro-browser-agent"] = {
             "command": sys.executable,
             "args": [browser_agent_server_path],
             "env": {
-                "OPENSWARM_PORT": backend_port,
-                "OPENSWARM_AUTH_TOKEN": auth_tok,
-                "OPENSWARM_AGENT_MODEL": session.model,
-                "OPENSWARM_DASHBOARD_ID": session.dashboard_id or "",
-                "OPENSWARM_PRE_SELECTED_BROWSER_IDS": ",".join(pre_selected_bids),
-                "OPENSWARM_SELECTED_APP_IDS": ",".join(selected_app_ids),
-                "OPENSWARM_PARENT_SESSION_ID": session.id,
+                "MAESTRO_PORT": backend_port,
+                "MAESTRO_AUTH_TOKEN": auth_tok,
+                "MAESTRO_AGENT_MODEL": session.model,
+                "MAESTRO_DASHBOARD_ID": session.dashboard_id or "",
+                "MAESTRO_PRE_SELECTED_BROWSER_IDS": ",".join(pre_selected_bids),
+                "MAESTRO_SELECTED_APP_IDS": ",".join(selected_app_ids),
+                "MAESTRO_PARENT_SESSION_ID": session.id,
             },
             "type": "stdio",
         }
@@ -65,15 +65,15 @@ def register_builtin_mcp_servers(
         invoke_agent_server_path = os.path.join(
             agents_dir, "invoke_agent_mcp_server.py"
         )
-        backend_port = os.environ.get("OPENSWARM_PORT", "8324")
-        mcp_servers["openswarm-invoke-agent"] = {
+        backend_port = os.environ.get("MAESTRO_PORT", "8324")
+        mcp_servers["maestro-invoke-agent"] = {
             "command": sys.executable,
             "args": [invoke_agent_server_path],
             "env": {
-                "OPENSWARM_PORT": backend_port,
-                "OPENSWARM_AUTH_TOKEN": get_auth_token(),
-                "OPENSWARM_PARENT_SESSION_ID": session.id,
-                "OPENSWARM_DASHBOARD_ID": session.dashboard_id or "",
+                "MAESTRO_PORT": backend_port,
+                "MAESTRO_AUTH_TOKEN": get_auth_token(),
+                "MAESTRO_PARENT_SESSION_ID": session.id,
+                "MAESTRO_DASHBOARD_ID": session.dashboard_id or "",
             },
             "type": "stdio",
         }
@@ -82,13 +82,13 @@ def register_builtin_mcp_servers(
     mcp_meta_server_path = os.path.join(
         agents_dir, "mcp_meta_server.py"
     )
-    mcp_servers["openswarm-mcp-meta"] = {
+    mcp_servers["maestro-mcp-meta"] = {
         "command": sys.executable,
         "args": [mcp_meta_server_path],
         "env": {
-            "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-            "OPENSWARM_AUTH_TOKEN": get_auth_token(),
-            "OPENSWARM_PARENT_SESSION_ID": session.id,
+            "MAESTRO_PORT": os.environ.get("MAESTRO_PORT", "8324"),
+            "MAESTRO_AUTH_TOKEN": get_auth_token(),
+            "MAESTRO_PARENT_SESSION_ID": session.id,
         },
         "type": "stdio",
     }
@@ -103,41 +103,41 @@ def register_builtin_mcp_servers(
             has_loadable_skill = False
         if has_loadable_skill:
             skill_server_path = os.path.join(agents_dir, "skill_mcp_server.py")
-            mcp_servers["openswarm-skill"] = {
+            mcp_servers["maestro-skill"] = {
                 "command": sys.executable,
                 "args": [skill_server_path],
                 "env": {
-                    "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-                    "OPENSWARM_AUTH_TOKEN": get_auth_token(),
-                    "OPENSWARM_PARENT_SESSION_ID": session.id,
+                    "MAESTRO_PORT": os.environ.get("MAESTRO_PORT", "8324"),
+                    "MAESTRO_AUTH_TOKEN": get_auth_token(),
+                    "MAESTRO_PARENT_SESSION_ID": session.id,
                 },
                 "type": "stdio",
             }
 
-    # Always-on settings-meta server: SettingsRead / SettingsWrite let the agent read and edit its own OpenSwarm Settings autonomously. The backend (/api/settings-meta) enforces the only two guardrails: it can't disconnect the credential powering this run, and reads come back with secrets redacted. No activation gate, Settings is the agent's own house, not a third-party MCP.
+    # Always-on settings-meta server: SettingsRead / SettingsWrite let the agent read and edit its own Maestro Settings autonomously. The backend (/api/settings-meta) enforces the only two guardrails: it can't disconnect the credential powering this run, and reads come back with secrets redacted. No activation gate, Settings is the agent's own house, not a third-party MCP.
     settings_meta_server_path = os.path.join(
         agents_dir, "settings_meta_server.py"
     )
-    mcp_servers["openswarm-settings-meta"] = {
+    mcp_servers["maestro-settings-meta"] = {
         "command": sys.executable,
         "args": [settings_meta_server_path],
         "env": {
-            "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-            "OPENSWARM_AUTH_TOKEN": get_auth_token(),
-            "OPENSWARM_PARENT_SESSION_ID": session.id,
+            "MAESTRO_PORT": os.environ.get("MAESTRO_PORT", "8324"),
+            "MAESTRO_AUTH_TOKEN": get_auth_token(),
+            "MAESTRO_PARENT_SESSION_ID": session.id,
         },
         "type": "stdio",
     }
 
     # Always-on apps server: CreateApp lets ANY agent spin up a live App card on the canvas. This replaced the standalone App Builder page; the tool result carries the App Builder reference so no mode switch is needed.
     apps_server_path = os.path.join(agents_dir, "apps_mcp_server.py")
-    mcp_servers["openswarm-apps"] = {
+    mcp_servers["maestro-apps"] = {
         "command": sys.executable,
         "args": [apps_server_path],
         "env": {
-            "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-            "OPENSWARM_AUTH_TOKEN": get_auth_token(),
-            "OPENSWARM_PARENT_SESSION_ID": session.id,
+            "MAESTRO_PORT": os.environ.get("MAESTRO_PORT", "8324"),
+            "MAESTRO_AUTH_TOKEN": get_auth_token(),
+            "MAESTRO_PARENT_SESSION_ID": session.id,
         },
         "type": "stdio",
     }
@@ -146,14 +146,14 @@ def register_builtin_mcp_servers(
     schedule_server_path = os.path.join(
         agents_dir, "schedule_mcp_server.py"
     )
-    mcp_servers["openswarm-schedule"] = {
+    mcp_servers["maestro-schedule"] = {
         "command": sys.executable,
         "args": [schedule_server_path],
         "env": {
-            "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-            "OPENSWARM_AUTH_TOKEN": get_auth_token(),
-            "OPENSWARM_PARENT_SESSION_ID": session.id,
-            "OPENSWARM_DASHBOARD_ID": session.dashboard_id or "",
+            "MAESTRO_PORT": os.environ.get("MAESTRO_PORT", "8324"),
+            "MAESTRO_AUTH_TOKEN": get_auth_token(),
+            "MAESTRO_PARENT_SESSION_ID": session.id,
+            "MAESTRO_DASHBOARD_ID": session.dashboard_id or "",
         },
         "type": "stdio",
     }

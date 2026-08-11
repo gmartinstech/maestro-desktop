@@ -67,10 +67,10 @@ def test_ambiguous_match_picks_deterministically():
 
 def test_github_headers_adds_token_when_set(monkeypatch):
     from backend.apps.skill_registry.skill_registry_github import github_headers
-    monkeypatch.delenv("OPENSWARM_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("MAESTRO_GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     assert "Authorization" not in github_headers()
-    monkeypatch.setenv("OPENSWARM_GITHUB_TOKEN", "ghp_test")
+    monkeypatch.setenv("MAESTRO_GITHUB_TOKEN", "ghp_test")
     assert github_headers()["Authorization"] == "Bearer ghp_test"
 
 

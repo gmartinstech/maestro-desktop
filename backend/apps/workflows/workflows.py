@@ -35,11 +35,11 @@ EDIT_AGENT_INTRO = (
 )
 
 
-def _scan_cron_for_openswarm() -> list[str]:
+def _scan_cron_for_maestro() -> list[str]:
     """Surface OS-level scheduled-task entries that reference us.
 
     macOS + Linux: read `crontab -l`. Windows: query `schtasks` for any
-    task whose command/path contains 'openswarm'. Best-effort across all
+    task whose command/path contains 'maestro'. Best-effort across all
     three; any failure (no tool installed, permission denied, parse
     error) just returns []. Surfaced to the FE so the Workflows hub can
     offer a one-click migration banner to convert into native workflows.
@@ -56,7 +56,7 @@ def _scan_cron_for_openswarm() -> list[str]:
             if proc.returncode != 0:
                 return []
             for line in (proc.stdout or "").splitlines():
-                if "openswarm" in line.lower() and not line.lstrip().startswith('"#'):
+                if "maestro" in line.lower() and not line.lstrip().startswith('"#'):
                     findings.append(line.strip())
         except Exception:
             return []
@@ -70,7 +70,7 @@ def _scan_cron_for_openswarm() -> list[str]:
         if proc.returncode != 0:
             return []
         out = proc.stdout or ""
-        return [line.strip() for line in out.splitlines() if "openswarm" in line.lower() and not line.strip().startswith("#")]
+        return [line.strip() for line in out.splitlines() if "maestro" in line.lower() and not line.strip().startswith("#")]
     except Exception:
         return []
 
@@ -82,9 +82,9 @@ _cron_findings: list[str] = []
 async def workflows_lifespan():
     storage.init()
     await scheduler.start()
-    # Cheap one-shot scan for prior cron entries that reference us. We don't migrate automatically; the FE shows a banner with a "Convert to OpenSwarm scheduled tasks" button so the user is in control.
+    # Cheap one-shot scan for prior cron entries that reference us. We don't migrate automatically; the FE shows a banner with a "Convert to Maestro scheduled tasks" button so the user is in control.
     global _cron_findings
-    _cron_findings = _scan_cron_for_openswarm()
+    _cron_findings = _scan_cron_for_maestro()
     try:
         yield
     finally:
@@ -613,7 +613,7 @@ async def get_paused_state():
 
 @workflows.router.get("/cron/findings")
 async def cron_findings():
-    """Cron entries we found at startup that reference OpenSwarm. The
+    """Cron entries we found at startup that reference Maestro. The
     FE renders a one-time banner inviting users to convert them; we
     return the raw lines so the user can verify before migrating."""
     return {"entries": list(_cron_findings)}

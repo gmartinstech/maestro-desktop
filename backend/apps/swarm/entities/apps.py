@@ -155,9 +155,9 @@ def p_localize_env(folder: str) -> None:
     except Exception:
         return
     patch_env_port(env_path, "FRONTEND_PORT", str(p_free_port()))
-    patch_env_port(env_path, "OPENSWARM_TEMPLATE_BACKEND_PATH", TEMPLATE_BACKEND_PATH)
+    patch_env_port(env_path, "MAESTRO_TEMPLATE_BACKEND_PATH", TEMPLATE_BACKEND_PATH)
     try:
-        patch_env_port(env_path, "OPENSWARM_BACKEND_VENV_CACHE", warm_venv_dir())
+        patch_env_port(env_path, "MAESTRO_BACKEND_VENV_CACHE", warm_venv_dir())
     except Exception:
         pass
     # Imported apps arrive WITHOUT node_modules (export drops the warm-cache symlink), so relink it here like seed does; without it the first runtime boot npm-installs while the preview races onto a not-yet-bound port, so the app stays blank until a full restart.

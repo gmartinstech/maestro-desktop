@@ -93,7 +93,7 @@ def set_framework_overhead(session: AgentSession, composed_prompt: Optional[str]
 
 @typechecked
 def register_web_mcp_server(mcp_servers: Dict, p_m: str, browser_ok: bool = False) -> None:
-    """Register the DDG-backed openswarm-web stdio MCP into the server set when the primary has no
+    """Register the DDG-backed maestro-web stdio MCP into the server set when the primary has no
     reliable native web path. The server script lives in the agents package (not here), so resolve
     it off that package dir, not __file__."""
     import os
@@ -108,20 +108,20 @@ def register_web_mcp_server(mcp_servers: Dict, p_m: str, browser_ok: bool = Fals
     else:
         p_primary_hint = ""
     from backend.auth import get_auth_token as p_get_auth_token3
-    mcp_servers["openswarm-web"] = {
+    mcp_servers["maestro-web"] = {
         "command": sys.executable,
         "args": [web_mcp_server_path],
         "env": {
-            "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-            "OPENSWARM_AUTH_TOKEN": p_get_auth_token3(),
-            "OPENSWARM_PRIMARY_API": p_primary_hint,
-            "OPENSWARM_BROWSER_OK": "1" if browser_ok else "0",
+            "MAESTRO_PORT": os.environ.get("MAESTRO_PORT", "8324"),
+            "MAESTRO_AUTH_TOKEN": p_get_auth_token3(),
+            "MAESTRO_PRIMARY_API": p_primary_hint,
+            "MAESTRO_BROWSER_OK": "1" if browser_ok else "0",
         },
         "type": "stdio",
     }
     logger.info(
         f"[MCP-DEBUG] Primary {p_m} has no reliable native web search, "
-        f"registering openswarm-web (DDG search + trafilatura fetch, free)"
+        f"registering maestro-web (DDG search + trafilatura fetch, free)"
     )
 
 
@@ -130,8 +130,8 @@ def append_web_tools_hint(composed_prompt: Optional[str], need_web_mcp: bool, ef
     """Append a <web_tools> block naming the MCP-backed WebSearch/WebFetch when the deferred bare
     WebSearch tool isn't usable on this session, so smaller models don't thrash on ToolSearch."""
     p_web_tools_available = need_web_mcp and (
-        "mcp__openswarm-web__WebSearch" in effective_allowed
-        or "mcp__openswarm-web__WebFetch" in effective_allowed
+        "mcp__maestro-web__WebSearch" in effective_allowed
+        or "mcp__maestro-web__WebFetch" in effective_allowed
     )
     if not p_web_tools_available:
         return composed_prompt
@@ -143,14 +143,14 @@ def append_web_tools_hint(composed_prompt: Optional[str], need_web_mcp: bool, ef
         "equivalents instead, call them DIRECTLY, no ToolSearch "
         "step needed:"
     )
-    if "mcp__openswarm-web__WebSearch" in effective_allowed:
+    if "mcp__maestro-web__WebSearch" in effective_allowed:
         p_hint_lines.append(
-            "- `mcp__openswarm-web__WebSearch(query: str, "
+            "- `mcp__maestro-web__WebSearch(query: str, "
             "num_results?: int)`, DuckDuckGo search."
         )
-    if "mcp__openswarm-web__WebFetch" in effective_allowed:
+    if "mcp__maestro-web__WebFetch" in effective_allowed:
         p_hint_lines.append(
-            "- `mcp__openswarm-web__WebFetch(url: str, prompt?: "
+            "- `mcp__maestro-web__WebFetch(url: str, prompt?: "
             "str)`, fetch a URL and return readable text."
         )
     p_hint_lines.append(

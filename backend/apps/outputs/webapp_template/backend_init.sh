@@ -19,7 +19,7 @@ if [[ ! -f .env ]]; then
 fi
 
 # Source .env so we know the current BACKEND_PORT and the path to the
-# master template's backend/ (written by OpenSwarm at seed time).
+# master template's backend/ (written by Maestro at seed time).
 set -a
 source .env
 set +a
@@ -36,23 +36,23 @@ if [[ -d ./backend ]]; then
     exit 1
 fi
 
-# Resolve master template backend/ path. OPENSWARM_TEMPLATE_BACKEND_PATH
+# Resolve master template backend/ path. MAESTRO_TEMPLATE_BACKEND_PATH
 # is written into .env at seed time.
-if [[ -z "${OPENSWARM_TEMPLATE_BACKEND_PATH:-}" ]]; then
-    echo "ERROR: OPENSWARM_TEMPLATE_BACKEND_PATH not set in .env. This" >&2
-    echo "       workspace was seeded by an older OpenSwarm; ask the" >&2
+if [[ -z "${MAESTRO_TEMPLATE_BACKEND_PATH:-}" ]]; then
+    echo "ERROR: MAESTRO_TEMPLATE_BACKEND_PATH not set in .env. This" >&2
+    echo "       workspace was seeded by an older Maestro; ask the" >&2
     echo "       App Builder to recreate it." >&2
     exit 1
 fi
 
-if [[ ! -d "$OPENSWARM_TEMPLATE_BACKEND_PATH" ]]; then
+if [[ ! -d "$MAESTRO_TEMPLATE_BACKEND_PATH" ]]; then
     echo "ERROR: master template backend dir not found at" >&2
-    echo "       $OPENSWARM_TEMPLATE_BACKEND_PATH" >&2
+    echo "       $MAESTRO_TEMPLATE_BACKEND_PATH" >&2
     exit 1
 fi
 
-echo "Copying backend/ from $OPENSWARM_TEMPLATE_BACKEND_PATH..."
-cp -R "$OPENSWARM_TEMPLATE_BACKEND_PATH" ./backend
+echo "Copying backend/ from $MAESTRO_TEMPLATE_BACKEND_PATH..."
+cp -R "$MAESTRO_TEMPLATE_BACKEND_PATH" ./backend
 chmod +x ./backend/run.sh
 
 # Reuse the warm-cache backend venv if available; this skips the
@@ -63,7 +63,7 @@ chmod +x ./backend/run.sh
 # is already satisfied. After we cp -aR the cache into the workspace,
 # the activate script's VIRTUAL_ENV path is rewritten so `source
 # .venv/bin/activate` resolves to the correct workspace path.
-CACHE_VENV="${OPENSWARM_BACKEND_VENV_CACHE:-}/.venv"
+CACHE_VENV="${MAESTRO_BACKEND_VENV_CACHE:-}/.venv"
 if [[ -d "$CACHE_VENV" ]]; then
     echo "Reusing warm backend venv from $CACHE_VENV..."
     cp -aR "$CACHE_VENV" ./backend/.venv

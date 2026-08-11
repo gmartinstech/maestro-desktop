@@ -40,7 +40,7 @@ def modhash(force: bool = False) -> str:
     if not mh:
         invalidate(DOMAIN)
         raise RedditError(
-            "Not logged in to Reddit. Open reddit.com in the OpenSwarm browser, sign in, then retry."
+            "Not logged in to Reddit. Open reddit.com in the Maestro browser, sign in, then retry."
         )
     p_modhash, p_modhash_exp = mh, now + MODHASH_TTL_S
     return mh

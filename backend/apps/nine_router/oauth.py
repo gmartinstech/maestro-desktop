@@ -220,15 +220,15 @@ def p_should_use_external_browser(provider: str) -> bool:
 
 
 def p_backend_port() -> int:
-    """Best-effort lookup of the OpenSwarm backend HTTP port.
+    """Best-effort lookup of the Maestro backend HTTP port.
 
-    Falls back to 8324 (the default in backend/main.py) if OPENSWARM_PORT
+    Falls back to 8324 (the default in backend/main.py) if MAESTRO_PORT
     hasn't been set yet. backend/main.py:239 sets this env var at startup
     before any request handler runs, so `start_oauth` will always see the
     correct value.
     """
     try:
-        return int(os.environ.get("OPENSWARM_PORT", "8324"))
+        return int(os.environ.get("MAESTRO_PORT", "8324"))
     except (TypeError, ValueError):
         return 8324
 
@@ -242,7 +242,7 @@ def p_callback_uri_for_provider(provider: str) -> str:
       http://localhost:1455/auth/callback URI; handled by
       p_start_codex_callback_listener above.
     - Gemini/Google's OAuth consent page rejects embedded browsers, so we
-      route the callback through OpenSwarm's backend endpoint at
+      route the callback through Maestro's backend endpoint at
       /api/subscriptions/callback (backend/main.py) which runs the
       exchange itself.
     """

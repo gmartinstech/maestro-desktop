@@ -244,7 +244,7 @@ def search_curated(cache: dict[str, dict], q: str, category: str, offset: int, l
 async def community_search(q: str, limit: int) -> dict:
     """Live-proxy a query to the skills.sh wild registry. Not cached: it's a
     600k-entry remote index, so we search it on demand rather than mirror it."""
-    async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "openswarm"}) as client:
+    async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "maestro"}) as client:
         r = await client.get(COMMUNITY_SEARCH_URL, params={"q": q or "skill"})
         r.raise_for_status()
         data = r.json()

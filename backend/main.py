@@ -70,7 +70,7 @@ try:
     p_boot_settings = p_load_boot_settings()
     if not getattr(p_boot_settings, "installation_id", None):
         # Electron resolves this before startup so analytics and affiliate attribution share one install id.
-        p_env_iid = os.environ.get("OPENSWARM_INSTALLATION_ID", "")
+        p_env_iid = os.environ.get("MAESTRO_INSTALLATION_ID", "")
         p_boot_settings.installation_id = (
             p_env_iid if p_re.fullmatch(r"[A-Za-z0-9_-]{8,128}", p_env_iid) else p_uuid.uuid4().hex
         )
@@ -85,8 +85,6 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://api.openswarm.com",
-        "https://openswarm.com",
     ],
     allow_origin_regex=r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+)$",
     allow_credentials=True,
@@ -107,7 +105,7 @@ async def p_auth_middleware(request: Request, call_next):
       - `OPTIONS` preflights, browsers don't send Authorization on them
 
     Anything else requires `Authorization: Bearer <token>` OR
-    `x-openswarm-token: <token>`. Failure responds with 401 and a short
+    `x-maestro-token: <token>`. Failure responds with 401 and a short
     JSON error, no upstream handler sees the request.
 
     The anthropic-proxy route (`/api/anthropic-proxy/v1/*`) is NOT
@@ -122,7 +120,7 @@ async def p_auth_middleware(request: Request, call_next):
     elif is_path_exempt(request.url.path):
         response = await call_next(request)
     else:
-        # Accept Authorization Bearer, x-openswarm-token, OR x-api-key (CLI path, CLI sends x-api-key with our token as value).
+        # Accept Authorization Bearer, x-maestro-token, OR x-api-key (CLI path, CLI sends x-api-key with our token as value).
         headers = dict(request.headers)
         x_api_key = headers.get("x-api-key") or headers.get("X-API-Key")
         # Accept `?token=<token>` query param too. Required for browser-driven GETs that can't set headers, notably the App Builder iframe loading /api/outputs/.../serve/index.html via <iframe src="...">.
@@ -139,7 +137,7 @@ async def p_auth_middleware(request: Request, call_next):
             # This middleware sits OUTSIDE CORSMiddleware, so an early 401 skips its headers and a cross-origin caller (e.g. the vite dev server) sees an opaque "CORS blocked" instead of an honest 401. Echo the origin ONLY when it matches the CORS allow-list (same regex), so the 401 is legible without re-opening CORS to arbitrary origins.
             import re as p_re
             p_origin = headers.get("origin")
-            p_allowed = bool(p_origin) and bool(p_re.match(r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+|https://(api\.)?openswarm\.com)$", p_origin))
+            p_allowed = bool(p_origin) and bool(p_re.match(r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+|https://(api\.)?maestro\.com)$", p_origin))
             p_cors = {"Access-Control-Allow-Origin": p_origin, "Access-Control-Allow-Credentials": "true"} if p_allowed else {}
             return JSONResponse(
                 {"error": "unauthorized", "detail": "missing or invalid token"},
@@ -389,7 +387,7 @@ async def dev_token():
     """Hand the per-install token to the dev frontend, which has no Electron
     preload to read it from. Disabled in packaged builds (the preload exists
     there); localhost binding is the only thing gating it in dev."""
-    if os.environ.get("OPENSWARM_PACKAGED") == "1":
+    if os.environ.get("MAESTRO_PACKAGED") == "1":
         return JSONResponse({"error": "not available"}, status_code=404)
     from backend.auth import get_auth_token
     return JSONResponse({"token": get_auth_token()})
@@ -538,7 +536,7 @@ async def browser_session_cookies(domain: str = ""):
     """Hand a vetted platform's live partition cookies + UA to its own-session MCP shim.
 
     Auth is the standard localhost token (middleware). Cookies are read live from
-    Electron's persist:openswarm-browser partition and are never persisted server-side;
+    Electron's persist:maestro-browser partition and are never persisted server-side;
     the shim talks to the site as the user's browser.
     """
     d = (domain or "").lower().strip().lstrip(".")
@@ -593,7 +591,7 @@ async def browser_session_action(request: Request):
 
 @app.post("/api/mcp-meta/{action}")
 async def mcp_meta(action: str, request: Request):
-    """Back the openswarm-mcp-meta stdio MCP server.
+    """Back the maestro-mcp-meta stdio MCP server.
 
     Actions:
       - list: enumerate installed MCPs, separated by active vs available.
@@ -759,7 +757,7 @@ async def mcp_meta(action: str, request: Request):
 
 @app.post("/api/settings-meta/{action}")
 async def settings_meta(action: str, request: Request):
-    """Back the openswarm-settings-meta stdio MCP server (agent-editable Settings).
+    """Back the maestro-settings-meta stdio MCP server (agent-editable Settings).
 
     Actions:
       - read: the full settings object with every secret redacted to
@@ -897,13 +895,13 @@ if __name__ == "__main__":
     import argparse
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="OpenSwarm backend server")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("OPENSWARM_PORT", "8324")))
-    parser.add_argument("--host", default=os.environ.get("OPENSWARM_HOST", "127.0.0.1"))
+    parser = argparse.ArgumentParser(description="Maestro backend server")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("MAESTRO_PORT", "8324")))
+    parser.add_argument("--host", default=os.environ.get("MAESTRO_HOST", "127.0.0.1"))
     parser.add_argument("--reload", action="store_true", default=False)
     args = parser.parse_args()
 
-    os.environ["OPENSWARM_PORT"] = str(args.port)
+    os.environ["MAESTRO_PORT"] = str(args.port)
 
     import uvicorn.config
 

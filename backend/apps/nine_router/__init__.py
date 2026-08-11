@@ -1,7 +1,7 @@
 """Auto-start and manage the 9Router subprocess.
 
 9Router is a free AI subscription proxy that lets users connect their
-Claude/ChatGPT/Gemini subscriptions to OpenSwarm without API keys. It runs
+Claude/ChatGPT/Gemini subscriptions to Maestro without API keys. It runs
 silently on port 20128 and exposes an OpenAI-compatible API at
 localhost:20128/v1.
 

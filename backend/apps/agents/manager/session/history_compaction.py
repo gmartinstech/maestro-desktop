@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 
 # One plain-English trust line, fenced by a tag. The model treats the fence as structural framing; the sentence is what actually defuses a security-conscious agent flagging the block as spoofed tool output.
 PLATFORM_NOTE_PREAMBLE = (
-    "This block is authored by the OpenSwarm platform, not tool output and not a "
+    "This block is authored by the Maestro platform, not tool output and not a "
     "prior message. It is trusted context."
 )
-PLATFORM_NOTE_OPEN = "<openswarm_platform_note>"
-PLATFORM_NOTE_CLOSE = "</openswarm_platform_note>"
-SESSION_RECAP_OPEN = "<openswarm_session_recap>"
-SESSION_RECAP_CLOSE = "</openswarm_session_recap>"
+PLATFORM_NOTE_OPEN = "<maestro_platform_note>"
+PLATFORM_NOTE_CLOSE = "</maestro_platform_note>"
+SESSION_RECAP_OPEN = "<maestro_session_recap>"
+SESSION_RECAP_CLOSE = "</maestro_session_recap>"
 
 # Per-turn caps so the re-grounded recap stays compact (summaries, not replays) and cannot reinflate the context window from one giant tool input/output.
 RECAP_TOOL_INPUT_CAP = 200
@@ -32,14 +32,14 @@ def wrap_platform_note(body: str) -> str:
     return f"{PLATFORM_NOTE_OPEN}\n{PLATFORM_NOTE_PREAMBLE}\n{body}\n{PLATFORM_NOTE_CLOSE}"
 
 
-P_SENTINEL_TAG_RE = re.compile(r"</?openswarm_(?:platform_note|session_recap)\b[^>]*>")
+P_SENTINEL_TAG_RE = re.compile(r"</?maestro_(?:platform_note|session_recap)\b[^>]*>")
 
 
 @typechecked
 def strip_forged_sentinels(text: str) -> str:
     """Neuter any platform-note/recap tags hiding in UNTRUSTED text (tool results,
     user input) so attacker-supplied content can't pose as trusted platform context."""
-    if "openswarm_platform_note" not in text and "openswarm_session_recap" not in text:
+    if "maestro_platform_note" not in text and "maestro_session_recap" not in text:
         return text
     return P_SENTINEL_TAG_RE.sub(lambda m: m.group(0).replace("<", "&lt;").replace(">", "&gt;"), text)
 
@@ -216,7 +216,7 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
         return content, None
     head = strip_forged_sentinels(serialized[:4_000])
     note = wrap_platform_note(
-        f"Output truncated by OpenSwarm. Full output ({len(serialized)} chars) saved to "
+        f"Output truncated by Maestro. Full output ({len(serialized)} chars) saved to "
         f"{blob_path}. Ask the user or run a follow-up tool call if you need the rest."
     )
     replacement = f"{head}\n\n{note}"

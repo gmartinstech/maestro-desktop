@@ -13,7 +13,7 @@ from backend.apps.outputs import view_builder_templates as vt
 def test_prefers_bundled_extracted_tree(monkeypatch, tmp_path):
     digest = vt.warm_cache_digest()
     # Force a home-cache miss so we exercise the bundled path.
-    monkeypatch.setenv("OPENSWARM_WEBAPP_CACHE_DIR", str(tmp_path / "home"))
+    monkeypatch.setenv("MAESTRO_WEBAPP_CACHE_DIR", str(tmp_path / "home"))
     bundle = tmp_path / "resources_cache"
     monkeypatch.setattr(vt, "P_BUNDLED_ARCHIVE_DIR", str(bundle))
     nm = bundle / digest / "node_modules" / "vite" / "bin"
@@ -48,7 +48,7 @@ def test_ensure_warm_cache_wipes_partial_and_never_returns_incomplete(monkeypatc
     # A half-finished cache (package tree present, .bin/vite missing) must be WIPED and never handed back, so no workspace symlinks to an unlaunchable tree and run.sh is never pushed into installing through the shared cache.
     digest = vt.warm_cache_digest()
     home = tmp_path / "home"
-    monkeypatch.setenv("OPENSWARM_WEBAPP_CACHE_DIR", str(home))
+    monkeypatch.setenv("MAESTRO_WEBAPP_CACHE_DIR", str(home))
     cache_modules = home / digest / "node_modules"
     (cache_modules / "vite" / "bin").mkdir(parents=True)
     (cache_modules / "vite" / "bin" / "vite.js").write_text("// vite")

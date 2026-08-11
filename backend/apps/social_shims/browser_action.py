@@ -13,8 +13,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, List
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-AUTH_TOKEN = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+AUTH_TOKEN = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 ACTION_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/browser-session/action"
 
 
@@ -37,7 +37,7 @@ def perform(domain: str, steps: List[Dict[str, Any]]) -> Dict[str, Any]:
         raise BrowserActionError(f"Browser bridge HTTP {e.code}: {body[:200]}")
     except urllib.error.URLError as e:
         raise BrowserActionError(
-            f"Browser bridge unreachable: {getattr(e, 'reason', e)}. Is the OpenSwarm dashboard open?"
+            f"Browser bridge unreachable: {getattr(e, 'reason', e)}. Is the Maestro dashboard open?"
         )
     if data.get("error"):
         raise BrowserActionError(str(data["error"]))

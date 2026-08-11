@@ -709,8 +709,8 @@ ACTION_MAP = {
     "BrowserClickByName": "click_by_name",
 }
 
-# --- App agent: driving an OpenSwarm-built app via its native bridge ---------
-# Apps expose window.OPENSWARM_APP = { describe(), getState(), invoke(name,args) }.
+# --- App agent: driving an Maestro-built app via its native bridge ---------
+# Apps expose window.MAESTRO_APP = { describe(), getState(), invoke(name,args) }.
 # The agent reads structure/state and acts through that bridge in single
 # executeJavaScript round-trips, no screenshots or accessibility tree. These
 # three tools are translated to BrowserEvaluate in execute_browser_tool, so they
@@ -720,7 +720,7 @@ APP_TOOLS_SCHEMA = [
         "name": "AppDescribe",
         "description": (
             "Read the app's rules and CURRENT list of actions, straight from the "
-            "app itself (window.OPENSWARM_APP.describe()). Returns "
+            "app itself (window.MAESTRO_APP.describe()). Returns "
             "{rules, controls, __rev}: rules is what the app is and its objective, "
             "controls is an array of {name, args, description, keys}, and __rev is "
             "a revision number. (Older apps may return a bare array of controls.) "
@@ -736,7 +736,7 @@ APP_TOOLS_SCHEMA = [
         "name": "AppGetState",
         "description": (
             "Read a small JSON snapshot of the app's current state "
-            "(window.OPENSWARM_APP.getState()). Use it to check what's on screen "
+            "(window.MAESTRO_APP.getState()). Use it to check what's on screen "
             "and to verify an action landed. The snapshot includes __rev, the "
             "controls revision: if it differs from the __rev you were given, the "
             "controls changed, so call AppDescribe to refresh them. Returns null "
@@ -748,7 +748,7 @@ APP_TOOLS_SCHEMA = [
         "name": "AppInvoke",
         "description": (
             "Perform one app action by name with arguments "
-            "(window.OPENSWARM_APP.invoke(name, args)). The name MUST be one that "
+            "(window.MAESTRO_APP.invoke(name, args)). The name MUST be one that "
             "AppDescribe just returned; never invent or modify actions, only invoke "
             "the ones the app exposes. Returns the action's result, or an "
             "{__error__} if it threw. After invoking, re-AppDescribe if the action "
@@ -1018,17 +1018,17 @@ SYSTEM_PROMPT = (
 
 MAX_TURNS = 40
 
-# App mode: drive an OpenSwarm-built app through its native bridge. This is the
+# App mode: drive an Maestro-built app through its native bridge. This is the
 # global "how to operate an app" guidance (decision: one global doc, not per-app;
 # per-app specifics come live from AppDescribe). Deliberately short, the bridge
 # does the heavy lifting and future models need less hand-holding.
 APP_SYSTEM_PROMPT = (
-    "You operate an OpenSwarm-built app (a small web app the user created, e.g. a "
+    "You operate an Maestro-built app (a small web app the user created, e.g. a "
     "graphing tool or a form). The app is ALREADY open in front of you; do not "
     "navigate anywhere.\n\n"
 
     "## How you see and act: the app's own bridge (this is the fast path)\n"
-    "The app exposes a native bridge, window.OPENSWARM_APP, with three calls you "
+    "The app exposes a native bridge, window.MAESTRO_APP, with three calls you "
     "reach through tools:\n"
     "- AppDescribe -> {rules, controls, __rev}: the app's objective and its "
     "current actions {name, args, description, keys}.\n"

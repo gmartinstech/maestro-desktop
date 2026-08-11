@@ -84,5 +84,5 @@ def test_probe_disabled_or_router_down(monkeypatch):
     monkeypatch.setattr(sh, "is_running", lambda: False)
     assert asyncio.run(sh.probe_subscription_health(CONNS)) == []
     monkeypatch.setattr(sh, "is_running", lambda: True)
-    monkeypatch.setenv("OPENSWARM_BOOT_HEALTH", "0")
+    monkeypatch.setenv("MAESTRO_BOOT_HEALTH", "0")
     assert asyncio.run(sh.probe_subscription_health(CONNS)) == []

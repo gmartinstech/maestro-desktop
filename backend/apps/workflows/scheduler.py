@@ -50,7 +50,7 @@ def _host_tz() -> ZoneInfo:
     global _host_tz_cache
     if _host_tz_cache is not None:
         return _host_tz_cache
-    name = os.environ.get("OPENSWARM_TIMEZONE", "").strip()
+    name = os.environ.get("MAESTRO_TIMEZONE", "").strip()
     if not name:
         try:
             from tzlocal import get_localzone_name  # type: ignore
@@ -370,7 +370,7 @@ def _mark_stuck_runs_failed() -> None:
                 storage.update_run(
                     r.id,
                     status="failure",
-                    error="Interrupted: OpenSwarm or your computer shut down before this run finished.",
+                    error="Interrupted: Maestro or your computer shut down before this run finished.",
                     finished_at=now,
                 )
                 # The run row is fixed, but the workflow still summarizes this dead run as 'running' (that's what the detail header reads), so heal the summary too when this was the latest run.
@@ -416,7 +416,7 @@ def _capture_missed(wf: Workflow, missed: list[datetime]) -> None:
         record_skipped(
             wf,
             older[0],
-            f"Skipped {len(older)}{suffix} earlier missed runs while OpenSwarm was closed",
+            f"Skipped {len(older)}{suffix} earlier missed runs while Maestro was closed",
         )
     for sf in recent:
         storage.add_missed(MissedRun(workflow_id=wf.id, scheduled_for=sf))

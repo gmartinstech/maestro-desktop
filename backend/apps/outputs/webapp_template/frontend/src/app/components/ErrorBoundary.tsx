@@ -18,7 +18,7 @@ interface ErrorBoundaryState {
  * in JSX), React unmounts the whole tree and the iframe goes black —
  * the user just sees an empty preview pane and has no idea what
  * happened. This boundary catches those errors, renders a readable
- * error card in their place, AND mirrors the error up to the OpenSwarm
+ * error card in their place, AND mirrors the error up to the Maestro
  * host (via window.parent.postMessage + console.error, both of which
  * the webview-preload bridge already forwards) so the App Builder
  * agent's `post_tool_hook` can see what went wrong on its next turn
@@ -39,8 +39,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Clean first mount: nothing caught, so the app is in a good render
     // state and the ready beacon is allowed.
     if (!this.state.error) {
-      window.__openswarm_render_failed = false;
-      window.__openswarm_last_error = '';
+      window.__maestro_render_failed = false;
+      window.__maestro_last_error = '';
     }
   }
 
@@ -48,8 +48,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Fast Refresh retried the previously-broken subtree and it rendered:
     // re-allow the ready beacon so index.tsx's vite:afterUpdate can report ok.
     if (prevState.error && !this.state.error) {
-      window.__openswarm_render_failed = false;
-      window.__openswarm_last_error = '';
+      window.__maestro_render_failed = false;
+      window.__maestro_last_error = '';
     }
   }
 
@@ -59,11 +59,11 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // window-error gate: the app is not in a rendered state right now.
     // Stash the message so the HMR handler can re-assert this error after
     // an unrelated edit (which resets the host's render-state to None).
-    window.__openswarm_render_failed = true;
-    window.__openswarm_rendered = false;
-    window.__openswarm_last_error =
+    window.__maestro_render_failed = true;
+    window.__maestro_rendered = false;
+    window.__maestro_last_error =
       `${error?.message ?? String(error)}\n${errorInfo?.componentStack ?? ''}`.trim();
-    // Two channels so the OpenSwarm host's webview-preload bridge can
+    // Two channels so the Maestro host's webview-preload bridge can
     // pick this up regardless of which one it taps:
     //   1. console.error — forwarded as a `[FRONTEND]` line into the
     //      App Builder's Terminal pane, which the agent's
@@ -72,14 +72,14 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     //      the structured payload without parsing console output.
     // eslint-disable-next-line no-console
     console.error(
-      '[openswarm:app-error]',
+      '[maestro:app-error]',
       error?.message ?? String(error),
       errorInfo?.componentStack ?? '',
     );
     try {
       window.parent.postMessage(
         {
-          type: 'openswarm:app-error',
+          type: 'maestro:app-error',
           message: error?.message ?? String(error),
           stack: error?.stack,
           componentStack: errorInfo?.componentStack,

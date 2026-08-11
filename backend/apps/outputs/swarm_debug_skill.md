@@ -1,6 +1,6 @@
-# swarm-debug — OpenSwarm's logger for App backends
+# swarm-debug — Maestro's logger for App backends
 
-`swarm_debug` (the `swarm-debug` package on PyPI) is OpenSwarm's opinionated
+`swarm_debug` (the `swarm-debug` package on PyPI) is Maestro's opinionated
 `print()` replacement for the App Builder's backend code. It prints colored,
 indented, frame-aware log lines that read at a glance and land in the App
 Builder's **Terminal** tab under the `[BACKEND]` prefix.
@@ -131,7 +131,7 @@ with debug.time("fetch users"):     # times the block, prints the duration
 
 ## Visibility (why output might not show)
 
-Output is gated per-file: only files toggled ON print. OpenSwarm re-toggles
+Output is gated per-file: only files toggled ON print. Maestro re-toggles
 every file ON at each backend boot, and new code needs a backend restart to
 load anyway (no auto-reload), so in practice your `debug()` lines are always
 visible after the restart that loads them. If you ever need to manage this
@@ -182,9 +182,9 @@ pane in real time. Frontend `console.log` calls in the running app land in
 the same Terminal pane prefixed `[FRONTEND]`. Use this to correlate cause
 and effect across the two halves of your stack.
 
-The same stream is tee'd to **`.openswarm/terminal.log`** at the workspace
+The same stream is tee'd to **`.maestro/terminal.log`** at the workspace
 root (reset on every app start), so you can read your own `debug()` output
-directly: `tail -100 .openswarm/terminal.log`.
+directly: `tail -100 .maestro/terminal.log`.
 
 ---
 

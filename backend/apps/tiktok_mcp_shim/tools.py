@@ -2,7 +2,7 @@
 
 Reads (feed/search/user/videos/video/comments) and writes (like/favorite/comment/
 follow/upload). Writes are signature-gated by TikTok; when its anti-bot check rejects
-a call the tool returns an actionable error pointing at the OpenSwarm browser agent,
+a call the tool returns an actionable error pointing at the Maestro browser agent,
 which drives the real session and is free + undetectable. Video ids come from the read
 tools (or a tiktok.com/@user/video/<id> URL's trailing id).
 """
@@ -121,7 +121,7 @@ TOOLS = [
     },
     {
         "name": "tiktok_upload",
-        "description": "Upload a video. Routes to the OpenSwarm browser agent (TikTok upload can't be done bot-safely over HTTP).",
+        "description": "Upload a video. Routes to the Maestro browser agent (TikTok upload can't be done bot-safely over HTTP).",
         "inputSchema": {
             "type": OBJ,
             "properties": {

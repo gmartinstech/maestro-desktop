@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     import anthropic
     from backend.apps.settings.models import AppSettings
 
-OPENSWARM_DEFAULT_PROXY_URL = "https://api.openswarm.com"
+MAESTRO_DEFAULT_PROXY_URL = "https://llm.martinstech.net/v1"
 
 
 def p_check_9router() -> bool:

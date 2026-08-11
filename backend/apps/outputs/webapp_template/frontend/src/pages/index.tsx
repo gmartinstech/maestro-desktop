@@ -1,4 +1,4 @@
-// Cold-start home page for a freshly-seeded OpenSwarm App.
+// Cold-start home page for a freshly-seeded Maestro App.
 //
 // Renders the same Bayer-dither shader as the inline splash in
 // `index.html`, so when React mounts and clears `#root`, the animation

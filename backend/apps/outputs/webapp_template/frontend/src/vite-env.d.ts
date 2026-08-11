@@ -1,9 +1,9 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pages/client-react" />
 
-// Render-health beacon flags the OpenSwarm App Builder host reads off the preview.
+// Render-health beacon flags the Maestro App Builder host reads off the preview.
 interface Window {
-  __openswarm_rendered?: boolean;
-  __openswarm_render_failed?: boolean;
-  __openswarm_last_error?: string;
+  __maestro_rendered?: boolean;
+  __maestro_render_failed?: boolean;
+  __maestro_last_error?: string;
 }

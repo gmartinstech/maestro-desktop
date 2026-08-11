@@ -4,7 +4,7 @@ through our local proxy instead of directly to oauth2.googleapis.com.
 google_workspace_mcp.auth.gauth.get_credentials() hardcodes
 token_uri="https://oauth2.googleapis.com/token" and refreshes with
 whatever GOOGLE_WORKSPACE_CLIENT_ID/SECRET are in env on every API call.
-OAuth runs through a rotation pool in openswarm-cloud, so the
+OAuth runs through a rotation pool in the OAuth helper service, so the
 refresh_token is bound to whichever pool slot minted it, not the single
 client baked into the DMG. Refresh directly against Google with the
 wrong client returns unauthorized_client.
@@ -45,8 +45,8 @@ def p_patched_get_credentials():
             "GOOGLE_WORKSPACE_TOKEN_URI",
             "https://oauth2.googleapis.com/token",
         ),
-        client_id=os.environ.get("GOOGLE_WORKSPACE_CLIENT_ID", "openswarm-proxy"),
-        client_secret=os.environ.get("GOOGLE_WORKSPACE_CLIENT_SECRET", "openswarm-proxy"),
+        client_id=os.environ.get("GOOGLE_WORKSPACE_CLIENT_ID", "maestro-proxy"),
+        client_secret=os.environ.get("GOOGLE_WORKSPACE_CLIENT_SECRET", "maestro-proxy"),
     )
 
 

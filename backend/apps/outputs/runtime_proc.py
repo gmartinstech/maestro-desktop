@@ -97,9 +97,9 @@ def background_priority_kwargs() -> dict:
 
     We intentionally do NOT pass `start_new_session=True` here even
     though it would defend against an errant `kill 0` inside the
-    workspace propagating into the OpenSwarm group: doing so also
+    workspace propagating into the Maestro group: doing so also
     detaches the workspace from the terminal's foreground process
-    group, so a user Ctrl+C only reaches OpenSwarm itself and the
+    group, so a user Ctrl+C only reaches Maestro itself and the
     cleanup path has to chase every workspace by hand. If that path
     is even slightly slow or gets interrupted by a second Ctrl+C, the
     workspace's uvicorn / vite leaks past shutdown and the next
@@ -166,7 +166,7 @@ def kill_descendant_tree(pid: int, sig_name: str = "TERM") -> None:
 def is_port_free(port: int) -> bool:
     """True if nothing currently holds a TCP listener on 127.0.0.1:port.
     Cheap kernel-probe; resolves on bind success. Used as the cross-session
-    safety net: if a prior OpenSwarm run left a ghost subprocess holding
+    safety net: if a prior Maestro run left a ghost subprocess holding
     the .env-persisted FRONTEND_PORT, we detect it here and reallocate
     rather than handing run.sh a port that will EADDRINUSE."""
     try:
@@ -217,7 +217,7 @@ def ensure_force_port_shim(workspace_path: str) -> None:
     `.env` and then pins every instance to the same FRONTEND_PORT/BACKEND_PORT,
     so opening a SECOND instance collides on the primary's ports and its preview
     never binds ("Starting preview" forever). This injects the exact override
-    block the current template ships (inert unless OPENSWARM_FORCE_*_PORT is set,
+    block the current template ships (inert unless MAESTRO_FORCE_*_PORT is set,
     i.e. only for secondary instances), leaving the primary untouched. Idempotent;
     mirrors Patch 1a in scripts/fetch-webapp-template.sh."""
     run_sh = os.path.join(workspace_path, "run.sh")
@@ -228,16 +228,16 @@ def ensure_force_port_shim(workspace_path: str) -> None:
             lines = f.readlines()
     except Exception:
         return
-    if any("OPENSWARM_FORCE_FRONTEND_PORT" in ln for ln in lines):
+    if any("MAESTRO_FORCE_FRONTEND_PORT" in ln for ln in lines):
         return
     block = [
         "\n",
-        "# Per-instance port overrides: OpenSwarm passes these when the user opens a SECOND instance of the app, so it boots on fresh ports instead of colliding with the primary's .env-pinned ones.\n",
-        'if [[ -n "${OPENSWARM_FORCE_FRONTEND_PORT:-}" ]]; then\n',
-        '    export FRONTEND_PORT="$OPENSWARM_FORCE_FRONTEND_PORT"\n',
+        "# Per-instance port overrides: Maestro passes these when the user opens a SECOND instance of the app, so it boots on fresh ports instead of colliding with the primary's .env-pinned ones.\n",
+        'if [[ -n "${MAESTRO_FORCE_FRONTEND_PORT:-}" ]]; then\n',
+        '    export FRONTEND_PORT="$MAESTRO_FORCE_FRONTEND_PORT"\n',
         "fi\n",
-        'if [[ -n "${OPENSWARM_FORCE_BACKEND_PORT:-}" ]]; then\n',
-        '    export BACKEND_PORT="$OPENSWARM_FORCE_BACKEND_PORT"\n',
+        'if [[ -n "${MAESTRO_FORCE_BACKEND_PORT:-}" ]]; then\n',
+        '    export BACKEND_PORT="$MAESTRO_FORCE_BACKEND_PORT"\n',
         "fi\n",
     ]
     out: list[str] = []
@@ -263,7 +263,7 @@ def ensure_force_port_shim(workspace_path: str) -> None:
 def is_new_mode(workspace_path: str) -> bool:
     """A workspace is "new-mode" (webapp-template scaffold) if it has a
     `run.sh` at its root. Old-mode workspaces are flat `index.html`-only
-    apps that pre-date the template swap; they're served by OpenSwarm's
+    apps that pre-date the template swap; they're served by Maestro's
     own `/api/outputs/workspace/{ws}/serve/...` FastAPI route and have an
     optional `backend.py` we spawn directly.
 

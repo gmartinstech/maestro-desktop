@@ -2,6 +2,8 @@ import json
 import logging
 import os
 
+from backend.config.state_paths import home_state_dir
+
 logger = logging.getLogger(__name__)
 
 # Catalog ships in the repo so a brand-new install shows skills with zero network (build snapshot), and every successful live fetch is persisted to the user's cache so subsequent launches are instant + offline-safe. The live fetch always overwrites both once it lands, so neither can go stale at runtime.
@@ -9,9 +11,7 @@ BUNDLED_SNAPSHOT = os.path.join(os.path.dirname(__file__), "skills_snapshot.json
 
 
 def disk_cache_path() -> str:
-    base = os.environ.get("OPENSWARM_SKILL_CACHE_DIR") or os.path.expanduser(
-        "~/.openswarm/cache"
-    )
+    base = os.environ.get("MAESTRO_SKILL_CACHE_DIR") or home_state_dir("cache")
     return os.path.join(base, "skill_registry.json")
 
 

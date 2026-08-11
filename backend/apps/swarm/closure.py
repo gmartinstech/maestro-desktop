@@ -36,7 +36,7 @@ def p_now() -> str:
 
 
 def p_created_with() -> str:
-    return os.environ.get("OPENSWARM_VERSION") or "OpenSwarm"
+    return os.environ.get("MAESTRO_VERSION") or "Maestro"
 
 
 class p_Ctx:
@@ -208,7 +208,7 @@ def stage_upload(raw: bytes, filename: str) -> tuple[str, Manifest, list[str]]:
                 raise BundleError("bundle manifest is invalid")
             if manifest.format_version > FORMAT_VERSION:
                 shutil.rmtree(sandbox, ignore_errors=True)
-                raise BundleError("this .swarm was made by a newer OpenSwarm; please update")
+                raise BundleError("this .swarm was made by a newer Maestro; please update")
             return sandbox, manifest, warnings
         return stage_skill_from_zip(raw, filename, warnings)
     return p_stage_skill_from_markdown(raw, filename, warnings)

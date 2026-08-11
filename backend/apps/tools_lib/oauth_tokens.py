@@ -8,7 +8,8 @@ import httpx
 
 from backend.config.paths import TOOLS_DIR as DATA_DIR
 from backend.apps.tools_lib.models import ToolDefinition
-from backend.apps.tools_lib.oauth_config import OPENSWARM_OAUTH_BASE_URL
+from backend.apps.tools_lib.oauth_config import MAESTRO_OAUTH_BASE_URL
+from backend.config.state_paths import home_state_dir
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ async def p_refresh_via_proxy(provider: str, tool: ToolDefinition, default_expir
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
-                f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/{provider}/refresh",
+                f"{MAESTRO_OAUTH_BASE_URL}/api/oauth/{provider}/refresh",
                 json={"refresh_token": refresh_token},
             )
         if resp.status_code == 401:
@@ -172,7 +173,7 @@ def m365_server_script() -> str:
 
 
 def m365_cache_env() -> dict[str, str]:
-    cache_dir = os.path.join(os.path.expanduser("~"), ".openswarm")
+    cache_dir = home_state_dir()
     os.makedirs(cache_dir, exist_ok=True)
     return {
         "MS365_MCP_TOKEN_CACHE_PATH": os.path.join(cache_dir, "ms365-token-cache.json"),

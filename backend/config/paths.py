@@ -9,7 +9,7 @@ import sys
 
 P_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+p_is_packaged = os.environ.get("MAESTRO_PACKAGED") == "1"
 
 if p_is_packaged:
     if sys.platform == "darwin":

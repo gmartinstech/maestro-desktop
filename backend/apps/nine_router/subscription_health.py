@@ -2,7 +2,7 @@
 closed (refresh-token rotation, the "Breaking codex" class) so the UI can offer reconnect BEFORE
 the user burns a failed turn discovering it. Probes SUBSCRIPTION lanes only (1 token of sub quota,
 never a billable API key), and only a definitive auth-shaped 401/403 counts as dead: transient
-429/5xx/timeouts stay silent so the pill can never cry wolf. Kill switch: OPENSWARM_BOOT_HEALTH=0."""
+429/5xx/timeouts stay silent so the pill can never cry wolf. Kill switch: MAESTRO_BOOT_HEALTH=0."""
 
 import asyncio
 import logging
@@ -40,7 +40,7 @@ p_cached_at: float = 0.0
 
 @typechecked
 def health_probe_enabled() -> bool:
-    return os.environ.get("OPENSWARM_BOOT_HEALTH", "1") != "0"
+    return os.environ.get("MAESTRO_BOOT_HEALTH", "1") != "0"
 
 
 @typechecked

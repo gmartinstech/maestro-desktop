@@ -45,7 +45,7 @@ def should_register_web_mcp(
     api_type: Optional[str],
     anthropic_api_key: Optional[str],
 ) -> bool:
-    """True when the agent loop must register the DDG-backed openswarm-web MCP because the
+    """True when the agent loop must register the DDG-backed maestro-web MCP because the
     primary model has NO reliable native Anthropic web-search path. We prefer Anthropic's
     hosted search (return False) whenever it's actually reachable, and cascade through our own
     /api/web/search (Gemini -> OpenAI -> DuckDuckGo) otherwise. The three no-path cases:

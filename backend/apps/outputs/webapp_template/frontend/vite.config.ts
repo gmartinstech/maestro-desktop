@@ -7,7 +7,7 @@ import os from 'os';
 import fs from 'fs';
 
 // Shared, hash-keyed vite optimization cache. Every webapp-template
-// workspace shares its node_modules/ via a symlink to OpenSwarm's warm
+// workspace shares its node_modules/ via a symlink to Maestro's warm
 // cache, AND now shares the optimized-deps output via this cache too —
 // keyed on the hash of vite.config.ts + package.json so a real config
 // or dep bump invalidates automatically. First workspace ever opened
@@ -38,8 +38,8 @@ function sharedViteCacheDir(): string {
     // Fall through — if hashing fails we still get a stable shared
     // cache, just under one "fallback" key.
   }
-  const base = process.env.OPENSWARM_VITE_CACHE_DIR
-    || path.join(os.homedir(), '.openswarm', 'cache', 'webapp_template_vite_cache');
+  const base = process.env.MAESTRO_VITE_CACHE_DIR
+    || path.join(os.homedir(), '.maestro', 'cache', 'webapp_template_vite_cache');
   return path.join(base, digest);
 }
 

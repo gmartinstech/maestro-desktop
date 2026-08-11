@@ -25,7 +25,7 @@ def test_bundled_snapshot_exists_and_includes_pdf():
 
 def test_seed_makes_catalog_non_empty_offline(monkeypatch, tmp_path):
     # Point the disk cache at an empty tmp dir so only the bundled snapshot can seed; this is the brand-new-install, no-network case.
-    monkeypatch.setenv("OPENSWARM_SKILL_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("MAESTRO_SKILL_CACHE_DIR", str(tmp_path))
     seeded = cache.load_seed_cache()
     assert len(seeded) >= 10
 
@@ -36,7 +36,7 @@ def test_seed_makes_catalog_non_empty_offline(monkeypatch, tmp_path):
 
 def test_disk_cache_roundtrip_and_priority(monkeypatch, tmp_path):
     # A saved last-good fetch must win over the bundled snapshot on next boot.
-    monkeypatch.setenv("OPENSWARM_SKILL_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("MAESTRO_SKILL_CACHE_DIR", str(tmp_path))
     sentinel = {"only-skill": {"name": "only-skill", "description": "", "content": "",
                                "folder": "skills/only-skill", "category": "Test",
                                "repositoryUrl": ""}}

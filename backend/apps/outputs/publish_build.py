@@ -23,7 +23,7 @@ P_SECRET_KEY_EXTS = (".pem", ".key", ".p12", ".pfx", ".keystore")
 
 
 def p_node_bin() -> Optional[str]:
-    return os.environ.get("OPENSWARM_NODE_PATH") or shutil.which("node")
+    return os.environ.get("MAESTRO_NODE_PATH") or shutil.which("node")
 
 
 def p_safe_build_config(fe: str) -> tuple[list[str], Optional[str]]:
@@ -51,7 +51,7 @@ def p_safe_build_config(fe: str) -> tuple[list[str], Optional[str]]:
         content,
     )
     ext = os.path.splitext(cfg_name)[1]
-    temp_name = f"vite.config.openswarm-publish{ext}"
+    temp_name = f"vite.config.maestro-publish{ext}"
     with open(os.path.join(fe, temp_name), "w", encoding="utf-8") as f:
         f.write(patched)
     return ["--config", temp_name], os.path.join(fe, temp_name)

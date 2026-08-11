@@ -1,7 +1,7 @@
 """Provider API-key sync into 9Router.
 
 Mirrors the user's stored Gemini / OpenAI / OpenRouter keys into 9Router
-as OpenSwarm-managed apikey connections. Talks to the already-running
+as Maestro-managed apikey connections. Talks to the already-running
 9Router over HTTP; never spawns the subprocess (that's process.py's job).
 """
 
@@ -21,9 +21,9 @@ def nr():
 
 # API-key auth (provider="gemini", authType="apikey") and OAuth hit different Google quotas: OAuth uses the Code Assist free tier (aggressively rate-limited; 429s on Gemini 3 Pro/Flash even for paid users), while an AI Studio API key uses generativelanguage.googleapis.com (independent and far higher). We mirror google_api_key into 9Router so the API-key path is preferred when a key is set.
 
-NINE_ROUTER_KEYED_NAME = "AI Studio (OpenSwarm-managed)"
-NINE_ROUTER_OPENAI_KEYED_NAME = "OpenAI (OpenSwarm-managed)"
-NINE_ROUTER_OPENROUTER_KEYED_NAME = "OpenRouter (OpenSwarm-managed)"
+NINE_ROUTER_KEYED_NAME = "AI Studio (Maestro-managed)"
+NINE_ROUTER_OPENAI_KEYED_NAME = "OpenAI (Maestro-managed)"
+NINE_ROUTER_OPENROUTER_KEYED_NAME = "OpenRouter (Maestro-managed)"
 
 # Reserved prefix that registry.py's gpt-5.*-api router_model_ids depend on. Changing this breaks model resolution for OpenAI own-key users.
 NINE_ROUTER_OPENAI_KEYED_PREFIX = "cp-openai"
@@ -52,7 +52,7 @@ async def p_sync_apikey_provider(
     *,
     label: str,
 ) -> None:
-    """Create/update/delete an OpenSwarm-managed apikey connection. Silent if 9Router is down."""
+    """Create/update/delete an Maestro-managed apikey connection. Silent if 9Router is down."""
     if not nr().is_running():
         return
 

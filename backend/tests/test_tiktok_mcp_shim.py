@@ -78,7 +78,7 @@ def test_feed_walks_and_normalizes():
 
 def test_read_session_unavailable_is_actionable():
     def boom(*a, **k):
-        raise SessionUnavailable("Not logged in to tiktok.com. Open tiktok.com in the OpenSwarm browser, sign in, then retry.")
+        raise SessionUnavailable("Not logged in to tiktok.com. Open tiktok.com in the Maestro browser, sign in, then retry.")
 
     with patch.object(tiktok_reads, "get", boom):
         out = handle_tool_call("tiktok_get_user", {"username": "bob"})
@@ -114,7 +114,7 @@ def test_follow_navigates_to_profile():
 
 def test_write_surfaces_no_card_error():
     def boom(domain, steps):
-        raise BrowserActionError("No tiktok.com browser card is open. Open tiktok.com in an OpenSwarm browser card and sign in, then retry.")
+        raise BrowserActionError("No tiktok.com browser card is open. Open tiktok.com in an Maestro browser card and sign in, then retry.")
 
     with patch.object(tiktok_writes, "perform", boom):
         out = handle_tool_call("tiktok_like", {"video_url": VIDEO_URL})

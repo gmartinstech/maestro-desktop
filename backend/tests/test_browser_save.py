@@ -64,7 +64,7 @@ def test_falls_back_to_home_workspace_when_no_cwd(tmp_path, monkeypatch):
     monkeypatch.setattr(os.path, "expanduser", lambda p: str(tmp_path))
     msg = save_page_data(None, "sess-xyz", "f.json", "[]")
     assert msg.startswith("Saved")
-    assert (tmp_path / ".openswarm" / "workspaces" / "sess-xyz" / SUBDIR / "f.json").is_file()
+    assert (tmp_path / ".maestro" / "workspaces" / "sess-xyz" / SUBDIR / "f.json").is_file()
 
 
 def test_non_json_content_still_saves_without_count(tmp_path):

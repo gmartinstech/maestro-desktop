@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stdio MCP server letting ANY agent create an OpenSwarm App on the canvas.
+"""Stdio MCP server letting ANY agent create an Maestro App on the canvas.
 
 One tool, CreateApp, backed by /api/outputs/agent-create. Always on, no
 activation gate: app-building is a core capability, not a third-party MCP.
@@ -14,17 +14,17 @@ import sys
 import urllib.error
 import urllib.request
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-BACKEND_AUTH = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+BACKEND_AUTH = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 BACKEND_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/outputs"
-PARENT_SESSION_ID = os.environ.get("OPENSWARM_PARENT_SESSION_ID", "")
+PARENT_SESSION_ID = os.environ.get("MAESTRO_PARENT_SESSION_ID", "")
 
 
 TOOLS = [
     {
         "name": "CreateApp",
         "description": (
-            "Create a new OpenSwarm App: a real React 18 + TypeScript + Vite web app "
+            "Create a new Maestro App: a real React 18 + TypeScript + Vite web app "
             "(optional FastAPI backend) that appears as a live preview card on the "
             "user's dashboard, next to you. Use this whenever the user asks you to "
             "build/make an app, tool, game, dashboard, tracker, visualizer, or any "
@@ -103,7 +103,7 @@ def handle_tool_call(tool_name: str, arguments: dict) -> dict:
             "",
             f"NEXT: read {path}/SKILL.md now — it's the full App Builder reference (stack, layout, rules); follow it.",
             "Then build by writing files under the workspace path; the preview hot-reloads on save.",
-            "Housekeeping: write meta.json (name/description) first; `bash restart.sh` restarts the runtime; `.openswarm/terminal.log` is the live terminal (check it before declaring done).",
+            "Housekeeping: write meta.json (name/description) first; `bash restart.sh` restarts the runtime; `.maestro/terminal.log` is the live terminal (check it before declaring done).",
         ]
         return {"content": [{"type": "text", "text": "\n".join(lines)}]}
 
@@ -128,7 +128,7 @@ def main():
             send_response(id_, {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "openswarm-apps", "version": "1.0.0"},
+                "serverInfo": {"name": "maestro-apps", "version": "1.0.0"},
             })
         elif method == "notifications/initialized":
             pass

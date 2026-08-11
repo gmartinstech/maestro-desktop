@@ -58,7 +58,7 @@ async def outputs_lifespan():
     try:
         yield
     finally:
-        # Reap every per-app subprocess. Without this each `bash run.sh` (and its vite/uvicorn descendants) reparents to PID 1 when the main backend dies, leaving ghost listeners on the .env-pinned ports that block the next OpenSwarm launch's reload preview.
+        # Reap every per-app subprocess. Without this each `bash run.sh` (and its vite/uvicorn descendants) reparents to PID 1 when the main backend dies, leaving ghost listeners on the .env-pinned ports that block the next Maestro launch's reload preview.
         try:
             from backend.apps.outputs.runtime import manager as runtime_manager
             killed = await runtime_manager.stop_all()
@@ -295,7 +295,7 @@ async def seed_workspace(body: WorkspaceSeedRequest):
       from `/api/outputs/workspace/{ws}/serve/...`.
 
     - **`template_mode="webapp_template"`**: copies the vendored
-      openswarm-ai/webapp-template snapshot (React + Vite + TS frontend
+      vendored webapp-template snapshot (React + Vite + TS frontend
       with an optional FastAPI backend) into the workspace, allocates a
       free FRONTEND_PORT and writes it into both `.env` and
       `.env.example`. BACKEND_PORT stays NONE; the agent opts in with
@@ -482,7 +482,7 @@ async def runtime_report_error(workspace_id: str, body: dict, instance: int = 1)
 
 @outputs.router.post("/workspace/{workspace_id}/runtime/console-log")
 async def runtime_console_log(workspace_id: str, body: dict, instance: int = 1):
-    """Fold webview console lines into the runtime's terminal stream so they reach the Terminal panes AND the agent-readable .openswarm/terminal.log. Renderer batches; body is {lines: [{level, text}, ...]}."""
+    """Fold webview console lines into the runtime's terminal stream so they reach the Terminal panes AND the agent-readable .maestro/terminal.log. Renderer batches; body is {lines: [{level, text}, ...]}."""
     from backend.apps.outputs.runtime import manager as runtime_manager
     rt = runtime_manager.get(workspace_id, instance)
     if rt is None:
@@ -749,7 +749,7 @@ async def execute_output(body: OutputExecute):
     ).model_dump()
 
 
-# --------------------------------------------------------------------------- Publishing to {slug}.openswarm.host ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Publishing to {slug}.maestro.host ---------------------------------------------------------------------------
 
 @outputs.router.post("/publish/preflight")
 async def publish_preflight(body: PublishPreflightRequest):

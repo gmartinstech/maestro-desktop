@@ -52,7 +52,7 @@ BASE_KWARGS = {
     "system_prompt": {"type": "preset", "preset": "claude_code"},
     "allowed_tools": ["Read"],
     "disallowed_tools": ["mcp__claude_ai_*"],
-    "mcp_servers": {"openswarm-mcp-meta": {"command": "python", "args": ["m.py"], "type": "stdio"}},
+    "mcp_servers": {"maestro-mcp-meta": {"command": "python", "args": ["m.py"], "type": "stdio"}},
     "can_use_tool": lambda: None,
     "stderr": lambda line: None,
     "hooks": {"PreToolUse": []},

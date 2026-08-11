@@ -86,7 +86,7 @@ def test_read_redacts_every_secret(client, reset_settings):
     assert r.status_code == 200, r.text
     settings = r.json()["settings"]
     # Secret fields come back as state, never a raw string value.
-    for field in ("anthropic_api_key", "openai_api_key", "claude_subscription_token", "openswarm_bearer_token"):
+    for field in ("anthropic_api_key", "openai_api_key", "claude_subscription_token", "maestro_bearer_token"):
         if field in settings:
             assert isinstance(settings[field], dict), f"{field} leaked as a raw value"
             assert "configured" in settings[field]
@@ -106,13 +106,13 @@ def test_unknown_and_server_owned_fields_are_refused(client, reset_settings):
     r = client.post("/api/settings-meta/write", json={"changes": {
         "not_a_real_field": 1,
         "connection_mode": "forged-mode",
-        "openswarm_bearer_token": "forged",
+        "maestro_bearer_token": "forged",
     }})
     assert r.status_code == 200, r.text
     out = r.json()["outcomes"]
     assert out["not_a_real_field"]["status"] == "unknown"
     assert out["connection_mode"]["status"] == "refused"
-    assert out["openswarm_bearer_token"]["status"] == "refused"
+    assert out["maestro_bearer_token"]["status"] == "refused"
     # And the server-owned field is genuinely untouched on disk.
     from backend.apps.settings.settings import load_settings
     assert load_settings().connection_mode != "forged-mode"

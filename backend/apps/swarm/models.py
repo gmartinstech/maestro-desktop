@@ -59,7 +59,7 @@ class BundlePreview(BaseModel):
 
 class Manifest(BaseModel):
     format_version: int = FORMAT_VERSION
-    created_with: str = "OpenSwarm"
+    created_with: str = "Maestro"
     created_at: str = ""
     bundle_id: str
     # sha256 over every entity payload + file (not the manifest itself); set at pack time, re-checked on import to reject a corrupted or edited archive.

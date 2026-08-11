@@ -531,7 +531,7 @@ def test_create_enabled_schedule_normalizes_local_timezone(monkeypatch):
     from backend.apps.workflows import scheduler
     from backend.apps.workflows.workflows import create_workflow
     from backend.apps.workflows.models import WorkflowCreate, ScheduleConfig, WorkflowStep
-    monkeypatch.setenv("OPENSWARM_TIMEZONE", "America/Chicago")
+    monkeypatch.setenv("MAESTRO_TIMEZONE", "America/Chicago")
     monkeypatch.setattr(scheduler, "_host_tz_cache", None)
     body = WorkflowCreate(
         title="local-tz-create",
@@ -553,7 +553,7 @@ def test_enable_schedule_normalizes_local_timezone_and_preserves_concrete_timezo
     from backend.apps.workflows import storage, scheduler
     from backend.apps.workflows.workflows import update_workflow
     from backend.apps.workflows.models import WorkflowUpdate, ScheduleConfig
-    monkeypatch.setenv("OPENSWARM_TIMEZONE", "America/Denver")
+    monkeypatch.setenv("MAESTRO_TIMEZONE", "America/Denver")
     monkeypatch.setattr(scheduler, "_host_tz_cache", None)
 
     wf = _make_wf()
@@ -635,7 +635,7 @@ def test_legacy_timezone_coerced_on_load(monkeypatch):
     }
     with open(os.path.join(storage.DATA_DIR, f"{wf_id}.json"), "w") as f:
         json.dump(legacy_blob, f)
-    monkeypatch.setenv("OPENSWARM_TIMEZONE", "America/Los_Angeles")
+    monkeypatch.setenv("MAESTRO_TIMEZONE", "America/Los_Angeles")
     monkeypatch.setattr(storage, "_cache_loaded", False)
     loaded = storage.get_workflow(wf_id)
     assert loaded is not None

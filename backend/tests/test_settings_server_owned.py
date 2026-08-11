@@ -2,7 +2,7 @@
 
 Reproduces the production bug where a Settings save built from a stale snapshot
 (the renderer PUTs the ENTIRE AppSettings object) silently wiped
-openswarm_bearer_token + connection_mode. The fix: identity/connection fields are
+maestro_bearer_token + connection_mode. The fix: identity/connection fields are
 written only by their dedicated flows; PUT /api/settings preserves whatever is on
 disk for them.
 """
@@ -38,7 +38,7 @@ def p_seed_server_owned(token="repro-bearer-0123456789abcdef"):
     from backend.apps.settings.settings import load_settings, save_settings
 
     s = load_settings()
-    s.openswarm_bearer_token = token
+    s.maestro_bearer_token = token
     s.user_id = "u-real"
     save_settings(s)
     return token
@@ -61,11 +61,11 @@ def test_stale_settings_put_cannot_wipe_server_owned_state(client, reset_setting
     from backend.apps.settings.settings import load_settings
     s = load_settings()
     assert s.user_name == "Stale Draft Save"
-    assert s.openswarm_bearer_token == token, "stale PUT wiped the bearer"
+    assert s.maestro_bearer_token == token, "stale PUT wiped the bearer"
     assert s.user_id == "u-real", "stale PUT wiped the user id"
 
     body = r.json()["settings"]
-    assert body["openswarm_bearer_token"] == token
+    assert body["maestro_bearer_token"] == token
 
 
 def test_put_cannot_inject_server_owned_fields(client, reset_settings):
@@ -74,7 +74,7 @@ def test_put_cannot_inject_server_owned_fields(client, reset_settings):
     snapshot = client.get("/api/settings").json()
     forged = dict(snapshot)
     forged["connection_mode"] = "forged-mode"
-    forged["openswarm_bearer_token"] = "forged-bearer-fedcba9876543210"
+    forged["maestro_bearer_token"] = "forged-bearer-fedcba9876543210"
     forged["user_id"] = "u-forged"
 
     r = client.put("/api/settings", json=forged)
@@ -82,6 +82,6 @@ def test_put_cannot_inject_server_owned_fields(client, reset_settings):
 
     from backend.apps.settings.settings import load_settings
     s = load_settings()
-    assert s.openswarm_bearer_token == snapshot.get("openswarm_bearer_token")
+    assert s.maestro_bearer_token == snapshot.get("maestro_bearer_token")
     assert s.connection_mode == snapshot.get("connection_mode")
     assert s.user_id == snapshot.get("user_id")

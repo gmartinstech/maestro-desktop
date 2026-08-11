@@ -67,9 +67,9 @@ def reset_settings():
 def p_run_stdio(port: int, token: str, session_id: str, changes: dict) -> str:
     env = {
         **os.environ,
-        "OPENSWARM_PORT": str(port),
-        "OPENSWARM_AUTH_TOKEN": token,
-        "OPENSWARM_PARENT_SESSION_ID": session_id,
+        "MAESTRO_PORT": str(port),
+        "MAESTRO_AUTH_TOKEN": token,
+        "MAESTRO_PARENT_SESSION_ID": session_id,
     }
     rpc = "\n".join([
         json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),

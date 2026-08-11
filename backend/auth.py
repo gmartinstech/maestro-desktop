@@ -63,7 +63,7 @@ def get_auth_token() -> str:
 class p_TokenScrubFilter(logging.Filter):
     """Logging filter that redacts the install token from log records (defense in depth)."""
 
-    P_PLACEHOLDER = "<REDACTED:openswarm-token>"
+    P_PLACEHOLDER = "<REDACTED:maestro-token>"
 
     @staticmethod
     def p_args_might_contain_token(args) -> bool:
@@ -177,7 +177,7 @@ P_AUTH_EXEMPT_EXACT = {
     "/api/tools/oauth/callback",
     "/api/tools/oauth/cloud-claim",
     "/api/version",
-    # Local Google OAuth token-endpoint proxy: hit by the google-workspace-mcp subprocess we spawn. It doesn't (and can't easily) carry the install bearer in google-auth's refresh post. Localhost binding is the gate, and the route does nothing the public api.openswarm.com/api/oauth/google/refresh doesn't already do for any internet caller, so no new attack surface.
+    # Local Google OAuth token-endpoint proxy: hit by the google-workspace-mcp subprocess we spawn. It doesn't (and can't easily) carry the install bearer in google-auth's refresh post. Localhost binding is the gate, and the route does nothing the OAuth helper's public /api/oauth/google/refresh doesn't already do for any internet caller, so no new attack surface.
     "/api/tools/google-oauth-token",
     # Dev-only token handoff for the split-port frontend (no Electron preload to read the token from). The route itself 404s in packaged builds.
     "/api/dev/token",
@@ -217,7 +217,7 @@ def extract_bearer(header_value: str | None) -> str:
 
 
 def request_matches_token(request_headers: dict, query_params: dict | None = None) -> bool:
-    """Validate that an HTTP/WS request carries our token (Bearer, x-openswarm-token, or ?token=); constant-time compare."""
+    """Validate that an HTTP/WS request carries our token (Bearer, x-maestro-token, or ?token=); constant-time compare."""
     if not TOKEN:
         # Backend not initialized: fail closed. Only test fixtures that bypass main hit this.
         return False
@@ -229,12 +229,12 @@ def request_matches_token(request_headers: dict, query_params: dict | None = Non
     if bearer:
         candidates.append(bearer)
 
-    openswarm_header = (
-        request_headers.get("x-openswarm-token")
-        or request_headers.get("X-OpenSwarm-Token")
+    maestro_header = (
+        request_headers.get("x-maestro-token")
+        or request_headers.get("X-Maestro-Token")
     )
-    if openswarm_header:
-        candidates.append(openswarm_header.strip())
+    if maestro_header:
+        candidates.append(maestro_header.strip())
 
     if query_params:
         qp_token = query_params.get("token")
@@ -263,7 +263,7 @@ def is_origin_allowed(origin: str | None) -> bool:
         return True
     if origin in P_ORIGIN_ALLOWLIST_DEV:
         return True
-    # Packaged Electron file:// includes paths like file:///Applications/OpenSwarm.app/...; match by prefix.
+    # Packaged Electron file:// includes paths like file:///Applications/Maestro.app/...; match by prefix.
     if origin.startswith("file://"):
         return True
     if origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:"):

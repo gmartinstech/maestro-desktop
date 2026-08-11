@@ -2,7 +2,7 @@
 
 Seeding used to be create-if-absent, which pinned every install to whatever shipped the day it
 first booted: the App Builder agent's prompt kept a months-old skill and so never learned that
-`.openswarm/terminal.log` existed. `seeded_hash` records the bytes we last wrote so an untouched
+`.maestro/terminal.log` existed. `seeded_hash` records the bytes we last wrote so an untouched
 file can be safely replaced, while a real edit (or an untracked pre-existing install) is left alone.
 """
 

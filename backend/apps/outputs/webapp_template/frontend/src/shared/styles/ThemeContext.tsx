@@ -14,7 +14,7 @@ type Mode = 'light' | 'dark';
 //   1. Default to the OS appearance (`prefers-color-scheme: dark`) on
 //      first mount — synchronous, no flash.
 //   2. Persist user toggles to localStorage for instant re-render on the
-//      same app, AND to OpenSwarm's /api/settings.app_template_theme_override
+//      same app, AND to Maestro's /api/settings.app_template_theme_override
 //      so future apps see it on load.
 //   3. After mount, async-fetch /api/settings; if the override there
 //      differs from the synchronous default, switch to it. Brief style
@@ -22,11 +22,13 @@ type Mode = 'light' | 'dark';
 //      vite SPAs) or (b) blocking initial render on a network call.
 //
 // The auth token rides in the URL (the template is loaded with
-// `?token=<bearer>` by OpenSwarm's webview preload), so the fetch can hit
+// `?token=<bearer>` by Maestro's webview preload), so the fetch can hit
 // localhost:8324 cross-origin via the host's CORS allow-list.
 
-const LOCAL_STORAGE_KEY = 'openswarm-app-theme-override';
-const OPENSWARM_BACKEND = 'http://localhost:8324';
+const LOCAL_STORAGE_KEY = 'maestro-app-theme-override';
+// Pre-rebrand key; read once and rewritten under the new name so an existing app workspace keeps the user's theme choice.
+const LEGACY_LOCAL_STORAGE_KEY = 'openswarm-app-theme-override';
+const MAESTRO_BACKEND = 'http://localhost:8324';
 
 function readUrlToken(): string {
   try {
@@ -39,7 +41,14 @@ function readUrlToken(): string {
 function readLocalStorageOverride(): Mode | null {
   try {
     const v = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-    return v === 'light' || v === 'dark' ? v : null;
+    if (v === 'light' || v === 'dark') return v;
+    const legacy = window.localStorage.getItem(LEGACY_LOCAL_STORAGE_KEY);
+    if (legacy === 'light' || legacy === 'dark') {
+      window.localStorage.setItem(LOCAL_STORAGE_KEY, legacy);
+      window.localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
+      return legacy;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -212,7 +221,7 @@ const ClaudeThemeProvider: React.FC<ClaudeThemeProviderProps> = ({ children }) =
   // the system and respect their choice.
   const userOverrideRef = useRef<boolean>(readLocalStorageOverride() !== null);
 
-  // (1) After mount, ask OpenSwarm whether a prior app already set a
+  // (1) After mount, ask Maestro whether a prior app already set a
   // cross-app override. If so AND the user hasn't already toggled in
   // this session AND it differs from current state, adopt it.
   useEffect(() => {
@@ -226,7 +235,7 @@ const ClaudeThemeProvider: React.FC<ClaudeThemeProviderProps> = ({ children }) =
         // defaults every unset field (api keys, subscription tokens,
         // etc.), so PUTting just `{ app_template_theme_override }`
         // there logs the user out. The dedicated endpoint merges.
-        const res = await fetch(`${OPENSWARM_BACKEND}/api/settings/app-theme-override`, {
+        const res = await fetch(`${MAESTRO_BACKEND}/api/settings/app-theme-override`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok || cancelled) return;
@@ -274,14 +283,14 @@ const ClaudeThemeProvider: React.FC<ClaudeThemeProviderProps> = ({ children }) =
       try {
         window.localStorage.setItem(LOCAL_STORAGE_KEY, next);
       } catch { /* private mode etc. — fine, the remote PUT still carries it */ }
-      // (b) Cross-app persistence: push to OpenSwarm's dedicated
+      // (b) Cross-app persistence: push to Maestro's dedicated
       // theme-override endpoint (NOT the generic /api/settings PUT,
       // which expects a full AppSettings body and would default every
       // unspecified field — wiping api keys / subscription tokens and
       // popping the SignInGate). Fire-and-forget — best effort.
       const token = readUrlToken();
       if (token) {
-        fetch(`${OPENSWARM_BACKEND}/api/settings/app-theme-override`, {
+        fetch(`${MAESTRO_BACKEND}/api/settings/app-theme-override`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

@@ -19,7 +19,7 @@ trafilatura==2.0.0
 # swarm-analytics: typed client for the product-analytics ingest; fire-and-forget so it never breaks the app.
 swarm-analytics==0.1.1
 # tzlocal: dev-mode fallback for resolving the user's IANA timezone when
-# Electron's OPENSWARM_TIMEZONE env var isn't set (i.e. `bash run.sh`).
+# Electron's MAESTRO_TIMEZONE env var isn't set (i.e. `bash run.sh`).
 # Packaged builds get the env var directly so this is a safety net.
 tzlocal==5.3.1
 # Test deps (pytest, pytest-asyncio) live in requirements-dev.txt — they

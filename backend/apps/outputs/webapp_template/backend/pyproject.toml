@@ -1,7 +1,7 @@
 [project]
-name = "openswarm-backend"
+name = "maestro-backend"
 version = "0.1.0"
-description = "OpenSwarm web app backend — FastAPI + SubApp plugin pattern"
+description = "Maestro web app backend — FastAPI + SubApp plugin pattern"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi[standard]",

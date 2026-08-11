@@ -5,7 +5,7 @@ cache. Nothing else in the package spawns or kills the subprocess; the sync
 and oauth modules only talk to the already-running server over HTTP.
 
 9Router is a free AI subscription proxy that lets users connect their
-Claude/ChatGPT/Gemini subscriptions to OpenSwarm without API keys. It runs
+Claude/ChatGPT/Gemini subscriptions to Maestro without API keys. It runs
 silently in the background on port 20128 and exposes an OpenAI-compatible
 API at localhost:20128/v1.
 """
@@ -31,8 +31,8 @@ NINE_ROUTER_URL = f"http://localhost:{NINE_ROUTER_PORT}"
 NINE_ROUTER_API = f"{NINE_ROUTER_URL}/api"
 NINE_ROUTER_V1 = f"{NINE_ROUTER_URL}/v1"
 
-# Pinned 9router npm package version. Prod default stays 0.3.60; set OPENSWARM_ROUTER_VERSION to stage a bump in dev (keys the dev cache by version, so the override pulls a clean install) without shipping it. 0.4.x gates its internal /api/* routes behind auth (the old bump blocker): bare `POST /api/providers` / `/api/oauth/<prov>/device-code` now 401 instead of working. That auth is now PORTED here: see cli_auth_token() / cli_auth_headers() below, which compute the `x-9r-cli-token` 9Router checks and which every /api/* call in this package attaches. The header is empty on 0.3.60 (no machine-id file), so the old auth-free path is untouched. What the bump buys: cc/claude-opus-4-8 and cx/gpt-5.5 on the sub routes (gpt-5.5 404s on 0.3.60), a reworked WebSearch behind /api/v1/search, and 3 months of cross-provider translator robustness. REMAINING gate before flipping the prod default to 0.4.x: re-qualify cross-provider WebSearch. The original 0.3.60 pin reason was that 0.3.60-0.3.96 regressed it (a Codex/Gemini primary delegating WebSearch saw "claude-haiku-4-5-20251001 unavailable" or hallucinated output); 0.4.x reworked it but that's unverified here. Also confirmed on 0.4.80: it STILL emits `max_tokens` (not max_completion_tokens) on Anthropic->OpenAI, so our /api/openai-passthrough rename (core/openai_passthrough.py + sync_openai_api_key, routed via an `openai-compatible` node that honors `baseUrl`) STAYS necessary.
-NINE_ROUTER_NPM_VERSION = os.environ.get("OPENSWARM_ROUTER_VERSION", "0.3.60")
+# Pinned 9router npm package version. Prod default stays 0.3.60; set MAESTRO_ROUTER_VERSION to stage a bump in dev (keys the dev cache by version, so the override pulls a clean install) without shipping it. 0.4.x gates its internal /api/* routes behind auth (the old bump blocker): bare `POST /api/providers` / `/api/oauth/<prov>/device-code` now 401 instead of working. That auth is now PORTED here: see cli_auth_token() / cli_auth_headers() below, which compute the `x-9r-cli-token` 9Router checks and which every /api/* call in this package attaches. The header is empty on 0.3.60 (no machine-id file), so the old auth-free path is untouched. What the bump buys: cc/claude-opus-4-8 and cx/gpt-5.5 on the sub routes (gpt-5.5 404s on 0.3.60), a reworked WebSearch behind /api/v1/search, and 3 months of cross-provider translator robustness. REMAINING gate before flipping the prod default to 0.4.x: re-qualify cross-provider WebSearch. The original 0.3.60 pin reason was that 0.3.60-0.3.96 regressed it (a Codex/Gemini primary delegating WebSearch saw "claude-haiku-4-5-20251001 unavailable" or hallucinated output); 0.4.x reworked it but that's unverified here. Also confirmed on 0.4.80: it STILL emits `max_tokens` (not max_completion_tokens) on Anthropic->OpenAI, so our /api/openai-passthrough rename (core/openai_passthrough.py + sync_openai_api_key, routed via an `openai-compatible` node that honors `baseUrl`) STAYS necessary.
+NINE_ROUTER_NPM_VERSION = os.environ.get("MAESTRO_ROUTER_VERSION", "0.3.60")
 
 # 9Router (our pinned 0.3.60) appends every request to ~/.9router/request-details.json and reloads the WHOLE file on each write; once it reaches tens of MB the router's node process OOM-aborts and takes the app down, even while idle (verified from crash dumps). Two cheap, pin-safe guards until the real fix (a 9Router bump past 0.4.66, which moved off this file): 1. rotate that log before we spawn 9Router when it gets large, so growth can't run away; 2. give node an explicit, generous heap ceiling for legitimate large multimodal bodies. Neither touches routing, so WebSearch/WebFetch translation and the 0.3.60 pin are unaffected.
 P_REQUEST_LOG_PATH = os.path.expanduser("~/.9router/request-details.json")
@@ -177,7 +177,7 @@ def cli_auth_headers() -> dict[str, str]:
 
 def p_find_9router_dir() -> str | None:
     """Locate the bundled 9Router directory (works in both dev and packaged mode)."""
-    p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+    p_is_packaged = os.environ.get("MAESTRO_PACKAGED") == "1"
 
     if p_is_packaged:
         import sys
@@ -222,7 +222,7 @@ def p_find_node() -> str | None:
     """Find a Node.js binary (works in both dev and packaged mode).
 
     Priority order:
-      1. OPENSWARM_NODE_PATH; set by electron/main.js when a real Node
+      1. MAESTRO_NODE_PATH; set by electron/main.js when a real Node
          binary is bundled in extraResources. Always preferred on user
          machines because it (a) avoids the bouncing "exec" Dock icon
          that ELECTRON_RUN_AS_NODE produces on fresh Macs and (b) starts
@@ -233,7 +233,7 @@ def p_find_node() -> str | None:
          packaged builds that for some reason shipped without the bundled
          node payload.
     """
-    bundled = os.environ.get("OPENSWARM_NODE_PATH")
+    bundled = os.environ.get("MAESTRO_NODE_PATH")
     if bundled and os.path.exists(bundled):
         return bundled
 
@@ -241,7 +241,7 @@ def p_find_node() -> str | None:
     if node:
         return node
 
-    electron_path = os.environ.get("OPENSWARM_ELECTRON_PATH")
+    electron_path = os.environ.get("MAESTRO_ELECTRON_PATH")
     if electron_path and os.path.exists(electron_path):
         return electron_path
 
@@ -257,7 +257,7 @@ def p_dev_router_cache_dir() -> str:
     base = os.environ.get("XDG_CACHE_HOME") or os.path.join(
         os.path.expanduser("~"), ".cache"
     )
-    return os.path.join(base, "openswarm-router", NINE_ROUTER_NPM_VERSION)
+    return os.path.join(base, "maestro-router", NINE_ROUTER_NPM_VERSION)
 
 
 def p_ensure_router_cached() -> str | None:
@@ -287,7 +287,7 @@ def p_ensure_router_cached() -> str | None:
         pkg_json = os.path.join(cache_dir, "package.json")
         if not os.path.exists(pkg_json):
             with open(pkg_json, "w") as f:
-                f.write('{"name":"_openswarm_router_cache","version":"0.0.0","private":true}\n')
+                f.write('{"name":"_maestro_router_cache","version":"0.0.0","private":true}\n')
 
         logger.info(
             "Installing 9router@%s into %s (one-time, ~30s)...",
@@ -335,7 +335,7 @@ def p_report_start_failure(reason: str, *, detail: str = "", **fields: Any) -> N
         payload: dict[str, Any] = {
             "kind": "9router_start_failed",
             "reason": reason,
-            "packaged": os.environ.get("OPENSWARM_PACKAGED") == "1",
+            "packaged": os.environ.get("MAESTRO_PACKAGED") == "1",
             **fields,
         }
         if detail:
@@ -470,7 +470,7 @@ def start_watchdog() -> None:
 async def p_ensure_running_impl():
     """Start 9Router if not already running."""
     global p_process, p_is_running_last_ok
-    p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+    p_is_packaged = os.environ.get("MAESTRO_PACKAGED") == "1"
 
     if is_running():
         # In dev mode, kill stale standalone servers (from previous builds) so we can start `next dev` which always uses latest source code
@@ -523,7 +523,7 @@ async def p_ensure_running_impl():
         cmd = [node, f"--max-old-space-size={P_NODE_HEAP_MB}"] + (["--require", p_patch] if p_patch else []) + [standalone_server]
         cwd = os.path.dirname(standalone_server)
         env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
-        if node == os.environ.get("OPENSWARM_ELECTRON_PATH"):
+        if node == os.environ.get("MAESTRO_ELECTRON_PATH"):
             env["ELECTRON_RUN_AS_NODE"] = "1"
     else:
         # Dev: install the pinned npm package into a local cache once, then spawn `node app/server.js` directly (bypasses the package cli.js tray icon users confusingly quit, its update-check spinner, and the TUI).
@@ -543,7 +543,7 @@ async def p_ensure_running_impl():
         env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
 
     # Capture stdout+stderr so a failed start can tell us WHY (the old DEVNULL default made every "router never came up" a silent mystery, which is the whole reason #90 was un-diagnosable). Packaged prod (NODE_ENV=production standalone) is quiet, so one fixed temp file, truncated each start attempt, won't grow; dev keeps its chatty-Next.js DEVNULL unless debug is set.
-    p_cap_path = os.path.join(tempfile.gettempdir(), "openswarm-9router-start.log")
+    p_cap_path = os.path.join(tempfile.gettempdir(), "maestro-9router-start.log")
     p_cap_file = None
     if p_is_packaged:
         try:
@@ -551,7 +551,7 @@ async def p_ensure_running_impl():
             p_stdout, p_stderr = p_cap_file, subprocess.STDOUT
         except OSError:
             p_stdout, p_stderr = subprocess.DEVNULL, subprocess.DEVNULL
-    elif os.environ.get("OPENSWARM_DEBUG_9ROUTER"):
+    elif os.environ.get("MAESTRO_DEBUG_9ROUTER"):
         p_log_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "data", "9router.log",

@@ -1,6 +1,6 @@
 # Analytics Overview (`swarm-analytics` SDK)
 
-This document explains how the OpenSwarm product-analytics system works and how
+This document explains how the Maestro product-analytics system works and how
 to use the `swarm-analytics` Python SDK to send analytics from the desktop app.
 It is written for an engineer/agent integrating the SDK into a separate codebase.
 

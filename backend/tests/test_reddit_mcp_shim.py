@@ -112,7 +112,7 @@ def test_submit_surfaces_reddit_errors():
 
 def test_session_unavailable_is_actionable():
     def boom(*a, **k):
-        raise SessionUnavailable("Not logged in to reddit.com. Open reddit.com in the OpenSwarm browser, sign in, then retry.")
+        raise SessionUnavailable("Not logged in to reddit.com. Open reddit.com in the Maestro browser, sign in, then retry.")
 
     with patch.object(reddit_reads, "api", boom):
         out = handle_tool_call("reddit_whoami", {})

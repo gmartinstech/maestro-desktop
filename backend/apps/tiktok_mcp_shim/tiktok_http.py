@@ -18,7 +18,7 @@ from backend.apps.tiktok_mcp_shim.tiktok_sign import signed_query
 
 SIGNATURE_HINT = (
     "TikTok blocked this as unsigned/automated (its X-Bogus/X-Gnarly gate). Reads sometimes "
-    "slip through; signed writes and uploads need a real browser. Use the OpenSwarm browser "
+    "slip through; signed writes and uploads need a real browser. Use the Maestro browser "
     "agent for TikTok actions: it drives your live tiktok.com session, so it's free, "
     "undetectable, and can do everything a human can."
 )

@@ -36,7 +36,7 @@ _paused = False
 
 def _resolve_host_tz_name() -> str:
     """Best-effort IANA name for the host. Mirrors apps/service/client.py."""
-    name = os.environ.get("OPENSWARM_TIMEZONE", "").strip()
+    name = os.environ.get("MAESTRO_TIMEZONE", "").strip()
     if not name:
         try:
             from tzlocal import get_localzone_name  # type: ignore

@@ -1,7 +1,7 @@
 """Multi-instance app runtimes: two dashboard cards of the same app must get fully
 independent AppRuntime processes on independent ports. Pins the invariants the
 frontend's per-instance attach relies on: instance-suffixed registry keys, no shared
-refcount between instances, fresh (non-.env) ports + OPENSWARM_FORCE_* env for
+refcount between instances, fresh (non-.env) ports + MAESTRO_FORCE_* env for
 secondaries, and per-instance terminal.log files."""
 
 import os
@@ -54,8 +54,8 @@ async def test_secondary_instance_uses_fresh_ports_and_force_env(tmp_path, monke
     ok = await rt.start()
     # The stubbed spawn raises, so start() reports failure and nulls the ports; the forced env captured at spawn time carries what the secondary would have used.
     assert ok is False
-    forced_fp = int(captured_env["OPENSWARM_FORCE_FRONTEND_PORT"])
-    forced_bp = int(captured_env["OPENSWARM_FORCE_BACKEND_PORT"])
+    forced_fp = int(captured_env["MAESTRO_FORCE_FRONTEND_PORT"])
+    forced_bp = int(captured_env["MAESTRO_FORCE_BACKEND_PORT"])
     assert forced_fp != 45001
     assert forced_bp != 45002
     # .env untouched: the primary still owns its pinned ports.
@@ -63,10 +63,10 @@ async def test_secondary_instance_uses_fresh_ports_and_force_env(tmp_path, monke
 
 
 def test_secondary_terminal_log_is_suffixed(tmp_path):
-    os.makedirs(os.path.join(str(tmp_path), ".openswarm"))
+    os.makedirs(os.path.join(str(tmp_path), ".maestro"))
     rt1 = AppRuntime("ws1", str(tmp_path), instance=1)
     rt2 = AppRuntime("ws1", str(tmp_path), instance=2)
     rt1.record_frontend_log("log", "hello from instance 1")
     rt2.record_frontend_log("log", "hello from instance 2")
-    files = sorted(os.listdir(os.path.join(str(tmp_path), ".openswarm")))
+    files = sorted(os.listdir(os.path.join(str(tmp_path), ".maestro")))
     assert files == ["terminal-2.log", "terminal.log"]

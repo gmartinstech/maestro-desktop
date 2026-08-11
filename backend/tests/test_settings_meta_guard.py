@@ -34,7 +34,7 @@ CONNECTION_MODES = ["own_key"]
 KNOWN_SECRET_FIELDS = [
     "anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
     "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
-    "openswarm_bearer_token", "installation_id",
+    "maestro_bearer_token", "installation_id",
 ]
 
 

@@ -11,6 +11,7 @@ import os
 import tempfile
 import threading
 import time
+from typing import List, Tuple
 
 from pydantic import ValidationError
 
@@ -22,13 +23,25 @@ logger = logging.getLogger(__name__)
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 
 
+# Old field name -> new field name, applied oldest-first so a two-generation-old settings.json chains all the way through (openswarm_auth_token -> openswarm_bearer_token -> maestro_bearer_token).
+P_LEGACY_FIELD_RENAMES: List[Tuple[str, str]] = [
+    ("openswarm_auth_token", "openswarm_bearer_token"),
+    ("openswarm_bearer_token", "maestro_bearer_token"),
+    ("openswarm_proxy_url", "maestro_proxy_url"),
+]
+
+
 def migrate_legacy_fields(raw: dict) -> dict:
-    """Translate deprecated pre-launch field names ('managed', 'openswarm-pro', 'free-trial', 'openswarm_auth_token') into production schema."""
+    """Translate deprecated pre-launch field names ('managed', 'openswarm-pro', 'free-trial') and the pre-rebrand openswarm_* keys into the production schema."""
     # The paid tier and the zero-config trial are both gone; any record still carrying one of those modes routes as own_key.
     if raw.get("connection_mode") in ("managed", "openswarm-pro", "free-trial"):
         raw["connection_mode"] = "own_key"
-    if "openswarm_auth_token" in raw and "openswarm_bearer_token" not in raw:
-        raw["openswarm_bearer_token"] = raw.pop("openswarm_auth_token")
+    for old, new in P_LEGACY_FIELD_RENAMES:
+        if old in raw:
+            # A value already written under the newer name wins; the stale one is just dropped.
+            value = raw.pop(old)
+            if new not in raw:
+                raw[new] = value
     return raw
 
 

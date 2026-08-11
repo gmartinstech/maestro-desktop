@@ -20,8 +20,8 @@ import pytest
 
 # --------------------------------------------------------------------------- Boot env: route data dirs into a tmp scratch root before importing backend modules. ---------------------------------------------------------------------------
 
-P_TMPROOT = tempfile.mkdtemp(prefix="openswarm-phase1-stress-")
-os.environ.setdefault("OPENSWARM_DATA_DIR", P_TMPROOT)
+P_TMPROOT = tempfile.mkdtemp(prefix="maestro-phase1-stress-")
+os.environ.setdefault("MAESTRO_DATA_DIR", P_TMPROOT)
 
 
 # --------------------------------------------------------------------------- Group 1, Message.client_message_id ---------------------------------------------------------------------------

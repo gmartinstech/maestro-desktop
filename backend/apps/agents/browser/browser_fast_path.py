@@ -136,7 +136,7 @@ def dispatch_failed(result: dict) -> bool:
 
 
 NO_DASHBOARD_REPLY = (
-    "I can't drive a browser right now because no OpenSwarm window is connected. "
+    "I can't drive a browser right now because no Maestro window is connected. "
     "Open the app window and send this again."
 )
 

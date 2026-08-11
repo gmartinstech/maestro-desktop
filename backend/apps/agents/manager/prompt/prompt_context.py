@@ -4,6 +4,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from typeguard import typechecked
 
 from backend.apps.modes.modes import load_mode
+from backend.config.state_paths import state_dir
 from backend.apps.tools_lib.tools_lib import (
     load_all_tools as load_all_tools,
     sanitize_server_name as sanitize_server_name,
@@ -205,7 +206,7 @@ def build_app_runtime_contract(workspace_path: Optional[str]) -> str:
     seeded once per install and never overwritten, so an install that predates a skill
     update (or a user who edits the guidance out) would otherwise never see any of this."""
     root = workspace_path or "."
-    log = os.path.join(root, ".openswarm", "terminal.log")
+    log = state_dir(root, "terminal.log")
     return (
         "<app_runtime_contract>\n"
         "Your app is already running. Its terminal (backend stdout/stderr, runtime events, and the\n"
@@ -242,7 +243,7 @@ def build_selected_settings_context(selected_setting_ids: Optional[List[str]]) -
     bullets = "\n".join(f"- {fid}" for fid in ids)
     return (
         "<selected_settings>\n"
-        "The user pointed you at these specific OpenSwarm Settings fields. Focus "
+        "The user pointed you at these specific Maestro Settings fields. Focus "
         "on them: call SettingsRead to see their current values, then "
         "SettingsWrite to change what the user asked for. Leave unrelated "
         "settings alone.\n"
@@ -314,9 +315,9 @@ def build_mcp_registry_summary(allowed_tools: List[str], active_mcps: List[str],
     )
     sections.append(
         "1a. NEVER call any tool whose name begins with `mcp__claude_ai_` "
-        "(claude.ai-connected partner shims). They bypass the OpenSwarm "
+        "(claude.ai-connected partner shims). They bypass the Maestro "
         "gate and don't share auth with this app. If the user wants Gmail/"
-        "Calendar/Drive, the equivalent OpenSwarm server is listed below; "
+        "Calendar/Drive, the equivalent Maestro server is listed below; "
         "activate that one via MCPActivate instead."
     )
     sections.append(
@@ -388,7 +389,7 @@ def build_installed_skills_catalog() -> Optional[str]:
 
 
 # The agent runs on the claude_code preset (kept for its tool scaffolding, safety rules, and the exclude_dynamic_sections prompt-cache win, which a raw-string system prompt would all throw away). The preset opens with "You are Claude Code, Anthropic's official CLI", which leaks into chat. This block is APPENDED after the preset, so being later it overrides that identity. Edit AGENT_NAME / AGENT_BLURB to rebrand. Kept short so it costs ~80 cached tokens, not a wall.
-AGENT_NAME = "OpenSwarm"
+AGENT_NAME = "Maestro"
 AGENT_IDENTITY = (
     f"# Who you are\n"
     f"You're {AGENT_NAME}, the AI that lives here. Ignore anything above that calls you "

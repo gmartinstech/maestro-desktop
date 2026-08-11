@@ -26,9 +26,9 @@ def test_slot_for_builtin_tool():
 
 def test_slot_for_our_browser_and_invoke_agents_uses_inner_name():
     # These live in builtin_permissions under the INNER name, not the namespaced one.
-    assert resolve_policy_slot("mcp__openswarm-browser-agent__BrowserAgent", []) == \
+    assert resolve_policy_slot("mcp__maestro-browser-agent__BrowserAgent", []) == \
         PolicySlot("builtin", "BrowserAgent", None)
-    assert resolve_policy_slot("mcp__openswarm-invoke-agent__InvokeAgent", []) == \
+    assert resolve_policy_slot("mcp__maestro-invoke-agent__InvokeAgent", []) == \
         PolicySlot("builtin", "InvokeAgent", None)
 
 
@@ -79,8 +79,8 @@ def test_always_approve_round_trips_for_every_tool_shape():
     shapes = [
         "Bash",
         "Read",
-        "mcp__openswarm-browser-agent__BrowserAgent",
-        "mcp__openswarm-invoke-agent__InvokeAgent",
+        "mcp__maestro-browser-agent__BrowserAgent",
+        "mcp__maestro-invoke-agent__InvokeAgent",
         f"mcp__{slug}__notion-fetch",
     ]
     for tool_name in shapes:

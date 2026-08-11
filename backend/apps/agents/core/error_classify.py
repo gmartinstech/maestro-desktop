@@ -57,7 +57,7 @@ P_TRANSLATION_ERROR_PATTERNS = re.compile(
 # Patterns that look rate-limit-ish but are actually non-transient (user quota, auth, context-window tier gate). Must NOT retry, upgrading, reauthing, or trimming context is required. The long-context-required variant is what Anthropic returns when an OAuth Pro/Max account ships a request whose input exceeds the 200K standard tier and would need the "extra usage" tier; the user can't recover by waiting, so we surface it instead of looping.
 NON_TRANSIENT_PATTERNS = re.compile(
     r"(?:usage\s+cap\s+exceeded"
-    r"|reached\s+your\s+OpenSwarm.*plan\s+limit"
+    r"|reached\s+your\s+Maestro.*plan\s+limit"
     r"|no\s+active\s+subscription"
     r"|subscription\s+(?:canceled|past_due)"
     r"|invalid.*token"
@@ -105,7 +105,7 @@ def is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
 
     Used by the catch-all error path to surface a friendly "subscription
     expired / reconnect" card instead of dumping the raw 401 JSON. The most
-    common cause: the OpenSwarm Pro bearer or 9Router OAuth token has expired
+    common cause: the Maestro Pro bearer or 9Router OAuth token has expired
     while the UI still shows the connection as 'connected'.
     """
     combined = f"{exc!s}\n{extra_text}".strip()
@@ -176,7 +176,7 @@ def is_transient_capacity_error(exc: BaseException, extra_text: str = "") -> boo
         return False
     if TRANSIENT_CAPACITY_PATTERNS.search(combined):
         return True
-    # Pool-exhaustion copy from the OpenSwarm proxy ("No pool capacity available. Try again shortly."), matches the capacity family too.
+    # Pool-exhaustion copy from the Maestro proxy ("No pool capacity available. Try again shortly."), matches the capacity family too.
     if re.search(r"no\s+pool\s+capacity", combined, re.IGNORECASE):
         return True
     return False
@@ -203,7 +203,7 @@ def is_out_of_tokens(exc: BaseException, extra_text: str = "") -> bool:
         return False
     return bool(re.search(
         r"usage\s+cap\s+exceeded"
-        r"|reached\s+your\s+OpenSwarm.*plan\s+limit"
+        r"|reached\s+your\s+Maestro.*plan\s+limit"
         r"|usage\s+limit"
         r"|insufficient_quota"
         r"|exceeded\s+your\s+current\s+quota"

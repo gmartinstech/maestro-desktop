@@ -10,6 +10,8 @@ import sys
 import tarfile
 import threading
 
+from backend.config.state_paths import home_state_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,10 +19,10 @@ def p_resolve_npm() -> list[str] | None:
     """Resolve an invokable npm command. Windows ships npm as npm.cmd (a
     batch shim), which Python's subprocess won't find via a bare "npm";
     and the packaged Electron build bundles only node.exe (no npm) but
-    exports OPENSWARM_NODE_PATH, so we also probe node's own bundled
+    exports MAESTRO_NODE_PATH, so we also probe node's own bundled
     npm-cli.js. Returns an argv prefix, or None when npm is genuinely
     absent (caller treats warm-cache as a skippable optimization)."""
-    node_path = os.environ.get("OPENSWARM_NODE_PATH")
+    node_path = os.environ.get("MAESTRO_NODE_PATH")
     if node_path and os.path.exists(node_path):
         node_dir = os.path.dirname(node_path)
         # Prefer invoking npm-cli.js through our bundled node so this doesn't depend on a system node for the shim's shebang. Second entry is the canonical Mac-dist layout (lib/node_modules/npm); first is the Windows layout (node_modules/npm beside node.exe).
@@ -55,7 +57,7 @@ APP_BUILDER_SKILL_SOURCE_PATH = os.path.join(os.path.dirname(__file__), "app_bui
 # Second built-in skill: documentation for `swarm-debug`, the colored frame-aware logger pre-installed in every webapp-template workspace's backend. Registered the same way as the App Builder skill.
 SWARM_DEBUG_SKILL_SOURCE_PATH = os.path.join(os.path.dirname(__file__), "swarm_debug_skill.md")
 
-# Root of the vendored openswarm-ai/webapp-template snapshot. seed_workspace copytrees this into new-mode workspaces (excluding backend/, which gets brought in on-demand by the workspace's own backend_init.sh). See scripts/fetch-webapp-template.sh for the snapshot fetch + patches.
+# Root of the vendored webapp-template snapshot. seed_workspace copytrees this into new-mode workspaces (excluding backend/, which gets brought in on-demand by the workspace's own backend_init.sh). See scripts/fetch-webapp-template.sh for the snapshot fetch + patches.
 WEBAPP_TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "webapp_template")
 
 # Bundled default; used as the read-once fallback if the user-editable copy at ~/.claude/skills/app_builder_skill.md has been removed despite the built-in flag (defensive; shouldn't happen in normal use).
@@ -166,7 +168,7 @@ DEBUGGER_PATH = os.path.abspath(
 TEMPLATE_BACKEND_PATH = os.path.abspath(os.path.join(WEBAPP_TEMPLATE_DIR, "backend"))
 
 
-# --------------------------------------------------------------------------- Shared node_modules cache; every new webapp-template workspace symlinks its frontend/node_modules to a single warm directory. First-app create pays the ~22s npm-install cost once; every subsequent app is instant (just a symlink + vite startup, ~1s). Cache directory is keyed by a sha of the template's package.json, so a template dep bump invalidates the cache automatically; old caches sit until the user clears ~/.openswarm/cache. ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Shared node_modules cache; every new webapp-template workspace symlinks its frontend/node_modules to a single warm directory. First-app create pays the ~22s npm-install cost once; every subsequent app is instant (just a symlink + vite startup, ~1s). Cache directory is keyed by a sha of the template's package.json, so a template dep bump invalidates the cache automatically; old caches sit until the user clears ~/.maestro/cache. ---------------------------------------------------------------------------
 
 p_warm_cache_lock = threading.Lock()
 p_warm_cache_thread: threading.Thread | None = None
@@ -249,9 +251,7 @@ def warm_cache_digest() -> str:
 def p_warm_cache_dir() -> str:
     """Path the warm node_modules lives under. Hashed by package.json so
     upgrades automatically force a re-populate."""
-    base = os.environ.get("OPENSWARM_WEBAPP_CACHE_DIR") or os.path.expanduser(
-        "~/.openswarm/cache/webapp_template_node_modules"
-    )
+    base = os.environ.get("MAESTRO_WEBAPP_CACHE_DIR") or home_state_dir("cache", "webapp_template_node_modules")
     return os.path.join(base, warm_cache_digest())
 
 
@@ -290,7 +290,7 @@ def ensure_warm_cache() -> str | None:
         # A node_modules that exists but flunks the completeness check is a half-finished install; wipe it so the rebuild below starts on clean ground instead of layering onto a broken tree.
         if os.path.isdir(cache_modules):
             shutil.rmtree(cache_modules, ignore_errors=True)
-        # Fast path: pre-built archive shipped inside the release. The build script generates this so users hitting OpenSwarm for the first time skip the ~22 s live `npm install`. Falls through on any failure so dev installs (no archive) keep working.
+        # Fast path: pre-built archive shipped inside the release. The build script generates this so users hitting Maestro for the first time skip the ~22 s live `npm install`. Falls through on any failure so dev installs (no archive) keep working.
         if p_try_extract_bundled_archive(cache_dir, warm_cache_digest()):
             if warm_cache_is_complete(cache_modules):
                 logger.info("webapp-template: warm cache ready from bundled archive")
@@ -434,9 +434,7 @@ def warm_venv_dir() -> str:
             digest = hashlib.sha256(fh.read()).hexdigest()[:12]
     except OSError:
         digest = "fallback"
-    base = os.environ.get("OPENSWARM_BACKEND_VENV_CACHE_DIR") or os.path.expanduser(
-        "~/.openswarm/cache/webapp_template_backend_venv"
-    )
+    base = os.environ.get("MAESTRO_BACKEND_VENV_CACHE_DIR") or home_state_dir("cache", "webapp_template_backend_venv")
     return os.path.join(base, digest)
 
 
@@ -560,7 +558,7 @@ def seed_webapp_template_workspace(workspace_dir: str, frontend_port: int) -> No
       3. Append an install-specific path to `.env` ONLY (NOT
          `.env.example`; it is an absolute path on the current
          machine, not a template default):
-            OPENSWARM_TEMPLATE_BACKEND_PATH=<abs path to master template's backend/>
+            MAESTRO_TEMPLATE_BACKEND_PATH=<abs path to master template's backend/>
          It is read by `backend_init.sh`. The debugger is no longer
          seeded from a local path; the template's `pip install -e .`
          resolves `swarm-debug` from PyPI.
@@ -591,9 +589,9 @@ def seed_webapp_template_workspace(workspace_dir: str, frontend_port: int) -> No
     patch_env_port(env_example_path, "FRONTEND_PORT", str(frontend_port))
 
     # Install-specific paths; .env only.
-    patch_env_port(env_path, "OPENSWARM_TEMPLATE_BACKEND_PATH", TEMPLATE_BACKEND_PATH)
+    patch_env_port(env_path, "MAESTRO_TEMPLATE_BACKEND_PATH", TEMPLATE_BACKEND_PATH)
     # Backend-venv warm-cache path; backend_init.sh checks this for a pre-populated `.venv/` to cp -aR into the workspace instead of paying the ~25s venv-create + pip-install cost. Written even if the cache isn't ready yet; backend_init.sh re-checks at run time.
-    patch_env_port(env_path, "OPENSWARM_BACKEND_VENV_CACHE", warm_venv_dir())
+    patch_env_port(env_path, "MAESTRO_BACKEND_VENV_CACHE", warm_venv_dir())
 
     # Make the shipped scripts executable. tarball/git extracts may strip the +x bit depending on how the snapshot was vendored.
     for script in ("run.sh", "backend_init.sh", "restart.sh", "frontend/run.sh"):

@@ -10,7 +10,7 @@ from backend.apps.agents.browser import browser_meta_playbook as meta
 
 @pytest.fixture(autouse=True)
 def p_isolated(monkeypatch):
-    monkeypatch.setenv("OPENSWARM_BROWSER_META_DIR", tempfile.mkdtemp(prefix="meta_test_"))
+    monkeypatch.setenv("MAESTRO_BROWSER_META_DIR", tempfile.mkdtemp(prefix="meta_test_"))
     meta.clear(wipe_disk=True)
     yield
     meta.clear(wipe_disk=True)

@@ -186,7 +186,7 @@ def pretty_path(p: str) -> str:
 
 
 def test_pretty_path_absolute():
-    assert pretty_path("/Users/eric/Downloads/openswarm/foo.ts") == "foo.ts"
+    assert pretty_path("/Users/eric/Downloads/maestro/foo.ts") == "foo.ts"
 
 
 def test_pretty_path_relative():

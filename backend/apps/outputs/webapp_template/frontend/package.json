@@ -1,5 +1,5 @@
 {
-  "name": "open-swarm-app-template",
+  "name": "maestro-app-template",
   "version": "1.0.0",
   "description": "SaaS skeleton frontend built with React",
   "scripts": {

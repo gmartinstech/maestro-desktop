@@ -2,7 +2,7 @@
 
 Carries no credentials. Each tool call is forwarded as a small HTTPS
 request that includes a per-install identifier (used for rate-limiting).
-The shim refuses operations against guilds not in OPENSWARM_DISCORD_GUILD_IDS
+The shim refuses operations against guilds not in MAESTRO_DISCORD_GUILD_IDS
 (set at spawn time from the user's authorized guild list).
 
 stdlib-only on purpose so the subprocess starts fast.
@@ -15,10 +15,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-PROXY_BASE = os.environ.get("OPENSWARM_OAUTH_BASE_URL", "https://api.openswarm.com").rstrip("/")
-INSTALL_ID = os.environ.get("OPENSWARM_INSTALL_ID", "")
+PROXY_BASE = os.environ.get("MAESTRO_OAUTH_BASE_URL", "https://llm.martinstech.net/v1").rstrip("/")
+INSTALL_ID = os.environ.get("MAESTRO_INSTALL_ID", "")
 ALLOWED_GUILDS = set(
-    g for g in (os.environ.get("OPENSWARM_DISCORD_GUILD_IDS", "") or "").split(",") if g
+    g for g in (os.environ.get("MAESTRO_DISCORD_GUILD_IDS", "") or "").split(",") if g
 )
 
 
@@ -225,14 +225,14 @@ def p_call(
     locally so the user gets a clear error instead of an opaque 401.
     """
     if not INSTALL_ID:
-        return 0, "OPENSWARM_INSTALL_ID env var not set; cannot call Discord proxy"
+        return 0, "MAESTRO_INSTALL_ID env var not set; cannot call Discord proxy"
 
     url = f"{PROXY_BASE}/api/discord{path}"
     if query:
         url += "?" + urllib.parse.urlencode({k: v for k, v in query.items() if v is not None})
 
     headers = {
-        "X-OpenSwarm-Install-Id": INSTALL_ID,
+        "X-Maestro-Install-Id": INSTALL_ID,
         "Accept": "application/json",
     }
     data: bytes | None = None
@@ -277,7 +277,7 @@ def p_ok(payload) -> dict:
 def p_check_guild(guild_id: str) -> str | None:
     """Return an error string if guild_id is outside the user-authorized set, else None.
 
-    The set is sourced from OPENSWARM_DISCORD_GUILD_IDS env var (CSV) which
+    The set is sourced from MAESTRO_DISCORD_GUILD_IDS env var (CSV) which
     tools_lib.py populates from the tool's oauth_tokens.guilds. If the env
     var is empty (no guild authorization yet), allow all; agent shouldn't
     be able to spawn this MCP without an OAuth flow having happened.
@@ -286,7 +286,7 @@ def p_check_guild(guild_id: str) -> str | None:
         return None  # nothing to enforce yet
     if guild_id not in ALLOWED_GUILDS:
         return (
-            f"Guild {guild_id} is not authorized for this OpenSwarm install. "
+            f"Guild {guild_id} is not authorized for this Maestro install. "
             f"Authorized guilds: {sorted(ALLOWED_GUILDS)}"
         )
     return None
@@ -432,7 +432,7 @@ def main():
             p_send(id_, {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "openswarm-discord", "version": "1.0.0"},
+                "serverInfo": {"name": "maestro-discord", "version": "1.0.0"},
             })
         elif method == "notifications/initialized":
             pass

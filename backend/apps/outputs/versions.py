@@ -4,7 +4,7 @@ Each unique file's bytes are written ONCE to a per-app blob store (sha256 name,
 zlib-compressed); a version is a tiny manifest mapping path -> blob digest. So a
 run that changes one file out of fifty costs one new blob, not fifty, and 500
 versions of a barely-changing app stay small. That keeps this feature from
-making OpenSwarm feel heavier than it already is. We reuse the .swarm app
+making Maestro feel heavier than it already is. We reuse the .swarm app
 serializer (captures flat-inline AND webapp_template workspace apps; skips
 node_modules/.venv/dist/.git, excludes .env), but never .swarm's pack() (it
 refuses on secret-shaped fields, and a local snapshot must never decline to save

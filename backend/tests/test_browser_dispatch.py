@@ -63,7 +63,7 @@ def test_fast_path_no_dashboard_returns_friendly_reply(monkeypatch):
     ))
 
     assert any(
-        m.role == "assistant" and "no OpenSwarm window is connected" in str(m.content)
+        m.role == "assistant" and "no Maestro window is connected" in str(m.content)
         for m in session.messages
     )
     assert session.status == "completed"

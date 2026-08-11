@@ -16,15 +16,15 @@ try:
 except ImportError:
     HAS_PIL = False
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-BACKEND_AUTH = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+BACKEND_AUTH = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 BACKEND_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/browser-agent/run"
-MODEL = os.environ.get("OPENSWARM_AGENT_MODEL", "sonnet")
-DASHBOARD_ID = os.environ.get("OPENSWARM_DASHBOARD_ID", "")
-PRE_SELECTED_BROWSER_IDS = os.environ.get("OPENSWARM_PRE_SELECTED_BROWSER_IDS", "")
-PARENT_SESSION_ID = os.environ.get("OPENSWARM_PARENT_SESSION_ID", "")
+MODEL = os.environ.get("MAESTRO_AGENT_MODEL", "sonnet")
+DASHBOARD_ID = os.environ.get("MAESTRO_DASHBOARD_ID", "")
+PRE_SELECTED_BROWSER_IDS = os.environ.get("MAESTRO_PRE_SELECTED_BROWSER_IDS", "")
+PARENT_SESSION_ID = os.environ.get("MAESTRO_PARENT_SESSION_ID", "")
 # Apps the user selected on the dashboard; AppAgent may only target these (anti-hallucination).
-SELECTED_APP_IDS = [a.strip() for a in os.environ.get("OPENSWARM_SELECTED_APP_IDS", "").split(",") if a.strip()]
+SELECTED_APP_IDS = [a.strip() for a in os.environ.get("MAESTRO_SELECTED_APP_IDS", "").split(",") if a.strip()]
 
 TOOLS = [
     {
@@ -118,7 +118,7 @@ TOOLS = [
     {
         "name": "AppAgent",
         "description": (
-            "Operate one of the user's OpenSwarm-built apps (a small web app they "
+            "Operate one of the user's Maestro-built apps (a small web app they "
             "created, e.g. a graphing tool, a form, or a canvas game like Doom) that "
             "is open on the dashboard. A dedicated app agent performs the task: it "
             "drives the app through its native bridge when one is available (reading "
@@ -194,8 +194,9 @@ MAX_IMAGE_B64_BYTES = 400_000
 MAX_SUMMARY_CHARS = 16_000
 MAX_ACTION_LOG_ENTRIES = 40
 REPORT_DIR = os.environ.get(
-    "OPENSWARM_TOOL_REPORT_DIR",
-    os.path.join(os.path.expanduser("~"), ".openswarm", "tool-reports"),
+    "MAESTRO_TOOL_REPORT_DIR",
+    # Deliberately not via config.state_paths: this file runs as a standalone subprocess with no `backend` on sys.path. Spill reports are write-then-read-within-the-turn, so there is no legacy state to migrate.
+    os.path.join(os.path.expanduser("~"), ".maestro", "tool-reports"),
 )
 
 
@@ -422,7 +423,7 @@ def main():
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
                 "serverInfo": {
-                    "name": "openswarm-browser-agent",
+                    "name": "maestro-browser-agent",
                     "version": "1.0.0",
                 },
             })

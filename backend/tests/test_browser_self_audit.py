@@ -63,7 +63,7 @@ def test_clean_history_proposes_nothing():
 def test_audit_fires_every_n_finished_tasks(monkeypatch, tmp_path):
     # the trigger refreshes the report once every N tasks, off the hot path. Make threads synchronous so the test is deterministic, and use a small N.
     from backend.apps.agents.browser import browser_metrics as m
-    monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", str(tmp_path))
+    monkeypatch.setenv("MAESTRO_BROWSER_METRICS_DIR", str(tmp_path))
     m.p_metrics_dir_cache = None
     m.p_task_count = 0
     monkeypatch.setattr(m, "P_AUDIT_EVERY_N", 5)

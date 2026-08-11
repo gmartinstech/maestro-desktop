@@ -39,7 +39,7 @@ CURATED_SHORTLIST: list[CuratedEntry] = [
     {
         "id": "Discord",
         "title": "Discord",
-        "description": "Read messages, send messages, manage channels, interact with Discord servers via the OpenSwarm bot.",
+        "description": "Read messages, send messages, manage channels, interact with Discord servers via the Maestro bot.",
     },
     {
         "id": "Notion",
@@ -233,7 +233,7 @@ async def p_call_classifier(settings, prompt: str, available: list[CuratedEntry]
         max_tokens=300,
         system=system,
         messages=[{"role": "user", "content": user_turn}],
-        extra_headers={"X-Openswarm-Task-Id": task_id} if task_id else {},
+        extra_headers={"X-Maestro-Task-Id": task_id} if task_id else {},
     )
 
     text = ""

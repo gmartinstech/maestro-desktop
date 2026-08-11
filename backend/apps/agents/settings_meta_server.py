@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stdio MCP server letting an agent read and edit its own OpenSwarm Settings.
+"""Stdio MCP server letting an agent read and edit its own Maestro Settings.
 
 Two tools, SettingsRead and SettingsWrite, backed by /api/settings-meta. Always
 on, no activation gate (Settings is the agent's own house). The backend enforces
@@ -14,17 +14,17 @@ import sys
 import urllib.error
 import urllib.request
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-BACKEND_AUTH = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+BACKEND_AUTH = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 BACKEND_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/settings-meta"
-PARENT_SESSION_ID = os.environ.get("OPENSWARM_PARENT_SESSION_ID", "")
+PARENT_SESSION_ID = os.environ.get("MAESTRO_PARENT_SESSION_ID", "")
 
 
 TOOLS = [
     {
         "name": "SettingsRead",
         "description": (
-            "Read the user's OpenSwarm Settings (model defaults, theme, prompts, "
+            "Read the user's Maestro Settings (model defaults, theme, prompts, "
             "connected providers, toggles). Secrets come back as configured/not, "
             "never the actual key. Call this before SettingsWrite so you change "
             "the right field to the right value."
@@ -38,7 +38,7 @@ TOOLS = [
     {
         "name": "SettingsWrite",
         "description": (
-            "Change one or more OpenSwarm Settings. Pass `changes` as a map of "
+            "Change one or more Maestro Settings. Pass `changes` as a map of "
             "setting field name to new value (use the exact field names from "
             "SettingsRead, e.g. {\"theme\": \"light\", \"default_model\": \"opus-4-8\"}). "
             "You can set or clear API keys too. Two things you cannot do: clear the "
@@ -95,7 +95,7 @@ def call_backend(action: str, payload: dict) -> dict:
 def p_format_read(settings: dict) -> str:
     """Render redacted settings compactly so the model spends tokens on the
     values it can act on, not on JSON punctuation."""
-    lines = ["Current OpenSwarm Settings (secrets shown as configured/not):"]
+    lines = ["Current Maestro Settings (secrets shown as configured/not):"]
     for key in sorted(settings.keys()):
         val = settings[key]
         if isinstance(val, dict) and "configured" in val:
@@ -160,7 +160,7 @@ def main():
             send_response(id_, {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "openswarm-settings-meta", "version": "1.0.0"},
+                "serverInfo": {"name": "maestro-settings-meta", "version": "1.0.0"},
             })
         elif method == "notifications/initialized":
             pass

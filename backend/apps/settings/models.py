@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Any, Literal
 
 DEFAULT_SYSTEM_PROMPT = (
-    "You are a personal AI assistant running inside OpenSwarm.\n\n"
+    "You are a personal AI assistant running inside Maestro.\n\n"
     "## Core Behavior\n"
     "Act, don't ask. When a tool can accomplish the task, call it immediately; "
     "do not describe what you would do, do not ask for confirmation, just execute. "
@@ -72,12 +72,12 @@ class AppSettings(BaseModel):
     locale: Optional[str] = None
     first_opened_at: Optional[str] = None
     connection_mode: str = "own_key"
-    openswarm_bearer_token: Optional[str] = None
-    openswarm_proxy_url: Optional[str] = None
+    maestro_bearer_token: Optional[str] = None
+    maestro_proxy_url: Optional[str] = None
     # Server-owned identity; user_email above is the self-reported onboarding value.
     user_id: Optional[str] = None
     signin_method: Optional[Literal["google", "stripe", "email"]] = None
-    # Runtime preflight (electron/preflight.js). Default-on; users opt out via this flag, env var OPENSWARM_DISABLE_PREFLIGHT=1, or the cloud-side cohort rollout knocking preflight_rollout_pct down.
+    # Runtime preflight (electron/preflight.js). Default-on; users opt out via this flag, env var MAESTRO_DISABLE_PREFLIGHT=1, or the cloud-side cohort rollout knocking preflight_rollout_pct down.
     preflight_enabled: bool = True
     # 0-100; the cohort gate compares (hash(installation_id) % 100) < pct. 100 = everyone, 0 = nobody, used as the kill switch if a staged rollout finds a false-positive spike.
     preflight_rollout_pct: int = 100

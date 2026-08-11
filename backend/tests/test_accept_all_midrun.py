@@ -33,7 +33,7 @@ def test_always_allow_applies_to_next_call_same_run(p_isolated_persistence):
 def test_always_allow_namespaced_builtin_uses_inner_slot(p_isolated_persistence):
     # Our browser/invoke delegation tools live in builtin_permissions under the INNER name; a write through the namespaced name must land where the next read looks.
     live_perms: dict = {}
-    name = "mcp__openswarm-browser-agent__BrowserAgent"
+    name = "mcp__maestro-browser-agent__BrowserAgent"
     decision.set_tool_policy(name, "always_allow", live_perms)
     assert live_perms == {"BrowserAgent": "always_allow"}
     assert decision.effective_policy(name, live_perms, {}) == "always_allow"

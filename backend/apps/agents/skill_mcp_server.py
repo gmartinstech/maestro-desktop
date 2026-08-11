@@ -7,8 +7,8 @@ import sys
 import urllib.error
 import urllib.request
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-BACKEND_AUTH = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+BACKEND_AUTH = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 LOAD_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/skills/load"
 
 TOOLS = [
@@ -102,7 +102,7 @@ def main():
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
                 "serverInfo": {
-                    "name": "openswarm-skill",
+                    "name": "maestro-skill",
                     "version": "1.0.0",
                 },
             })

@@ -25,6 +25,7 @@ def p_resolve_bash() -> str:
                 return candidate
     return "bash"
 
+from backend.config.state_paths import state_dir
 from backend.apps.outputs.runtime_proc import (
     ERROR_PATTERNS,
     FRONTEND_BIND_POLL_INTERVAL,
@@ -113,7 +114,7 @@ class AppRuntime:
         self.log_buffer: deque[LogLine] = deque(maxlen=LOG_BUFFER_LINES)
         # On-disk tee of the ring buffer so the App Builder agent can inspect terminal output itself (Read/grep); reset on every start(). Secondary instances get a suffixed file so they don't clobber the primary's.
         log_name = "terminal.log" if self.instance <= 1 else f"terminal-{self.instance}.log"
-        self.p_terminal_log_path = os.path.join(workspace_path, ".openswarm", log_name)
+        self.p_terminal_log_path = state_dir(workspace_path, log_name)
         self.p_terminal_log_bytes = 0
         self.p_subscribers: set[LogSubscriber] = set()
         # Recent build/runtime errors scraped from stderr; drained by the agent's post-tool hook after Write/Edit so the agent sees vite/babel/uvicorn errors in its next turn and can self-fix instead of leaving the user with a red iframe overlay.
@@ -226,12 +227,12 @@ class AppRuntime:
             self.frontend_port = find_free_port()
             self.port = find_free_port() if (bp_raw and bp_raw != "NONE") else None
         else:
-            # FRONTEND_PORT is allocated by seed_workspace; should always be a number. If missing, fall back to a fresh allocation (rare edge case: workspace seeded by an older OpenSwarm).
+            # FRONTEND_PORT is allocated by seed_workspace; should always be a number. If missing, fall back to a fresh allocation (rare edge case: workspace seeded by an older Maestro).
             try:
                 self.frontend_port = int(fp_raw) if fp_raw else find_free_port()
             except ValueError:
                 self.frontend_port = find_free_port()
-            # Port-collision safety net: if a ghost subprocess from a prior OpenSwarm run is still bound to the persisted port (force-quit, crash, OS killed the parent before stop_all could reap), Vite would EADDRINUSE silently. Re-probe and reallocate, then rewrite .env so the bash run.sh subprocess reads the new port.
+            # Port-collision safety net: if a ghost subprocess from a prior Maestro run is still bound to the persisted port (force-quit, crash, OS killed the parent before stop_all could reap), Vite would EADDRINUSE silently. Re-probe and reallocate, then rewrite .env so the bash run.sh subprocess reads the new port.
             if self.frontend_port and not is_port_free(self.frontend_port):
                 new_port = find_free_port()
                 self.p_broadcast(LogLine(
@@ -261,16 +262,16 @@ class AppRuntime:
         env = self.p_spawn_env_base()
         if self.instance > 1:
             # run.sh applies these AFTER sourcing .env, so the secondary boots on its own ports. Older workspaces (pre-override run.sh) ignore them; their secondary instance EADDRINUSEs visibly in the Terminal instead of silently sharing the primary.
-            env["OPENSWARM_FORCE_FRONTEND_PORT"] = str(self.frontend_port)
+            env["MAESTRO_FORCE_FRONTEND_PORT"] = str(self.frontend_port)
             if self.port:
-                env["OPENSWARM_FORCE_BACKEND_PORT"] = str(self.port)
-        # bash run.sh reads .env itself; we don't need to set FRONTEND_PORT / BACKEND_PORT here. We DO export the install paths as env vars (the more reliable read site for subshells). OPENSWARM_DEBUGGER_PATH is legacy-only: workspaces seeded before the PyPI swap have a run.sh that editable-installs the bundled debugger from it; new templates resolve `swarm-debug` from PyPI via pyproject.
+                env["MAESTRO_FORCE_BACKEND_PORT"] = str(self.port)
+        # bash run.sh reads .env itself; we don't need to set FRONTEND_PORT / BACKEND_PORT here. We DO export the install paths as env vars (the more reliable read site for subshells). MAESTRO_DEBUGGER_PATH is legacy-only: workspaces seeded before the PyPI swap have a run.sh that editable-installs the bundled debugger from it; new templates resolve `swarm-debug` from PyPI via pyproject.
         from backend.apps.outputs.view_builder_templates import (
             DEBUGGER_PATH,
             TEMPLATE_BACKEND_PATH,
         )
-        env["OPENSWARM_DEBUGGER_PATH"] = DEBUGGER_PATH
-        env["OPENSWARM_TEMPLATE_BACKEND_PATH"] = TEMPLATE_BACKEND_PATH
+        env["MAESTRO_DEBUGGER_PATH"] = DEBUGGER_PATH
+        env["MAESTRO_TEMPLATE_BACKEND_PATH"] = TEMPLATE_BACKEND_PATH
 
         cmd, spawn_cwd, launch_desc = self.p_resolve_launch(env)
         try:
@@ -312,7 +313,7 @@ class AppRuntime:
         otherwise fall back to bash so behavior is unchanged everywhere else.
         vite.config.ts reads FRONTEND_PORT / BACKEND_PORT from the environment."""
         if os.name == "nt" and self.port is None:
-            node = env.get("OPENSWARM_NODE_PATH") or shutil.which("node")
+            node = env.get("MAESTRO_NODE_PATH") or shutil.which("node")
             vite_bin = os.path.join(
                 self.workspace_path, "frontend", "node_modules", "vite", "bin", "vite.js"
             )
@@ -426,9 +427,9 @@ class AppRuntime:
         """Inherited env minus the install token. Backend.py can hit our
         REST API back via its own creds if it really needs to, but it
         shouldn't inherit the host process's token by default."""
-        env = {k: v for k, v in os.environ.items() if k != "OPENSWARM_AUTH_TOKEN"}
-        # Hand the workspace's backend/run.sh the exact interpreter we're running on. In the packaged build that's the bundled standalone Python, so a fresh machine with no system `python3` still works; in dev it's whatever launched uvicorn. OPENSWARM_NODE_PATH already rides in via os.environ (set by the Electron shell) for run.sh's Node resolution.
-        env["OPENSWARM_PYTHON"] = sys.executable
+        env = {k: v for k, v in os.environ.items() if k != "MAESTRO_AUTH_TOKEN"}
+        # Hand the workspace's backend/run.sh the exact interpreter we're running on. In the packaged build that's the bundled standalone Python, so a fresh machine with no system `python3` still works; in dev it's whatever launched uvicorn. MAESTRO_NODE_PATH already rides in via os.environ (set by the Electron shell) for run.sh's Node resolution.
+        env["MAESTRO_PYTHON"] = sys.executable
         # Force npm to skip dependency lifecycle scripts for every install run.sh triggers. An imported app's package.json is untrusted (it brings its own run.sh, so we can't gate the flag there); a malicious dep's postinstall would otherwise run arbitrary code on the host the moment its preview boots. Vite/esbuild get their platform binary via optionalDependencies, not a script, so this doesn't break the build.
         env["npm_config_ignore_scripts"] = "true"
         return env
@@ -495,7 +496,7 @@ class AppRuntime:
         """Fold a webview console line into the terminal stream (ring buffer, WS subscribers, terminal.log). Called by the console-log beacon endpoint."""
         stream = {"warn": "frontend-warn", "error": "frontend-error"}.get(level, "frontend")
         # The app-ready/app-error beacons ride this same console channel but already drive render_state via the report-* endpoints; re-capturing them would duplicate render_error_text into the agent's note.
-        if stream == "frontend-error" and "[openswarm:app-" not in text:
+        if stream == "frontend-error" and "[maestro:app-" not in text:
             self.p_frontend_errors.append(text.rstrip())
         self.p_broadcast(LogLine(stream, text))
 
@@ -531,10 +532,10 @@ class AppRuntime:
             self.recent_errors.append(text.rstrip())
 
     def p_maybe_capture_render_beacon(self, text: str) -> None:
-        if "[openswarm:app-ready]" in text:
+        if "[maestro:app-ready]" in text:
             self.set_render_ok()
-        elif "[openswarm:app-error]" in text:
-            idx = text.index("[openswarm:app-error]") + len("[openswarm:app-error]")
+        elif "[maestro:app-error]" in text:
+            idx = text.index("[maestro:app-error]") + len("[maestro:app-error]")
             self.set_render_error(text[idx:].strip())
 
     async def p_pipe_stream(self, stream: Optional[asyncio.StreamReader], name: str) -> None:
@@ -590,7 +591,7 @@ class AppRuntimeManager:
 
     async def p_watch_restart_sentinels(self) -> None:
         """The agent-side restart path: a workspace's restart.sh (or a bare `touch
-        .openswarm/restart-requested`) asks the harness to bounce the app runtime,
+        .maestro/restart-requested`) asks the harness to bounce the app runtime,
         which the agent cannot do itself (no API token, and uvicorn runs without
         --reload). Consume the sentinel FIRST so restart.sh's wait loop unblocks,
         then restart every attached instance of that workspace."""
@@ -602,7 +603,7 @@ class AppRuntimeManager:
                     ws_path = rt.workspace_path
                     if ws_path in seen_paths or rt.p_suspended or not rt.running:
                         continue
-                    sentinel = os.path.join(ws_path, ".openswarm", RESTART_SENTINEL_NAME)
+                    sentinel = state_dir(ws_path, RESTART_SENTINEL_NAME)
                     if not os.path.exists(sentinel):
                         continue
                     seen_paths.add(ws_path)
@@ -765,7 +766,7 @@ class AppRuntimeManager:
         FastAPI lifespan shutdown AND from Electron's pre-quit POST. Without
         this, each `bash run.sh` (and its vite/uvicorn descendants) reparents
         to PID 1 when the main backend dies, leaving ghost listeners on the
-        persisted FRONTEND_PORT/BACKEND_PORT that block the NEXT OpenSwarm
+        persisted FRONTEND_PORT/BACKEND_PORT that block the NEXT Maestro
         launch's app reload. Wakes any SIGSTOP'd idle entries before reaping
         so they can run their own shutdown. Parallel via gather; with the
         per-runtime 3s SIGTERM grace, worst case is one ~3s wait rather than

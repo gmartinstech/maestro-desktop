@@ -130,7 +130,7 @@ async def handle_run_error(e: Exception, session: AgentSession, session_id: str,
             "message": error_msg.model_dump(mode="json"),
         })
     elif is_auth_error(e, extra_text=p_stderr_tail):
-        # Three sub-cases the user can hit, with distinct fixes: 1. "No credentials for provider: claude", user picked a -cc route but doesn't have Claude Pro/Max connected via 9Router. Tell them to either connect Claude Pro/Max OR pick a non--cc model. 2. OpenSwarm Pro 401, bearer expired. Reconnect. 3. Anthropic API key 401, wrong key. Re-enter.
+        # Three sub-cases the user can hit, with distinct fixes: 1. "No credentials for provider: claude", user picked a -cc route but doesn't have Claude Pro/Max connected via 9Router. Tell them to either connect Claude Pro/Max OR pick a non--cc model. 2. Maestro Pro 401, bearer expired. Reconnect. 3. Anthropic API key 401, wrong key. Re-enter.
         p_model = (session.model or "").lower()
         p_combined = f"{e!s}\n{p_stderr_tail}".lower()
         # Codex/OpenAI subscription tokens rotate every ~2-3 minutes, the user sees the rotation window as a 401 with "reset after 1m 59s" or similar. Don't ask them to reconnect; just tell them to wait it out and retry.

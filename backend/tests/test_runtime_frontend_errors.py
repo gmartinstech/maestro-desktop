@@ -31,7 +31,7 @@ def test_render_beacons_are_not_captured_as_console_errors(tmp_path):
     """app-error rides the same console.error channel but already drives render_state via the
     report-* endpoints; capturing it would duplicate render_error_text into the agent's note."""
     rt = p_runtime(str(tmp_path))
-    rt.record_frontend_log("error", "[openswarm:app-error] Boom at App.tsx:12")
+    rt.record_frontend_log("error", "[maestro:app-error] Boom at App.tsx:12")
     assert rt.drain_frontend_errors() == []
 
 

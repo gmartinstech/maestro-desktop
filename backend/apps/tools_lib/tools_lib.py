@@ -16,8 +16,8 @@ from backend.config.Apps import SubApp
 from backend.apps.tools_lib.models import ToolDefinition, ToolCreate, ToolUpdate, BUILTIN_TOOLS
 from backend.config.paths import DATA_ROOT, TOOLS_DIR as DATA_DIR, BUILTIN_PERMISSIONS_PATH as BUILTIN_PERMS_PATH, TRUSTED_SENSITIVE_PATHS_PATH
 
-# oauth_config runs the dotenv load (leaf) so OPENSWARM_OAUTH_BASE_URL is set before anything reads it; re-exported here for the route handlers below.
-from backend.apps.tools_lib.oauth_config import OPENSWARM_OAUTH_BASE_URL
+# oauth_config runs the dotenv load (leaf) so MAESTRO_OAUTH_BASE_URL is set before anything reads it; re-exported here for the route handlers below.
+from backend.apps.tools_lib.oauth_config import MAESTRO_OAUTH_BASE_URL
 # sanitize_server_name + derive_mcp_config re-exported for agent_manager/main.
 from backend.apps.tools_lib.mcp_config import sanitize_server_name, derive_mcp_config
 from backend.apps.tools_lib.mcp_discovery import (
@@ -208,10 +208,10 @@ def resolve_policy_slot(tool_name: str, tools: list[ToolDefinition]) -> PolicySl
     differently. That divergence was the bug behind 'Always approve' acting like a
     one-time accept: writes landed under the raw mcp__server__action name while the
     gate read the parsed inner action, so the next call never saw the policy."""
-    bm = re.match(r"mcp__openswarm-browser-agent__(.+)", tool_name)
+    bm = re.match(r"mcp__maestro-browser-agent__(.+)", tool_name)
     if bm:
         return PolicySlot("builtin", bm.group(1), None)
-    im = re.match(r"mcp__openswarm-invoke-agent__(.+)", tool_name)
+    im = re.match(r"mcp__maestro-invoke-agent__(.+)", tool_name)
     if im:
         return PolicySlot("builtin", im.group(1), None)
     m = re.match(r"mcp__([^_]+(?:-[^_]+)*)__(.+)", tool_name)
@@ -456,9 +456,9 @@ async def m365_device_login(tool_id: str):
         raise HTTPException(status_code=500, detail="M365 MCP server not installed")
 
     # Same priority as MCP-bundle / 9Router paths: bundled real node first (clean, no Dock flicker, fast cold-start), then system node, then Electron-as-Node as last resort.
-    bundled = os.environ.get("OPENSWARM_NODE_PATH")
+    bundled = os.environ.get("MAESTRO_NODE_PATH")
     node = shutil.which("node")
-    electron = os.environ.get("OPENSWARM_ELECTRON_PATH")
+    electron = os.environ.get("MAESTRO_ELECTRON_PATH")
     cmd = (bundled if bundled and os.path.exists(bundled) else None) or node or electron
     if not cmd:
         raise HTTPException(status_code=500, detail="No node/electron found")
@@ -623,14 +623,14 @@ async def oauth_start(tool_id: str):
         )
     from backend.config.install_id import get_install_id
     install_id = get_install_id()
-    p_port = os.environ.get("OPENSWARM_PORT", "8324")
+    p_port = os.environ.get("MAESTRO_PORT", "8324")
     params = {
         "install_id": install_id,
         "tool_id": tool_id,
         "local_port": p_port,
     }
     auth_url = (
-        f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/{proxied}/start?"
+        f"{MAESTRO_OAUTH_BASE_URL}/api/oauth/{proxied}/start?"
         f"{urlencode(params)}"
     )
     return {"auth_url": auth_url}
@@ -652,27 +652,27 @@ async def oauth_cloud_claim(
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
-                f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/session/{session_id}/claim",
+                f"{MAESTRO_OAUTH_BASE_URL}/api/oauth/session/{session_id}/claim",
                 json={"install_id": install_id},
             )
     except Exception as e:
         logger.exception("Cloud OAuth claim threw: %s", e)
         return HTMLResponse(
             f"<html><body><h2>Connection failed</h2><pre>{e}</pre>"
-            f"<p>Please retry from OpenSwarm.</p></body></html>",
+            f"<p>Please retry from Maestro.</p></body></html>",
             status_code=502,
         )
 
     if resp.status_code in (404, 410):
         return HTMLResponse(
             "<html><body><h2>Session expired</h2>"
-            "<p>Please retry from OpenSwarm.</p></body></html>",
+            "<p>Please retry from Maestro.</p></body></html>",
             status_code=410,
         )
     if resp.status_code == 403:
         return HTMLResponse(
             "<html><body><h2>OAuth session not bound to this install</h2>"
-            "<p>Please retry from OpenSwarm.</p></body></html>",
+            "<p>Please retry from Maestro.</p></body></html>",
             status_code=403,
         )
     if resp.status_code != 200:
@@ -714,7 +714,7 @@ async def google_oauth_token_proxy(request: Request):
     that minted the refresh_token, so a direct refresh against Google
     returns unauthorized_client. We accept the form-encoded shape,
     discard the (mismatched) local client creds, and forward the
-    refresh_token to api.openswarm.com/api/oauth/google/refresh which
+    refresh_token to the OAuth helper's /api/oauth/google/refresh which
     walks the pool to find the issuing slot. The cloud's JSON envelope
     is reshaped back to Google's native token-endpoint response so
     google-auth keeps working transparently.
@@ -731,7 +731,7 @@ async def google_oauth_token_proxy(request: Request):
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             upstream = await client.post(
-                f"{OPENSWARM_OAUTH_BASE_URL}/api/oauth/google/refresh",
+                f"{MAESTRO_OAUTH_BASE_URL}/api/oauth/google/refresh",
                 json={"refresh_token": refresh_token},
             )
     except Exception as e:

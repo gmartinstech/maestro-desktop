@@ -30,14 +30,14 @@ case "$OSTYPE" in
 esac
 
 # --- Find a working Python 3 ---
-# Prefer an explicit path the host passed us (OPENSWARM_PYTHON, set by the
+# Prefer an explicit path the host passed us (MAESTRO_PYTHON, set by the
 # packaged Electron shell to the bundled standalone Python so a fresh
 # Windows machine with no system Python still works). Fall back to PATH
 # probing for dev. `python` is first on Windows since python3.x aliases
 # usually don't exist there.
 PYTHON=""
-if [[ -n "${OPENSWARM_PYTHON:-}" ]] && "${OPENSWARM_PYTHON}" -c "import sys; sys.exit(0 if sys.version_info[0]==3 else 1)" &>/dev/null; then
-    PYTHON="${OPENSWARM_PYTHON}"
+if [[ -n "${MAESTRO_PYTHON:-}" ]] && "${MAESTRO_PYTHON}" -c "import sys; sys.exit(0 if sys.version_info[0]==3 else 1)" &>/dev/null; then
+    PYTHON="${MAESTRO_PYTHON}"
 else
     if [[ "$IS_WIN" == "1" ]]; then
         CANDIDATES="python python3 python3.13 python3.12 python3.11 python3.10"
@@ -59,7 +59,7 @@ echo "Using Python: $PYTHON ($("$PYTHON" --version 2>&1))"
 
 # --- Create virtual environment if it doesn't exist ---
 VENV_DIR="$BACKEND_DIR_ABSPATH/.venv"
-SENTINEL="$VENV_DIR/.openswarm_installed"
+SENTINEL="$VENV_DIR/.maestro_installed"
 
 # Resolve the venv interpreter by OS layout instead of `source activate`,
 # whose path (bin/ vs Scripts/) and shell semantics differ across
@@ -102,10 +102,10 @@ fi
 
 # --- Start the backend server ---
 # No --reload here: this is the user's generated workspace, not an
-# OpenSwarm dev environment. The agent rewrites files whole-file
+# Maestro dev environment. The agent rewrites files whole-file
 # during builds; uvicorn's WatchFiles supervisor would just tear down
 # the running server every keystroke. When the agent explicitly wants
-# the backend to pick up new code it can hit OpenSwarm's
+# the backend to pick up new code it can hit Maestro's
 # /api/outputs/workspace/{ws}/runtime/restart endpoint, which sends a
 # clean SIGTERM and restarts via this same script.
 # swarm-debug gates output on per-file toggles that default OFF; force all ON each boot so agent-added files show in the Terminal.

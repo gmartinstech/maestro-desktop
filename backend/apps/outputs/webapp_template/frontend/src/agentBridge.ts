@@ -1,7 +1,7 @@
-// window.OPENSWARM_APP - the agent bridge, shipped with the template so it
+// window.MAESTRO_APP - the agent bridge, shipped with the template so it
 // EXISTS from first paint, before any app-specific code runs (index.tsx imports
 // this first). An app makes itself agent-operable by calling
-// window.OPENSWARM_APP.register({ rules, controls, getState, invoke }) on mount;
+// window.MAESTRO_APP.register({ rules, controls, getState, invoke }) on mount;
 // it never has to wire up the plumbing, so it cannot forget it. Until the app
 // registers, describe()/getState() report { __ready: false } so the agent knows
 // the app is still booting (and waits) instead of declaring it bridge-less.
@@ -31,7 +31,7 @@ export type AgentRegistration = {
 };
 
 type Bridge = {
-  __openswarm: true;
+  __maestro: true;
   __ready: boolean;
   __rev: number;
   register: (api: AgentRegistration) => void;
@@ -43,7 +43,7 @@ type Bridge = {
 
 declare global {
   interface Window {
-    OPENSWARM_APP?: Bridge;
+    MAESTRO_APP?: Bridge;
   }
 }
 
@@ -102,7 +102,7 @@ function stopAutopilot(): void {
 }
 
 const bridge: Bridge = {
-  __openswarm: true,
+  __maestro: true,
   __ready: false,
   __rev: 0,
   register(api: AgentRegistration) {
@@ -169,7 +169,7 @@ const bridge: Bridge = {
   },
   invoke(name: string, args?: Record<string, unknown>) {
     if (!bridge.__ready || !registration) {
-      throw 'OPENSWARM_APP not registered yet';
+      throw 'MAESTRO_APP not registered yet';
     }
     if (name === AUTOPILOT) {
       if (typeof registration.policy !== 'function') {
@@ -192,4 +192,4 @@ const bridge: Bridge = {
   },
 };
 
-window.OPENSWARM_APP = bridge;
+window.MAESTRO_APP = bridge;

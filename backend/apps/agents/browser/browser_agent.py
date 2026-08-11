@@ -95,16 +95,16 @@ def app_bridge_expression(tool_name: str, tool_input: dict) -> str:
     """JS for an app bridge tool. Each expression returns a JSON STRING (so it
     round-trips as text) and never throws; bridge errors come back as JSON."""
     if tool_name == "AppDescribe":
-        call = "window.OPENSWARM_APP.describe()"
+        call = "window.MAESTRO_APP.describe()"
     elif tool_name == "AppGetState":
-        call = "window.OPENSWARM_APP.getState()"
+        call = "window.MAESTRO_APP.getState()"
     else:  # AppInvoke
         name = json.dumps(tool_input.get("name", ""))
         args = json.dumps(tool_input.get("args") or {})
-        call = f"window.OPENSWARM_APP.invoke({name}, {args})"
+        call = f"window.MAESTRO_APP.invoke({name}, {args})"
     return (
         "(function(){try{"
-        "var A=window.OPENSWARM_APP;"
+        "var A=window.MAESTRO_APP;"
         "if(!A||typeof A.describe!=='function'){return JSON.stringify(null);}"
         f"var r={call};"
         "return JSON.stringify(r===undefined?null:r);"
@@ -112,7 +112,7 @@ def app_bridge_expression(tool_name: str, tool_input: dict) -> str:
     )
 
 
-# App-bridge readiness. The template ships window.OPENSWARM_APP from first paint
+# App-bridge readiness. The template ships window.MAESTRO_APP from first paint
 # but in a "not ready" state until the app calls register(...). On the agent's
 # first turn the app may still be mounting (Vite cold-boot is 10-30s), so the
 # reads poll briefly for the bridge to come up instead of declaring it absent.
@@ -255,7 +255,7 @@ async def execute_browser_tool(
         logger.info(f"[browser-action] {tool_name}: {p_action}  -> {browser_id}")
 
     # App bridge tools translate to a single BrowserEvaluate against the app's
-    # window.OPENSWARM_APP, so they need no frontend command-handler changes.
+    # window.MAESTRO_APP, so they need no frontend command-handler changes.
     if tool_name in APP_BRIDGE_TOOLS:
         action = "evaluate"
         expr = app_bridge_expression(tool_name, tool_input)
@@ -541,9 +541,9 @@ async def run_browser_agent(
     Creates a visible AgentSession, streams progress via WebSocket,
     and returns the full action log + summary + final screenshot.
 
-    When app_mode is set, browser_id points at an OpenSwarm-built app's webview
+    When app_mode is set, browser_id points at an Maestro-built app's webview
     (registered as "app:<output_id>"). The agent drives it through the app's
-    native bridge (window.OPENSWARM_APP) instead of web perception: no initial
+    native bridge (window.MAESTRO_APP) instead of web perception: no initial
     navigate, no AX-tree front-load, and a lean app toolset + prompt.
     """
     from backend.apps.agents.agent_manager import agent_manager
@@ -678,7 +678,7 @@ async def run_browser_agent(
         )
         clear_browser_history(browser_id)
         prior_messages = []
-    # App mode: read the bridge's rules + controls ONCE up front and front-load them so the agent knows the app's purpose and every control before its first action (no screenshot fumbling) and need not call AppDescribe again until controls change. Also the runtime bridge gate: if the bridge never comes up, fail loudly into the logs + the agent's first message (and, under OPENSWARM_REQUIRE_BRIDGE=1, end the run rather than UI-fumble).
+    # App mode: read the bridge's rules + controls ONCE up front and front-load them so the agent knows the app's purpose and every control before its first action (no screenshot fumbling) and need not call AppDescribe again until controls change. Also the runtime bridge gate: if the bridge never comes up, fail loudly into the logs + the agent's first message (and, under MAESTRO_REQUIRE_BRIDGE=1, end the run rather than UI-fumble).
     # NOTE: app mode runs this on EVERY task, even a resumed conversation; the bridge can appear between runs (app just made agent-operable) and a resumed history may carry a stale "no bridge, screenshot it" strategy, so re-reading + re-attaching the controls each task re-points the agent at the bridge.
     app_front_load = ""
     if app_mode:
@@ -705,11 +705,11 @@ async def run_browser_agent(
         else:
             p_oid = p_app_output_id(browser_id) or browser_id
             p_msg = (
-                f"BRIDGE MISSING: window.OPENSWARM_APP not registered - "
+                f"BRIDGE MISSING: window.MAESTRO_APP not registered - "
                 f"app '{p_oid}' is not agent-operable"
             )
             logger.error(f"[app-agent] {p_msg}")
-            if os.environ.get("OPENSWARM_REQUIRE_BRIDGE") == "1":
+            if os.environ.get("MAESTRO_REQUIRE_BRIDGE") == "1":
                 session.status = "completed"
                 await ws_manager.send_to_session(session_id, "agent:status", {
                     "session_id": session_id, "status": "completed",
@@ -2305,7 +2305,7 @@ async def run_browser_agents(
         return [{
             "summary": (
                 "Error: no dashboard window is connected, so browser tools cannot run. "
-                "Tell the user to open the OpenSwarm window and try again; do not retry until they do."
+                "Tell the user to open the Maestro window and try again; do not retry until they do."
             ),
             "action_log": [], "final_screenshot": None,
         } for _ in tasks]

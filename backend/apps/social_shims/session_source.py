@@ -2,8 +2,8 @@
 
 Shared by every social MCP shim (reddit/x/tiktok). The shim never stores
 credentials. It asks the backend's browser-session bridge (gated by the same
-per-install token every OpenSwarm shim uses) for the cookies the user's own
-logged-in browser already holds in the persist:openswarm-browser partition, then
+per-install token every Maestro shim uses) for the cookies the user's own
+logged-in browser already holds in the persist:maestro-browser partition, then
 talks to the site as that browser. stdlib-only so the subprocess starts fast.
 """
 
@@ -15,8 +15,8 @@ import urllib.parse
 import urllib.request
 from typing import Dict, Tuple
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-AUTH_TOKEN = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+AUTH_TOKEN = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 BRIDGE_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/browser-session/cookies"
 CACHE_TTL_S = 60.0
 
@@ -53,7 +53,7 @@ def get_session(domain: str) -> Tuple[str, str]:
         with urllib.request.urlopen(req, timeout=20.0) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="replace") or "{}")
     except urllib.error.HTTPError as e:
-        raise SessionUnavailable(f"Session bridge error (HTTP {e.code}); is the OpenSwarm dashboard open?")
+        raise SessionUnavailable(f"Session bridge error (HTTP {e.code}); is the Maestro dashboard open?")
     except urllib.error.URLError as e:
         raise SessionUnavailable(f"Session bridge unreachable: {getattr(e, 'reason', e)}")
     except Exception as e:
@@ -64,7 +64,7 @@ def get_session(domain: str) -> Tuple[str, str]:
     cookies = data.get("cookies") or []
     if not cookies:
         raise SessionUnavailable(
-            f"Not logged in to {domain}. Open {domain} in the OpenSwarm browser, sign in, then retry."
+            f"Not logged in to {domain}. Open {domain} in the Maestro browser, sign in, then retry."
         )
     cookie_header = "; ".join(
         f"{c['name']}={c['value']}" for c in cookies if c.get("name")

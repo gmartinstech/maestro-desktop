@@ -90,7 +90,7 @@ def p_validate_code_safety(code: str) -> None:
 
 # Env vars we always scrub from the subprocess, regardless of strict-vs-force. These are the keys an attacker would actually want; install token, provider API keys, cloud credentials. Everything else is local-machine convenience.
 P_SCRUBBED_ENV_KEYS = frozenset({
-    "OPENSWARM_AUTH_TOKEN",
+    "MAESTRO_AUTH_TOKEN",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "GOOGLE_API_KEY",
@@ -164,7 +164,7 @@ async def execute_backend_code(
 
     Security boundaries (defense in depth; none alone is sufficient):
       1. AST allowlist on imports + blocked-builtin call list.
-      2. Subprocess cwd = fresh temp dir (not the OpenSwarm process cwd).
+      2. Subprocess cwd = fresh temp dir (not the Maestro process cwd).
       3. Subprocess env strips PATH, all *TOKEN / *_API_KEY inheritance.
       4. Preamble scrubs dangerous attrs off `builtins` inside the subprocess
          to catch AST-bypass tricks (e.g. metaclass shenanigans).
@@ -197,7 +197,7 @@ async def execute_backend_code(
     )
     wrapper = preamble + code + postamble
 
-    with tempfile.TemporaryDirectory(prefix="openswarm-exec-") as workdir:
+    with tempfile.TemporaryDirectory(prefix="maestro-exec-") as workdir:
         proc = await asyncio.create_subprocess_exec(
             sys.executable, "-c", wrapper,
             stdin=asyncio.subprocess.PIPE,

@@ -41,7 +41,7 @@ async def discover_mcp_tools_http(url: str, headers: dict | None = None) -> list
         init_resp = await client.post(url, headers=h, json={
             "jsonrpc": "2.0", "id": 1, "method": "initialize",
             "params": {"protocolVersion": "2025-03-26", "capabilities": {},
-                       "clientInfo": {"name": "self-swarm", "version": "0.1.0"}},
+                       "clientInfo": {"name": "maestro", "version": "0.1.0"}},
         })
         if init_resp.status_code not in (200, 201):
             raise HTTPException(status_code=502, detail=f"MCP initialize failed: {init_resp.status_code}")
@@ -89,7 +89,7 @@ async def discover_mcp_tools_sse(url: str, headers: dict | None = None) -> list[
             async with ClientSession(
                 read_stream,
                 write_stream,
-                client_info=Implementation(name="self-swarm", version="0.1.0"),
+                client_info=Implementation(name="maestro", version="0.1.0"),
             ) as session:
                 await session.initialize()
                 result = await session.list_tools()
@@ -202,7 +202,7 @@ async def discover_mcp_tools_stdio(command: str, args: list[str] | None = None, 
             "params": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {},
-                "clientInfo": {"name": "self-swarm", "version": "0.1.0"},
+                "clientInfo": {"name": "maestro", "version": "0.1.0"},
             },
         })
         # First response is the slow one. On Windows with a cold npx cache, `npx -y <pkg>` has to download the package + transitive deps and AV-scan every file npm writes; total install time often exceeds 60 s and occasionally pushes past 90 s. Subsequent reads run against an already-running server and stay at the default 30 s.

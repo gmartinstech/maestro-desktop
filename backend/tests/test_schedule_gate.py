@@ -1,4 +1,4 @@
-"""The always-on openswarm-schedule MCP must never fall through to always_allow:
+"""The always-on maestro-schedule MCP must never fall through to always_allow:
 its committing tools force an approval and Claude's internal Cron* tools are denied,
 even when the user set everything to always_allow. This is the unattended-widen guard
 the scheduled-tasks PR shipped without a test, and the exact path most at risk in the
@@ -10,10 +10,10 @@ from backend.apps.agents.manager.permissions.workflow_approval import is_claude_
 
 def test_schedule_commit_tools_force_ask_even_when_always_allow():
     for tool in (
-        "mcp__openswarm-schedule__ScheduleWorkflow",
-        "mcp__openswarm-schedule__UpdateScheduledWorkflow",
-        "mcp__openswarm-schedule__DeleteScheduledWorkflow",
-        "mcp__openswarm-schedule__PauseAllWorkflows",
+        "mcp__maestro-schedule__ScheduleWorkflow",
+        "mcp__maestro-schedule__UpdateScheduledWorkflow",
+        "mcp__maestro-schedule__DeleteScheduledWorkflow",
+        "mcp__maestro-schedule__PauseAllWorkflows",
     ):
         policy, _ = path_gate.maybe_override_policy("always_allow", tool, {})
         assert policy == "ask", f"{tool} must force an approval, not silently always_allow"

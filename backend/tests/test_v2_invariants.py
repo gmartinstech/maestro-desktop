@@ -32,8 +32,8 @@ from unittest.mock import patch, AsyncMock, MagicMock
 import pytest
 
 
-P_TMPROOT = tempfile.mkdtemp(prefix="openswarm-v2-invariants-")
-os.environ.setdefault("OPENSWARM_DATA_DIR", P_TMPROOT)
+P_TMPROOT = tempfile.mkdtemp(prefix="maestro-v2-invariants-")
+os.environ.setdefault("MAESTRO_DATA_DIR", P_TMPROOT)
 
 
 # --------------------------------------------------------------------------- Fixture: build a fake ToolDefinition without touching disk. ---------------------------------------------------------------------------
@@ -1430,7 +1430,7 @@ def test_resolve_attachments_uses_os_path_basename_for_windows_paths():
     in CI on Windows hosts via .github/workflows/."""
     import os, ntpath
     # ntpath.basename simulates what Windows os.path.basename does on actual Windows hosts. Our backend uses os.path which == ntpath on Windows and posixpath on macOS/Linux, so paths go through correctly at runtime per host. This test asserts the parsing is correct WHEN routed through ntpath (the Windows code path).
-    win_path = r"C:\Users\rrios\AppData\Local\Temp\self-swarm-uploads\palm.pdf"
+    win_path = r"C:\Users\rrios\AppData\Local\Temp\maestro-uploads\palm.pdf"
     assert ntpath.basename(win_path) == "palm.pdf"
     # And that os.path.join with mixed separators on Windows would still produce a valid path (ntpath is forgiving).
     assert ntpath.basename(r"D:/Downloads\test.pdf") == "test.pdf"
@@ -2751,7 +2751,7 @@ def test_sync_custom_providers_updates_existing_node_in_place():
     existing_nodes = [
         {
             "id": "openai-compatible-chat-existing",
-            "name": "Together AI (OpenSwarm-managed)",
+            "name": "Together AI (Maestro-managed)",
             "prefix": "cp-together-ai",
             "type": "openai-compatible",
             "baseUrl": "https://api.together.xyz/v1",
@@ -2762,7 +2762,7 @@ def test_sync_custom_providers_updates_existing_node_in_place():
         {
             "id": "conn-existing",
             "provider": "openai-compatible-chat-existing",
-            "name": "Together AI (OpenSwarm-managed)",
+            "name": "Together AI (Maestro-managed)",
             "authType": "apikey",
             "apiKey": "old-key",
         },
@@ -2803,7 +2803,7 @@ def test_sync_custom_providers_deletes_orphaned_managed_nodes():
     existing_nodes = [
         {
             "id": "node-orphan",
-            "name": "OldProvider (OpenSwarm-managed)",
+            "name": "OldProvider (Maestro-managed)",
             "prefix": "cp-oldprovider",
             "type": "openai-compatible",
         },

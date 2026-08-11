@@ -43,13 +43,13 @@ def test_tweet_id_of():
 # -- reads drive the right URL + scrape ------------------------------------
 
 def test_search_drives_search_url_and_scrapes():
-    fake, calls = perform_returning([{"id": "111", "author": "bob", "text": "openswarm rocks", "likes": 42, "url": TWEET_URL}])
+    fake, calls = perform_returning([{"id": "111", "author": "bob", "text": "maestro rocks", "likes": 42, "url": TWEET_URL}])
     with patch.object(x_reads, "perform", fake):
-        out = handle_tool_call("x_search", {"query": "openswarm", "product": "top", "count": 5})
+        out = handle_tool_call("x_search", {"query": "maestro", "product": "top", "count": 5})
     data = json.loads(p_text(out))
     assert "isError" not in out
     assert calls["domain"] == "x.com"
-    assert any("search?q=openswarm" in (u or "") for u in calls["urls"])
+    assert any("search?q=maestro" in (u or "") for u in calls["urls"])
     assert data["tweets"][0]["author"] == "bob" and data["count"] == 1
 
 
@@ -102,7 +102,7 @@ def test_delete_is_card_only():
 
 def test_no_card_error_surfaces():
     def boom(*a, **k):
-        raise BrowserActionError("No x.com browser card is open. Open x.com in an OpenSwarm browser card and sign in, then retry.")
+        raise BrowserActionError("No x.com browser card is open. Open x.com in an Maestro browser card and sign in, then retry.")
 
     with patch.object(x_writes, "perform", boom):
         out = handle_tool_call("x_like", {"target": TWEET_URL})

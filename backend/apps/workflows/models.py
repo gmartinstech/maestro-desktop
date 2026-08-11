@@ -145,7 +145,7 @@ class WorkflowRun(BaseModel):
 
 
 class MissedRun(BaseModel):
-    # A single scheduled fire that elapsed while OpenSwarm was closed. Captured at startup and surfaced in the launch-time review card; leaves this store only when the user runs it (becomes a ran_late run) or dismisses it (becomes a skipped run). scheduled_for is the instant it should have fired.
+    # A single scheduled fire that elapsed while Maestro was closed. Captured at startup and surfaced in the launch-time review card; leaves this store only when the user runs it (becomes a ran_late run) or dismisses it (becomes a skipped run). scheduled_for is the instant it should have fired.
     id: str = Field(default_factory=lambda: uuid4().hex)
     workflow_id: str
     scheduled_for: datetime

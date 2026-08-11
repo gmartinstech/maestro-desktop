@@ -1,15 +1,15 @@
 ---
 name: themed-ui-design
-description: Use when building, designing, or modifying any frontend UI component, page, or interface for the OpenSwarm app. Covers both general design excellence principles AND the specific OpenSwarm theme system, tokens, and component conventions. Trigger this for any React/MUI component work, UI design tasks, layout creation, styling questions, or when the user asks to build something visual.
+description: Use when building, designing, or modifying any frontend UI component, page, or interface for the Maestro app. Covers both general design excellence principles AND the specific Maestro theme system, tokens, and component conventions. Trigger this for any React/MUI component work, UI design tasks, layout creation, styling questions, or when the user asks to build something visual.
 ---
 
 # Themed UI Design
 
-Build distinctive, production-grade frontend interfaces for the OpenSwarm app that are visually striking AND perfectly aligned with the app's warm, editorial design system.
+Build distinctive, production-grade frontend interfaces for the Maestro app that are visually striking AND perfectly aligned with the app's warm, editorial design system.
 
 This skill combines two concerns:
 1. **Design Excellence** — Bold aesthetic thinking, anti-slop principles, creative typography/color/motion
-2. **Theme Compliance** — OpenSwarm's specific tokens, MUI conventions, and component patterns
+2. **Theme Compliance** — Maestro's specific tokens, MUI conventions, and component patterns
 
 Both matter equally. A component that follows the token system but looks generic has failed. A component that looks stunning but ignores the theme system has also failed.
 
@@ -20,11 +20,11 @@ Both matter equally. A component that follows the token system but looks generic
 Before writing any code, answer these questions:
 
 - **Purpose**: What problem does this interface solve? Who interacts with it?
-- **Tone within the brand**: The OpenSwarm aesthetic is warm, editorial, and refined — but within that envelope there's range. Is this component playful? Dense and utilitarian? Spacious and luxurious? Dramatic?
+- **Tone within the brand**: The Maestro aesthetic is warm, editorial, and refined — but within that envelope there's range. Is this component playful? Dense and utilitarian? Spacious and luxurious? Dramatic?
 - **Differentiation**: What makes this component memorable? What's the one detail someone would notice and appreciate?
 - **Hierarchy**: What's the single most important thing on screen? Everything else should defer to it.
 
-**CRITICAL**: The OpenSwarm brand is "sophisticated productivity tool meets premium design magazine meets dev IDE." Every component should feel like it belongs in that world — warm, organic, quietly confident. But within that world, make bold choices. Asymmetric layouts. Unexpected spacing. Elegant motion. The goal is *intentional* design, not safe design.
+**CRITICAL**: The Maestro brand is "sophisticated productivity tool meets premium design magazine meets dev IDE." Every component should feel like it belongs in that world — warm, organic, quietly confident. But within that world, make bold choices. Asymmetric layouts. Unexpected spacing. Elegant motion. The goal is *intentional* design, not safe design.
 
 ### Anti-Slop Checklist
 

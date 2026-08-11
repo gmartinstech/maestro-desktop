@@ -17,15 +17,15 @@ import urllib.request
 import urllib.error
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-BACKEND_AUTH = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+BACKEND_AUTH = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 BACKEND_BASE = f"http://127.0.0.1:{BACKEND_PORT}/api/workflows"
-PARENT_SESSION_ID = os.environ.get("OPENSWARM_PARENT_SESSION_ID", "")
-DASHBOARD_ID = os.environ.get("OPENSWARM_DASHBOARD_ID", "")
+PARENT_SESSION_ID = os.environ.get("MAESTRO_PARENT_SESSION_ID", "")
+DASHBOARD_ID = os.environ.get("MAESTRO_DASHBOARD_ID", "")
 
 
 def p_local_timezone_name() -> str:
-    name = os.environ.get("OPENSWARM_TIMEZONE", "").strip()
+    name = os.environ.get("MAESTRO_TIMEZONE", "").strip()
     if not name:
         try:
             from tzlocal import get_localzone_name  # type: ignore
@@ -593,7 +593,7 @@ def main():
             send_response(id_, {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "openswarm-schedule", "version": "1.0.0"},
+                "serverInfo": {"name": "maestro-schedule", "version": "1.0.0"},
             })
         elif method == "notifications/initialized":
             pass

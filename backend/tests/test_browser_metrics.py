@@ -10,7 +10,7 @@ import pytest
 @pytest.fixture()
 def metrics(monkeypatch):
     d = tempfile.mkdtemp(prefix="bm_test_")
-    monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", d)
+    monkeypatch.setenv("MAESTRO_BROWSER_METRICS_DIR", d)
     from backend.apps.agents.browser import browser_metrics as bm
     # The dir is memoized once for the prod hot path; drop the cache so each test re-resolves to its own temp dir instead of inheriting a prior test's.
     bm.p_metrics_dir_cache = None
@@ -80,7 +80,7 @@ def test_record_task_summary_and_rollups(metrics):
 
 def test_metrics_never_raises_on_bad_dir(monkeypatch):
     # An unwritable dir must not throw into the agent loop.
-    monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", "/proc/cannot/write/here")
+    monkeypatch.setenv("MAESTRO_BROWSER_METRICS_DIR", "/proc/cannot/write/here")
     from backend.apps.agents.browser import browser_metrics as bm
     bm.p_metrics_dir_cache = None  # re-resolve so we actually hit the bad dir
     bm.record_tool("s", "b", 1, "BrowserScreenshot", 5, ok=True, error="",
@@ -92,7 +92,7 @@ def test_task_secrets_are_scrubbed_from_tasks_jsonl(tmp_path, monkeypatch):
     from backend.apps.agents.browser import browser_metrics as bm
     import os as p_os
     import time as p_time
-    monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", str(tmp_path))
+    monkeypatch.setenv("MAESTRO_BROWSER_METRICS_DIR", str(tmp_path))
     bm.p_metrics_dir_cache = None
     bm.record_task("s1", "b1", "log into acme with password hunter2 then post sk-abc12345678901234567",
                    "completed", p_time.time() - 1, 2, [], {})

@@ -41,9 +41,9 @@ def is_script_path(rel: str) -> bool:
 def github_headers() -> dict:
     """GitHub request headers, with auth if a token is set. Unauthenticated is
     60 req/hr/IP (fine for the odd install, the wall for a power user); a token
-    (OPENSWARM_GITHUB_TOKEN or GITHUB_TOKEN) raises it to 5000/hr."""
-    headers = {"User-Agent": "openswarm-skill-registry", "Accept": "application/vnd.github+json"}
-    token = os.environ.get("OPENSWARM_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    (MAESTRO_GITHUB_TOKEN or GITHUB_TOKEN) raises it to 5000/hr."""
+    headers = {"User-Agent": "maestro-skill-registry", "Accept": "application/vnd.github+json"}
+    token = os.environ.get("MAESTRO_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers

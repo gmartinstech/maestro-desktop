@@ -48,7 +48,7 @@ def compose_turn_system_prompt(
     try:
         from zoneinfo import ZoneInfo
         # Best-effort IANA name for the host. Mirrors apps/service/client.py.
-        tz_name = os.environ.get("OPENSWARM_TIMEZONE", "").strip()
+        tz_name = os.environ.get("MAESTRO_TIMEZONE", "").strip()
         if not tz_name:
             try:
                 from tzlocal import get_localzone_name  # type: ignore

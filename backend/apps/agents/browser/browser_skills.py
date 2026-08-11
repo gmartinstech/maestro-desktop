@@ -419,7 +419,7 @@ def p_sanitized_steps_for_disk(steps: list[dict]) -> list[dict]:
 
 # --- persistence ----------------------------------------------------------
 def p_skills_dir() -> str | None:
-    override = os.environ.get("OPENSWARM_BROWSER_SKILLS_DIR")
+    override = os.environ.get("MAESTRO_BROWSER_SKILLS_DIR")
     base = override
     if not base:
         try:

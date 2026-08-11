@@ -31,9 +31,9 @@ These let users sign in with their Google account.
 
 1. Click the project dropdown at the very top of the page (it says "Select a project" or shows your current project name).
 2. Click **New Project** in the top-right of the popup.
-3. Name it something like `OpenSwarm`.
+3. Name it something like `Maestro`.
 4. Click **Create**.
-5. Wait a few seconds, then click the project dropdown again and select your new `OpenSwarm` project.
+5. Wait a few seconds, then click the project dropdown again and select your new `Maestro` project.
 
 ### Step 3 — Enable the Google+ API (required for OAuth)
 
@@ -47,7 +47,7 @@ These let users sign in with their Google account.
 2. Select **External** (unless you're inside a Google Workspace org and only want internal users).
 3. Click **Create**.
 4. Fill in the required fields:
-   - **App name**: `OpenSwarm`
+   - **App name**: `Maestro`
    - **User support email**: your email
    - **Developer contact email**: your email
 5. Click **Save and Continue**.
@@ -63,7 +63,7 @@ These let users sign in with their Google account.
 2. Click **+ Create Credentials** at the top.
 3. Select **OAuth client ID**.
 4. For **Application type**, select **Web application**.
-5. **Name**: `OpenSwarm` (or anything you want).
+5. **Name**: `Maestro` (or anything you want).
 6. Under **Authorized redirect URIs**, click **+ Add URI** and add:
    ```
    http://localhost:8324/api/auth/google/callback
@@ -129,7 +129,7 @@ Apple doesn't let you use your regular password for automated tools. You need to
 2. Sign in with your Apple ID.
 3. In the **Sign-In and Security** section, click **App-Specific Passwords**.
 4. Click **Generate an app-specific password** (or the **+** button).
-5. Enter a label like `OpenSwarm Notarization`.
+5. Enter a label like `Maestro Notarization`.
 6. Click **Create**.
 7. Apple shows you a password in the format `xxxx-xxxx-xxxx-xxxx`. **Copy it now** — you can't see it again.
 
@@ -187,7 +187,7 @@ A GitHub Personal Access Token that lets the build script upload release artifac
 ### Step 2 — Create a token
 
 1. Click **Generate new token** > **Generate new token (classic)**.
-2. **Note**: `OpenSwarm Releases` (or whatever you want).
+2. **Note**: `Maestro Releases` (or whatever you want).
 3. **Expiration**: pick a duration (90 days, or "No expiration" if you don't want to rotate it).
 4. **Scopes**: check the **`repo`** checkbox (this gives full access to your repositories, which is needed to create releases and upload assets).
 5. Click **Generate token** at the bottom.

@@ -64,7 +64,7 @@ def metrics_dir() -> str:
     global p_metrics_dir_cache
     if p_metrics_dir_cache is not None:
         return p_metrics_dir_cache
-    override = os.environ.get("OPENSWARM_BROWSER_METRICS_DIR")
+    override = os.environ.get("MAESTRO_BROWSER_METRICS_DIR")
     if override:
         base = override
     else:
@@ -73,7 +73,7 @@ def metrics_dir() -> str:
             base = os.path.join(DATA_ROOT, "browser_metrics")
         except Exception:
             import tempfile
-            base = os.path.join(tempfile.gettempdir(), "openswarm_browser_metrics")
+            base = os.path.join(tempfile.gettempdir(), "maestro_browser_metrics")
     try:
         os.makedirs(base, mode=0o700, exist_ok=True)
     except Exception:

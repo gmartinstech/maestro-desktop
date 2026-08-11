@@ -36,7 +36,7 @@ class SearchBody(BaseModel):
     num_results: int = Field(5, ge=1, le=10, description="Max results to return.")
     # Hint from the MCP server about which primary provider the session is using. Lets us route to that provider's native search tool (Gemini googleSearch, OpenAI web_search_preview) when available, costs come out of the user's existing primary budget.
     primary: str | None = Field(None, description="Primary provider hint: 'gemini' | 'openai' | 'anthropic' | None")
-    # Set by the openswarm-web shim from OPENSWARM_BROWSER_OK; the browser-fallback nudge must never fire in a session without browser-delegation tools.
+    # Set by the maestro-web shim from MAESTRO_BROWSER_OK; the browser-fallback nudge must never fire in a session without browser-delegation tools.
     browser_ok: bool = Field(False, description="Whether this session has browser-delegation tools available.")
 
 
@@ -73,7 +73,7 @@ P_GROUNDED_ATTEMPT_TIMEOUT = 48.0  # just above the providers' own 45s httpx tim
 P_LOCAL_FETCH_TIMEOUT = 32.0
 P_BROWSER_TIER_TIMEOUT = 46.0  # main-bridge send has its own per-action timeout; this outer wait_for is just a backstop above it
 
-# Drive the packaged app's offscreen Chromium (main-process hidden window) for a fetch/search. Returns the bridge result dict, or None when no Electron main bridge is connected (dev/headless/backend-only) so the cascade just skips this tier. This is the real "browser reachable" gate, OPENSWARM_BROWSER_OK is effectively always "1" and not trustworthy for this.
+# Drive the packaged app's offscreen Chromium (main-process hidden window) for a fetch/search. Returns the bridge result dict, or None when no Electron main bridge is connected (dev/headless/backend-only) so the cascade just skips this tier. This is the real "browser reachable" gate, MAESTRO_BROWSER_OK is effectively always "1" and not trustworthy for this.
 async def p_browser_bridge(action: str, params: dict) -> dict | None:
     from backend.apps.agents.core.ws_manager import ws_manager
     from uuid import uuid4

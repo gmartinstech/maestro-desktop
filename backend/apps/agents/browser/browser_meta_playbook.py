@@ -33,7 +33,7 @@ CACHE: list[str] | None = None
 
 
 def p_dir() -> str | None:
-    base = os.environ.get("OPENSWARM_BROWSER_META_DIR")
+    base = os.environ.get("MAESTRO_BROWSER_META_DIR")
     if not base:
         try:
             from backend.config.paths import DATA_ROOT

@@ -1,35 +1,35 @@
-// Install window.OPENSWARM_APP BEFORE anything else so the agent bridge exists
+// Install window.MAESTRO_APP BEFORE anything else so the agent bridge exists
 // from first paint, even while React + the app are still mounting. The app fills
-// it in by calling window.OPENSWARM_APP.register(...) on mount.
+// it in by calling window.MAESTRO_APP.register(...) on mount.
 import './agentBridge';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Main from './app/Main';
 import ErrorBoundary from './app/components/ErrorBoundary';
 
-// Render-health beacons the OpenSwarm host reads (via the forwarded preview
+// Render-health beacons the Maestro host reads (via the forwarded preview
 // console) to decide, at the end of an agent turn, whether the app renders.
 // The ErrorBoundary covers React render crashes; the listeners here cover
 // what never reaches a boundary: module-load / pre-mount throws and vite
 // transform errors.
 function reportRender(ok: boolean, detail?: string) {
   if (ok) {
-    window.__openswarm_rendered = true;
+    window.__maestro_rendered = true;
     // eslint-disable-next-line no-console
-    console.log('[openswarm:app-ready]');
+    console.log('[maestro:app-ready]');
   } else {
     // eslint-disable-next-line no-console
-    console.error('[openswarm:app-error]', detail ?? '');
+    console.error('[maestro:app-error]', detail ?? '');
   }
 }
 
-// Gate on __openswarm_rendered so a throw inside a click handler after a good
+// Gate on __maestro_rendered so a throw inside a click handler after a good
 // render (a bug, but not "the app won't render") doesn't block the turn.
 window.addEventListener('error', (e) => {
-  if (!window.__openswarm_rendered) reportRender(false, e.message || String(e.error ?? e));
+  if (!window.__maestro_rendered) reportRender(false, e.message || String(e.error ?? e));
 });
 window.addEventListener('unhandledrejection', (e) => {
-  if (!window.__openswarm_rendered) reportRender(false, String(e.reason ?? e));
+  if (!window.__maestro_rendered) reportRender(false, String(e.reason ?? e));
 });
 
 if (import.meta.hot) {
@@ -42,8 +42,8 @@ if (import.meta.hot) {
   // still showing its fallback, report the error again (an unrelated edit that
   // didn't fix it must not flip the gate to "ready"); otherwise report ready.
   hot.on('vite:afterUpdate', () => {
-    if (window.__openswarm_render_failed) {
-      reportRender(false, window.__openswarm_last_error || 'app still failing to render');
+    if (window.__maestro_render_failed) {
+      reportRender(false, window.__maestro_last_error || 'app still failing to render');
     } else {
       reportRender(true);
     }
@@ -52,7 +52,7 @@ if (import.meta.hot) {
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {
-  console.error('[openswarm:app-error]', '#root element not found in DOM');
+  console.error('[maestro:app-error]', '#root element not found in DOM');
 } else {
   // Wrap Main in an ErrorBoundary so any runtime crash from agent
   // edits (missing imports, hook-rules violations, etc.) shows a
@@ -64,10 +64,10 @@ if (!rootEl) {
       <Main />
     </ErrorBoundary>,
   );
-  // Defer a frame so a synchronous render crash sets __openswarm_render_failed
+  // Defer a frame so a synchronous render crash sets __maestro_render_failed
   // (via the boundary) before we'd wrongly report ready.
   requestAnimationFrame(() => {
-    if (window.__openswarm_render_failed) return;
+    if (window.__maestro_render_failed) return;
     reportRender(true);
   });
 }

@@ -7,15 +7,15 @@ import sys
 import urllib.error
 import urllib.request
 
-BACKEND_PORT = os.environ.get("OPENSWARM_PORT", "8324")
-BACKEND_AUTH = os.environ.get("OPENSWARM_AUTH_TOKEN", "")
+BACKEND_PORT = os.environ.get("MAESTRO_PORT", "8324")
+BACKEND_AUTH = os.environ.get("MAESTRO_AUTH_TOKEN", "")
 SEARCH_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/web/search"
 FETCH_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/web/fetch"
 
 # Primary-provider hint from agent_manager; backend picks the native search tool (googleSearch/web_search_preview) so searches use the user's existing budget.
-PRIMARY_HINT = os.environ.get("OPENSWARM_PRIMARY_API", "") or None
+PRIMARY_HINT = os.environ.get("MAESTRO_PRIMARY_API", "") or None
 # Whether this session actually has browser-delegation tools; gates the backend's "fall back to the browser" nudge.
-BROWSER_OK = os.environ.get("OPENSWARM_BROWSER_OK", "0") == "1"
+BROWSER_OK = os.environ.get("MAESTRO_BROWSER_OK", "0") == "1"
 
 TOOLS = [
     {
@@ -159,7 +159,7 @@ def main():
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
                 "serverInfo": {
-                    "name": "openswarm-web",
+                    "name": "maestro-web",
                     "version": "1.0.0",
                 },
             })

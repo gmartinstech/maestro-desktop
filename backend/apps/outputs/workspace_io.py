@@ -73,6 +73,7 @@ WALK_SKIP_DIRS = frozenset({
     ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
+    ".maestro",
     ".openswarm",
 })
 

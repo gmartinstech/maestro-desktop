@@ -34,7 +34,7 @@ class MainApp:
                     if p_dt > 50:  # only flag a slow lifespan; keeps boot logs quiet
                         print(f"[perf] lifespan {sub_app.name} t={p_dt:.0f}ms", flush=True)
                 print(f"[perf] lifespans-total t={(time.perf_counter() - p_boot_t0) * 1000:.0f}ms", flush=True)
-                p_port = os.environ.get("OPENSWARM_PORT", "8324")
+                p_port = os.environ.get("MAESTRO_PORT", "8324")
                 print(f"\nCheck out the API docs at: http://127.0.0.1:{p_port}/docs\n")
                 yield
                 

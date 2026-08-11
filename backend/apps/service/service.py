@@ -6,7 +6,7 @@ and lifecycle management. Responsibilities:
   - Usage-summary and cost-breakdown endpoints (user-facing, for the
     Settings / Usage page)
   - Background heartbeat that reports operational state to the cloud
-  - 9Router auto-start for OpenSwarm Pro users
+  - 9Router auto-start for Maestro Pro users
   - Frontend event endpoint (`POST /api/service/event`)
   - Periodic spool drainer for offline retry
 """

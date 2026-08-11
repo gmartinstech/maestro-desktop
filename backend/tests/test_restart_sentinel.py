@@ -1,5 +1,5 @@
 """Agent self-restart handshake: a workspace's restart.sh touches
-.openswarm/restart-requested and the AppRuntimeManager watcher consumes it and
+.maestro/restart-requested and the AppRuntimeManager watcher consumes it and
 restarts every attached instance of that workspace. This is the only restart
 path an agent has (no API token, uvicorn runs without --reload), so pin both
 the pickup and the sentinel consumption restart.sh's wait loop depends on."""
@@ -34,8 +34,8 @@ async def test_sentinel_restarts_all_attached_instances(tmp_path, monkeypatch):
     await mgr.attach("ws1", ws, 1)
     await mgr.attach("ws1", ws, 2)
 
-    os.makedirs(os.path.join(ws, ".openswarm"), exist_ok=True)
-    sentinel = os.path.join(ws, ".openswarm", "restart-requested")
+    os.makedirs(os.path.join(ws, ".maestro"), exist_ok=True)
+    sentinel = os.path.join(ws, ".maestro", "restart-requested")
     with open(sentinel, "w", encoding="utf-8") as f:
         f.write("")
 

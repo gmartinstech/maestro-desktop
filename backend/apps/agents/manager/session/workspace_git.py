@@ -36,7 +36,7 @@ def ensure_cwd_git_repo(cwd: str, home: Optional[str] = None) -> None:
             return
 
         import subprocess as sp_git
-        # Case A: cwd is inside some git repo (possibly parent). Verify HEAD resolves. If the enclosing repo is broken (e.g. a stray `.git` in $HOME with no commits, which makes workspaces under ~/.openswarm/workspaces/ inherit a broken HEAD), we need to init a fresh repo AT cwd so it shadows the parent.
+        # Case A: cwd is inside some git repo (possibly parent). Verify HEAD resolves. If the enclosing repo is broken (e.g. a stray `.git` in $HOME with no commits, which makes workspaces under ~/.maestro/workspaces/ inherit a broken HEAD), we need to init a fresh repo AT cwd so it shadows the parent.
         inside = sp_git.run(
             ["git", "rev-parse", "--is-inside-work-tree"],
             cwd=cwd,
@@ -55,9 +55,9 @@ def ensure_cwd_git_repo(cwd: str, home: Optional[str] = None) -> None:
             if os.path.isdir(os.path.join(cwd, ".git")):
                 # .git is directly here, commit to fix it.
                 sp_git.run(
-                    ["git", "-c", "user.email=openswarm@local",
-                     "-c", "user.name=OpenSwarm",
-                     "commit", "--allow-empty", "-q", "-m", "openswarm init"],
+                    ["git", "-c", "user.email=maestro@local",
+                     "-c", "user.name=Maestro",
+                     "commit", "--allow-empty", "-q", "-m", "maestro init"],
                     cwd=cwd,
                     stdout=sp_git.DEVNULL, stderr=sp_git.DEVNULL, timeout=10,
                 )
@@ -71,9 +71,9 @@ def ensure_cwd_git_repo(cwd: str, home: Optional[str] = None) -> None:
             stdout=sp_git.DEVNULL, stderr=sp_git.DEVNULL, timeout=10,
         )
         sp_git.run(
-            ["git", "-c", "user.email=openswarm@local",
-             "-c", "user.name=OpenSwarm",
-             "commit", "--allow-empty", "-q", "-m", "openswarm init"],
+            ["git", "-c", "user.email=maestro@local",
+             "-c", "user.name=Maestro",
+             "commit", "--allow-empty", "-q", "-m", "maestro init"],
             cwd=cwd,
             stdout=sp_git.DEVNULL, stderr=sp_git.DEVNULL, timeout=10,
         )

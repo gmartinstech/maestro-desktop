@@ -42,40 +42,40 @@ def build_effective_tool_lists(
     if mcp_servers:
         all_tools_list = load_all_tools()
         for name in mcp_servers:
-            if name == "openswarm-browser-agent":
+            if name == "maestro-browser-agent":
                 for bt in browser_delegation_tools:
                     policy = builtin_perms.get(bt, "always_allow")
                     if policy == "always_allow":
-                        effective_allowed.append(f"mcp__openswarm-browser-agent__{bt}")
+                        effective_allowed.append(f"mcp__maestro-browser-agent__{bt}")
                     elif policy == "deny":
-                        effective_disallowed.append(f"mcp__openswarm-browser-agent__{bt}")
+                        effective_disallowed.append(f"mcp__maestro-browser-agent__{bt}")
                 continue
 
-            if name == "openswarm-invoke-agent":
+            if name == "maestro-invoke-agent":
                 for it in invoke_agent_tools:
                     policy = builtin_perms.get(it, "always_allow")
                     if policy == "always_allow":
-                        effective_allowed.append(f"mcp__openswarm-invoke-agent__{it}")
+                        effective_allowed.append(f"mcp__maestro-invoke-agent__{it}")
                     elif policy == "deny":
-                        effective_disallowed.append(f"mcp__openswarm-invoke-agent__{it}")
+                        effective_disallowed.append(f"mcp__maestro-invoke-agent__{it}")
                 continue
 
-            if name == "openswarm-skill":
+            if name == "maestro-skill":
                 policy = builtin_perms.get("Skill", "always_allow")
                 if policy == "always_allow":
-                    effective_allowed.append("mcp__openswarm-skill__Skill")
+                    effective_allowed.append("mcp__maestro-skill__Skill")
                 else:
-                    effective_disallowed.append("mcp__openswarm-skill__Skill")
+                    effective_disallowed.append("mcp__maestro-skill__Skill")
                 continue
 
-            if name == "openswarm-web":
+            if name == "maestro-web":
                 # Expose our DDG-backed web tools under an MCP prefix. Honor existing WebSearch/WebFetch permission policy, if the user disabled them in Settings, don't offer the MCP variants either.
                 for wt in ("WebSearch", "WebFetch"):
                     policy = builtin_perms.get(wt, "always_allow")
                     if policy == "always_allow":
-                        effective_allowed.append(f"mcp__openswarm-web__{wt}")
+                        effective_allowed.append(f"mcp__maestro-web__{wt}")
                     elif policy == "deny":
-                        effective_disallowed.append(f"mcp__openswarm-web__{wt}")
+                        effective_disallowed.append(f"mcp__maestro-web__{wt}")
                 continue
 
             tool_def = next(
@@ -95,7 +95,7 @@ def build_effective_tool_lists(
             else:
                 effective_allowed.append(f"mcp__{name}__*")
 
-    # If the openswarm-web MCP was registered, the CLI's built-in WebSearch/WebFetch are guaranteed to fail (no Anthropic backend). Suppress them so the model picks our MCP variants and doesn't waste a turn on a broken tool.
+    # If the maestro-web MCP was registered, the CLI's built-in WebSearch/WebFetch are guaranteed to fail (no Anthropic backend). Suppress them so the model picks our MCP variants and doesn't waste a turn on a broken tool.
     if need_web_mcp:
         effective_allowed = [t for t in effective_allowed if t not in ("WebSearch", "WebFetch")]
         for wt_name in ("WebSearch", "WebFetch"):
@@ -105,7 +105,7 @@ def build_effective_tool_lists(
     for bt in path_gate.CLAUDE_INTERNAL_SCHEDULER_TOOLS:
         if bt not in effective_disallowed:
             effective_disallowed.append(bt)
-    # The claude_code preset ships its own bare `Skill` tool that reads ~/.claude/skills directly; always withhold it so skills only ever load through our provider-agnostic mcp__openswarm-skill__Skill (or not at all).
+    # The claude_code preset ships its own bare `Skill` tool that reads ~/.claude/skills directly; always withhold it so skills only ever load through our provider-agnostic mcp__maestro-skill__Skill (or not at all).
     if "Skill" not in effective_disallowed:
         effective_disallowed.append("Skill")
     return effective_allowed, effective_disallowed

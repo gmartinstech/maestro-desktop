@@ -1,7 +1,7 @@
 """Regression guard for the oversize-file corruption fix (PR #106).
 
 The bug: the workspace poll read substituted any file over the per-file cap with
-a `// [openswarm] file truncated...` marker; the frontend treated that marker as
+a `// [maestro] file truncated...` marker; the frontend treated that marker as
 real content and round-tripped it back into storage on save/export/snapshot,
 permanently destroying the real source of oversize files. These tests pin the
 three layers of the fix: omit-on-read (no stub), refuse-shrink-on-write (disk
@@ -15,7 +15,7 @@ from backend.apps.outputs.workspace_io import (
     would_shrink_oversize_file,
 )
 
-MARKER = "// [openswarm] file truncated"
+MARKER = "// [maestro] file truncated"
 # Comfortably above the workspace poll cap (currently 2 MB) without importing the
 # module-private constant. If the cap is ever raised past this, bump it here too.
 OVERSIZE = 3 * 1024 * 1024

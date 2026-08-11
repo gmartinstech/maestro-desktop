@@ -1,6 +1,6 @@
 # App Builder — Platform Reference
 
-You are building an **App** inside OpenSwarm. The workspace you're working
+You are building an **App** inside Maestro. The workspace you're working
 in is a **React 18 + TypeScript + Vite** project (with an optional FastAPI
 backend you can opt into on demand). It's served live to a webview, so it
 behaves like a real browser tab — cross-origin `fetch`, popups, mic/camera,
@@ -56,9 +56,9 @@ fast.
 3. Leave `frontend/package.json`, `frontend/vite.config.ts`, `run.sh`,
    `.env`, `meta.json` alone — vite still needs them.
 4. Don't run `bash backend_init.sh` — lightweight mode has no backend.
-5. Agent control still works without the template: `window.OPENSWARM_APP` is
+5. Agent control still works without the template: `window.MAESTRO_APP` is
    injected by the app shell, so even here you can make the app agent-operable
-   by calling `window.OPENSWARM_APP.register({ rules, controls, getState,
+   by calling `window.MAESTRO_APP.register({ rules, controls, getState,
    invoke })` from your inline `<script>` (see the bridge section below). This is
    optional, the agent can also play any app via native keyboard/mouse, but for
    a game/canvas a registered `getState` (e.g. score, alive) makes it far more
@@ -81,7 +81,7 @@ workspace/
 ├── .env                   # FRONTEND_PORT, BACKEND_PORT (NONE by default)
 ├── .env.example           # Mirror of .env (LLM-consistency — edit both
 │                          #   when you change either)
-├── run.sh                 # OpenSwarm's runtime spawns this; you don't
+├── run.sh                 # Maestro's runtime spawns this; you don't
 ├── backend_init.sh        # Run this when you need a backend (see below)
 ├── restart.sh             # Run this to restart the app runtime (see below)
 ├── SKILL.md               # This document
@@ -336,7 +336,7 @@ export const JOBS_LIST = '/api/jobs/list';
 
 The FastAPI backend above runs in preview but is **not hosted when an app is
 published** to the web. For features that should keep working on a published
-`{slug}.openswarm.host` link, use these two runtime calls instead of a backend.
+`{slug}.maestro.host` link, use these two runtime calls instead of a backend.
 They run on the published site (same-origin, no credentials). In the App Builder
 **preview** they throw a clear "available once published" error, preview can't run
 them without embedding a credential into your app, so test these by publishing.
@@ -371,16 +371,16 @@ things those two can't do (it won't be there once published).
 
 ---
 
-## Make the app agent-operable: the `OPENSWARM_APP` bridge
+## Make the app agent-operable: the `MAESTRO_APP` bridge
 
 An agent can drive this app on the user's behalf (e.g. "graph y=x^2 on my
 Desmos app"). It does NOT do that by clicking pixels or scraping the DOM (slow,
 and an app's DOM is often a bare `<canvas>`). Instead it reads and acts through
-`window.OPENSWARM_APP`, a bridge the template already ships for you
+`window.MAESTRO_APP`, a bridge the template already ships for you
 (`src/agentBridge.ts`, installed before your app mounts).
 
 **You do not wire up the bridge; you `register()` into it.** Call
-`window.OPENSWARM_APP.register({ rules, controls, getState, invoke })` once your
+`window.MAESTRO_APP.register({ rules, controls, getState, invoke })` once your
 app's core object exists (e.g. in a mount `useEffect`). This is REQUIRED for
 every app: the runtime verifies it and the agent's first action fails loudly
 with `BRIDGE MISSING` if you forget. Pass:
@@ -398,13 +398,13 @@ with `BRIDGE MISSING` if you forget. Pass:
 
 Keep `args` shapes simple (strings, numbers, booleans, small objects). The agent
 only ever calls actions that `controls` listed; it never edits your code. When
-dynamic controls change, call `window.OPENSWARM_APP.refresh()` so the agent
+dynamic controls change, call `window.MAESTRO_APP.refresh()` so the agent
 knows to re-read them (it bumps the `__rev` the agent watches).
 
 ```tsx
 // `calc` here is the app's own API (Desmos example); use whatever yours exposes.
 function registerAgentBridge(calc: any) {
-  window.OPENSWARM_APP!.register({
+  window.MAESTRO_APP!.register({
     rules: 'A graphing calculator. Plot and remove expressions like y=x^2 or y=sin(x).',
     controls() {
       const controls = [
@@ -421,9 +421,9 @@ function registerAgentBridge(calc: any) {
       return { expressions: calc.getExpressions().map((e: any) => ({ id: e.id, latex: e.latex })) };
     },
     invoke(name: string, args: any = {}) {
-      if (name === 'addExpr') { const id = String(Date.now()); calc.setExpression({ id, latex: args.latex }); window.OPENSWARM_APP!.refresh(); return { id }; }
-      if (name === 'removeExpr') { calc.removeExpression({ id: args.id }); window.OPENSWARM_APP!.refresh(); return { ok: true }; }
-      if (name === 'clear') { calc.setBlank(); window.OPENSWARM_APP!.refresh(); return { ok: true }; }
+      if (name === 'addExpr') { const id = String(Date.now()); calc.setExpression({ id, latex: args.latex }); window.MAESTRO_APP!.refresh(); return { id }; }
+      if (name === 'removeExpr') { calc.removeExpression({ id: args.id }); window.MAESTRO_APP!.refresh(); return { ok: true }; }
+      if (name === 'clear') { calc.setBlank(); window.MAESTRO_APP!.refresh(); return { ok: true }; }
       throw `Unknown action: ${name}`;
     },
   });
@@ -466,12 +466,12 @@ Frontend `console.log/warn/error` calls land in the Terminal pane under
 stream as `[BACKEND]` lines, so you can correlate cause and effect across
 the two halves of your stack.
 
-**Read the terminal yourself: `.openswarm/terminal.log`** at the workspace
+**Read the terminal yourself: `.maestro/terminal.log`** at the workspace
 root is a live tee of everything the Terminal pane shows — `[BACKEND]` /
 `[BACKEND:stderr]` stdout+stderr, `[RUNTIME]` events, and `[FRONTEND]` /
 `[FRONTEND:warn]` / `[FRONTEND:error]` console lines from the running app.
 It resets on every app (re)start. When something misbehaves, don't guess —
-`tail -100 .openswarm/terminal.log` (or grep it for `error`) and look at
+`tail -100 .maestro/terminal.log` (or grep it for `error`) and look at
 what actually happened.
 
 ---
@@ -510,9 +510,9 @@ Common deps already in the template:
 ## Workflow tips
 
 - **Edits are auto-saved**. As soon as you write a file via the Edit/Write tool, it's on disk. Vite HMR re-renders the preview within ~100ms.
-- **`bash restart.sh` restarts the app runtime yourself** — backend + vite, no user action needed. Use it after `bash backend_init.sh`, after editing `.env`, or whenever backend code must reload (uvicorn runs WITHOUT --reload, so backend edits do NOT hot-apply). Never ask the user to restart for you, and never try to kill/rerun run.sh — the harness owns the process. If `restart.sh` is missing (older app), `mkdir -p .openswarm && touch .openswarm/restart-requested` does the same thing.
-- After a restart, wait a few seconds and check `.openswarm/terminal.log` to confirm the boot looked clean.
-- **`meta.json`** at workspace root drives the app's name + description in the OpenSwarm sidebar and on the app's live card on the dashboard. Write it FIRST when starting a new app (see step 1 of the Quick start checklist), and revise it any time the app's purpose shifts.
+- **`bash restart.sh` restarts the app runtime yourself** — backend + vite, no user action needed. Use it after `bash backend_init.sh`, after editing `.env`, or whenever backend code must reload (uvicorn runs WITHOUT --reload, so backend edits do NOT hot-apply). Never ask the user to restart for you, and never try to kill/rerun run.sh — the harness owns the process. If `restart.sh` is missing (older app), `mkdir -p .maestro && touch .maestro/restart-requested` does the same thing.
+- After a restart, wait a few seconds and check `.maestro/terminal.log` to confirm the boot looked clean.
+- **`meta.json`** at workspace root drives the app's name + description in the Maestro sidebar and on the app's live card on the dashboard. Write it FIRST when starting a new app (see step 1 of the Quick start checklist), and revise it any time the app's purpose shifts.
 
 ---
 
@@ -520,10 +520,10 @@ Common deps already in the template:
 
 The preview iframe is wrapped in an ErrorBoundary that surfaces React
 runtime errors as a visible red error card AND mirrors the error into
-the Terminal pane as a `[FRONTEND]` line tagged `[openswarm:app-error]`.
+the Terminal pane as a `[FRONTEND]` line tagged `[maestro:app-error]`.
 After substantial edits — especially anything that touches imports,
 hooks, or React state — **always check the most recent `[FRONTEND]`
-lines before saying "done"** (`tail -50 .openswarm/terminal.log`).
+lines before saying "done"** (`tail -50 .maestro/terminal.log`).
 If you see one, fix it before claiming the app is ready.
 
 The three most common ways agent edits crash a React preview:
@@ -554,7 +554,7 @@ The three most common ways agent edits crash a React preview:
 
    Then run `bash restart.sh`. The workspace's `frontend/node_modules`
    will re-symlink to the shared warm cache on next vite boot — only
-   ONE React copy exists across all OpenSwarm apps, so the
+   ONE React copy exists across all Maestro apps, so the
    duplicate is gone. The `.vite-cache` wipe is important because
    vite caches pre-bundled deps including the duplicate React.
 

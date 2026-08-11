@@ -194,7 +194,7 @@ void main(){
         display: 'block',
         ...style,
       }}
-      aria-label="OpenSwarm idle background"
+      aria-label="Maestro idle background"
     />
   );
 };

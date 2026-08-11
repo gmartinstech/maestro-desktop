@@ -77,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           // public dir yet), which produced visible broken-image
           // placeholders in the first ~1 s of every app load.
           src={logoUrl}
-          alt="OpenSwarm"
+          alt="Maestro"
           sx={{ width: 26, height: 26, objectFit: 'contain', flexShrink: 0 }}
         />
         {!collapsed && (
@@ -96,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
               whiteSpace: 'nowrap',
             }}
           >
-            OpenSwarm
+            Maestro
           </Typography>
         )}
       </Box>

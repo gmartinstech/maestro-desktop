@@ -1,5 +1,5 @@
 """Unit coverage for should_register_web_mcp: the decision of whether to register the
-DDG-backed openswarm-web MCP. Security/cost-relevant (it governs whether WebSearch cascades
+DDG-backed maestro-web MCP. Security/cost-relevant (it governs whether WebSearch cascades
 through our own /api/web/search vs the native Anthropic path), so pin each provider case."""
 
 import pytest
@@ -27,7 +27,7 @@ def test_non_claude_primary_registers():
 
 
 def test_subscription_route_claude_registers():
-    # opus-4-8 on an own-key account: the aux haiku call 401s through 9Router, so a bare key isn't enough -> fall back to openswarm-web.
+    # opus-4-8 on an own-key account: the aux haiku call 401s through 9Router, so a bare key isn't enough -> fall back to maestro-web.
     assert p_call(router_model_id="cc/opus", api_type="anthropic",
                  anthropic_api_key="sk-ant-xxx") is True
 

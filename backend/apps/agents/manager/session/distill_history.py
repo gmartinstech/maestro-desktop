@@ -24,7 +24,7 @@ from backend.apps.agents.manager.session.history_compaction import (
 
 logger = logging.getLogger(__name__)
 
-DISTILL_ENABLED = os.environ.get("OPENSWARM_DISTILL_HISTORY", "1") != "0"
+DISTILL_ENABLED = os.environ.get("MAESTRO_DISTILL_HISTORY", "1") != "0"
 MAX_DISTILL_INPUT_CHARS = 60_000
 
 P_SYSTEM = (

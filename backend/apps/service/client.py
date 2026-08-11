@@ -1,7 +1,7 @@
 """Operational state forwarder.
 
 Single public surface: `submit(kind, payload)`. The desktop hands off
-opaque payload dicts; the cloud at api.openswarm.com is responsible for
+opaque payload dicts; the configured service endpoint is responsible for
 parsing and routing them. The desktop has no schema knowledge.
 
 Three `kind` values are accepted; they're the routing primitive the
@@ -34,7 +34,7 @@ from backend.apps.service.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-P_DEFAULT_BASE = "https://api.openswarm.com"
+P_DEFAULT_BASE = "https://llm.martinstech.net/v1"
 P_PATH_BY_KIND = {
     "state": "/api/service/state",
     "session": "/api/service/sync",
@@ -99,7 +99,8 @@ def spool_path() -> str:
         from backend.config.paths import SETTINGS_DIR
         return os.path.join(SETTINGS_DIR, "service_spool.db")
     except Exception:
-        return os.path.expanduser("~/.openswarm/data/service_spool.db")
+        from backend.config.state_paths import home_state_dir
+        return home_state_dir("data", "service_spool.db")
 
 
 def set_test_sink(fn: Optional[Any]) -> None:
@@ -180,7 +181,7 @@ def p_envelope() -> dict:
         pass
     # Timezone: prefer the IANA zone name passed in by Electron (always canonical, e.g. "America/Los_Angeles") so cloud-side localTimeFields() can format hour-of-day correctly. Fall back to Python's local zone which sometimes returns abbreviations (PDT, CDT) or localized names ("Romance (zomertijd)") that don't round-trip through tzdata.
     try:
-        ianatz = os.environ.get("OPENSWARM_TIMEZONE", "").strip()
+        ianatz = os.environ.get("MAESTRO_TIMEZONE", "").strip()
         if not ianatz:
             try:
                 from tzlocal import get_localzone_name  # type: ignore
@@ -198,23 +199,23 @@ def p_envelope() -> dict:
         pass
     # Locale: BCP 47 string ("en-US", "es-ES", etc.) injected by Electron via app.getLocale(); see electron/main.js. We don't fall back to Python's locale.getdefaultlocale() because that's deprecated, often empty, and returns inconsistent OS-specific values across macOS/Windows/Linux.
     try:
-        loc = os.environ.get("OPENSWARM_LOCALE", "").strip()
+        loc = os.environ.get("MAESTRO_LOCALE", "").strip()
         if loc:
             env["locale"] = loc
     except Exception:
         pass
     env["app_version"] = APP_VERSION
     # How this build was packaged. Set by the platform-specific build script (electron-builder afterPack hooks for dmg / exe / appimage / deb / rpm). Defaults to "dev" when running from `bash run.sh` in a checked-out repo.
-    env["install_method"] = os.environ.get("OPENSWARM_INSTALL_METHOD", "dev")
+    env["install_method"] = os.environ.get("MAESTRO_INSTALL_METHOD", "dev")
     return env
 
 
 def p_base_url() -> str:
     try:
         from backend.apps.settings.store import load_settings
-        from backend.apps.settings.credentials import OPENSWARM_DEFAULT_PROXY_URL
+        from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
         s = load_settings()
-        return (getattr(s, "openswarm_proxy_url", None) or OPENSWARM_DEFAULT_PROXY_URL).rstrip("/")
+        return (getattr(s, "maestro_proxy_url", None) or MAESTRO_DEFAULT_PROXY_URL).rstrip("/")
     except Exception:
         return P_DEFAULT_BASE
 
@@ -338,7 +339,7 @@ P_DEFAULT_SYNC_PATH = "/api/service/sync"
 def submit(kind: str, payload: dict) -> None:
     """Routes through sync(). The cloud demuxes by payload shape (state /
     sync / diagnostic / event), so kind here is informational; the routing
-    happens server-side in openswarm-cloud/src/routes/service/ingest.ts.
+    happens server-side in the service endpoint's own ingest route.
     New call sites should use sync() directly with a well-shaped payload."""
     sync(payload)
 

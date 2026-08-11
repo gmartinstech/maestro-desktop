@@ -75,11 +75,11 @@ done
 # edit) and actively harmful: WatchFiles uses real fs handles, the
 # reload supervisor adds a couple hundred MB of resident memory, and
 # every reload tears down running agent WebSockets. Only enable it
-# when the top-level run.sh has set OPENSWARM_DEV=1 (which the dev
+# when the top-level run.sh has set MAESTRO_DEV=1 (which the dev
 # launcher does). Packaged builds leave it unset → fast, lean,
 # single-process uvicorn.
-if [[ "${OPENSWARM_DEV:-}" == "1" ]]; then
-    echo "OPENSWARM_DEV=1 detected — running uvicorn with --reload."
+if [[ "${MAESTRO_DEV:-}" == "1" ]]; then
+    echo "MAESTRO_DEV=1 detected — running uvicorn with --reload."
     python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8324 --reload \
         --reload-dir "$BACKEND_DIR_ABSPATH" \
         "${UVICORN_EXCLUDE_ARGS[@]}"

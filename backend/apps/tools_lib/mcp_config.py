@@ -6,7 +6,8 @@ import sys
 from typing import Optional
 
 from backend.apps.tools_lib.models import ToolDefinition
-from backend.apps.tools_lib.oauth_config import OPENSWARM_OAUTH_BASE_URL
+from backend.apps.tools_lib.oauth_config import MAESTRO_OAUTH_BASE_URL
+from backend.config.state_paths import home_state_dir
 
 logger = logging.getLogger(__name__)
 
@@ -119,12 +120,12 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
             if tool.oauth_tokens.get("refresh_token"):
                 env["GOOGLE_WORKSPACE_REFRESH_TOKEN"] = tool.oauth_tokens["refresh_token"]
             # google_workspace_mcp's gauth.py hardcodes token_uri to https://oauth2.googleapis.com/token and refreshes using the local CLIENT_ID/SECRET on every API call. The OAuth flow itself runs through the cloud's rotation pool, so the refresh_token is bound to whichever pool slot minted it, not the single client baked into the DMG. Mismatch -> Google returns unauthorized_client. We point token_uri at a local proxy that forwards the refresh to our cloud's pool-aware /api/oauth/google/refresh endpoint; CLIENT_ID/SECRET become unused placeholders (gauth.py only validates non-empty).
-            p_port = os.environ.get("OPENSWARM_PORT", "8324")
+            p_port = os.environ.get("MAESTRO_PORT", "8324")
             env["GOOGLE_WORKSPACE_TOKEN_URI"] = (
                 f"http://127.0.0.1:{p_port}/api/tools/google-oauth-token"
             )
-            env.setdefault("GOOGLE_WORKSPACE_CLIENT_ID", "openswarm-proxy")
-            env.setdefault("GOOGLE_WORKSPACE_CLIENT_SECRET", "openswarm-proxy")
+            env.setdefault("GOOGLE_WORKSPACE_CLIENT_ID", "maestro-proxy")
+            env.setdefault("GOOGLE_WORKSPACE_CLIENT_SECRET", "maestro-proxy")
 
     # Google Workspace MCP: redirect spawn through our shim that monkey-patches gauth.get_credentials before the worker registers tools, so token_uri points at our local proxy. Stays a stdio subprocess; google-workspace-mcp gets installed into uv's ephemeral env via --with, same way the upstream entry-point invocation used to do it.
     if tool.name.lower() == "google workspace" and config.get("type") == "stdio":
@@ -140,12 +141,12 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
     if tool.name.lower() == "discord" and config.get("type") == "stdio":
         from backend.config.install_id import get_install_id
         env = config.setdefault("env", {})
-        env["OPENSWARM_OAUTH_BASE_URL"] = OPENSWARM_OAUTH_BASE_URL
-        env["OPENSWARM_INSTALL_ID"] = get_install_id()
+        env["MAESTRO_OAUTH_BASE_URL"] = MAESTRO_OAUTH_BASE_URL
+        env["MAESTRO_INSTALL_ID"] = get_install_id()
         # Pass the authorized guild IDs so the shim can scope-enforce.
         guild_ids = [g.get("id", "") for g in (tool.oauth_tokens.get("guilds") or []) if g.get("id")]
         if guild_ids:
-            env["OPENSWARM_DISCORD_GUILD_IDS"] = ",".join(guild_ids)
+            env["MAESTRO_DISCORD_GUILD_IDS"] = ",".join(guild_ids)
         # The shim runs as a subprocess and needs to import `backend.apps.discord_mcp_shim`; set PYTHONPATH to the project root (parent of the backend/ dir) so that import resolves.
         p_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
@@ -155,8 +156,8 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
     if tool.name.lower() in {"reddit", "x", "tiktok"} and config.get("type") == "stdio":
         from backend.auth import get_auth_token
         env = config.setdefault("env", {})
-        env["OPENSWARM_PORT"] = os.environ.get("OPENSWARM_PORT", "8324")
-        env["OPENSWARM_AUTH_TOKEN"] = get_auth_token()
+        env["MAESTRO_PORT"] = os.environ.get("MAESTRO_PORT", "8324")
+        env["MAESTRO_AUTH_TOKEN"] = get_auth_token()
         p_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         existing_pp = env.get("PYTHONPATH") or os.environ.get("PYTHONPATH", "")
         env["PYTHONPATH"] = (p_project_root + os.pathsep + existing_pp) if existing_pp else p_project_root
@@ -164,7 +165,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
     # Microsoft 365 MCP: use a stable token cache path shared across process spawns
     if tool.name.lower() == "microsoft 365" and config.get("type") == "stdio":
         env = config.setdefault("env", {})
-        cache_dir = os.path.join(os.path.expanduser("~"), ".openswarm")
+        cache_dir = home_state_dir()
         os.makedirs(cache_dir, exist_ok=True)
         env["MS365_MCP_TOKEN_CACHE_PATH"] = os.path.join(cache_dir, "ms365-token-cache.json")
         env["MS365_MCP_SELECTED_ACCOUNT_PATH"] = os.path.join(cache_dir, "ms365-selected-account.json")
@@ -181,7 +182,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
                 pkg_name = next((a for a in (config.get("args") or []) if not a.startswith("-")), None)
                 if pkg_name:
                     p_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                    electron_path = os.environ.get("OPENSWARM_ELECTRON_PATH")
+                    electron_path = os.environ.get("MAESTRO_ELECTRON_PATH")
                     # Two bundle layouts in mcp-bundles/, checked in priority order: 1. Multi-file bundle dir: mcp-bundles/<safe>/dist/index.js Used when the SDK reads sibling files at runtime. Examples: @softeria/ms-365-mcp-server reads ../package.json for --version and dist/endpoints.json for Graph API definitions; @notionhq/notion-mcp-server reads ../scripts/notion-openapi.json. The build script ships a stripped package.json (no "type":"module") next to dist/ so __dirname/../package.json resolves correctly. See scripts/build-app.sh `build_mcp_bundle_dir`. 2. Single-file bundle: mcp-bundles/<safe>.js Used when the SDK is fully self-contained (reddit-mcp-buddy). Scoped names get flattened ("@softeria/ms-365-mcp-server" -> "softeria-ms-365-mcp-server") for filesystem safety.
                     safe_bundle = pkg_name.replace("/", "-").replace("@", "")
                     bundle_dir_path = os.path.join(p_backend, "mcp-bundles", safe_bundle, "dist", "index.js")
@@ -191,8 +192,8 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
                         bundle_path = bundle_dir_path
                     elif os.path.isfile(bundle_file_path):
                         bundle_path = bundle_file_path
-                    # Prefer the bundled real-Node binary over Electron-as-Node: avoids the bouncing "exec" Dock icon on fresh user Macs + spawns ~10x faster than re-execing the OpenSwarm Electron binary as Node. Falls back to Electron-as-Node only if the bundled node payload wasn't shipped (legacy builds).
-                    bundled_node = os.environ.get("OPENSWARM_NODE_PATH")
+                    # Prefer the bundled real-Node binary over Electron-as-Node: avoids the bouncing "exec" Dock icon on fresh user Macs + spawns ~10x faster than re-execing the Maestro Electron binary as Node. Falls back to Electron-as-Node only if the bundled node payload wasn't shipped (legacy builds).
+                    bundled_node = os.environ.get("MAESTRO_NODE_PATH")
                     if bundle_path and bundled_node and os.path.exists(bundled_node):
                         config["command"] = bundled_node
                         config["args"] = [bundle_path]
@@ -234,7 +235,7 @@ def derive_mcp_config(tool: ToolDefinition) -> Optional[dict]:
         env.setdefault("PATH", augmented_path())
         env.setdefault("PYTHONPATH", "")
         # Point uv/uvx at our bundled Python; avoids macOS CLT popup on fresh Macs and avoids downloading Python at runtime
-        p_is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
+        p_is_packaged = os.environ.get("MAESTRO_PACKAGED") == "1"
         p_is_windows = sys.platform == "win32"
         if p_is_packaged:
             p_resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
