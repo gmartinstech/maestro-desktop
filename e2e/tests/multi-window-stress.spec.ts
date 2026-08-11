@@ -13,22 +13,22 @@ import path from 'path';
 // attaches, and the modal opens/closes cleanly on top of them.
 
 function backendLogPath(): string {
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'OpenSwarm', 'data', 'backend.log');
-  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
-  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'OpenSwarm', 'data', 'backend.log');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'Maestro Studio', 'data', 'backend.log');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Maestro Studio', 'data', 'backend.log');
 }
 function crashCount(): number {
   try { return (fs.readFileSync(backendLogPath(), 'utf8').match(/renderer process gone/g) || []).length; }
   catch { return 0; }
 }
 
-const WEBVIEWS = Number(process.env.OPENSWARM_E2E_WEBVIEWS || 3);
+const WEBVIEWS = Number(process.env.MAESTRO_E2E_WEBVIEWS || 3);
 // Entirely webview-based. Electron <webview> compositor layers do not attach
 // under Playwright-controlled Electron 40 (CastLabs) in a headless/automated
-// launch, so this whole spec is gated behind OPENSWARM_E2E_HEAVY=1 and meant to
+// launch, so this whole spec is gated behind MAESTRO_E2E_HEAVY=1 and meant to
 // run on a real display (or manually). See onboarding-completion.spec.ts for the
 // same heavy-surface caveat and the New-Agent renderer-crash finding.
-const HEAVY = process.env.OPENSWARM_E2E_HEAVY === '1';
+const HEAVY = process.env.MAESTRO_E2E_HEAVY === '1';
 
 test.describe.configure({ mode: 'serial' });
 (HEAVY ? test.describe : test.describe.skip)(`multi-window stress (${WEBVIEWS} webviews + modal)`, () => {

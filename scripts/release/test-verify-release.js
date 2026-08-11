@@ -39,8 +39,8 @@ function mkdir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'osw-rel-')); }
 // (1) good release: both feeds, same version, matches expected -> promotable
 (() => {
   const d = mkdir();
-  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'OpenSwarm-Setup-x64.exe'));
-  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.3', 'OpenSwarm-arm64.dmg'));
+  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'MaestroStudio-Setup-x64.exe'));
+  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.3', 'MaestroStudio-arm64.dmg'));
   const r = run(['--dir', d, '--expect-version', '1.2.3', '--json']);
   assert(r.code === 0, `good release should pass, got ${r.code}`);
   assert(JSON.parse(r.stdout).version === '1.2.3', 'should report version 1.2.3');
@@ -52,7 +52,7 @@ function mkdir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'osw-rel-')); }
 // (2) missing latest-mac.yml -> blocked
 (() => {
   const d = mkdir();
-  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'OpenSwarm-Setup-x64.exe'));
+  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'MaestroStudio-Setup-x64.exe'));
   const r = run(['--dir', d, '--expect-version', '1.2.3']);
   assert(r.code === 1, 'missing mac feed should block');
   fs.rmSync(d, { recursive: true, force: true });
@@ -61,8 +61,8 @@ function mkdir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'osw-rel-')); }
 // (3) version mismatch across feeds -> blocked
 (() => {
   const d = mkdir();
-  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'OpenSwarm-Setup-x64.exe'));
-  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.2', 'OpenSwarm-arm64.dmg'));
+  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'MaestroStudio-Setup-x64.exe'));
+  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.2', 'MaestroStudio-arm64.dmg'));
   const r = run(['--dir', d, '--expect-version', '1.2.3']);
   assert(r.code === 1, 'version mismatch should block');
   fs.rmSync(d, { recursive: true, force: true });
@@ -71,8 +71,8 @@ function mkdir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'osw-rel-')); }
 // (4) feeds agree with each other but not with expected version -> blocked
 (() => {
   const d = mkdir();
-  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.0', 'OpenSwarm-Setup-x64.exe'));
-  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.0', 'OpenSwarm-arm64.dmg'));
+  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.0', 'MaestroStudio-Setup-x64.exe'));
+  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.0', 'MaestroStudio-arm64.dmg'));
   const r = run(['--dir', d, '--expect-version', '1.2.3']);
   assert(r.code === 1, 'expected-version mismatch should block');
   fs.rmSync(d, { recursive: true, force: true });

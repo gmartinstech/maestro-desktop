@@ -10,7 +10,7 @@ const caught = (log, head, re) => h.bootFailures({ log, headShort: head }).failu
 
 const HEAD = 'abc123def456';
 const GOOD = [
-  '[provenance] OpenSwarm 1.1.69 sha=abc123def456 channel=stable builtAt=2026-01-01T00:00:00Z',
+  '[provenance] Maestro 1.1.69 sha=abc123def456 channel=stable builtAt=2026-01-01T00:00:00Z',
   '[perf] app-launch t=100',
   '[perf] first-paint t=400',
   '[perf] backend-http-ready t=4000',
@@ -29,7 +29,7 @@ check('missing first-paint mark -> caught', caught(GOOD.replace(/\[perf\] first-
 check('missing backend-http-ready mark -> caught', caught(GOOD.replace(/\[perf\] backend-http-ready t=4000/, ''), HEAD, /backend-http-ready/));
 check('out-of-order marks -> caught', caught(GOOD.replace('first-paint t=400', 'first-paint t=9999'), HEAD, /out of order/));
 check('degenerate all-zero marks -> caught', caught(
-  '[provenance] OpenSwarm 1 sha=abc123def456 channel=stable\n[perf] app-launch t=0\n[perf] first-paint t=0\n[perf] backend-http-ready t=0',
+  '[provenance] Maestro 1 sha=abc123def456 channel=stable\n[perf] app-launch t=0\n[perf] first-paint t=0\n[perf] backend-http-ready t=0',
   HEAD, /> 0|degenerate/));
 
 // A stale build (old sha, all marks fine) must still be caught - the case we saw fire live.

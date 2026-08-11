@@ -27,7 +27,7 @@ if (Test-Path $PythonEnvDir) {
     Remove-Item -Recurse -Force $PythonEnvDir
 }
 
-$TempDir = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "openswarm-pyenv-$([guid]::NewGuid())") -Force
+$TempDir = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "maestro-pyenv-$([guid]::NewGuid())") -Force
 try {
     $ArchivePath = Join-Path $TempDir.FullName 'python.tar.gz'
     Write-Host "Downloading standalone Python..."

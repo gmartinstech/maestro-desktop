@@ -34,12 +34,12 @@ function parseArgs(argv) {
 // Mirrors getAuthTokenFilePath()/getBackendLogPath() in electron/main.js.
 function defaultLogPath() {
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
+    return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
   } else if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || os.homedir(), 'OpenSwarm', 'data', 'backend.log');
+    return path.join(process.env.APPDATA || os.homedir(), 'Maestro Studio', 'data', 'backend.log');
   }
   const xdg = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-  return path.join(xdg, 'OpenSwarm', 'data', 'backend.log');
+  return path.join(xdg, 'Maestro Studio', 'data', 'backend.log');
 }
 
 function fail(msg, report) {

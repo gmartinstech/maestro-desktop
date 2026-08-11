@@ -73,8 +73,8 @@ def match_task(recorded, spec):
 
 def main():
     metrics_dir = sys.argv[1] if len(sys.argv) > 1 else os.environ.get(
-        "OPENSWARM_BROWSER_METRICS_DIR",
-        os.path.expanduser("~/Library/Application Support/OpenSwarm/data/browser_metrics"),
+        "MAESTRO_BROWSER_METRICS_DIR",
+        os.path.expanduser("~/Library/Application Support/Maestro Studio/data/browser_metrics"),
     )
     recorded = load_tasks(metrics_dir)
     print(f"metrics dir: {metrics_dir}\nrecorded tasks: {len(recorded)}\n")

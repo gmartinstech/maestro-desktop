@@ -12,9 +12,9 @@ import path from 'path';
 // nothing is read from or written to a committed file.
 
 function backendLogPath(): string {
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'OpenSwarm', 'data', 'backend.log');
-  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
-  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'OpenSwarm', 'data', 'backend.log');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'Maestro Studio', 'data', 'backend.log');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Maestro Studio', 'data', 'backend.log');
 }
 function crashCount(): number {
   try { return (fs.readFileSync(backendLogPath(), 'utf8').match(/renderer process gone/g) || []).length; }
@@ -32,7 +32,7 @@ test.describe('real agent round-trip', () => {
   // never silently green this on a leg that can't actually test it.
   test.beforeAll(async () => {
     test.skip(!hasAnyProviderKey(), 'no provider env key set; pass ANTHROPIC_API_KEY or OPENAI_API_KEY etc. to enable');
-    test.skip(process.env.CI !== 'true' && process.env.OPENSWARM_E2E_SEED !== '1', 'seed gate not enabled; set OPENSWARM_E2E_SEED=1 for local runs');
+    test.skip(process.env.CI !== 'true' && process.env.MAESTRO_E2E_SEED !== '1', 'seed gate not enabled; set MAESTRO_E2E_SEED=1 for local runs');
     app = await launchApp();
     page = await waitForMainWindow(app);
     vis = await startVisibility(app, page, 'real-agent-roundtrip');

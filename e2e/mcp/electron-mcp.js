@@ -17,20 +17,20 @@ function packagedAppPath(explicit) {
   if (process.env.E2E_APP_PATH) return process.env.E2E_APP_PATH;
   const dist = path.join(REPO_ROOT, 'electron', 'dist');
   const candidates = process.platform === 'win32'
-    ? [path.join(dist, 'win-unpacked', 'OpenSwarm.exe')]
+    ? [path.join(dist, 'win-unpacked', 'Maestro Studio.exe')]
     : process.platform === 'darwin'
-      ? ['mac-arm64', 'mac', 'mac-universal'].map((d) => path.join(dist, d, 'OpenSwarm.app', 'Contents', 'MacOS', 'OpenSwarm'))
-      : [path.join(dist, 'linux-unpacked', 'openswarm')];
+      ? ['mac-arm64', 'mac', 'mac-universal'].map((d) => path.join(dist, d, 'Maestro Studio.app', 'Contents', 'MacOS', 'Maestro Studio'))
+      : [path.join(dist, 'linux-unpacked', 'maestro-studio')];
   const found = candidates.find((c) => { try { return fs.statSync(c).isFile(); } catch { return false; } });
   if (!found) throw new Error(`packaged app not found; build first or pass appPath. Looked in:\n  ${candidates.join('\n  ')}`);
   return found;
 }
 
 function backendLogPath() {
-  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || os.homedir(), 'OpenSwarm', 'data', 'backend.log');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || os.homedir(), 'Maestro Studio', 'data', 'backend.log');
   const xdg = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-  return path.join(xdg, 'OpenSwarm', 'data', 'backend.log');
+  return path.join(xdg, 'Maestro Studio', 'data', 'backend.log');
 }
 
 let app = null;   // ElectronApplication
@@ -42,7 +42,7 @@ async function findMainWindow(timeoutMs = 120000) {
     for (const w of app.windows()) {
       try {
         const ready = await w.evaluate(() => {
-          const hasBridge = typeof window.openswarm?.getBackendPort === 'function';
+          const hasBridge = typeof window.maestro?.getBackendPort === 'function';
           const root = document.getElementById('root');
           return hasBridge && !!root && root.childElementCount > 0;
         });
@@ -59,7 +59,7 @@ function err(s) { return { content: [{ type: 'text', text: `ERROR: ${s}` }], isE
 function needPage() { if (!page) throw new Error('no app open; call app_launch first'); }
 
 const TOOLS = [
-  { name: 'app_launch', description: 'Launch the packaged OpenSwarm app and wait for the main window. Returns backend port + build provenance.', inputSchema: { type: 'object', properties: { appPath: { type: 'string', description: 'Optional explicit path to the packaged binary' } } } },
+  { name: 'app_launch', description: 'Launch the packaged Maestro app and wait for the main window. Returns backend port + build provenance.', inputSchema: { type: 'object', properties: { appPath: { type: 'string', description: 'Optional explicit path to the packaged binary' } } } },
   { name: 'app_close', description: 'Close the running app.', inputSchema: { type: 'object', properties: {} } },
   { name: 'screenshot', description: 'Capture a PNG screenshot of the current main window (what a user would see).', inputSchema: { type: 'object', properties: { fullPage: { type: 'boolean' } } } },
   { name: 'snapshot', description: 'Return the accessibility tree of the page (structured "what is on screen" without pixels).', inputSchema: { type: 'object', properties: {} } },
@@ -67,7 +67,7 @@ const TOOLS = [
   { name: 'fill', description: 'Type text into an input/textarea by selector (clears first).', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } },
   { name: 'press', description: 'Press a keyboard key (e.g. Enter, Escape, Control+A) on the focused element.', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
   { name: 'wait_for', description: 'Wait until a selector is visible (default 30s).', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeoutMs: { type: 'number' } }, required: ['selector'] } },
-  { name: 'eval', description: 'Evaluate a JS expression in the renderer and return the JSON result (powerful: inspect anything, incl. window.openswarm).', inputSchema: { type: 'object', properties: { expression: { type: 'string' } }, required: ['expression'] } },
+  { name: 'eval', description: 'Evaluate a JS expression in the renderer and return the JSON result (powerful: inspect anything, incl. window.maestro).', inputSchema: { type: 'object', properties: { expression: { type: 'string' } }, required: ['expression'] } },
   { name: 'read_log', description: 'Return the tail of the app backend.log (provenance + [perf] marks + errors land here).', inputSchema: { type: 'object', properties: { tailLines: { type: 'number' } } } },
 ];
 
@@ -77,8 +77,8 @@ async function handle(name, a) {
     app = await _electron.launch({ executablePath: packagedAppPath(a.appPath), args: [] });
     page = await findMainWindow();
     const info = await page.evaluate(async () => ({
-      port: window.openswarm.getBackendPort ? await window.openswarm.getBackendPort() : null,
-      build: window.openswarm.getBuildInfo ? await window.openswarm.getBuildInfo() : null,
+      port: window.maestro.getBackendPort ? await window.maestro.getBackendPort() : null,
+      build: window.maestro.getBuildInfo ? await window.maestro.getBuildInfo() : null,
     }));
     return text({ launched: true, ...info });
   }
@@ -104,7 +104,7 @@ async function handle(name, a) {
 }
 
 async function main() {
-  const server = new Server({ name: 'openswarm-gui', version: '0.1.0' }, { capabilities: { tools: {} } });
+  const server = new Server({ name: 'maestro-gui', version: '0.1.0' }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     try { return await handle(req.params.name, req.params.arguments || {}); }

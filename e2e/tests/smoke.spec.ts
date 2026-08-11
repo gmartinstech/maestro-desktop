@@ -26,15 +26,15 @@ test.describe('packaged app boot', () => {
 
   test('preload bridge is exposed', async () => {
     const hasBridge = await win.evaluate(() => ({
-      port: typeof (window as any).openswarm?.getBackendPort === 'function',
-      buildInfo: typeof (window as any).openswarm?.getBuildInfo === 'function',
+      port: typeof (window as any).maestro?.getBackendPort === 'function',
+      buildInfo: typeof (window as any).maestro?.getBuildInfo === 'function',
     }));
     expect(hasBridge.port).toBe(true);
     expect(hasBridge.buildInfo).toBe(true);
   });
 
   test('backend reaches HTTP-ready (health 200)', async () => {
-    const port: number = await win.evaluate(() => (window as any).openswarm.getBackendPort());
+    const port: number = await win.evaluate(() => (window as any).maestro.getBackendPort());
     expect(port).toBeGreaterThan(0);
     // Poll the real backend the packaged app spawned, from inside the renderer
     // (same origin/path the app itself uses), until it answers 200.
@@ -49,7 +49,7 @@ test.describe('packaged app boot', () => {
   });
 
   test('provenance: running app reports the built commit', async () => {
-    const info = await win.evaluate(() => (window as any).openswarm.getBuildInfo());
+    const info = await win.evaluate(() => (window as any).maestro.getBuildInfo());
     const onDisk = readBuildInfo();
     expect(info.sha).toBe(onDisk.sha);
     expect(info.shortSha).toMatch(/^[0-9a-f]{12}$/);
@@ -57,7 +57,7 @@ test.describe('packaged app boot', () => {
   });
 
   test('app version is reported', async () => {
-    const version = await win.evaluate(() => (window as any).openswarm.getAppVersion());
+    const version = await win.evaluate(() => (window as any).maestro.getAppVersion());
     expect(version).toMatch(/^\d+\.\d+\.\d+/);
   });
 });

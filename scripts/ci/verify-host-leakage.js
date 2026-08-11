@@ -37,7 +37,7 @@ function hostPatterns() {
   if (homePosix && !/^\/(Users|home)\/runner\/?$/.test(homePosix)) patterns.push(homePosix);
   // Source-map sentinels often containing dev-only roots.
   patterns.push('/Users/runner/work');   // GH Actions macos runner work dir
-  patterns.push('D:\\a\\openswarm');     // GH Actions windows runner work dir
+  patterns.push('D:\\a\\maestro-desktop');     // GH Actions windows runner work dir
   patterns.push('/home/runner/work');    // GH Actions linux runner work dir
   // Belt-and-braces: literal username - but skip generic CI/shared accounts whose
   // names are common English words. GitHub runners are literally "runner", which

@@ -6,7 +6,7 @@ name: E2E (packaged app, Windows)
 #                 Layers 1-5. Fails the "tests that test the tests" fast.
 #   verify      - build the UNPACKED app (electron-builder --dir, which skips the
 #                 slow ~2min NSIS LZMA compression) and run the deterministic
-#                 verify-all gate against win-unpacked\OpenSwarm.exe.
+#                 verify-all gate against win-unpacked\Maestro Studio.exe.
 #   playwright  - build the unpacked app and run the renderer-level Playwright e2e.
 #   installer   - full NSIS build + destructive install->verify->uninstall. The
 #                 heaviest leg, so it runs only on PR-to-main / dispatch (NOT on
@@ -75,9 +75,9 @@ jobs:
         shell: bash
         run: |
           node scripts/ci/verify-preflight.js
-          OPENSWARM_TEST_NETWORK=blocked node scripts/ci/verify-preflight.js
-          OPENSWARM_TEST_APPDATA=readonly node scripts/ci/verify-preflight.js
-          OPENSWARM_TEST_LANG=de-DE node scripts/ci/verify-preflight.js
+          MAESTRO_TEST_NETWORK=blocked node scripts/ci/verify-preflight.js
+          MAESTRO_TEST_APPDATA=readonly node scripts/ci/verify-preflight.js
+          MAESTRO_TEST_LANG=de-DE node scripts/ci/verify-preflight.js
 
   # Build the unpacked app + run the deterministic gate.
   verify:
@@ -253,8 +253,8 @@ jobs:
           node scripts/ci/verify-preflight-rigs.js
           node scripts/ci/verify-preflight-race.js
           node scripts/ci/verify-preflight.js
-          OPENSWARM_TEST_NETWORK=blocked node scripts/ci/verify-preflight.js
-          OPENSWARM_TEST_APPDATA=readonly node scripts/ci/verify-preflight.js
+          MAESTRO_TEST_NETWORK=blocked node scripts/ci/verify-preflight.js
+          MAESTRO_TEST_APPDATA=readonly node scripts/ci/verify-preflight.js
       - name: Build packaged app (Windows)
         shell: pwsh
         run: pwsh -NoProfile -File scripts/build-app-win.ps1

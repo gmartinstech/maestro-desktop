@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   #9 item 5 (DRAFT, opt-in, NEVER silent): add a Windows Defender exclusion for
-  OpenSwarm's install + data dirs. This is the nuclear cold-start fix -- it stops
+  Maestro's install + data dirs. This is the nuclear cold-start fix -- it stops
   Defender real-time-scanning those folders entirely, which is the root of the
   54-138s post-update cold launch AND the ~14s first-app extract.
 
@@ -13,7 +13,7 @@
 
 .USAGE
   pwsh scripts\add-defender-exclusion.ps1            # show plan + paths, change nothing
-  pwsh scripts\add-defender-exclusion.ps1 -Status    # list current openswarm exclusions
+  pwsh scripts\add-defender-exclusion.ps1 -Status    # list current maestro exclusions
   pwsh scripts\add-defender-exclusion.ps1 -Apply     # add (run elevated)
   pwsh scripts\add-defender-exclusion.ps1 -Remove    # undo (run elevated)
 #>
@@ -28,10 +28,14 @@ $ErrorActionPreference = 'Stop'
 # The three trees Defender rescans on launch / first-app: the Squirrel install
 # (executables + python-env + node_modules), the Electron user data, and the
 # warm caches.
+# Names match what electron-builder actually produces: productName
+# "Maestro Studio" (userData + NSIS install dir) and package name
+# "maestro-studio" (Squirrel install dir).
 $paths = @(
-    (Join-Path $env:LOCALAPPDATA 'openswarm'),
-    (Join-Path $env:APPDATA 'openswarm'),
-    (Join-Path $env:USERPROFILE '.openswarm')
+    (Join-Path $env:LOCALAPPDATA 'maestro-studio'),
+    (Join-Path $env:LOCALAPPDATA 'Programs\Maestro Studio'),
+    (Join-Path $env:APPDATA 'Maestro Studio'),
+    (Join-Path $env:USERPROFILE '.maestro')
 ) | Where-Object { $_ }
 
 function Test-Admin {
@@ -42,15 +46,15 @@ function Test-Admin {
 
 if ($Status) {
     try {
-        $ex = (Get-MpPreference).ExclusionPath | Where-Object { $_ -match 'openswarm' }
-        if ($ex) { $ex | ForEach-Object { Write-Host "  excluded: $_" } } else { Write-Host "  (no openswarm Defender exclusions set)" }
+        $ex = (Get-MpPreference).ExclusionPath | Where-Object { $_ -match 'maestro' }
+        if ($ex) { $ex | ForEach-Object { Write-Host "  excluded: $_" } } else { Write-Host "  (no maestro Defender exclusions set)" }
     } catch {
         Write-Warning "Defender not queryable here (non-Defender AV, or needs elevation): $_"
     }
     return
 }
 
-Write-Host "OpenSwarm Defender exclusion (OPT-IN). Would apply to:"
+Write-Host "Maestro Defender exclusion (OPT-IN). Would apply to:"
 $paths | ForEach-Object { Write-Host "  $_" }
 Write-Host ""
 Write-Host "SECURITY: this stops Windows Defender from real-time-scanning those folders."

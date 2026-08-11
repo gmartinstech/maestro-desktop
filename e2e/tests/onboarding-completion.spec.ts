@@ -26,9 +26,9 @@ const STEP_IDS = [
 ];
 
 function backendLogPath(): string {
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'OpenSwarm', 'data', 'backend.log');
-  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
-  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'OpenSwarm', 'data', 'backend.log');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'Maestro Studio', 'data', 'backend.log');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Maestro Studio', 'data', 'backend.log');
 }
 function crashCount(): number {
   try { return (fs.readFileSync(backendLogPath(), 'utf8').match(/renderer process gone/g) || []).length; }
@@ -56,7 +56,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
 
   async function markCompleted(stepId: string) {
     await page.evaluate((id) => {
-      const store = (window as any).__OPENSWARM_STORE__;
+      const store = (window as any).__MAESTRO_STORE__;
       if (!store) throw new Error('Redux store not exposed');
       store.dispatch({ type: 'onboardingProgress/markStepCompleted', payload: id });
     }, stepId);
@@ -64,7 +64,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   }
   async function unmarkCompleted(stepId: string) {
     await page.evaluate((id) => {
-      const store = (window as any).__OPENSWARM_STORE__;
+      const store = (window as any).__MAESTRO_STORE__;
       if (!store) throw new Error('Redux store not exposed');
       store.dispatch({ type: 'onboardingProgress/unmarkStepCompleted', payload: id });
     }, stepId);
@@ -72,7 +72,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   }
   async function readCompletedSet(): Promise<string[]> {
     return await page.evaluate(() => {
-      const store = (window as any).__OPENSWARM_STORE__;
+      const store = (window as any).__MAESTRO_STORE__;
       if (!store) return [];
       // The slice stores completed step ids in `completedSteps` (a string[]);
       // there is no `completed` field, so the old read always returned empty.
@@ -90,8 +90,8 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
 
   test('self-check: 8 known step ids and Redux store is reachable', async () => {
     expect(STEP_IDS.length).toBe(8);
-    const ok = await page.evaluate(() => !!(window as any).__OPENSWARM_STORE__);
-    expect(ok, 'window.__OPENSWARM_STORE__ not exposed - __OPENSWARM_E2E__ init script missing or store gate failed').toBe(true);
+    const ok = await page.evaluate(() => !!(window as any).__MAESTRO_STORE__);
+    expect(ok, 'window.__MAESTRO_STORE__ not exposed - __MAESTRO_E2E__ init script missing or store gate failed').toBe(true);
   });
 
   test('ordering 1: sequential 1->8 marks every step exactly once', async () => {
@@ -158,7 +158,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   // selector drift (or a panel that never rendered) reported green while doing
   // nothing. Every step here resolves its target via must()/mustClick() and
   // asserts a positive post-condition (a specific route, a specific element).
-  const REAL_UI = process.env.OPENSWARM_E2E_REAL_UI === '1';
+  const REAL_UI = process.env.MAESTRO_E2E_REAL_UI === '1';
   const HAS_KEY = !!(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GOOGLE_API_KEY || process.env.OPENROUTER_API_KEY);
   // Heavy-surface gate. Steps 3 (agent compose) and 4 (browser <webview>) drive
   // Electron's separate-compositor / webview layers, which on a clean build under
@@ -168,9 +168,9 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   // (nav, settings, dashboard create, slice ops) works, so this is most
   // consistent with an automation-environment limitation rather than a
   // user-facing bug, BUT that needs manual interactive confirmation. Until then,
-  // gate these two behind OPENSWARM_E2E_HEAVY=1 so they are runnable where the
+  // gate these two behind MAESTRO_E2E_HEAVY=1 so they are runnable where the
   // surfaces work (real display / manual) without permanently reddening CI.
-  const HEAVY = process.env.OPENSWARM_E2E_HEAVY === '1';
+  const HEAVY = process.env.MAESTRO_E2E_HEAVY === '1';
 
   const must = async (sel: string, label: string) => {
     const loc = page.locator(sel);
@@ -222,7 +222,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   // Test-the-test: prove must() fails loudly on a missing target. If this ever
   // passes silently, every real-UI assertion below is unreliable.
   test('real-UI self-check: must() fails loudly on a missing target', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
     let threw = false;
     try { await must('#__not_in_dom_real_ui__', 'sentinel'); } catch { threw = true; }
     expect(threw, 'must() did NOT fail on a missing element; the silent-green guarantee is broken').toBe(true);
@@ -232,7 +232,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   // a live element at the surface it lives on. Catches selector drift up front
   // rather than letting a single step quietly skip its action.
   test('real-UI precheck: every selector the real-UI steps depend on exists', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
     await resetAll();
     await ensureSidebarExpanded();
     for (const sel of [
@@ -255,7 +255,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   });
 
   test('real-UI step 1: connect_model opens Settings -> Models tab', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
     await resetAll();
     await ensureSidebarExpanded();
     await mustClick('[data-onboarding="sidebar-settings-button"]', 'settings button');
@@ -267,7 +267,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   });
 
   test('real-UI step 2: enable_actions navigates to Customization > Actions', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
     await ensureCustomizationExpanded();
     await mustClick('[data-onboarding="sidebar-actions"]', 'customization > Actions');
     await expect.poll(() => page.url(), { message: 'did not land on /actions', timeout: 5000 }).toMatch(/\/actions(\b|$)/);
@@ -275,8 +275,8 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   });
 
   test('real-UI step 3: launch_agent opens compose (skip send if no provider key)', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
-    test.skip(!HEAVY, 'heavy surface (agent compose crashes renderer under automation); set OPENSWARM_E2E_HEAVY=1 on a real display');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
+    test.skip(!HEAVY, 'heavy surface (agent compose crashes renderer under automation); set MAESTRO_E2E_HEAVY=1 on a real display');
     await ensureDashboardActive();
     await mustClick('[data-onboarding="new-agent-button"]', 'new agent');
     const editor = page.locator('[data-onboarding="chat-input"]').first();
@@ -291,8 +291,8 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   });
 
   test('real-UI step 4: use_browser mounts a webview', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
-    test.skip(!HEAVY, 'heavy surface (<webview> does not attach under automation); set OPENSWARM_E2E_HEAVY=1 on a real display');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
+    test.skip(!HEAVY, 'heavy surface (<webview> does not attach under automation); set MAESTRO_E2E_HEAVY=1 on a real display');
     await ensureDashboardActive();
     await mustClick('[data-onboarding="browser-button"]', 'browser');
     await page.waitForFunction(() => document.querySelectorAll('webview').length > 0, undefined, { timeout: 15_000 });
@@ -301,7 +301,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   });
 
   test('real-UI step 7: install_skill navigates to Customization > Skills', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
     await ensureCustomizationExpanded();
     await mustClick('[data-onboarding="sidebar-skills"]', 'customization > Skills');
     await expect.poll(() => page.url(), { message: 'did not land on /skills', timeout: 5000 }).toMatch(/\/skills(\b|$)/);
@@ -309,7 +309,7 @@ test.describe('onboarding completion (8 steps, 3 orderings)', () => {
   });
 
   test('real-UI step 8: make_app opens the Add App picker', async () => {
-    test.skip(!REAL_UI, 'OPENSWARM_E2E_REAL_UI=1 not set');
+    test.skip(!REAL_UI, 'MAESTRO_E2E_REAL_UI=1 not set');
     await ensureDashboardActive();
     await mustClick('[data-onboarding="dashboard-toolbar-apps"]', 'add app');
     // The view picker replaces the toolbar buttons with a "Search apps..." input.

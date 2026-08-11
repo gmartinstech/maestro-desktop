@@ -38,7 +38,7 @@ function startCloseMidHandshake() {
 
 // Filesystem rig: a path inside the OS temp dir that we'll keep, plus a "locked"
 // path inside it that we make non-writable (best-effort cross-platform).
-function tmpDataDir(label) { return path.join(os.tmpdir(), `openswarm-preflight-rig-${label}-${process.pid}-${Date.now()}`); }
+function tmpDataDir(label) { return path.join(os.tmpdir(), `maestro-preflight-rig-${label}-${process.pid}-${Date.now()}`); }
 
 // A localized PowerShell stub via a fake execFile that returns German text.
 function germanLocaleEnv() {

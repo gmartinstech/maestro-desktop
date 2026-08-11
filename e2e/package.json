@@ -1,7 +1,7 @@
 {
-  "name": "openswarm-e2e",
+  "name": "maestro-e2e",
   "private": true,
-  "description": "Cross-platform end-to-end tests that drive the PACKAGED OpenSwarm desktop app (Electron) on macOS and Windows via Playwright, plus an MCP server that hands a Claude Code instance the same Playwright hand to drive the app interactively.",
+  "description": "Cross-platform end-to-end tests that drive the PACKAGED Maestro Studio desktop app (Electron) on macOS and Windows via Playwright, plus an MCP server that hands a Claude Code instance the same Playwright hand to drive the app interactively.",
   "scripts": {
     "test": "playwright test",
     "mcp": "node mcp/electron-mcp.js",

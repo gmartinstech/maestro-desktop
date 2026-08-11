@@ -36,7 +36,7 @@ fi
 OUT_ARCHIVE="$OUT_DIR/node_modules.${PKG_DIGEST}.tar.gz"
 
 # Work in a temp dir so a failed install can't corrupt the template tree.
-WORK_DIR=$(mktemp -d -t openswarm-template-archive-XXXXXX)
+WORK_DIR=$(mktemp -d -t maestro-template-archive-XXXXXX)
 trap "rm -rf '$WORK_DIR'" EXIT
 
 echo "Building template node_modules archive..."

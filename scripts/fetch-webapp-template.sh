@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Re-vendor openswarm-ai/webapp-template into backend/apps/outputs/webapp_template/.
+# Re-vendor the upstream webapp template into backend/apps/outputs/webapp_template/.
+#
+# NOTE: $REPO below is a FACTUAL upstream source, not our branding. It is the
+# third-party repo this snapshot is pulled from; repointing it at a
+# gmartinstech/ repo that does not exist would silently break re-vendoring.
+# Change it only once we actually host our own fork of the template.
 #
 # Idempotent — wipes the existing vendored dir and re-clones at the pinned ref.
 # Strips files we don't want shipped (LICENSE, README.md, .gitignore — we
@@ -14,7 +19,7 @@
 
 set -euo pipefail
 
-REPO="openswarm-ai/webapp-template"
+REPO="openswarm-ai/webapp-template"   # upstream source of the vendored snapshot
 REF="main"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="$ROOT/backend/apps/outputs/webapp_template"
@@ -30,26 +35,26 @@ git clone --depth 1 --branch "$REF" "https://github.com/$REPO.git" "$TMP/clone" 
 rm -rf "$DEST"
 mkdir -p "$DEST"
 
-# Copy everything except files we don't ship in OpenSwarm.
+# Copy everything except files we don't ship in Maestro.
 ( cd "$TMP/clone" && rm -rf .git LICENSE README.md .gitignore )
 cp -R "$TMP/clone/." "$DEST/"
 
-# Patch 1a: root run.sh honors per-instance port overrides. OpenSwarm passes
-# OPENSWARM_FORCE_FRONTEND_PORT / OPENSWARM_FORCE_BACKEND_PORT when the user
+# Patch 1a: root run.sh honors per-instance port overrides. Maestro passes
+# MAESTRO_FORCE_FRONTEND_PORT / MAESTRO_FORCE_BACKEND_PORT when the user
 # opens a SECOND instance of an app; without this the `source .env` above
 # them pins every instance to the same ports.
 ROOT_RUN_SH="$DEST/run.sh"
-if ! grep -q "OPENSWARM_FORCE_FRONTEND_PORT" "$ROOT_RUN_SH"; then
+if ! grep -q "MAESTRO_FORCE_FRONTEND_PORT" "$ROOT_RUN_SH"; then
     awk '
         inserted != 1 && sourced && /^fi$/ {
             print
             print ""
-            print "# Per-instance port overrides: OpenSwarm passes these when the user opens a SECOND instance of the app, so it boots on fresh ports instead of colliding with the primary'\''s .env-pinned ones."
-            print "if [[ -n \"${OPENSWARM_FORCE_FRONTEND_PORT:-}\" ]]; then"
-            print "    export FRONTEND_PORT=\"$OPENSWARM_FORCE_FRONTEND_PORT\""
+            print "# Per-instance port overrides: Maestro passes these when the user opens a SECOND instance of the app, so it boots on fresh ports instead of colliding with the primary'\''s .env-pinned ones."
+            print "if [[ -n \"${MAESTRO_FORCE_FRONTEND_PORT:-}\" ]]; then"
+            print "    export FRONTEND_PORT=\"$MAESTRO_FORCE_FRONTEND_PORT\""
             print "fi"
-            print "if [[ -n \"${OPENSWARM_FORCE_BACKEND_PORT:-}\" ]]; then"
-            print "    export BACKEND_PORT=\"$OPENSWARM_FORCE_BACKEND_PORT\""
+            print "if [[ -n \"${MAESTRO_FORCE_BACKEND_PORT:-}\" ]]; then"
+            print "    export BACKEND_PORT=\"$MAESTRO_FORCE_BACKEND_PORT\""
             print "fi"
             inserted = 1
             next
@@ -84,7 +89,7 @@ fi
 # bind poller in runtime.py:_await_frontend_bind() actually sees the
 # bound socket on macOS, where `localhost` can resolve to ::1), disable
 # Vite's `open: true` browser auto-launch (preview belongs in the
-# OpenSwarm webview, not a popped-out Chrome tab), and set strictPort
+# Maestro webview, not a popped-out Chrome tab), and set strictPort
 # so Vite doesn't silently increment to a port we're not polling.
 VITE_CONFIG="$DEST/frontend/vite.config.ts"
 if ! grep -q "host: '127.0.0.1'" "$VITE_CONFIG"; then
@@ -125,7 +130,7 @@ __pycache__/
 *.pyc
 dist/
 build/
-.openswarm/
+.maestro/
 EOF
 
 # Patch 3: backend_init.sh — copied verbatim into every new workspace.
@@ -154,7 +159,7 @@ if [[ ! -f .env ]]; then
 fi
 
 # Source .env so we know the current BACKEND_PORT and the path to the
-# master template's backend/ (written by OpenSwarm at seed time).
+# master template's backend/ (written by Maestro at seed time).
 set -a
 source .env
 set +a
@@ -171,23 +176,23 @@ if [[ -d ./backend ]]; then
     exit 1
 fi
 
-# Resolve master template backend/ path. OPENSWARM_TEMPLATE_BACKEND_PATH
+# Resolve master template backend/ path. MAESTRO_TEMPLATE_BACKEND_PATH
 # is written into .env at seed time.
-if [[ -z "${OPENSWARM_TEMPLATE_BACKEND_PATH:-}" ]]; then
-    echo "ERROR: OPENSWARM_TEMPLATE_BACKEND_PATH not set in .env. This" >&2
-    echo "       workspace was seeded by an older OpenSwarm; ask the" >&2
+if [[ -z "${MAESTRO_TEMPLATE_BACKEND_PATH:-}" ]]; then
+    echo "ERROR: MAESTRO_TEMPLATE_BACKEND_PATH not set in .env. This" >&2
+    echo "       workspace was seeded by an older Maestro; ask the" >&2
     echo "       App Builder to recreate it." >&2
     exit 1
 fi
 
-if [[ ! -d "$OPENSWARM_TEMPLATE_BACKEND_PATH" ]]; then
+if [[ ! -d "$MAESTRO_TEMPLATE_BACKEND_PATH" ]]; then
     echo "ERROR: master template backend dir not found at" >&2
-    echo "       $OPENSWARM_TEMPLATE_BACKEND_PATH" >&2
+    echo "       $MAESTRO_TEMPLATE_BACKEND_PATH" >&2
     exit 1
 fi
 
-echo "Copying backend/ from $OPENSWARM_TEMPLATE_BACKEND_PATH..."
-cp -R "$OPENSWARM_TEMPLATE_BACKEND_PATH" ./backend
+echo "Copying backend/ from $MAESTRO_TEMPLATE_BACKEND_PATH..."
+cp -R "$MAESTRO_TEMPLATE_BACKEND_PATH" ./backend
 chmod +x ./backend/run.sh
 
 # Pick a free port. SO_REUSEADDR=0 means the kernel won't immediately
@@ -216,14 +221,14 @@ EOF
 chmod +x "$DEST/backend_init.sh"
 
 # Patch 4: restart.sh — the agent-facing runtime restart. The runtime is
-# owned by the OpenSwarm harness, so agents can't bounce it from Bash;
+# owned by the Maestro harness, so agents can't bounce it from Bash;
 # this writes the sentinel the AppRuntimeManager watcher consumes
 # (runtime.py RESTART_SENTINEL_NAME) and waits for pickup.
 cat > "$DEST/restart.sh" <<'EOF'
 #!/usr/bin/env bash
-# Restart this app's runtime (backend + vite), managed by the OpenSwarm harness.
+# Restart this app's runtime (backend + vite), managed by the Maestro harness.
 #
-# The runtime is spawned and owned by OpenSwarm, so you can't just kill/rerun
+# The runtime is spawned and owned by Maestro, so you can't just kill/rerun
 # run.sh from here. This script writes a sentinel the harness watches; the
 # harness consumes it and restarts the whole runtime. No API token needed.
 # Use after `bash backend_init.sh`, after editing `.env`, or whenever the
@@ -231,17 +236,17 @@ cat > "$DEST/restart.sh" <<'EOF'
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-mkdir -p "$HERE/.openswarm"
-SENTINEL="$HERE/.openswarm/restart-requested"
+mkdir -p "$HERE/.maestro"
+SENTINEL="$HERE/.maestro/restart-requested"
 touch "$SENTINEL"
-echo "Restart requested; waiting for the OpenSwarm harness to pick it up..."
+echo "Restart requested; waiting for the Maestro harness to pick it up..."
 
 for _ in $(seq 1 30); do
     if [[ ! -f "$SENTINEL" ]]; then
         echo "Restart under way. The runtime takes a few seconds to come back;"
-        echo "then check .openswarm/terminal.log for boot output:"
+        echo "then check .maestro/terminal.log for boot output:"
         sleep 6
-        tail -n 20 "$HERE/.openswarm/terminal.log" 2>/dev/null || true
+        tail -n 20 "$HERE/.maestro/terminal.log" 2>/dev/null || true
         exit 0
     fi
     sleep 1
@@ -249,7 +254,7 @@ done
 
 rm -f "$SENTINEL"
 echo "ERROR: the harness didn't pick up the restart within 30s." >&2
-echo "The runtime only runs while the app is open in OpenSwarm (preview card or" >&2
+echo "The runtime only runs while the app is open in Maestro (preview card or" >&2
 echo "App Builder). If you're running this app standalone via 'bash run.sh'," >&2
 echo "just Ctrl-C that process and rerun it instead." >&2
 exit 1

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Asserts the packaged app boots correctly from a TRULY empty user-data dir (no settings.json, no auth.token, no sessions). Catches a class of bugs where the app silently assumes prior state on disk and fails on a first-time user. CI-gated because it deletes the user data dir; never runs on a developer machine without explicit OPENSWARM_E2E_WIPE=1.
+// Asserts the packaged app boots correctly from a TRULY empty user-data dir (no settings.json, no auth.token, no sessions). Catches a class of bugs where the app silently assumes prior state on disk and fails on a first-time user. CI-gated because it deletes the user data dir; never runs on a developer machine without explicit MAESTRO_E2E_WIPE=1.
 
 'use strict';
 const fs = require('fs');
@@ -20,8 +20,8 @@ function rmrf(target) {
 }
 
 async function main() {
-  if (process.env.CI !== 'true' && process.env.OPENSWARM_E2E_WIPE !== '1') {
-    process.stdout.write('SKIP: clean-profile would wipe the user data dir. Set CI=true or OPENSWARM_E2E_WIPE=1 to run.\n');
+  if (process.env.CI !== 'true' && process.env.MAESTRO_E2E_WIPE !== '1') {
+    process.stdout.write('SKIP: clean-profile would wipe the user data dir. Set CI=true or MAESTRO_E2E_WIPE=1 to run.\n');
     process.exit(0);
   }
 

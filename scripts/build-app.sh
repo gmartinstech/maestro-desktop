@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Master build script for the OpenSwarm desktop app.
+# Master build script for the Maestro Studio desktop app.
 #
 # Usage:
 #   bash scripts/build-app.sh              Local dev build (unsigned)
@@ -42,12 +42,12 @@ else
     esac
 fi
 
-# Defensive: detach any leftover OpenSwarm DMG volumes from prior failed builds.
+# Defensive: detach any leftover Maestro DMG volumes from prior failed builds.
 # hdiutil's "Resource busy" / volume-name-collision errors almost always trace
 # back to a stale mount in /Volumes (e.g. after a build crash or a still-open
 # Finder window from the last run).
 shopt -s nullglob
-for vol in /Volumes/OpenSwarm*; do
+for vol in /Volumes/Maestro*; do
     if [[ -d "$vol" ]]; then
         echo "Detaching leftover DMG mount: $vol"
         hdiutil detach -force "$vol" 2>/dev/null || hdiutil detach "$vol" 2>/dev/null || true
@@ -56,7 +56,7 @@ done
 shopt -u nullglob
 
 echo "========================================"
-echo "  OpenSwarm Desktop App Builder"
+echo "  Maestro Studio Desktop App Builder"
 if $PUBLISH_MODE; then
     echo "  Mode: PRODUCTION (sign + notarize + publish)"
 elif $SIGN_MODE; then
@@ -151,8 +151,8 @@ build_mcp_bundle_single() {
     local entry_subpath="$2"
     local output_name="$3"
     local out_file="$MCP_BUNDLE_DIR/$output_name"
-    if [[ -f "$out_file" && -z "${OPENSWARM_REBUILD_BUNDLES:-}" ]]; then
-        echo "[0b] $pkg_name bundle already present (set OPENSWARM_REBUILD_BUNDLES=1 to force rebuild)."
+    if [[ -f "$out_file" && -z "${MAESTRO_REBUILD_BUNDLES:-}" ]]; then
+        echo "[0b] $pkg_name bundle already present (set MAESTRO_REBUILD_BUNDLES=1 to force rebuild)."
         return
     fi
     echo "[0b] Bundling $pkg_name -> $output_name ..."
@@ -162,9 +162,9 @@ build_mcp_bundle_single() {
         npm install "$pkg_name" --silent 2>/dev/null
         local entry="node_modules/$entry_subpath"
         if [[ ! -f "$entry" ]]; then echo "ERROR: $pkg_name entry not found at $entry" >&2; exit 1; fi
-        local banner='const __OPENSWARM_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
+        local banner='const __MAESTRO_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
         npx esbuild "$entry" --bundle --platform=node --format=cjs --target=node22 --legal-comments=none \
-            --define:import.meta.url=__OPENSWARM_IMPORT_META_URL__ \
+            --define:import.meta.url=__MAESTRO_IMPORT_META_URL__ \
             "--banner:js=$banner" \
             --outfile="$out_file"
     )
@@ -187,7 +187,7 @@ build_mcp_bundle_dir() {
     local extras="$4"      # e.g. "@softeria/ms-365-mcp-server/dist/endpoints.json=dist/endpoints.json"
     local external="$5"    # comma-separated package names
     local out_dir="$MCP_BUNDLE_DIR/$out_dir_name"
-    if [[ -f "$out_dir/dist/index.js" && -z "${OPENSWARM_REBUILD_BUNDLES:-}" ]]; then
+    if [[ -f "$out_dir/dist/index.js" && -z "${MAESTRO_REBUILD_BUNDLES:-}" ]]; then
         echo "[0b] $pkg_name bundle dir already present."
         return
     fi
@@ -218,7 +218,7 @@ build_mcp_bundle_dir() {
         fi
 
         # Banner polyfills `require` for the import.meta.url polyfill.
-        local banner='const __OPENSWARM_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
+        local banner='const __MAESTRO_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
 
         local external_args=""
         if [[ -n "$external" ]]; then
@@ -231,7 +231,7 @@ build_mcp_bundle_dir() {
         fi
 
         npx esbuild "$entry" --bundle --platform=node --format=cjs --target=node22 --legal-comments=none \
-            --define:import.meta.url=__OPENSWARM_IMPORT_META_URL__ \
+            --define:import.meta.url=__MAESTRO_IMPORT_META_URL__ \
             "--banner:js=$banner" \
             $external_args \
             --outfile="$out_dir/dist/index.js"
@@ -315,10 +315,10 @@ echo ""
 # fall back to ELECTRON_RUN_AS_NODE on user machines without system node.
 # Two wins:
 #   1. Dock cleanliness — Electron-as-Node fallback is the second probable
-#      source of the bouncing "exec" icon next to OpenSwarm on fresh Macs
+#      source of the bouncing "exec" icon next to Maestro on fresh Macs
 #      (Python.app wrapping addresses the first). Real node is a clean
 #      background process that LaunchServices never registers in the dock.
-#   2. Cold-start speed — re-execing the OpenSwarm Electron binary as Node
+#   2. Cold-start speed — re-execing the Maestro Electron binary as Node
 #      pays the full Electron startup cost (~5-15s on first launch incl.
 #      Gatekeeper/XProtect verification), then more for the Next.js server
 #      to boot. Real node starts in ~50ms. Shrinks the splash window
@@ -401,7 +401,7 @@ rsync -a \
     --exclude='tests' --exclude='**/tests' \
     --exclude='/.env' --exclude='/.env.*' \
     "$PROJECT_ROOT/backend/" "$STAGING_DIR/backend/"
-# /data: backend/config/paths.py points DATA_ROOT at ~/Library/Application Support/OpenSwarm/data
+# /data: backend/config/paths.py points DATA_ROOT at ~/Library/Application Support/Maestro Studio/data
 # in packaged mode and no code seeds from the bundle, so the entire shipped
 # backend/data/ tree was dead weight (and was leaking the dev machine's
 # auth.token + install_id + dev session artifacts).
@@ -424,11 +424,11 @@ rsync -a \
 # Production .env: just the OAuth helper base URL. Google client_id/secret are no
 # longer shipped: nothing in backend/ or frontend/ reads GOOGLE_OAUTH_CLIENT_{ID,
 # SECRET} at runtime, so we don't bake a secret into the packaged app.
-SHIP_OAUTH_BASE_URL="${OPENSWARM_OAUTH_BASE_URL_OVERRIDE:-https://api.openswarm.com}"
+SHIP_OAUTH_BASE_URL="${MAESTRO_OAUTH_BASE_URL_OVERRIDE:-https://llm.martinstech.net/v1}"
 mkdir -p "$STAGING_DIR/backend"
 cat > "$STAGING_DIR/backend/.env" <<EOF
 # OAuth helper base URL.
-OPENSWARM_OAUTH_BASE_URL=${SHIP_OAUTH_BASE_URL}
+MAESTRO_OAUTH_BASE_URL=${SHIP_OAUTH_BASE_URL}
 EOF
 echo "Staged production .env"
 

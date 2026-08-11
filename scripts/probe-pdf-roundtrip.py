@@ -6,7 +6,7 @@ anthropic_proxy → 9router → upstream provider → response. Use one of
 the model presets below; the script picks the right backend lane.
 
 Usage:
-  1. Configure the matching API key in OpenSwarm Settings (or env).
+  1. Configure the matching API key in Maestro Studio Settings (or env).
   2. Start the dev stack: bash run.sh
   3. python3 scripts/probe-pdf-roundtrip.py <provider> <pdf-path>
 

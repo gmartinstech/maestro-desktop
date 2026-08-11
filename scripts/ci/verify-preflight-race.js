@@ -11,7 +11,7 @@ let failed = 0;
 function check(name, cond, detail) { process.stdout.write(`  ${cond ? 'ok  ' : 'FAIL'}  ${name}${detail ? ` :: ${detail}` : ''}\n`); if (!cond) failed++; }
 
 async function main() {
-  const baseDir = path.join(os.tmpdir(), `openswarm-pf-race-${process.pid}-${Date.now()}`);
+  const baseDir = path.join(os.tmpdir(), `maestro-pf-race-${process.pid}-${Date.now()}`);
   fs.mkdirSync(baseDir, { recursive: true });
 
   process.stdout.write('Race: 20 parallel preflight runs (different dataDirs)\n');
@@ -20,7 +20,7 @@ async function main() {
   const promises = [];
   for (let i = 0; i < N; i++) {
     const dataDir = path.join(baseDir, `dd-${i}`);
-    promises.push(pf.run(pf.defaultEnv(), { dataDir, network: { url: 'http://127.0.0.1:1', timeoutMs: 200 }, clock: { url: 'http://127.0.0.1:1', timeoutMs: 200 }, dualStack: { host: 'invalid.openswarm.local', timeoutMs: 200 } }));
+    promises.push(pf.run(pf.defaultEnv(), { dataDir, network: { url: 'http://127.0.0.1:1', timeoutMs: 200 }, clock: { url: 'http://127.0.0.1:1', timeoutMs: 200 }, dualStack: { host: 'invalid.maestro.local', timeoutMs: 200 } }));
   }
   const results = await Promise.all(promises);
   const dt = Date.now() - t0;

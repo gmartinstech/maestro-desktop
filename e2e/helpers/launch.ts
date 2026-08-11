@@ -15,14 +15,14 @@ export function packagedAppPath(): string {
   const dist = path.join(REPO_ROOT, 'electron', 'dist');
   const candidates =
     process.platform === 'win32'
-      ? [path.join(dist, 'win-unpacked', 'OpenSwarm.exe')]
+      ? [path.join(dist, 'win-unpacked', 'Maestro Studio.exe')]
       : process.platform === 'darwin'
         ? [
-            path.join(dist, 'mac-arm64', 'OpenSwarm.app', 'Contents', 'MacOS', 'OpenSwarm'),
-            path.join(dist, 'mac', 'OpenSwarm.app', 'Contents', 'MacOS', 'OpenSwarm'),
-            path.join(dist, 'mac-universal', 'OpenSwarm.app', 'Contents', 'MacOS', 'OpenSwarm'),
+            path.join(dist, 'mac-arm64', 'Maestro Studio.app', 'Contents', 'MacOS', 'Maestro Studio'),
+            path.join(dist, 'mac', 'Maestro Studio.app', 'Contents', 'MacOS', 'Maestro Studio'),
+            path.join(dist, 'mac-universal', 'Maestro Studio.app', 'Contents', 'MacOS', 'Maestro Studio'),
           ]
-        : [path.join(dist, 'linux-unpacked', 'openswarm')];
+        : [path.join(dist, 'linux-unpacked', 'maestro-studio')];
   const found = candidates.find((c) => { try { return fs.statSync(c).isFile(); } catch { return false; } });
   if (!found) throw new Error(`Packaged app not found. Build first or set E2E_APP_PATH. Looked in:\n  ${candidates.join('\n  ')}`);
   return found;
@@ -36,13 +36,13 @@ export function packagedAppPath(): string {
 function seedTestUserIfClean(): void {
   // Gate on CI so a developer running `npm test` locally never has their real
   // (or absent) sign-in state replaced with a fake one.
-  if (process.env.CI !== 'true' && process.env.OPENSWARM_E2E_SEED !== '1') return;
+  if (process.env.CI !== 'true' && process.env.MAESTRO_E2E_SEED !== '1') return;
   const userData =
     process.platform === 'win32'
-      ? path.join(process.env.APPDATA || os.homedir(), 'OpenSwarm', 'data', 'settings')
+      ? path.join(process.env.APPDATA || os.homedir(), 'Maestro Studio', 'data', 'settings')
       : process.platform === 'darwin'
-        ? path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'settings')
-        : path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'OpenSwarm', 'data', 'settings');
+        ? path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'settings')
+        : path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Maestro Studio', 'data', 'settings');
   const file = path.join(userData, 'settings.json');
   // verify-all may have created the file without a user_id (no auth flow); we
   // re-seed in that case too. Only existing-with-real-user_id is left alone.
@@ -51,7 +51,7 @@ function seedTestUserIfClean(): void {
   const merged: any = { ...existing };
   if (!merged.user_id) {
     merged.user_id = 'e2e-fake-user';
-    merged.user_email = 'e2e@openswarm.test';
+    merged.user_email = 'e2e@maestro.test';
   }
   // Provider keys: read from env each launch so a key never has to live on disk
   // outside the per-user app-support dir (and so rotating just means a new shell).
@@ -79,33 +79,33 @@ export function hasAnyProviderKey(): boolean {
 
 export async function launchApp(): Promise<ElectronApplication> {
   seedTestUserIfClean();
-  // OPENSWARM_E2E=1 is read by electron/main.js BEFORE the renderer launches; it
-  // appends a Chromium switch the preload reads to set window.__OPENSWARM_E2E__
+  // MAESTRO_E2E=1 is read by electron/main.js BEFORE the renderer launches; it
+  // appends a Chromium switch the preload reads to set window.__MAESTRO_E2E__
   // before bundle.js parses, so the production store-on-window gate fires
   // deterministically (no addInitScript race).
-  // Diagnostic: OPENSWARM_E2E_DISABLE_GPU=1 launches with GPU/compositing off, to
+  // Diagnostic: MAESTRO_E2E_DISABLE_GPU=1 launches with GPU/compositing off, to
   // tell apart a real renderer crash from a headless-GPU-context 0xC0000005 that
   // only reproduces under automated launch. Not used by default.
-  const extraArgs = process.env.OPENSWARM_E2E_DISABLE_GPU === '1'
+  const extraArgs = process.env.MAESTRO_E2E_DISABLE_GPU === '1'
     ? ['--disable-gpu', '--disable-gpu-compositing', '--disable-software-rasterizer']
     : [];
   // Diagnostic: pass --js-flags=--no-opt on the launch command line (guaranteed
   // to reach the RENDERER V8, unlike main.js appendSwitch which may only affect
   // the main process). Used to confirm whether the renderer crash is the V8 bug.
-  if (process.env.OPENSWARM_E2E_NOOPT === '1') extraArgs.push('--js-flags=--no-opt');
+  if (process.env.MAESTRO_E2E_NOOPT === '1') extraArgs.push('--js-flags=--no-opt');
   const app = await electron.launch({
     executablePath: packagedAppPath(),
     args: extraArgs,
-    env: { ...process.env, OPENSWARM_E2E: '1' },
+    env: { ...process.env, MAESTRO_E2E: '1' },
   });
   // Belt-and-braces: addInitScript ALSO sets the flag in case a future Electron
   // changes the cmdline propagation. If either path works, the spec succeeds.
-  try { await app.context().addInitScript({ content: '(window).__OPENSWARM_E2E__ = true;' }); } catch { /* best effort */ }
+  try { await app.context().addInitScript({ content: '(window).__MAESTRO_E2E__ = true;' }); } catch { /* best effort */ }
   return app;
 }
 
 // The app opens a splash window first, then the main window that loads the React
-// frontend and exposes window.openswarm. Poll all windows until one has the
+// frontend and exposes window.maestro. Poll all windows until one has the
 // bridge AND the React root has mounted (first meaningful paint), then return it.
 export async function waitForMainWindow(app: ElectronApplication, timeoutMs = 120_000): Promise<Page> {
   const deadline = Date.now() + timeoutMs;
@@ -113,7 +113,7 @@ export async function waitForMainWindow(app: ElectronApplication, timeoutMs = 12
     for (const w of app.windows()) {
       try {
         const ready = await w.evaluate(() => {
-          const hasBridge = typeof (window as any).openswarm?.getBackendPort === 'function';
+          const hasBridge = typeof (window as any).maestro?.getBackendPort === 'function';
           const root = document.getElementById('root');
           return hasBridge && !!root && root.childElementCount > 0;
         });

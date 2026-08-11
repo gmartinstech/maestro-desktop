@@ -1,7 +1,15 @@
 // scripts/check-callhome.mjs — fails if a forbidden host appears in built output
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-const FORBIDDEN = [/openswarm\.com/i, /api\.openswarm/i, /analytics\.openswarm/i];
+// GUARD FILE. The `openswarm` literals below are INTENTIONAL and must never be
+// renamed away: they are the regression detector for the upstream call-home
+// hosts. Renaming them to `maestro` would silently disarm this check.
+const FORBIDDEN = [
+  /openswarm\.com/i,
+  /[a-z0-9-]+\.openswarm\.(com|ai|io|net)/i,
+  /api\.openswarm/i,
+  /analytics\.openswarm/i,
+];
 const ROOTS = ['frontend/build', 'electron'];
 let hits = [];
 function walk(p){ for (const e of readdirSync(p)){ const f=join(p,e); const s=statSync(f);

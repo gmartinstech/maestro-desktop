@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Proves the openswarm-gui MCP server works: spawn over stdio, list tools, then (unless --no-launch) launch the app, screenshot, assert the renderer painted, and close.
+// Proves the maestro-gui MCP server works: spawn over stdio, list tools, then (unless --no-launch) launch the app, screenshot, assert the renderer painted, and close.
 
 'use strict';
 const path = require('path');

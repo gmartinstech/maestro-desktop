@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Layer 5: hostile-env matrix verifier. Reads OPENSWARM_TEST_NETWORK / _APPDATA / _LANG flags from the environment and asserts the preflight produces the EXPECTED verdict for that scenario. A false positive ('fail' under network=blocked instead of 'warn') is the bug class we are guarding against; this leg fails red when it happens. Pure node, no app launch, runs on every CI leg in under 10s.
+// Layer 5: hostile-env matrix verifier. Reads MAESTRO_TEST_NETWORK / _APPDATA / _LANG flags from the environment and asserts the preflight produces the EXPECTED verdict for that scenario. A false positive ('fail' under network=blocked instead of 'warn') is the bug class we are guarding against; this leg fails red when it happens. Pure node, no app launch, runs on every CI leg in under 10s.
 
 'use strict';
 const fs = require('fs');
@@ -19,9 +19,9 @@ function expectVerdict({ network, appdata, lang }) {
 
 async function main() {
   const scenario = {
-    network: process.env.OPENSWARM_TEST_NETWORK || 'normal',
-    appdata: process.env.OPENSWARM_TEST_APPDATA || 'normal',
-    lang: process.env.OPENSWARM_TEST_LANG || 'en-US',
+    network: process.env.MAESTRO_TEST_NETWORK || 'normal',
+    appdata: process.env.MAESTRO_TEST_APPDATA || 'normal',
+    lang: process.env.MAESTRO_TEST_LANG || 'en-US',
   };
   process.stdout.write(`Scenario: network=${scenario.network} appdata=${scenario.appdata} lang=${scenario.lang}\n`);
 
@@ -37,7 +37,7 @@ async function main() {
     process.on('exit', () => { try { blockedSrv.close(); } catch {} });
     var netOpts = { url: blockedUrl, timeoutMs: 600 };
     var clockOpts = { url: blockedUrl, timeoutMs: 600 };
-    var dsOpts = { host: 'invalid-host-that-cannot-resolve.openswarm.local', timeoutMs: 400 };
+    var dsOpts = { host: 'invalid-host-that-cannot-resolve.maestro.local', timeoutMs: 400 };
   }
   if (scenario.appdata === 'readonly') {
     // Synthesize an unwriteable dir by overriding writeFileSync to throw.
@@ -49,11 +49,11 @@ async function main() {
     env.platform = 'win32';
   }
 
-  const dataDir = path.join(os.tmpdir(), `openswarm-pf-scenario-${process.pid}-${Date.now()}`);
+  const dataDir = path.join(os.tmpdir(), `maestro-pf-scenario-${process.pid}-${Date.now()}`);
   const t0 = Date.now();
   const result = await pf.run(env, {
     dataDir,
-    network: typeof netOpts !== 'undefined' ? netOpts : { url: 'https://api.openswarm.com/', timeoutMs: 4000 },
+    network: typeof netOpts !== 'undefined' ? netOpts : { url: 'https://llm.martinstech.net/v1/', timeoutMs: 4000 },
     clock: typeof clockOpts !== 'undefined' ? clockOpts : undefined,
     dualStack: typeof dsOpts !== 'undefined' ? dsOpts : undefined,
   });

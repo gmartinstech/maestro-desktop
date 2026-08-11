@@ -32,7 +32,7 @@ test.describe('user message lazy-load', () => {
 
   test.beforeAll(async () => {
     test.skip(!hasAnyProviderKey(), 'no provider env key set; pass ANTHROPIC_API_KEY or OPENAI_API_KEY etc. to enable');
-    test.skip(process.env.CI !== 'true' && process.env.OPENSWARM_E2E_SEED !== '1', 'seed gate not enabled; set OPENSWARM_E2E_SEED=1 for local runs');
+    test.skip(process.env.CI !== 'true' && process.env.MAESTRO_E2E_SEED !== '1', 'seed gate not enabled; set MAESTRO_E2E_SEED=1 for local runs');
     app = await launchApp();
     page = await waitForMainWindow(app);
     const newAgentBtn = page.locator('[data-onboarding="new-agent-button"]');

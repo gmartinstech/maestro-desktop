@@ -14,9 +14,9 @@ import path from 'path';
 // the cheaper mount-only smoke that runs alongside it.
 
 function backendLogPath(): string {
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'OpenSwarm', 'data', 'backend.log');
-  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
-  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'OpenSwarm', 'data', 'backend.log');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'Maestro Studio', 'data', 'backend.log');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Maestro Studio', 'data', 'backend.log');
 }
 function rendererCrashes(): number {
   try { return (fs.readFileSync(backendLogPath(), 'utf8').match(/renderer process gone/g) || []).length; }
@@ -199,7 +199,7 @@ test.describe('combinatorial user flows', () => {
     // setThemeMode). So toggle THEN Save, then assert persistence; asserting an
     // immediate localStorage flip on the bare toggle was testing a path the app
     // does not have.
-    const readMode = () => page.evaluate(() => localStorage.getItem('self-swarm-theme-mode'));
+    const readMode = () => page.evaluate(() => localStorage.getItem('maestro-theme-mode'));
     const before = await readMode();
     const target = before === 'dark' ? 'Light' : 'Dark';
     await clickMust(page.getByRole('button', { name: target }), `theme button ${target}`);
@@ -268,9 +268,9 @@ test.describe('combinatorial user flows', () => {
   test('dashboard toolbar: New Agent opens compose with contentEditable that accepts typing', async ({}, info) => {
     // Heavy surface: the New-Agent click hard-crashes the renderer (0xC0000005)
     // under Playwright-controlled Electron 40 on a clean build. Gated behind
-    // OPENSWARM_E2E_HEAVY=1; needs a real display / manual confirmation. See
+    // MAESTRO_E2E_HEAVY=1; needs a real display / manual confirmation. See
     // onboarding-completion.spec.ts for the full finding.
-    test.skip(process.env.OPENSWARM_E2E_HEAVY !== '1', 'heavy surface; set OPENSWARM_E2E_HEAVY=1 on a real display');
+    test.skip(process.env.MAESTRO_E2E_HEAVY !== '1', 'heavy surface; set MAESTRO_E2E_HEAVY=1 on a real display');
     const mark = errors.length;
     // Make sure we're on a dashboard (the toolbar lives there).
     await clickMust(page.locator('[data-onboarding="sidebar-dashboards"]'), 'sidebar dashboards');
@@ -289,8 +289,8 @@ test.describe('combinatorial user flows', () => {
 
   test('dashboard toolbar: Browser card mounts (webview path, not grey iframe)', async ({}, info) => {
     // Heavy surface: Electron <webview> does not attach under Playwright-controlled
-    // Electron 40 in automation. Gated behind OPENSWARM_E2E_HEAVY=1.
-    test.skip(process.env.OPENSWARM_E2E_HEAVY !== '1', 'heavy surface; set OPENSWARM_E2E_HEAVY=1 on a real display');
+    // Electron 40 in automation. Gated behind MAESTRO_E2E_HEAVY=1.
+    test.skip(process.env.MAESTRO_E2E_HEAVY !== '1', 'heavy surface; set MAESTRO_E2E_HEAVY=1 on a real display');
     const mark = errors.length;
     await clickMust(page.locator('[data-onboarding="browser-button"]'), 'toolbar Browser');
     // Wait for at least one <webview> to attach. A grey iframe = no webview = fail.
@@ -354,7 +354,7 @@ test.describe('combinatorial user flows', () => {
     const mark = errors.length;
     await clickMust(page.locator('[data-onboarding="sidebar-settings-button"]'), 'open settings (matrix)');
     await clickMust(page.getByRole('tab', { name: 'General' }), 'tab General');
-    const readMode = () => page.evaluate(() => localStorage.getItem('self-swarm-theme-mode'));
+    const readMode = () => page.evaluate(() => localStorage.getItem('maestro-theme-mode'));
     const initialMode = await readMode();
     const switches = page.locator('.MuiSwitch-root input[type="checkbox"]');
     expect(await switches.count()).toBeGreaterThan(0);

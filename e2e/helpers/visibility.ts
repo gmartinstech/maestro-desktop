@@ -41,9 +41,9 @@ export interface VisibilityHandle {
 }
 
 function backendLogPath(): string {
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'OpenSwarm', 'data', 'backend.log');
-  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
-  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'OpenSwarm', 'data', 'backend.log');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || '', 'Maestro Studio', 'data', 'backend.log');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Maestro Studio', 'data', 'backend.log');
 }
 
 function safeName(s: string): string {
@@ -73,7 +73,7 @@ const INIT_SCRIPT = `
 (() => {
   // Set BEFORE any bundle code runs so frontend code that gates on this flag
   // (e.g. store.ts exposing the Redux store) sees it during module load.
-  (window).__OPENSWARM_E2E__ = true;
+  (window).__MAESTRO_E2E__ = true;
   if ((window).__visibility_installed__) return;
   (window).__visibility_installed__ = true;
   const buf = [];
@@ -83,7 +83,7 @@ const INIT_SCRIPT = `
   // top-level slice-key diff each time. Full state can be 100s of KB; logging
   // every dispatch flat would saturate the JSONL. We log shallow changes only.
   const installReduxHook = () => {
-    const s = (window).__OPENSWARM_STORE__;
+    const s = (window).__MAESTRO_STORE__;
     if (!s) return false;
     let prev = s.getState();
     s.subscribe(() => {
@@ -103,7 +103,7 @@ const INIT_SCRIPT = `
     const id = setInterval(() => { if (installReduxHook() || ++tries > 200) clearInterval(id); }, 50);
   }
 
-  // NOTE: page-side IPC wrapping is NOT possible. window.openswarm is exposed via
+  // NOTE: page-side IPC wrapping is NOT possible. window.maestro is exposed via
   // contextBridge.exposeInMainWorld, which deep-freezes the object in the main
   // world, so reassigning api[key] from here is a silent no-op (verified: it
   // captured 0 events on every run). We deliberately do NOT instrument IPC here
@@ -111,7 +111,7 @@ const INIT_SCRIPT = `
   // through the channels that do work: page.on('request'/'response') for HTTP
   // round-trips, page.on('websocket') for the agent protocol, and the live
   // backend.log tail for server-side handling. Real per-call IPC timing would
-  // need a preload-side wrapper gated on __OPENSWARM_E2E__ (a packaged-build
+  // need a preload-side wrapper gated on __MAESTRO_E2E__ (a packaged-build
   // change), tracked as a follow-up.
   const push = (kind, payload) => {
     try { buf.push({ ts: performance.now(), kind, payload }); }
@@ -307,7 +307,7 @@ export async function startVisibility(
       // Pull current Redux state if available - tells us the slice that was
       // wrong at the moment of failure.
       let reduxState: unknown = null;
-      try { reduxState = await page.evaluate(() => (window as any).__OPENSWARM_STORE__?.getState?.() ?? null); }
+      try { reduxState = await page.evaluate(() => (window as any).__MAESTRO_STORE__?.getState?.() ?? null); }
       catch (e) { reduxState = { error: String(e) }; }
       // Read the tail of events.jsonl as the action breadcrumb. The user reads
       // this top-down to localize the failure to a step.

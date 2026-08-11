@@ -1,4 +1,4 @@
-# openswarm-gui MCP: a Playwright hand for a Claude Code tester
+# maestro-gui MCP: a Playwright hand for a Claude Code tester
 
 This is the "GUI hand" for the testing pyramid. The deterministic scripts in
 `scripts/ci/` are the fast, free, binary CI gate (boot, signing, resilience,
@@ -17,7 +17,7 @@ Registering an auto-connecting MCP server modifies CC's own config, so add it
 yourself, either:
 
 ```bash
-claude mcp add openswarm-gui -- node e2e/mcp/electron-mcp.js
+claude mcp add maestro-gui -- node e2e/mcp/electron-mcp.js
 ```
 
 or create `.mcp.json` at the repo root:
@@ -25,7 +25,7 @@ or create `.mcp.json` at the repo root:
 ```json
 {
   "mcpServers": {
-    "openswarm-gui": { "command": "node", "args": ["e2e/mcp/electron-mcp.js"] }
+    "maestro-gui": { "command": "node", "args": ["e2e/mcp/electron-mcp.js"] }
   }
 }
 ```
@@ -43,7 +43,7 @@ so there's a packaged binary to drive (`electron/dist/win-unpacked` or the `.app
 | `snapshot` | accessibility tree (structured "what's on screen", no pixels) |
 | `click` / `fill` / `press` | drive inputs by Playwright selector (CSS, `text=`, `role=`) |
 | `wait_for` | wait until a selector is visible |
-| `eval` | run JS in the renderer and return JSON (inspect anything, incl. `window.openswarm`) |
+| `eval` | run JS in the renderer and return JSON (inspect anything, incl. `window.maestro`) |
 | `read_log` | tail `backend.log` (provenance + `[perf]` marks + errors) |
 
 ## Verification rubric (the prompt a CC tester follows)

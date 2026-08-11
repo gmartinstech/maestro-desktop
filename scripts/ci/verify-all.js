@@ -48,7 +48,7 @@ function main() {
     ['9router actually routes (functional GET /api/providers)', 'verify-9router-functional.js', appArg],
     ['clean-profile invariant (CI-only; wipes data dir)', 'verify-clean-profile.js', appArg],
     ['boot beacon + preflight', 'verify-boot-beacon.js', appArg],
-    ['real agent turn (opt-in: OPENSWARM_E2E_AGENT=1)', 'verify-agent-turn.js', appArg],
+    ['real agent turn (opt-in: MAESTRO_E2E_AGENT=1)', 'verify-agent-turn.js', appArg],
   ];
 
   const results = steps.map(([label, script, extra]) => [label, run(label, script, extra)]);

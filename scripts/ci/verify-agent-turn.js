@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Drives a REAL agent turn on the app's own login (gated by OPENSWARM_E2E_AGENT=1; spends quota, else skips). Launches tool-free (no approval-gate hang) and asserts terminal status + tokens.output>0, a live reply the harness cant fake.
+// Drives a REAL agent turn on the app's own login (gated by MAESTRO_E2E_AGENT=1; spends quota, else skips). Launches tool-free (no approval-gate hang) and asserts terminal status + tokens.output>0, a live reply the harness cant fake.
 
 'use strict';
 const h = require('./lib/app-harness');
@@ -19,7 +19,7 @@ function providerForGroup(group) {
   if (g.includes('openai')) return 'openai';
   if (g.includes('google') || g.includes('gemini')) return 'google';
   if (g.includes('openrouter')) return 'openrouter';
-  return 'anthropic';   // Anthropic / OpenSwarm Pro / Claude / custom default
+  return 'anthropic';   // Anthropic / Claude / custom default
 }
 
 // Pick a model from /api/agents/models, preferring a cheap Anthropic-family one.
@@ -32,8 +32,8 @@ function pickModel(modelsByGroup) {
 }
 
 async function main() {
-  if (process.env.OPENSWARM_E2E_AGENT !== '1') {
-    process.stdout.write('SKIP: agent-turn check is gated. Set OPENSWARM_E2E_AGENT=1 to run a real turn (spends LLM quota).\n');
+  if (process.env.MAESTRO_E2E_AGENT !== '1') {
+    process.stdout.write('SKIP: agent-turn check is gated. Set MAESTRO_E2E_AGENT=1 to run a real turn (spends LLM quota).\n');
     process.exit(0);
   }
   const args = parseArgs(process.argv.slice(2));

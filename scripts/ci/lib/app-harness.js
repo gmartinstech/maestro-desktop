@@ -14,10 +14,10 @@ function packagedAppPath(explicit) {
   if (explicit) return explicit;
   const dist = path.join(REPO_ROOT, 'electron', 'dist');
   const candidates = process.platform === 'win32'
-    ? [path.join(dist, 'win-unpacked', 'OpenSwarm.exe')]
+    ? [path.join(dist, 'win-unpacked', 'Maestro Studio.exe')]
     : process.platform === 'darwin'
-      ? ['mac-arm64', 'mac', 'mac-universal'].map((d) => path.join(dist, d, 'OpenSwarm.app', 'Contents', 'MacOS', 'OpenSwarm'))
-      : [path.join(dist, 'linux-unpacked', 'openswarm')];
+      ? ['mac-arm64', 'mac', 'mac-universal'].map((d) => path.join(dist, d, 'Maestro Studio.app', 'Contents', 'MacOS', 'Maestro Studio'))
+      : [path.join(dist, 'linux-unpacked', 'maestro-studio')];
   const found = candidates.find((c) => { try { return fs.statSync(c).isFile(); } catch { return false; } });
   if (!found) throw new Error(`packaged app not found; build first or pass --app. Looked in:\n  ${candidates.join('\n  ')}`);
   return found;
@@ -33,10 +33,10 @@ function signableTarget(appExecutable) {
 }
 
 function backendLogPath() {
-  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'backend.log');
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || os.homedir(), 'OpenSwarm', 'data', 'backend.log');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'backend.log');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || os.homedir(), 'Maestro Studio', 'data', 'backend.log');
   const xdg = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-  return path.join(xdg, 'OpenSwarm', 'data', 'backend.log');
+  return path.join(xdg, 'Maestro Studio', 'data', 'backend.log');
 }
 
 // The bearer token the shell writes before bind; tests reuse it to call the authed API.
@@ -61,7 +61,7 @@ function killApp(child) {
   try {
     if (process.platform === 'win32') {
       if (child && child.pid) { try { execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore' }); } catch { /* gone */ } }
-      try { execSync('taskkill /IM OpenSwarm.exe /T /F', { stdio: 'ignore' }); } catch { /* none */ }
+      try { execSync('taskkill /IM "Maestro Studio.exe" /T /F', { stdio: 'ignore' }); } catch { /* none */ }
     } else if (child && child.pid) {
       try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* gone */ } }
     }
@@ -107,7 +107,9 @@ async function attachToRunning() {
 }
 
 function parseProvenanceSha(log) {
-  const m = log.match(/\[provenance\] OpenSwarm \S+ sha=([0-9a-f]+)/);
+  // Tolerant of either brand spelling emitted by electron/main.js ("Maestro" or
+  // "Maestro Studio") so this gate does not go red on a cosmetic rename.
+  const m = log.match(/\[provenance\] Maestro(?: Studio)? \S+ sha=([0-9a-f]+)/);
   return m ? m[1] : null;
 }
 

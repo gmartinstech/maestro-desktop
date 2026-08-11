@@ -8,7 +8,7 @@
 // Usage:
 //   node scripts/release/verify-release.js --dir <artifacts-dir> --expect-version 1.2.3
 //   node scripts/release/verify-release.js --dir <dir> --expect-version 1.2.3 \
-//        --base-url https://github.com/openswarm-ai/openswarm/releases/download/v1.2.3
+//        --base-url https://github.com/gmartinstech/maestro-desktop/releases/download/v1.2.3
 //
 // --dir            directory containing latest.yml + latest-mac.yml
 // --expect-version version both feeds (and their filenames) must match

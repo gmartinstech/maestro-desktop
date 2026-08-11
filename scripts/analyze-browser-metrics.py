@@ -7,8 +7,8 @@ goal was achieved, this is the independent reality check.
 
 Usage:
   python3 scripts/analyze-browser-metrics.py [metrics_dir]
-Defaults to $OPENSWARM_BROWSER_METRICS_DIR, else
-~/Library/Application Support/OpenSwarm/data/browser_metrics (mac) or backend/data/.
+Defaults to $MAESTRO_BROWSER_METRICS_DIR, else
+~/Library/Application Support/Maestro Studio/data/browser_metrics (mac) or backend/data/.
 """
 
 import json
@@ -25,10 +25,10 @@ PRODUCTIVE = {
 
 
 def _default_dir():
-    env = os.environ.get("OPENSWARM_BROWSER_METRICS_DIR")
+    env = os.environ.get("MAESTRO_BROWSER_METRICS_DIR")
     if env:
         return env
-    mac = os.path.expanduser("~/Library/Application Support/OpenSwarm/data/browser_metrics")
+    mac = os.path.expanduser("~/Library/Application Support/Maestro Studio/data/browser_metrics")
     if os.path.isdir(mac):
         return mac
     return os.path.join(os.path.dirname(__file__), "..", "backend", "data", "browser_metrics")

@@ -1,4 +1,4 @@
-# Master build script for the OpenSwarm desktop app on Windows.
+# Master build script for the Maestro Studio desktop app on Windows.
 #
 # Usage:
 #   pwsh scripts\build-app-win.ps1                Local dev build (unsigned)
@@ -14,7 +14,7 @@ param(
     [switch]$Publish,
     # Fast CI gate path: build only the unpacked win-unpacked\ dir (no NSIS
     # installer, no LZMA compression of the ~1GB tree - the slowest packaging
-    # phase). verify-all + Playwright drive the unpacked OpenSwarm.exe directly.
+    # phase). verify-all + Playwright drive the unpacked Maestro Studio.exe directly.
     [switch]$DirOnly,
     # Phase 7 A/B: build a Squirrel.Windows installer instead of the default
     # NSIS one, from the SAME staged tree / SAME commit. Opt-in only; NSIS stays
@@ -27,7 +27,7 @@ $ErrorActionPreference = 'Stop'
 if ($Publish) { $Sign = $true }
 # Override only the win target; everything else (signing hook, extraResources,
 # publish config) merges from electron/package.json's build block unchanged.
-$TargetOverride = if ($Squirrel) { @('--config.win.target=squirrel', '--config.squirrelWindows.iconUrl=https://raw.githubusercontent.com/openswarm-ai/openswarm/main/electron/build/icon.ico') } else { @() }
+$TargetOverride = if ($Squirrel) { @('--config.win.target=squirrel', '--config.squirrelWindows.iconUrl=https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico') } else { @() }
 
 $ScriptDir   = Split-Path -Parent $PSCommandPath
 $ProjectRoot = Split-Path -Parent $ScriptDir
@@ -159,12 +159,12 @@ New-Item -ItemType Directory -Force -Path $McpBundleDir | Out-Null
 # the bundle crashes at module load.
 function Build-McpBundleSingle($PackageName, $EntrySubpath, $OutputName) {
     $OutFile = Join-Path $McpBundleDir $OutputName
-    if ((Test-Path $OutFile) -and -not $env:OPENSWARM_REBUILD_BUNDLES) {
-        Write-Host "[0b] $PackageName bundle already present (set `$env:OPENSWARM_REBUILD_BUNDLES='1' to force rebuild)."
+    if ((Test-Path $OutFile) -and -not $env:MAESTRO_REBUILD_BUNDLES) {
+        Write-Host "[0b] $PackageName bundle already present (set `$env:MAESTRO_REBUILD_BUNDLES='1' to force rebuild)."
         return
     }
     Write-Host "[0b] Bundling $PackageName -> $OutputName ..."
-    $TmpDir = Join-Path $env:TEMP "openswarm-mcp-$([guid]::NewGuid())"
+    $TmpDir = Join-Path $env:TEMP "maestro-mcp-$([guid]::NewGuid())"
     New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
     Push-Location $TmpDir
     try {
@@ -172,9 +172,9 @@ function Build-McpBundleSingle($PackageName, $EntrySubpath, $OutputName) {
         if ($LASTEXITCODE -ne 0) { throw "$PackageName install failed" }
         $EntryPath = Join-Path (Join-Path $TmpDir 'node_modules') $EntrySubpath
         if (-not (Test-Path $EntryPath)) { throw "$PackageName entry not found at $EntryPath" }
-        $banner = 'const __OPENSWARM_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
+        $banner = 'const __MAESTRO_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
         & npx esbuild $EntryPath --bundle --platform=node --format=cjs --target=node22 --legal-comments=none `
-            --define:import.meta.url=__OPENSWARM_IMPORT_META_URL__ `
+            --define:import.meta.url=__MAESTRO_IMPORT_META_URL__ `
             "--banner:js=$banner" `
             "--outfile=$OutFile"
         if ($LASTEXITCODE -ne 0) { throw "esbuild failed for $PackageName" }
@@ -192,12 +192,12 @@ function Build-McpBundleSingle($PackageName, $EntrySubpath, $OutputName) {
 function Build-McpBundleDir($PackageName, $EntrySubpath, $OutDirName, $Extras, $External) {
     $OutDir = Join-Path $McpBundleDir $OutDirName
     $OutBundle = Join-Path (Join-Path $OutDir 'dist') 'index.js'
-    if ((Test-Path $OutBundle) -and -not $env:OPENSWARM_REBUILD_BUNDLES) {
+    if ((Test-Path $OutBundle) -and -not $env:MAESTRO_REBUILD_BUNDLES) {
         Write-Host "[0b] $PackageName bundle dir already present."
         return
     }
     Write-Host "[0b] Bundling $PackageName -> $OutDirName\ ..."
-    $TmpDir = Join-Path $env:TEMP "openswarm-mcp-$([guid]::NewGuid())"
+    $TmpDir = Join-Path $env:TEMP "maestro-mcp-$([guid]::NewGuid())"
     New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
     if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
     New-Item -ItemType Directory -Force -Path (Join-Path $OutDir 'dist') | Out-Null
@@ -226,11 +226,11 @@ function Build-McpBundleDir($PackageName, $EntrySubpath, $OutDirName, $Extras, $
             }
         }
 
-        $banner = 'const __OPENSWARM_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
+        $banner = 'const __MAESTRO_IMPORT_META_URL__ = require("url").pathToFileURL(__filename).href;'
         $esbuildArgs = @(
             $EntryPath, '--bundle', '--platform=node', '--format=cjs',
             '--target=node22', '--legal-comments=none',
-            '--define:import.meta.url=__OPENSWARM_IMPORT_META_URL__',
+            '--define:import.meta.url=__MAESTRO_IMPORT_META_URL__',
             "--banner:js=$banner",
             "--outfile=$OutBundle"
         )
@@ -294,8 +294,8 @@ Write-Host ""
 # --- Step 2: Python env ---
 $PythonEnv = Join-Path $ProjectRoot 'electron\python-env'
 $PythonExe = Join-Path $PythonEnv 'python.exe'
-if ((Test-Path $PythonExe) -and -not $env:OPENSWARM_REBUILD_PYTHON) {
-    Write-Host "[2/5] Python environment already present at $PythonEnv (set `$env:OPENSWARM_REBUILD_PYTHON='1' to force rebuild)."
+if ((Test-Path $PythonExe) -and -not $env:MAESTRO_REBUILD_PYTHON) {
+    Write-Host "[2/5] Python environment already present at $PythonEnv (set `$env:MAESTRO_REBUILD_PYTHON='1' to force rebuild)."
 } else {
     Write-Host "[2/5] Building Python environment..."
     & (Join-Path $ScriptDir 'build-python-env-win.ps1')
@@ -444,7 +444,7 @@ try {
 } catch {
     Write-Warning "[4b] webapp-template archive build FAILED: $_  (App Builder first-app falls back to live npm; non-fatal)"
 }
-# data: backend/config/paths.py points DATA_ROOT at %APPDATA%/OpenSwarm/data in
+# data: backend/config/paths.py points DATA_ROOT at %APPDATA%/Maestro Studio/data in
 # packaged mode and no code seeds from the bundle, so the entire shipped
 # backend/data/ tree was dead weight (and was leaking the dev machine's
 # auth.token + install_id + dev session artifacts).
@@ -454,16 +454,16 @@ try {
 # Production .env: OAuth helper base URL + Google credentials. See
 # Google client_id/secret are no longer shipped: nothing reads them at runtime,
 # so we don't bake a secret into the .env.
-$ShipOauthBaseUrl = if ($env:OPENSWARM_OAUTH_BASE_URL_OVERRIDE) {
-    $env:OPENSWARM_OAUTH_BASE_URL_OVERRIDE
+$ShipOauthBaseUrl = if ($env:MAESTRO_OAUTH_BASE_URL_OVERRIDE) {
+    $env:MAESTRO_OAUTH_BASE_URL_OVERRIDE
 } else {
-    'https://api.openswarm.com'
+    'https://llm.martinstech.net/v1'
 }
 $ShipEnvPath = Join-Path $Staging 'backend\.env'
 New-Item -ItemType Directory -Force -Path (Split-Path $ShipEnvPath -Parent) | Out-Null
 @(
     "# OAuth helper base URL.",
-    "OPENSWARM_OAUTH_BASE_URL=$ShipOauthBaseUrl"
+    "MAESTRO_OAUTH_BASE_URL=$ShipOauthBaseUrl"
 ) | Set-Content -Path $ShipEnvPath
 Write-Host "Staged production .env"
 
@@ -522,7 +522,7 @@ try {
     if ($DirOnly) {
         # Unpacked-only build for the fast CI gate. afterPack (router node_modules)
         # and locale-pak filtering still run during the pack phase, so the produced
-        # win-unpacked\OpenSwarm.exe is fully functional; only the NSIS installer +
+        # win-unpacked\Maestro Studio.exe is fully functional; only the NSIS installer +
         # update feed are skipped (verify-update-feed skips cleanly when absent).
         & npx electron-builder --win --x64 --dir $TargetOverride --publish never
     } elseif ($Publish) {
@@ -535,7 +535,7 @@ try {
         try {
             $pkgJson = Get-Content -Raw (Join-Path $ProjectRoot 'electron\package.json') | ConvertFrom-Json
             $version = $pkgJson.version
-            $macYmlUrl = "https://github.com/openswarm-ai/openswarm/releases/download/v$version/latest-mac.yml"
+            $macYmlUrl = "https://github.com/gmartinstech/maestro-desktop/releases/download/v$version/latest-mac.yml"
             $null = Invoke-WebRequest -Uri $macYmlUrl -Method Head -UseBasicParsing -ErrorAction Stop -TimeoutSec 10
             Write-Host "  > Mac release v$version detected on GitHub (latest-mac.yml present). OK to proceed."
         } catch {
@@ -566,24 +566,24 @@ Remove-Item -Recurse -Force $Staging -ErrorAction SilentlyContinue
 # --- Step 5b: Stable-named installer alias for the website download button ---
 # Squirrel names the local installer per `artifactName` (in
 # dist\squirrel-windows\) but RENAMES the published asset to
-# `openswarm-Setup-<version>.exe`, so the fixed openswarm.com download link
-# 404s without this stable-named copy. -Recurse because the .exe sits in the
+# `maestro-studio-Setup-<version>.exe`, so any fixed "latest download" link that
+# points at a version-independent filename 404s without this stable-named copy. -Recurse because the .exe sits in the
 # squirrel-windows\ subdir, not the dist\ root. Byte copy keeps the signature;
 # invisible to the updater, which keys off RELEASES + .nupkg, not the filename.
 if ($Publish) {
-    Write-Host "[5b/5] Uploading stable-named installer alias (OpenSwarm-Setup-x64.exe)..."
+    Write-Host "[5b/5] Uploading stable-named installer alias (MaestroStudio-Setup-x64.exe)..."
     $version  = (Get-Content -Raw (Join-Path $ProjectRoot 'electron\package.json') | ConvertFrom-Json).version
     $DistDir  = Join-Path $ProjectRoot 'electron\dist'
     $SetupExe = Get-ChildItem -Path $DistDir -Recurse -Filter '*Setup*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $SetupExe) { throw "No Squirrel Setup .exe found under $DistDir to alias" }
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        throw "gh CLI not found; cannot upload OpenSwarm-Setup-x64.exe alias (install gh or upload it manually)"
+        throw "gh CLI not found; cannot upload MaestroStudio-Setup-x64.exe alias (install gh or upload it manually)"
     }
-    $AliasExe = Join-Path $DistDir 'OpenSwarm-Setup-x64.exe'
+    $AliasExe = Join-Path $DistDir 'MaestroStudio-Setup-x64.exe'
     Copy-Item -Force $SetupExe.FullName $AliasExe
-    & gh release upload "v$version" $AliasExe --repo openswarm-ai/openswarm --clobber
-    if ($LASTEXITCODE -ne 0) { throw "gh release upload of OpenSwarm-Setup-x64.exe failed" }
-    Write-Host "Uploaded OpenSwarm-Setup-x64.exe to release v$version."
+    & gh release upload "v$version" $AliasExe --repo gmartinstech/maestro-desktop --clobber
+    if ($LASTEXITCODE -ne 0) { throw "gh release upload of MaestroStudio-Setup-x64.exe failed" }
+    Write-Host "Uploaded MaestroStudio-Setup-x64.exe to release v$version."
 }
 
 Write-Host ""

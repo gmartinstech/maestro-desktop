@@ -83,14 +83,14 @@ async function main() {
     else process.stdout.write('  9router up on :20128\n');
 
     // 4. external (best-effort unless --strict)
-    const proxy = await httpsReachable('https://api.openswarm.com/');
-    const feed = await httpsReachable('https://github.com/openswarm-ai/openswarm/releases/latest');
+    const proxy = await httpsReachable('https://llm.martinstech.net/v1/');
+    const feed = await httpsReachable('https://github.com/gmartinstech/maestro-desktop/releases/latest');
     const noteExternal = (name, code) => {
       const reachable = code > 0;
       process.stdout.write(`  ${name}: ${reachable ? `reachable (HTTP ${code})` : 'unreachable'}\n`);
       if (!reachable) (args.strict ? failures : warns).push(`${name} unreachable`);
     };
-    noteExternal('api.openswarm.com', proxy);
+    noteExternal('llm.martinstech.net', proxy);
     noteExternal('github release feed', feed);
   } finally {
     h.killApp(child);

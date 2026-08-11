@@ -104,7 +104,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          $inner = 'electron\dist\win-unpacked\OpenSwarm.exe'
+          $inner = 'electron\dist\win-unpacked\Maestro Studio.exe'
           if (Test-Path $inner) {
             Write-Host "--- inner app exe ---"
             node scripts/ci/verify-signature.js --target $inner
@@ -124,7 +124,7 @@ jobs:
       - name: Upload Squirrel installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openswarm-windows-squirrel-x64
+          name: maestro-windows-squirrel-x64
           # Squirrel output lives in dist\squirrel-windows\ (Setup.exe + RELEASES).
           # Skip the ~556MB full nupkg: it's only for differential updates, not the
           # install-and-feel test, and it doubles the artifact download.

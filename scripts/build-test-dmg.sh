@@ -7,7 +7,7 @@
 #   bash scripts/build-mac-arm64-signed.sh
 #
 # Output:
-#   electron/dist/OpenSwarm-arm64.dmg
+#   electron/dist/MaestroStudio-arm64.dmg
 
 set -euo pipefail
 
@@ -55,10 +55,10 @@ if [[ "$HOST_ARCH" != "arm64" ]]; then
 fi
 
 echo "============================================================"
-echo "  OpenSwarm arm64 signed+notarized DMG (test build)"
+echo "  Maestro Studio arm64 signed+notarized DMG (test build)"
 echo "  apple_id:   $APPLE_ID"
 echo "  team_id:    $APPLE_TEAM_ID"
-echo "  output:     $PROJECT_ROOT/electron/dist/OpenSwarm-arm64.dmg"
+echo "  output:     $PROJECT_ROOT/electron/dist/MaestroStudio-arm64.dmg"
 echo "============================================================"
 echo ""
 
@@ -68,7 +68,7 @@ echo ""
 # APPLE_ID + APPLE_TEAM_ID are set.
 bash "$SCRIPT_DIR/build-app.sh" --sign
 
-DMG_PATH="$PROJECT_ROOT/electron/dist/OpenSwarm-arm64.dmg"
+DMG_PATH="$PROJECT_ROOT/electron/dist/MaestroStudio-arm64.dmg"
 
 echo ""
 echo "============================================================"

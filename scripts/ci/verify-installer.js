@@ -18,15 +18,15 @@ function parseArgs(argv) {
   return out;
 }
 
-const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'OpenSwarm');
-const DATA_DIR = path.join(process.env.APPDATA || '', 'OpenSwarm');
+const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Maestro Studio');
+const DATA_DIR = path.join(process.env.APPDATA || '', 'Maestro Studio');
 const failures = [];
 const ok = (m) => process.stdout.write(`  ok   ${m}\n`);
 const bad = (m) => { failures.push(m); process.stdout.write(`  FAIL ${m}\n`); };
 const exists = (p) => { try { fs.statSync(p); return true; } catch { return false; } }
 
 function defaultSetup() {
-  const p = path.join(h.REPO_ROOT, 'electron', 'dist', 'OpenSwarm-Setup-x64.exe');
+  const p = path.join(h.REPO_ROOT, 'electron', 'dist', 'MaestroStudio-Setup-x64.exe');
   return exists(p) ? p : null;
 }
 
@@ -43,13 +43,13 @@ function checkSetupArtifact(setup) {
 
 function regUninstall() {
   try {
-    const ps = `$ErrorActionPreference='SilentlyContinue'; Get-ChildItem 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall' | ForEach-Object { $p=Get-ItemProperty $_.PSPath; if ($p.DisplayName -like '*OpenSwarm*') { $p.DisplayName + '|' + $p.QuietUninstallString } }`;
+    const ps = `$ErrorActionPreference='SilentlyContinue'; Get-ChildItem 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall' | ForEach-Object { $p=Get-ItemProperty $_.PSPath; if ($p.DisplayName -like '*Maestro*') { $p.DisplayName + '|' + $p.QuietUninstallString } }`;
     return execSync(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"')}"`, { encoding: 'utf8' }).trim();
   } catch { return ''; }
 }
 
 function uninstallerPathFromReg(reg) {
-  const m = reg.match(/"([^"]*Uninstall OpenSwarm\.exe)"/i) || reg.match(/([A-Za-z]:\\[^|]*Uninstall OpenSwarm\.exe)/i);
+  const m = reg.match(/"([^"]*Uninstall Maestro Studio\.exe)"/i) || reg.match(/([A-Za-z]:\\[^|]*Uninstall Maestro Studio\.exe)/i);
   return m ? m[1] : null;
 }
 
@@ -61,7 +61,7 @@ function findShortcuts() {
   ];
   const found = [];
   for (const d of dirs) {
-    try { for (const f of fs.readdirSync(d)) if (/openswarm.*\.lnk/i.test(f)) found.push(path.join(d, f)); } catch { /* */ }
+    try { for (const f of fs.readdirSync(d)) if (/maestro.*\.lnk/i.test(f)) found.push(path.join(d, f)); } catch { /* */ }
   }
   return found;
 }
@@ -70,11 +70,11 @@ function findShortcuts() {
 function assertInstalled() {
   if (!exists(INSTALL_DIR)) { bad(`install dir missing: ${INSTALL_DIR}`); return; }
   ok(`install dir present: ${INSTALL_DIR}`);
-  for (const f of ['OpenSwarm.exe', 'resources', 'locales']) {
+  for (const f of ['Maestro Studio.exe', 'resources', 'locales']) {
     if (exists(path.join(INSTALL_DIR, f))) ok(`contains ${f}`); else bad(`install dir missing ${f}`);
   }
   const reg = regUninstall();
-  if (!/OpenSwarm/i.test(reg)) bad('no OpenSwarm uninstall entry in HKCU registry');
+  if (!/Maestro/i.test(reg)) bad('no Maestro uninstall entry in HKCU registry');
   else {
     ok(`uninstall registry entry: ${reg.split('|')[0]}`);
     const up = uninstallerPathFromReg(reg);
@@ -89,7 +89,7 @@ function assertInstalled() {
 }
 
 function killRunning() {
-  try { execSync('taskkill /IM OpenSwarm.exe /T /F', { stdio: 'ignore' }); } catch { /* none */ }
+  try { execSync('taskkill /IM "Maestro Studio.exe" /T /F', { stdio: 'ignore' }); } catch { /* none */ }
 }
 
 function runDestructive(setup) {
@@ -99,7 +99,7 @@ function runDestructive(setup) {
   }
   process.stdout.write('\n[destructive] installing silently...\n');
   killRunning();
-  const installedExe = path.join(INSTALL_DIR, 'OpenSwarm.exe');
+  const installedExe = path.join(INSTALL_DIR, 'Maestro Studio.exe');
   // Blocking: spawnSync returns only once the installer has fully finished
   // (files + registry uninstall entry + shortcuts are all written, the last of
   // which assertInstalled checks). The timeout is the safety net: the silent
@@ -130,8 +130,8 @@ function runDestructive(setup) {
   if (up && exists(up)) { const un = spawnSync(up, ['/currentuser', '/S'], { stdio: 'inherit' }); if (un.status) bad(`uninstaller exited ${un.status}`); }
   else bad('could not find the uninstaller to run');
   const delDeadline = Date.now() + 60000;
-  while (Date.now() < delDeadline && exists(path.join(INSTALL_DIR, 'OpenSwarm.exe'))) { execSync('powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000"'); }
-  if (exists(path.join(INSTALL_DIR, 'OpenSwarm.exe'))) bad('uninstall left OpenSwarm.exe behind');
+  while (Date.now() < delDeadline && exists(path.join(INSTALL_DIR, 'Maestro Studio.exe'))) { execSync('powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000"'); }
+  if (exists(path.join(INSTALL_DIR, 'Maestro Studio.exe'))) bad('uninstall left Maestro Studio.exe behind');
   else ok('uninstall removed the app');
   // deleteAppDataOnUninstall:false - user data MUST survive an uninstall.
   if (exists(DATA_DIR)) ok(`user data preserved across uninstall: ${DATA_DIR}`);
