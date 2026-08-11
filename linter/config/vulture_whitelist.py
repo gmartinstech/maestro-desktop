@@ -23,7 +23,7 @@ health_lifespan
 # sys.modules[__name__] = debug, consumed by external packages
 debug
 
-# ---- OpenSwarm additions (eric/linter-integration) ----
+# ---- Upstream additions (eric/linter-integration) ----
 # These are intentional false positives: symbols vulture can't see being
 # used because the use is dynamic, a monkey-patch, or a kept-for-compat alias.
 

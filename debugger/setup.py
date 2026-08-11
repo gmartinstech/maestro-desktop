@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-# `py_modules` exposes BOTH `debug` (legacy import name used by OpenSwarm's
+# `py_modules` exposes BOTH `debug` (legacy import name used by the upstream
 # own backend) and `swarm_debug` (the import name the webapp-template
 # scaffold uses, matching the published-package convention `swarm-debug`).
 # The `swarm_debug` module is a thin re-export of `debug` — see swarm_debug.py.

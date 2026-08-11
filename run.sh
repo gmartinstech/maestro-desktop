@@ -102,7 +102,7 @@ fi
 # builds never run this top-level script (Electron spawns backend
 # directly), so the env stays unset in production and uvicorn boots in
 # its leaner non-reload mode.
-export OPENSWARM_DEV=1
+export MAESTRO_DEV=1
 echo -e "${BLUE}${BOLD}[backend]${RESET}  Starting backend server..."
 bash "$PROJECT_ROOT/backend/run.sh" > >(
     while IFS= read -r line; do

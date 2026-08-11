@@ -298,7 +298,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
 // Render the workflow's permission tiers as a flat prose line so the SavedView reads like a sentence, not a chip salad. Mirrors target #54.
 function describePermissions(workflow: Workflow): string {
   const tiers = workflow.permissions || [];
-  if (tiers.length === 0) return 'Notify me in Open Swarm';
+  if (tiers.length === 0) return 'Notify me in Maestro Studio';
   const parts: string[] = [];
   for (const t of tiers) {
     if (t.kind === 'notify') parts.push('notify in app');

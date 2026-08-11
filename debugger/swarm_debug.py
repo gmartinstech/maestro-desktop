@@ -1,10 +1,10 @@
 """Module alias — exposes the `debug()` function under the `swarm_debug`
 name so code that does `from swarm_debug import debug` resolves to the
-same OpenSwarm-bundled package that the legacy `import debug` path
+same upstream-bundled package that the legacy `import debug` path
 already serves.
 
 `debug.py` ends with `sys.modules[__name__] = debug`, which replaces the
-module object with the bare function. That trick lets OpenSwarm's own
+module object with the bare function. That trick lets the upstream
 code write `import debug; debug(x)` (the imported name binds to the
 function directly), but it means `from debug import debug` doesn't work
 (you can't attribute-walk a function). This shim captures the function

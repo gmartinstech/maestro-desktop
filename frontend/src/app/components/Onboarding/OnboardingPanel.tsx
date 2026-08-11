@@ -834,9 +834,9 @@ const InfoPopover: React.FC<InfoPopoverProps> = ({ stepId, anchorRef, onClose, t
 };
 
 const INFO_BY_STEP_ID: Record<string, string> = {
-  connect_model: `Open Swarm works with any AI model.
+  connect_model: `Maestro Studio works with any AI model.
 
-If you already have a subscription to ChatGPT, Claude, or Gemini, plug it directly into Open Swarm.
+If you already have a subscription to ChatGPT, Claude, or Gemini, plug it directly into Maestro Studio.
 
 Or use your own API keys.`,
   enable_actions: `Actions are the capabilities available to your AI agents.
@@ -846,12 +846,12 @@ Every tool an agent uses (reading a file, sending an email, searching the web) i
 Every action has a permission policy. It decides whether an agent can use it on its own or whether it needs your approval first.
 
 The Actions page is where you turn integrations on, sign in, and tune those permissions.`,
-  launch_agent: `An agent in Open Swarm can do anything you can do on your computer.
+  launch_agent: `An agent in Maestro Studio can do anything you can do on your computer.
 
 It can read and write files, run commands, search the web, control a browser, send emails, manage your calendar, and handle long, multi step tasks on its own.
 
 Think of each agent as a teammate you can brief on a task and let loose, while you watch it work in real time.`,
-  use_browser: `Open Swarm has built in browsers so you never have to jump between apps. One place, one workspace, for you and your agents.
+  use_browser: `Maestro Studio has built in browsers so you never have to jump between apps. One place, one workspace, for you and your agents.
 
 The browsers aren't just for you. Your agents can use them too. By default an agent can spin up and use its own browser whenever it needs one.
 

@@ -12,9 +12,9 @@ def debug(*args, mode:str='debug', override_max_chars:bool=False):
     # runs synchronously on the backend's startup path. On a cold launch (uncached
     # filesystem) that scan cost ~17s of the backend-http-ready time; warm it is
     # ~80ms. Skipping it in the packaged build removes the cold cost entirely. Dev
-    # (OPENSWARM_PACKAGED unset) keeps the full debugger. Safe: debug() returns
+    # (MAESTRO_PACKAGED unset) keeps the full debugger. Safe: debug() returns
     # None and every caller ignores the return value.
-    if os.environ.get("OPENSWARM_PACKAGED") == "1":
+    if os.environ.get("MAESTRO_PACKAGED") == "1":
         return
     frame = inspect.currentframe().f_back
     code = frame.f_code
