@@ -33,19 +33,29 @@ const steps = [
   ['typecheck', 'cd frontend && npx tsc --noEmit'],
   ['build',     'cd frontend && npm run build'],
   ['golden',    'npm run e2e:golden', packagedAppStatus],
+  // CLAUDE.md advertises "tests" in this gate; the 1745-test backend suite was never actually
+  // invoked here. MAESTRO_MOCK_AGENT must stay UNSET: the mock starves the WebSocket assertions.
+  ['backend',   process.platform === 'win32'
+      // Absolute + double-quoted: a relative venv path breaks differently in cmd (rejects forward
+      // slashes in the exe position) and in sh (eats lone backslashes). Quoting sidesteps both.
+      ? `"${path.join(process.cwd(), 'backend', '.venv', 'Scripts', 'python.exe')}" -m pytest -q -p no:randomly`
+      : `"${path.join(process.cwd(), 'backend', '.venv', 'bin', 'python')}" -m pytest -q -p no:randomly`,
+      undefined, 'backend'],
 ];
 let failed = [];
-for (const [name, cmd, precondition] of steps){
+for (const [name, cmd, precondition, cwd] of steps){
   console.log(`\n=== ${name} ===`);
   if (precondition){
     const { ok, why } = precondition();
     if (!ok){ console.error(`SKIPPED-AS-FAILED: ${name} — ${why}`); failed.push(name); continue; }
   }
-  try { execSync(cmd, { stdio:'inherit', shell:true }); }
+  try { execSync(cmd, { stdio:'inherit', shell:true, cwd: cwd ? path.join(process.cwd(), cwd) : undefined }); }
   catch { failed.push(name); }
 }
-try { execSync('node scripts/check-callhome.mjs', { stdio:'inherit' }); }
-catch { console.warn('WARN: call-home not yet clean (expected until DET epic)'); }
+// Was a console.warn "expected until DET epic". That epic is done and the tree is clean, so a
+// regression here must fail the gate rather than scroll past in a build log.
+try { console.log('\n=== call-home ==='); execSync('node scripts/check-callhome.mjs', { stdio:'inherit' }); }
+catch { failed.push('call-home'); }
 // Fork drift is a HARD failure, unlike the call-home warning above: an upstream merge that
 // reintroduces a deleted subsystem or the old branding must not reach main. See docs/UPSTREAM.md.
 try { console.log('\n=== fork-drift ==='); execSync('node scripts/check-fork-drift.mjs', { stdio:'inherit' }); }
