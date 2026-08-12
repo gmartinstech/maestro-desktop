@@ -275,28 +275,23 @@ If cross-run correlation later proves necessary, the honest upgrade is a **rotat
 published lifetime (e.g. re-minted per app version, or daily), documented as pseudonymous — not a
 quiet reintroduction of a permanent one. Do not add it in v1.
 
-### Open decision — consent posture now that the stream is anonymous
+### Decision — opt-in, default OFF (settled)
 
-The table below still specifies **opt-in, default OFF**. That was written when the envelope carried a
-persistent `install_id` and the data was pseudonymous. Under Decision 0 it is anonymous, and LGPD
-art. 12 puts genuinely anonymized data outside the personal-data regime — so strict art. 8º consent
-is no longer legally compelled.
+The purpose is **bug and error reporting**, not usage measurement, so opt-in is the right posture and
+the coverage objection does not really apply: what we need is a good report of *what broke*, and an
+install that never errors has nothing to contribute anyway. `telemetry_consent = None` on a fresh
+install and after `reset-to-defaults`; the toggle renders off; silence is not consent.
 
-This matters practically: **opt-in telemetry typically reaches single-digit percentages of installs.**
-For SRE that is close to useless — you cannot tell a version regression from sampling noise at 5%
-coverage, which defeats the purpose of building this.
+**The one consequence to accept knowingly:** rates are unreliable. Consenting installs are a
+self-selected population, so `failures / boots` describes *them*, not the user base. Read the
+numbers as "these are the failure modes that exist and roughly their relative weight", never as
+"X% of our installs are affected". `agent.turn_ok` stays as a within-population denominator —
+useful for ranking failure modes against each other, not for absolute incidence.
 
-Three postures, pick one before Phase 3:
-
-| Posture | Coverage | Case for it |
-|---|---|---|
-| **Opt-in, default OFF** (as written) | very low | Maximum trust. Correct if you doubt the anonymity claim, or want zero argument with a privacy-conscious SME buyer. |
-| **Opt-out, default ON, disclosed at first run** (recommended) | high | Defensible *because* the data is anonymous, contains no free-text beyond a scrubbed error preview, and is readable locally in the journal. This is the posture that makes the stream actually answer SRE questions. Requires the first-run disclosure to be real, not buried. |
-| Opt-out, ON, no disclosure | high | **Not acceptable.** Do not ship this. |
-
-If you choose opt-out, `telemetry_consent` keeps its tri-state but defaults to `granted`, and the
-first-run copy must state plainly what is sent and where the off switch is. The kill switch, the
-journal, and the scrubber are unchanged either way — they are what make the choice defensible.
+This also means a **quality-over-quantity** bias in the design: prefer a richer, well-scrubbed
+error payload over more event types. The classic follow-up, once this lands, is an explicit
+"send this report?" prompt attached to a crash or a failed turn — high-signal, individually
+consented, and a natural fit for opt-in. Out of scope for v1; do not build it speculatively.
 
 ### LGPD, concretely
 
