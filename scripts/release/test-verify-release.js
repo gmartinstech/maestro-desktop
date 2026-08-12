@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Phase 5a test: hermetic checks of the promotion gate. Builds throwaway
 // latest*.yml fixtures and asserts the gate promotes a good release and blocks
-// the two failures the gate exists for: a missing feed and a version mismatch.
+// the failures the gate exists for: a missing feed, an unparseable feed, and a
+// version that disagrees with the tag.
 // No network (URL checking is exercised separately in CI with --base-url).
 //
 //   node scripts/release/test-verify-release.js
@@ -36,11 +37,10 @@ function feed(version, asset) {
 
 function mkdir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'osw-rel-')); }
 
-// (1) good release: both feeds, same version, matches expected -> promotable
+// (1) good release: the Windows feed, version matches expected -> promotable
 (() => {
   const d = mkdir();
   fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'MaestroStudio-Setup-x64.exe'));
-  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.3', 'MaestroStudio-arm64.dmg'));
   const r = run(['--dir', d, '--expect-version', '1.2.3', '--json']);
   assert(r.code === 0, `good release should pass, got ${r.code}`);
   assert(JSON.parse(r.stdout).version === '1.2.3', 'should report version 1.2.3');
@@ -49,30 +49,27 @@ function mkdir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'osw-rel-')); }
   fs.rmSync(d, { recursive: true, force: true });
 })();
 
-// (2) missing latest-mac.yml -> blocked
+// (2) no feed at all (the publish uploaded assets but no manifest) -> blocked
 (() => {
   const d = mkdir();
-  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'MaestroStudio-Setup-x64.exe'));
   const r = run(['--dir', d, '--expect-version', '1.2.3']);
-  assert(r.code === 1, 'missing mac feed should block');
+  assert(r.code === 1, 'missing latest.yml should block');
   fs.rmSync(d, { recursive: true, force: true });
 })();
 
-// (3) version mismatch across feeds -> blocked
+// (3) feed present but unparseable (no version: field) -> blocked
 (() => {
   const d = mkdir();
-  fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.3', 'MaestroStudio-Setup-x64.exe'));
-  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.2', 'MaestroStudio-arm64.dmg'));
+  fs.writeFileSync(path.join(d, 'latest.yml'), 'files:\n  - url: MaestroStudio-Setup-x64.exe\n');
   const r = run(['--dir', d, '--expect-version', '1.2.3']);
-  assert(r.code === 1, 'version mismatch should block');
+  assert(r.code === 1, 'feed with no version: should block');
   fs.rmSync(d, { recursive: true, force: true });
 })();
 
-// (4) feeds agree with each other but not with expected version -> blocked
+// (4) feed is internally consistent but not the version being tagged -> blocked
 (() => {
   const d = mkdir();
   fs.writeFileSync(path.join(d, 'latest.yml'), feed('1.2.0', 'MaestroStudio-Setup-x64.exe'));
-  fs.writeFileSync(path.join(d, 'latest-mac.yml'), feed('1.2.0', 'MaestroStudio-arm64.dmg'));
   const r = run(['--dir', d, '--expect-version', '1.2.3']);
   assert(r.code === 1, 'expected-version mismatch should block');
   fs.rmSync(d, { recursive: true, force: true });

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Audits the electron-builder update feed (latest.yml / latest-mac.yml) without actually applying an update. Asserts: (a) feed parses, (b) advertised files exist locally, (c) advertised sha512 matches the on-disk file, (d) advertised size matches. A green release with a busted feed ships an update that bricks on apply for every user; this turns that class of bug red before publish.
+// Audits the electron-builder update feed (latest.yml) without actually applying an update. Asserts: (a) feed parses, (b) advertised files exist locally, (c) advertised sha512 matches the on-disk file, (d) advertised size matches. A green release with a busted feed ships an update that bricks on apply for every user; this turns that class of bug red before publish.
 
 'use strict';
 const fs = require('fs');
@@ -36,7 +36,8 @@ function sha512Base64(file) {
 
 function feedPaths(dir) {
   const out = [];
-  for (const f of ['latest.yml', 'latest-mac.yml', 'latest-mac-arm64.yml', 'latest-linux.yml']) {
+  // Windows-only shipping target; latest-mac*.yml went away with the mac pipeline.
+  for (const f of ['latest.yml', 'latest-linux.yml']) {
     const p = path.join(dir, f);
     if (fs.existsSync(p)) out.push(p);
   }

@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 // Phase 5a promotion gate: before a draft release is allowed to become "latest",
-// prove both auto-updater feeds exist, agree on version, and that their assets
-// actually resolve. A release that ships latest.yml but not latest-mac.yml (or
-// with mismatched versions) silently strands one platform's users on the old
-// build, which is the exact "broken latest" failure this gate exists to stop.
+// prove the auto-updater feed exists, states the expected version, and that its
+// assets actually resolve. A release whose feed is missing or points at a version
+// its filenames don't match silently strands users on the old build, which is the
+// exact "broken latest" failure this gate exists to stop.
+//
+// Windows is the only shipped target (macOS was dropped), so latest.yml is the
+// whole story. If another platform is ever added, add its feed to FEEDS and the
+// cross-feed version agreement check below starts guarding it too.
 //
 // Usage:
 //   node scripts/release/verify-release.js --dir <artifacts-dir> --expect-version 1.2.3
 //   node scripts/release/verify-release.js --dir <dir> --expect-version 1.2.3 \
 //        --base-url https://github.com/gmartinstech/maestro-desktop/releases/download/v1.2.3
 //
-// --dir            directory containing latest.yml + latest-mac.yml
-// --expect-version version both feeds (and their filenames) must match
+// --dir            directory containing latest.yml
+// --expect-version version the feed (and its filenames) must match
 // --base-url       if given, HEAD-check every referenced asset resolves (200)
 //
 // Exit 0 = promotable. Exit 1 = blocked (prints the first blocking reason).
@@ -21,7 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const FEEDS = ['latest.yml', 'latest-mac.yml'];
+const FEEDS = ['latest.yml'];
 
 function parseArgs(argv) {
   const out = { dir: null, expectVersion: null, baseUrl: null, json: false };
@@ -77,7 +81,7 @@ async function main() {
   const feeds = {};
   for (const name of FEEDS) {
     const p = path.join(args.dir, name);
-    if (!fs.existsSync(p)) fail(`missing feed: ${name} (one platform would be stranded on the old build)`, args.json);
+    if (!fs.existsSync(p)) fail(`missing feed: ${name} (users would be stranded on the old build)`, args.json);
     feeds[name] = parseFeed(fs.readFileSync(p, 'utf8'));
     if (!feeds[name].version) fail(`${name} has no version: field`, args.json);
   }
@@ -110,7 +114,7 @@ async function main() {
   const result = { ok: true, version: releaseVersion, feeds: FEEDS, checkedUrls: !!args.baseUrl };
   if (args.json) process.stdout.write(JSON.stringify(result) + '\n');
   else {
-    process.stdout.write(`\nPROMOTABLE: both feeds present, version ${releaseVersion} agrees`);
+    process.stdout.write(`\nPROMOTABLE: ${FEEDS.join(' + ')} present, version ${releaseVersion} agrees`);
     process.stdout.write(args.baseUrl ? ', all assets resolve.\n\n' : ' (URL check skipped; pass --base-url to enable).\n\n');
   }
 }

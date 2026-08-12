@@ -8,16 +8,13 @@ import path from 'node:path';
 // binary built before the change under test. Refuse both, with the fix in the message.
 function packagedAppStatus() {
   const dist = path.join(process.cwd(), 'electron', 'dist');
+  // Windows is the shipped target (macOS was dropped, mac pipeline deleted).
+  // The linux fallback is unsupported-but-runnable, for a dev on a linux box.
   const candidates = process.platform === 'win32'
     ? [path.join(dist, 'win-unpacked', 'Maestro Studio.exe')]
-    : process.platform === 'darwin'
-      ? [path.join(dist, 'mac-arm64', 'Maestro Studio.app', 'Contents', 'MacOS', 'Maestro Studio'),
-         path.join(dist, 'mac', 'Maestro Studio.app', 'Contents', 'MacOS', 'Maestro Studio')]
-      : [path.join(dist, 'linux-unpacked', 'maestro-studio')];
-  // `npm run dist` is mac-only; each host has its own entry point.
+    : [path.join(dist, 'linux-unpacked', 'maestro-studio')];
   const buildCmd = process.platform === 'win32' ? 'pwsh scripts\\build-app-win.ps1'
-    : process.platform === 'darwin' ? 'npm --prefix electron run dist'
-      : 'npm --prefix electron exec electron-builder -- --linux';
+    : 'npm --prefix electron exec electron-builder -- --linux';
   const target = process.env.E2E_APP_PATH || candidates.find((c) => { try { return statSync(c).isFile(); } catch { return false; } });
   if (!target) return { ok: false, why: `no packaged app found. Build it first (${buildCmd}), or set E2E_APP_PATH.\n  Looked in:\n    ${candidates.join('\n    ')}` };
   const builtAt = statSync(target).mtimeMs;

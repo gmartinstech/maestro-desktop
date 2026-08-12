@@ -1,13 +1,12 @@
 name: Promotion gate (update feeds agree)
 
 # The "don't let a half-baked release become latest" gate. Releases should be
-# cut as DRAFT first (publish.sh drafts experimental builds; do the same for
-# stable and only un-draft after dogfooding — see docs/RELEASE_CHECKLIST.md).
-# When a release is published / un-drafted, this verifies BOTH auto-updater
-# feeds exist, agree on version (with each other and the tag), and that every
-# referenced asset actually resolves (HEAD 200). If a platform's feed is
-# missing or versions mismatch, this goes red so the bad release is caught
-# before users auto-update into it.
+# cut as DRAFT first (build-app-win.ps1 drafts experimental builds; do the same
+# for stable and only un-draft after dogfooding — see docs/RELEASE_CHECKLIST.md).
+# When a release is published / un-drafted, this verifies the auto-updater feed
+# exists, agrees on version with the tag, and that every referenced asset
+# actually resolves (HEAD 200). If the feed is missing or the version mismatches,
+# this goes red so the bad release is caught before users auto-update into it.
 
 on:
   release:
@@ -47,7 +46,7 @@ jobs:
           gh release download "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" \
             -p 'latest*.yml' -D feeds || true
           ls -la feeds
-      - name: Verify both feeds exist, agree, and resolve
+      - name: Verify the update feed exists, agrees, and resolves
         shell: bash
         run: |
           node scripts/release/verify-release.js \

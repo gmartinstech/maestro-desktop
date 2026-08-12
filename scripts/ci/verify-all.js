@@ -32,7 +32,7 @@ function main() {
     ['preflight race (Layer 4: parallel + cache)', 'verify-preflight-race.js', []],
     ['preflight matrix (Layer 5: hostile-env scenario)', 'verify-preflight.js', []],
     ['pairwise generator selftest (covering array math)', 'selftest-pairwise.js', []],
-    ['packaging parity (Win+Mac stage the same dirs)', 'verify-packaging-parity.js', []],
+    ['packaging staging (every extraResources source is staged)', 'verify-packaging-parity.js', []],
     ['deps fully pinned (reproducible backend builds)', 'verify-deps-pinned.js', []],
     ['no build-host paths leaked into the artifact', 'verify-host-leakage.js', appArg],
     ['locale paks shipped (empty --lang -> Blink null-deref crash)', 'verify-locale-paks.js', appArg],
