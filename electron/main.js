@@ -543,9 +543,14 @@ app.on('before-quit', () => {
   console.log('[diag][main] before-quit (quit initiated)');
 });
 app.on('before-quit', writeCleanQuitLock);
-const iconPath = process.platform === 'win32'
-  ? path.join(__dirname, 'build', 'icon.ico')
-  : path.join(__dirname, 'build', 'icon.png');
+// build/ is electron-builder's INPUTS dir and is not shipped in the asar, so the window icon
+// ENOENTed in packaged builds and Electron fell back to its own atom — which is what users saw
+// in the taskbar. Prefer the build/ icon in dev, then the shipped splash/ copy. Same trap the
+// splash hit below; see iconPngPath.
+const p_iconCandidates = process.platform === 'win32'
+  ? [path.join(__dirname, 'build', 'icon.ico'), path.join(__dirname, 'splash', 'icon.ico'), path.join(__dirname, 'splash', 'icon.png')]
+  : [path.join(__dirname, 'build', 'icon.png'), path.join(__dirname, 'splash', 'icon.png')];
+const iconPath = p_iconCandidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } }) || p_iconCandidates[0];
 // PNG version of the icon for the splash. We ship a copy at splash/icon.png
 // because electron-builder's `build/` directory is its inputs folder (used
 // to GENERATE the .icns bundled icon) and is NOT included in the shipped

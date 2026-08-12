@@ -493,24 +493,6 @@ const AppShell: React.FC = () => {
             {t('appShell.appTitle')}
           </Typography>
         </Box>
-        {!IS_MAC && (
-          <Tooltip title={t('appShell.menuTooltip')}>
-            <IconButton
-              size="small"
-              onClick={handleOpenAppMenu}
-              aria-label={t('appShell.applicationMenuAriaLabel')}
-              sx={{
-                WebkitAppRegion: 'no-drag',
-                color: c.text.tertiary,
-                p: 0.5,
-                borderRadius: 1,
-                '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
-              }}
-            >
-              <MenuIcon size={18} />
-            </IconButton>
-          </Tooltip>
-        )}
         <Tooltip title={sidebarCollapsed ? t('appShell.showSidebar') : t('appShell.hideSidebar')}>
           <IconButton
             size="small"
@@ -529,6 +511,24 @@ const AppShell: React.FC = () => {
             <AnimatedPanelLeft size={18} />
           </IconButton>
         </Tooltip>
+        {!IS_MAC && (
+          <Tooltip title={t('appShell.menuTooltip')}>
+            <IconButton
+              size="small"
+              onClick={handleOpenAppMenu}
+              aria-label={t('appShell.applicationMenuAriaLabel')}
+              sx={{
+                WebkitAppRegion: 'no-drag',
+                color: c.text.tertiary,
+                p: 0.5,
+                borderRadius: 1,
+                '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
+              }}
+            >
+              <MenuIcon size={18} />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title={t('appShell.back')}>
           {/* span wrapper so a disabled button still shows its Tooltip; lucide
               glyph + hover-slide kept from the redesign, disabled-state from #68. */}
