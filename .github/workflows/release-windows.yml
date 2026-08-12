@@ -1,8 +1,8 @@
 name: Release (Windows)
 
 # Builds + signs + uploads the Windows installer to the GitHub Release matching
-# the app version in electron/package.json. Mac builds stay on the local
-# publish.sh flow — this workflow is Windows-only on purpose.
+# the app version in electron/package.json. Windows is the only shipped target
+# (macOS was dropped and its release pipeline deleted).
 #
 # Triggers:
 #   - Push a tag `v*` (e.g. v1.0.25) → full signed release build, uploaded to
@@ -197,8 +197,8 @@ jobs:
           Get-Content "$dir/latest.yml"
 
       # Publish the squirrel assets ourselves via gh (NOT electron-builder), so the
-      # installer keeps its MaestroStudio-Setup-x64.exe name. Find-or-create a DRAFT so
-      # the mac publish.sh run can converge into the same release; Eric flips it live.
+      # installer keeps its MaestroStudio-Setup-x64.exe name. Find-or-create a DRAFT
+      # so the release can be sanity-checked before it is flipped live.
       - name: Publish squirrel assets to the GitHub release (draft, publish runs)
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
         shell: pwsh

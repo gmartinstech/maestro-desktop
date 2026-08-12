@@ -75,7 +75,7 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 
 - **Start with Task 1** (repoint auto-update/publish to `gmartinstech/maestro-desktop`) — pure file edits, no build, verifiable via `grep` + `review.mjs`.
 - **Acceptance for the whole epic:** `node scripts/check-callhome.mjs` exits 0, golden smoke passes, and a runtime network capture shows zero `*.openswarm.com` traffic.
-- **Human-only tasks:** DET-2 (Windows signing — needs Azure Trusted Signing creds), DET-6 (macOS signing — deferred until a Mac target).
+- **Human-only tasks:** DET-2 (Windows signing — needs Azure Trusted Signing creds). DET-6 (macOS signing) is **cancelled**: see §10.
 - **After DET**, author + execute (in order): **BRD** (rebrand — needs the design-system assets from §3), **PRV** (provedor-ia + Keycloak JWT), **DOM** (domain modes/workflows/skills/tools), **LOC** (pt-BR i18n). Scope for each is in the spec (§5) and the board.
 
 ## 7. Open follow-ups / not-yet-done
@@ -107,3 +107,39 @@ A **first-pass** MartinsTech rebrand landed on `main` (commit `feat(brd): first-
 - **Self-hosted Inter + IBM Plex Mono woff2** (bundle under `frontend/public/fonts` + `@font-face`) so fonts work offline instead of via Google Fonts.
 - **Gold `#F5CC00` placements**: active/selection states, focus rings, badges (dark text on gold), brand mark — wire the `brand.gold` token into those specific spots.
 - Remaining old-brand strings (model-provider group labels in `Main.tsx` DEFAULT_MODEL_PRIORITY, onboarding copy) are DOM/BRD-copy cleanup, not visual-token work; the token sweep for them is OSR Phase 1 (`docs/plans/2026-08-10-osr-openswarm-removal.md`).
+
+## 10. macOS is dropped — Windows-only (product-owner decision)
+
+**Decision: macOS is not a target. Do not revive it.** The whole mac build/release
+pipeline was deleted, not disabled:
+
+- `.github/workflows/release-macos.yml`, `publish.sh`, `scripts/build-app.sh`,
+  `scripts/build-test-dmg.sh`, `scripts/build-python-env.sh`
+- `electron/scripts/` in full (`notarize.js` + its `afterSign` wiring,
+  `build-mouseclamp.sh`, `sign-vmp.{sh,js}` + the `postinstall` hook)
+- `electron/native/mouseclamp/**` (the Objective-C cursor-crash addon) and
+  `installMacMouseClamp()` in `electron/main.js`
+- `electron/build/{entitlements.mac.plist,entitlements.mac.inherit.plist,embedded.provisionprofile}`
+- the `mac` + `dmg` blocks in `electron/package.json` `build`, the `dist` /
+  `dist:publish` / `dist:all` / `test:mouseclamp` scripts, and the
+  `@electron/notarize` devDependency. `dist:win` / `dist:win:publish` are the
+  entry points that remain.
+- the `latest-mac.yml` gating in `scripts/release/verify-release.js` and the
+  `latest-mac.yml` pre-flight in `scripts/build-app-win.ps1` (that one was
+  actively **blocking** a Windows publish).
+- The Apple keychain access group `Y26NUZH4NG.…webauthn` went with the plist,
+  along with the `app.configureWebAuthn({ touchID })` call it authorized. That
+  was the last non-migration, non-attribution `openswarm` string in the tree, so
+  its `ALLOW_STRINGS` exemption in `scripts/check-fork-drift.mjs` is gone too.
+  Windows keeps the passkey reject-shim; there is no platform authenticator there.
+
+Runtime `process.platform === 'darwin'` / `IS_MAC` branches in `electron/main.js`,
+`frontend/src/**`, and `e2e/**` were left alone on purpose: they are inert on
+Windows and ripping them out is a large, risky, unrelated diff.
+
+Upstream mac commits are now categorically out of scope for cherry-picking — see
+`docs/UPSTREAM.md`.
+
+Not shipped as part of a Windows build but deliberately left in place:
+`electron/build/icon.icns` (+ its generation in `scripts/gen-icons.py`) and the
+`inspectMac()` diagnostic in `scripts/ci/verify-signature.js`.

@@ -5,7 +5,7 @@ name: Phase tests (hermetic)
 # smoke logic), Phase 5a (release promotion gate) — each asserts both its pass
 # and failure paths. No packaged artifact, secrets, or network needed, so it's
 # fast and always meaningful. The real packaged-app smoke (build + launch on
-# macOS + Windows) lives in e2e.yml; release signing/upload in release-*.yml.
+# Windows) lives in e2e.yml; release signing/upload in release-windows.yml.
 
 on:
   push:

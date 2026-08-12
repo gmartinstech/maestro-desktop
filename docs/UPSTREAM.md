@@ -66,6 +66,16 @@ Upstream's post-fork feature work: `voice:` (~54 commits, a feature we don't shi
 `canvas:` (~80), `onboarding:` (~77), `dock:` (~18). Also all `telemetry:` commits — that is
 precisely what we removed. Take fixes, not features.
 
+**macOS commits are categorically out of scope** (new exclusion class, added when the mac
+pipeline was deleted — `docs/HANDOFF.md` §10). Windows is the only shipped target, so skip
+anything whose value is mac-only: notarization / entitlements / provisioning profiles, DMG
+or `latest-mac.yml` work, `publish.sh` / `build-app.sh`, Touch ID / Secure-Enclave WebAuthn,
+the `mouseclamp` addon, and Objective-C (`.mm`) sources. A mac-only fix does not need
+judging — skip it without evaluation. A **cross-platform** fix that happens to touch a mac
+path is still fair game: take it and drop the mac half. Watch for a mac commit smuggling
+back the old Apple keychain access group (the `Y26NUZH4NG.*` webauthn group); the drift guard
+no longer exempts that string, so it will fail — that is correct, do not re-add the exemption.
+
 ## Taken so far (branch `ups/upstream-fixes`)
 
 | Upstream | Why |

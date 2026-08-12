@@ -53,9 +53,9 @@ Running agents in a terminal works fine for one task. But when you're juggling f
 
 ### Desktop App
 
-Download the latest release for macOS from [GitHub Releases](https://github.com/gmartinstech/maestro-desktop/releases).
+Download the latest Windows release (`MaestroStudio-Setup-x64.exe`) from [GitHub Releases](https://github.com/gmartinstech/maestro-desktop/releases/latest).
 
-> Windows and Linux builds are planned but not yet available.
+> Windows x64 is the only supported target. macOS is not shipped.
 
 ### Development Setup
 
@@ -110,9 +110,6 @@ For advanced configuration, copy `backend/.env.example` to `backend/.env`:
 | `BACKEND_PORT` | Backend server port (default: `8324`) |
 | `GOOGLE_OAUTH_CLIENT_ID` | Google Workspace integration (Gmail, Calendar, Drive) |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Google Workspace integration |
-| `APPLE_ID` | macOS code signing & notarization (release builds only) |
-| `APPLE_APP_SPECIFIC_PASSWORD` | macOS notarization (release builds only) |
-| `APPLE_TEAM_ID` | macOS code signing (release builds only) |
 | `GH_TOKEN` | GitHub Releases publishing (release builds only) |
 
 <br>
@@ -174,11 +171,10 @@ frontend/
 
 electron/
   main.js             Electron main process, auto-updater, Python env management
-  scripts/            Build and notarization scripts
 
 scripts/
-  build-app.sh        Desktop app packaging (electron-builder)
-  build-python-env.sh Standalone Python 3.13 environment bundler
+  build-app-win.ps1        Desktop app packaging for Windows (electron-builder)
+  build-python-env-win.ps1 Standalone Python 3.13 environment bundler
 ```
 
 <br>

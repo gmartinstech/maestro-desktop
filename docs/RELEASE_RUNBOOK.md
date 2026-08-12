@@ -2,7 +2,7 @@
 
 How a Maestro Studio desktop release is built, verified, and promoted. The guiding
 rule: **a release is reproducible and provenanced** — anyone can tell exactly
-what commit produced a given DMG/EXE, and rebuilding that commit yields the same
+what commit produced a given EXE, and rebuilding that commit yields the same
 bits. Distribution stays on GitHub Releases (auto-updater feeds live there).
 
 ## Versioning
@@ -16,10 +16,10 @@ build scripts set the pre-release channel automatically from that suffix.
 
 | Thing | Pin | Where |
 |-------|-----|-------|
-| uv | `0.11.16` | `scripts/build-app.sh`, `scripts/build-app-win.ps1` (override `UV_VERSION`) |
+| uv | `0.11.16` | `scripts/build-app-win.ps1` (override `UV_VERSION`) |
 | Node (bundled runtime + CI toolchain) | `20.18.1` | build scripts, `.nvmrc`, `.github/workflows/*` |
 | 9router | `0.3.60` | `scripts/fetch-router.{sh,ps1}` (override `ROUTER_VERSION`) |
-| Python | `3.13.2` standalone | `scripts/build-python-env*.{sh,ps1}` |
+| Python | `3.13.2` standalone | `scripts/build-python-env-win.ps1` |
 | Python deps | fully hash-locked | `backend/requirements.lock` |
 | npm deps | lockfile-exact via `npm ci` | `frontend/package-lock.json`, `electron/package-lock.json` |
 | electron-builder + deps | exact (no `^`) | `electron/package.json` |
@@ -54,8 +54,10 @@ Build sha to `git rev-parse HEAD` of the tag you released.
 
 ## Build (local)
 
-- macOS: `bash scripts/build-app.sh` (unsigned) / `--sign` / `--publish`.
-  Needs `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` for signing.
+Windows is the only shipped target. macOS was dropped and its build/release
+pipeline (`scripts/build-app.sh`, `publish.sh`, `release-macos.yml`, notarization,
+entitlements) was deleted — do not resurrect it without a decision to re-adopt it.
+
 - Windows: `pwsh scripts/build-app-win.ps1` (unsigned) / `-Sign` / `-Publish`.
   Signing is Azure Trusted Signing; CI handles it (see below).
 
@@ -63,13 +65,11 @@ Build sha to `git rev-parse HEAD` of the tag you released.
 
 Pushing a `v*` tag triggers `.github/workflows/release-windows.yml`, which builds
 + signs the Windows installer and uploads it to the GitHub Release for that tag.
-macOS currently publishes from a Mac via `bash publish.sh`.
 
-Recommended order so neither platform's users skip a version:
-1. macOS: `bash publish.sh` (produces `latest-mac.yml`).
-2. Windows: push the `v*` tag (or `pwsh publish-win.ps1`), producing `latest.yml`.
-3. Verify both `latest.yml` and `latest-mac.yml` exist on the release and their
-   versions match before the release leaves draft.
+1. Push the `v*` tag (or run `pwsh publish-win.ps1`), producing the installer and
+   `latest.yml`.
+2. Verify `latest.yml` exists on the release and its version matches the tag
+   before the release leaves draft.
 
 ## Auto-update verification (before promoting)
 
@@ -79,9 +79,9 @@ The auto-updater (electron-updater) checks GitHub Releases on launch and every
 
 - Automated (feed integrity): `promotion-gate.yml` runs
   `scripts/release/verify-release.js` when a release is published, confirming
-  both feeds exist, agree on version with each other and the tag, and that every
-  referenced asset resolves (HEAD 200). A missing or mismatched feed fails it.
-- Manual (the real cycle), once per release on each OS: install the PREVIOUS
+  `latest.yml` exists, agrees on version with the tag, and that every referenced
+  asset resolves (HEAD 200). A missing or mismatched feed fails it.
+- Manual (the real cycle), once per release: install the PREVIOUS
   stable, launch it, and confirm the new release is detected, downloads, installs
   on quit, and relaunches on the new version (Settings -> About -> Build sha flips
   to the new commit). Then confirm rollback. This needs two SIGNED releases on the
@@ -91,12 +91,12 @@ The auto-updater (electron-updater) checks GitHub Releases on launch and every
 ## Staged rollout (gated on fleet health)
 
 Do not flip a new release to 100% of users at once. electron-updater honors a
-`stagingPercentage` field in the published `latest.yml` / `latest-mac.yml`: only
+`stagingPercentage` field in the published `latest.yml`: only
 that fraction of machines (bucketed by a stable per-install hash) take the update.
 
 1. Publish as normal; the promotion gate + signed-artifact verify (`release-*.yml`)
-   + the cross-OS `verify-all` matrix (`e2e.yml`) must all be green first.
-2. Add `stagingPercentage: 10` to the release's `latest.yml` (and `latest-mac.yml`).
+   + the `verify-all` matrix (`e2e.yml`) must all be green first.
+2. Add `stagingPercentage: 10` to the release's `latest.yml`.
 3. Watch the boot-outcome beacons (the fleet self-report; the desktop posts a
    boot event through `/api/service` after each launch): confirm the new sha is
    booting on real machines with no spike in boot-failure or crash beacons.

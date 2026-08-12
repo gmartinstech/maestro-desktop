@@ -36,9 +36,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows-only. macOS legs removed: runner starvation + untriageable
-        # mac-only failures kept the matrix red. Re-add when a Mac maintainer
-        # owns them (and pass --require win32,darwin to verify-release-readiness).
+        # Windows-only, permanently: macOS is dropped as a target. Never pass
+        # --require win32,darwin to verify-release-readiness; darwin will never
+        # accrue runs and would block every v* tag.
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60

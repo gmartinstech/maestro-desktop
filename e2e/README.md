@@ -1,12 +1,11 @@
-# End-to-end tests (packaged app, macOS + Windows)
+# End-to-end tests (packaged app, Windows)
 
 Playwright tests that launch the **packaged** Maestro Studio desktop app (the real
 built binary, asar + bundled python-env + real paths) and drive it the way a user
-would. The same specs run unchanged on macOS and Windows; CI builds the artifact
-per-OS, then runs these. No provider API key is needed (no agent turn), so the
+would. Windows is the shipped target; CI builds the artifact, then runs these. No provider API key is needed (no agent turn), so the
 suite is hermetic and deterministic on a clean machine.
 
-## What it checks (per OS)
+## What it checks
 
 - Main window paints the React shell (first meaningful paint).
 - The preload bridge (`window.maestro`) is exposed.
@@ -18,7 +17,6 @@ suite is hermetic and deterministic on a clean machine.
 
 1. Build the app first (produces `electron/dist/...`):
    - Windows: `pwsh scripts/build-app-win.ps1`
-   - macOS:   `bash scripts/build-app.sh`
 2. Then:
    ```
    cd e2e
@@ -27,11 +25,11 @@ suite is hermetic and deterministic on a clean machine.
    ```
 
 Override the binary location with `E2E_APP_PATH=/path/to/app` if your build
-output lives elsewhere. Auto-detection covers `win-unpacked/Maestro Studio.exe` and the
-mac `Maestro Studio.app` variants.
+output lives elsewhere. Auto-detection covers `win-unpacked/Maestro Studio.exe`
+(the launcher still knows the old mac/linux layouts, harmlessly).
 
 ## CI
 
-`.github/workflows/e2e.yml` runs this on a `windows-latest` + `macos-latest`
-matrix: it builds the unsigned app, then runs the suite. Tag-driven signed
-releases are covered separately by `release-windows.yml` / `release-macos.yml`.
+`.github/workflows/e2e.yml` runs this on `windows-latest`: it builds the unsigned
+app, then runs the suite. Tag-driven signed releases are covered separately by
+`release-windows.yml`.

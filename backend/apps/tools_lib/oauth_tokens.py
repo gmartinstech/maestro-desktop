@@ -157,7 +157,7 @@ def m365_server_script() -> str:
     backend/mcp-bundles/softeria-ms-365-mcp-server/dist/index.js (4.7MB).
     The new path mirrors the SDK's internal layout (dist/index.js + sibling
     package.json) because cli.js reads __dirname/../package.json for the
-    --version flag; see scripts/build-app.sh `build_mcp_bundle_dir`.
+    --version flag; see scripts/build-app-win.ps1 `Build-McpBundleDir`.
     """
     p_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     bundle = os.path.join(

@@ -15,8 +15,8 @@ name: E2E (packaged app, Windows)
 # (bundled Python env, uv, MCP bundles, npm) so warm builds are fast - the build
 # script skips any input already on disk.
 #
-# macOS legs were removed (runner starvation + untriageable mac-only failures);
-# re-add when a Mac maintainer can own them. Real Win10 coverage still needs the
+# macOS is dropped as a target, so there are no mac legs and none should be added.
+# Real Win10 coverage still needs the
 # SELF-HOSTED e2e-win10 job (repo var WIN10_SELF_HOSTED=true + a
 # [self-hosted, windows, win10] runner).
 
