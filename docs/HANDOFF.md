@@ -83,7 +83,7 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 - `harness/review.mjs` has 2 logged **Minor** findings (tighten the `spawnSync` status check to `res.status !== 0`; harden `opt()` when a flag is passed with no value). Non-blocking.
 - Plan 1 tasks **8–10 were specced but not executed** (only PR #1's gate subset + PR #2's `review.mjs` shipped): `docs/UPSTREAM.md` runbook, `docs/CONTRIBUTING-maestro.md` (Definition of Done), `docs/SECRETS.md`, `.env.maestro.example`, `harness/dispatch.mjs` + `harness/models.json`, branch protection, visual-regression snapshots. Build them as needed — their specs are in `docs/plans/2026-07-20-foundation-and-stability-gate.md`.
 - Branch protection on `main` is **not** enabled yet (needs the GitHub settings / your call).
-- The backend `MAESTRO_MOCK_AGENT=1` seam for the golden smoke (Plan 1 Task 6, Step 1) was **not** applied — apply it in `backend/apps/agents/agent_manager.py` when you calibrate the smoke.
+- The backend `MAESTRO_MOCK_AGENT=1` seam for the golden smoke (Plan 1 Task 6, Step 1) is now applied in `backend/apps/agents/agent_manager.py` (selects `MockAgent.run_mock_turn` ahead of provider resolution). Note the flag must stay unset when running the backend suite.
 
 ## 8. Key file map
 

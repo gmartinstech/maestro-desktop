@@ -24,7 +24,7 @@ from backend.apps.agents.manager.session.SessionPersistence import SessionPersis
 from backend.apps.agents.manager.Messaging import Messaging
 from backend.apps.agents.manager.SessionControl import SessionControl
 from backend.apps.agents.manager.AgentLaunch import AgentLaunch
-from backend.apps.agents.manager.MockAgent import MockAgent
+from backend.apps.agents.manager.MockAgent import MockAgent, mock_agent_enabled
 from backend.apps.agents.manager.RunSupport import RunSupport
 from backend.apps.agents.manager.run.handle_run_error import handle_run_error
 from backend.apps.agents.manager.run.TurnRunner import TurnRunner
@@ -108,6 +108,11 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
         )
 
         try:
+            # MAESTRO_MOCK_AGENT=1 seam: this is the one place the concrete agent implementation is chosen, so selecting the mock here (before build_agent_options) is what keeps provider resolution, configure_provider_env and the CLI spawn out of a mock run entirely. Checked ahead of the SDK probe below so mock mode behaves the same whether or not the SDK is installed.
+            if mock_agent_enabled():
+                logger.info(f"MAESTRO_MOCK_AGENT=1: deterministic mock turn for session {session_id}")
+                await self.run_mock_turn(session_id, prompt)
+                return
             # SDK presence check: fall to mock mode here, before the options build, so a missing SDK is a clean mock run, not an error card. The real use is in run_options / turn_runner (lazy-imported there).
             import claude_agent_sdk  # noqa: F401
         except ImportError:

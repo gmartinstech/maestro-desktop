@@ -11,7 +11,10 @@ Fork of openswarm-ai/openswarm. Electron + React/TS (frontend/) + FastAPI/Python
 - Never call *.openswarm.com. Models go through provedor-ia (https://llm.martinstech.net/v1).
 - Retain LICENSE (© Haik Decie). Brand = Maestro Studio; appId net.martinstech.maestro.studio.
 - Small diffs. One ticket per branch/worktree. A different-vendor model (or human) reviews before merge.
-- Deterministic tests use MAESTRO_MOCK_AGENT=1 (no keys, no tokens).
+- MAESTRO_MOCK_AGENT=1 makes an agent turn stream a deterministic synthetic reply with no key,
+  CLI or network. It is for the packaged app and the golden e2e smoke. Do NOT set it for the
+  backend suite: those tests drive the real loop, and the mock starves the WS assertions.
+  Run backend tests with the flag UNSET (baseline: 6 pre-existing failures, 1703 passing).
 
 ## Where things live
 - Providers/registry: backend/apps/agents/providers/registry.py
