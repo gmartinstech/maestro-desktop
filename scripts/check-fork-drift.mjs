@@ -31,10 +31,10 @@ const ALLOW = [
 const ALLOW_PREFIX = ['docs/plans/', 'docs/specs/', 'docs/perf/', 'docs/superpowers/', 'docs/ops/', 'backend/tests/', 'backend/mcp-bundles/', 'electron/build-staging/', 'electron/dist/', 'debugger/build/', 'node_modules/'];
 
 // Narrower than a file exemption: these exact strings are allowed ANYWHERE, so a big file stays
-// guarded for everything else. The Apple keychain access group is pinned to upstream's signed
-// provisioning profile — renaming it without a MartinsTech Developer ID breaks macOS passkeys.
+// guarded for everything else. (The Apple keychain access group used to live here, pinned to
+// upstream's signed provisioning profile. It went away with the macOS build pipeline — do not
+// re-add it: an upstream mac commit dragging it back is exactly the drift this guard catches.)
 const ALLOW_STRINGS = [
-  'Y26NUZH4NG.com.clusterlabs.openswarm.webauthn',
   'fork of Open Swarm',
   'legacy `self-swarm-language`',
   'reaches openswarm-ai. Sync the fork',
