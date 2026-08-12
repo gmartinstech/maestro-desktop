@@ -46,5 +46,9 @@ for (const [name, cmd, precondition] of steps){
 }
 try { execSync('node scripts/check-callhome.mjs', { stdio:'inherit' }); }
 catch { console.warn('WARN: call-home not yet clean (expected until DET epic)'); }
+// Fork drift is a HARD failure, unlike the call-home warning above: an upstream merge that
+// reintroduces a deleted subsystem or the old branding must not reach main. See docs/UPSTREAM.md.
+try { console.log('\n=== fork-drift ==='); execSync('node scripts/check-fork-drift.mjs', { stdio:'inherit' }); }
+catch { failed.push('fork-drift'); }
 if (failed.length){ console.error(`\nVERIFY FAILED: ${failed.join(', ')}`); process.exit(1); }
 console.log('\nVERIFY GREEN');
