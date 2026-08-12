@@ -143,3 +143,12 @@ Upstream mac commits are now categorically out of scope for cherry-picking — s
 Not shipped as part of a Windows build but deliberately left in place:
 `electron/build/icon.icns` (+ its generation in `scripts/gen-icons.py`) and the
 `inspectMac()` diagnostic in `scripts/ci/verify-signature.js`.
+
+### Fallout worth a ticket: the youtube MCP bundle has no builder
+
+`scripts/build-app.sh` (deleted) was the only thing that regenerated the
+`@kirbah/mcp-youtube` bundle; `scripts/build-app-win.ps1` never built it.
+`backend/mcp-bundles/kirbah-mcp-youtube.js` is checked in, so packaged builds still
+ship it — but nothing can rebuild it now, so it silently freezes at its current version
+and a dependency fix there is unshippable. Either add the esbuild step to the Windows
+build script or drop the bundle deliberately. Do not leave it as an orphan.
