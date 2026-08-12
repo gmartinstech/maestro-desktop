@@ -32,8 +32,9 @@ now means "validated", not "a header was present". Proven live: `401 / 401 / 200
 
 ## What this gate still does NOT cover (honest residuals)
 
-- **macOS signing path is unverified locally** (no Mac here). The `codesign` +
-  `spctl` + staple logic is written but only CI on a Mac runner proves it.
+- **macOS is not covered at all, on purpose**: mac was dropped as a target and its
+  build/release pipeline deleted. `verify-signature.js` still carries an
+  `inspectMac()` (`codesign` + `spctl` + staple) branch that nothing exercises.
 - **Full port-range exhaustion** isn't exercised; we hold the bottom of the range
   (common real case). All-101-taken relies on get-port's own ephemeral fallback.
 - **Agent-turn content** isn't asserted (models vary); we assert real output
