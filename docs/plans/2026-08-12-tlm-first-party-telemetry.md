@@ -4,7 +4,7 @@
 identity; the Python package is `backend/apps/maestro_telemetry/` because a module name cannot
 contain a hyphen. Do not introduce a third spelling.
 
-**Goal:** a small, opt-in, LGPD-defensible diagnostic stream that tells us when the app crashes,
+**Goal:** an **anonymous SRE** signal — service reliability, not product analytics. A small stream that tells us when the app crashes,
 wedges, or fails an agent turn — and nothing else. Not product analytics.
 
 **Status:** queued. **Runs AFTER `osr/remove-openswarm-refs` merges.** See "Ordering" below for
@@ -62,7 +62,7 @@ top of it is actively dangerous.
 | `backend/apps/service/version.py` | `APP_VERSION` resolution with the packaged-build gotcha already solved (`MAESTRO_APP_VERSION` env first, because the `electron/package.json` path fallback fails in packaged dmg/exe and made every shipped install report `app_version="unknown"`). Do not re-derive this. |
 | `backend/apps/service/ring_buffer.py` | 33-line fixed-size rolling label log. Becomes the crumb trail for the wedge sensor. Note it currently stores only a label + timestamp, which is exactly the privacy posture we want — keep it that way. |
 | `client.py::resolve_timezone` / `resolve_locale` | Settings-first → OS → default, with the reasons documented (Python's `locale.getlocale()` is deprecated and inconsistent across platforms; `tzlocal` sometimes returns `PDT` or `Romance (zomertijd)` which don't round-trip through tzdata). Move verbatim into `telemetry/envelope.py`. |
-| `client.py::p_get_install_id` | Mint-once-and-persist UUID against `settings.installation_id`. Reuse the field so we don't orphan existing installs. |
+| ~~`client.py::p_get_install_id`~~ | **Do NOT salvage.** It mints and persists a stable UUID — the exact thing Decision 0 forbids. `envelope.py` mints an in-memory `run_id` instead. |
 | `client.py::p_delivered` / `p_retryable` | Correct retry classification: `None`/5xx/408/429 retryable, other 4xx means the payload itself is rejected and retrying forever poisons the spool. Keep the logic and the comment. |
 | `service.py` `/usage-summary` + `/cost-breakdown` | **Not telemetry.** These are local reads that power the Settings → Usage page. They never leave the machine. Leave them exactly where they are; do not drag them into `apps/maestro_telemetry/`. |
 
@@ -182,12 +182,11 @@ not here, the field does not go in until this document is amended.
 
 | Field | Value | Note |
 |---|---|---|
-| `install_id` | UUIDv4, from `settings.installation_id` | pseudonymous, rotated on consent revoke |
+| `run_id` | UUIDv4 minted **in memory at process start**, never persisted | anonymous: correlates events inside ONE launch, cannot link two launches |
 | `app_version` | e.g. `1.0.31` | |
 | `os` / `os_version` | `Windows` / `10.0.26200` | `platform.system()` / `platform.release()` — never `platform.platform()`, which on some Linux builds embeds the kernel build host |
 | `install_method` | `dev` \| `dmg` \| `exe` \| `appimage` \| `deb` \| `rpm` | |
-| `locale` | BCP-47, e.g. `pt-BR` | |
-| `timezone` | IANA, e.g. `America/Sao_Paulo` | |
+| `locale` | BCP-47, e.g. `pt-BR` | kept: number/date formatting causes real crashes |
 | `event_name` | one of the closed `Literal` set in Phase 3 | |
 | `t` | client unix seconds | |
 | `event_id` | UUIDv4 per event, idempotency key | |
@@ -208,7 +207,7 @@ integers, or durations in ms. Exactly one field family is free text (`error_prev
 - **API keys, tokens, bearer credentials.** Two independent walls: nothing in the allowlist is
   key-shaped, and every free-text field runs the secret scrub anyway.
 - **`user_email`, `user_name`, `user_use_case`, `user_referral_source`.** Never in an envelope,
-  never joined to `install_id`. This is a deliberate reversal of `service.py:165-181`.
+  never joined to anything. This is a deliberate reversal of `service.py:165-181`.
 - **Skill, workflow, app, dashboard, or session names.** User-authored strings.
 - **Cost, token counts, billing.** The pulse loop existed to reconcile a Pro tier we deleted.
 - **The whole settings object.** `settings.py`'s `p_sync(safe)` call is deleted, not filtered
@@ -257,6 +256,48 @@ class ScrubbedText(BaseModel):
 `str` fails pydantic validation at the emit boundary. `test_telemetry_scrub.py` pins that
 `ScrubbedText(value="raw")` is refused and `ScrubbedText.of("raw")` is the only way through.
 
+### Decision 0 — anonymous, and what that costs
+
+This is an **SRE** stream: it exists to find crashes, wedges and regressions, not to describe users.
+So no stable identifier ships. `run_id` is minted in memory per launch and dies with the process.
+`settings.installation_id` stays local and is never sent, never joined.
+
+**Be honest about what that forfeits**, because it is not free:
+
+| Lost | Consequence | Mitigation |
+|---|---|---|
+| Distinguishing 1 install crashing 500× from 500 installs crashing once | The single most common SRE follow-up question | Rate per **run**, not per install: `app.boot` is the denominator, so crashes-per-run is exact even without identity. A pathological single install shows up as a high `relaunch_count_1h` on one `run_id`. |
+| Cross-run crash de-duplication | The same recurring crash counts repeatedly | Group by `(app_version, os, event_name, error_preview)`. Coarser, sufficient for triage. |
+| "Did our fix work for the user who reported it?" | Cannot follow one install across a version bump | Compare aggregate rates between versions. For a specific user, ask them for a bug bundle — an explicit, consented, one-off share. |
+| Retention/funnel analysis | Impossible by construction | Intended. Not our purpose. |
+
+If cross-run correlation later proves necessary, the honest upgrade is a **rotating** id with a
+published lifetime (e.g. re-minted per app version, or daily), documented as pseudonymous — not a
+quiet reintroduction of a permanent one. Do not add it in v1.
+
+### Open decision — consent posture now that the stream is anonymous
+
+The table below still specifies **opt-in, default OFF**. That was written when the envelope carried a
+persistent `install_id` and the data was pseudonymous. Under Decision 0 it is anonymous, and LGPD
+art. 12 puts genuinely anonymized data outside the personal-data regime — so strict art. 8º consent
+is no longer legally compelled.
+
+This matters practically: **opt-in telemetry typically reaches single-digit percentages of installs.**
+For SRE that is close to useless — you cannot tell a version regression from sampling noise at 5%
+coverage, which defeats the purpose of building this.
+
+Three postures, pick one before Phase 3:
+
+| Posture | Coverage | Case for it |
+|---|---|---|
+| **Opt-in, default OFF** (as written) | very low | Maximum trust. Correct if you doubt the anonymity claim, or want zero argument with a privacy-conscious SME buyer. |
+| **Opt-out, default ON, disclosed at first run** (recommended) | high | Defensible *because* the data is anonymous, contains no free-text beyond a scrubbed error preview, and is readable locally in the journal. This is the posture that makes the stream actually answer SRE questions. Requires the first-run disclosure to be real, not buried. |
+| Opt-out, ON, no disclosure | high | **Not acceptable.** Do not ship this. |
+
+If you choose opt-out, `telemetry_consent` keeps its tri-state but defaults to `granted`, and the
+first-run copy must state plainly what is sent and where the off switch is. The kill switch, the
+journal, and the scrubber are unchanged either way — they are what make the choice defensible.
+
 ### LGPD, concretely
 
 | Requirement | What we do |
@@ -265,10 +306,10 @@ class ScrubbedText(BaseModel):
 | **Consent quality** (art. 8º) | Free, informed, specific, unambiguous. One purpose only: "diagnóstico técnico". Not bundled with anything else. |
 | **Opt-in, no pre-tick** (art. 8º §4º) | `telemetry_consent = None` on a fresh install and after `reset-to-defaults`. The toggle renders off. Silence is not consent. |
 | **Revocable at any time** (art. 8º §5º) | The same toggle, one click, effective immediately and without restarting: `emit()` re-reads consent on every call, it is not cached. |
-| **Right to deletion** (art. 18, VI) | "Excluir meus diagnósticos" in Settings: flips consent to `denied`, clears the local spool, clears the journal, rotates `install_id`, and POSTs `DELETE /v1/install/{install_id}`. The three local steps must succeed even when the server is unreachable, and the UI must say so honestly. |
+| **Right to deletion** (art. 18, VI) | Anonymous data has no data subject to delete for, so there is nothing server-side to erase — and no id to erase it by. The Settings action is therefore local and honest: flip consent to `denied`, clear the spool, clear the journal. Do NOT ship a `DELETE /v1/install/{id}` endpoint; it would require the very identifier we refuse to send. The copy must not promise server-side deletion we cannot perform. |
 | **Retention** | 90 days raw, then aggregate-only. Desktop-side it is stated in the UI copy; enforcement is server-side and is a contract item (Phase 6). We cannot verify it from the client — see Open Question 4. |
 | **Transparency** (art. 9º) | The journal (below). The user can read every event we sent, locally, without asking us. |
-| **Not anonymized** | `install_id` + OS + version + timezone is a fingerprint. We do **not** claim art. 12 anonymization, and the UI copy must not imply it. Pseudonymous, and we say so. |
+| **Anonymized** (art. 12) | No stable identifier leaves the machine. `run_id` dies with the process; `installation_id` is never sent and never joined. The remaining envelope — app_version, OS, os_version, install_method, locale — is a low-entropy bucket shared by thousands of installs, not a fingerprint. Timezone is dropped precisely because it raises entropy for no SRE value. |
 | **Controller + contact** | MartinsTech. `privacidade@martinstech.net` named in the UI copy. |
 
 ---
@@ -300,7 +341,6 @@ POST /v1/events
   Responses are ignored beyond the status code. No server-driven config, no remote
   kill switch, no cohort gating. The server cannot turn telemetry ON.
 
-DELETE /v1/install/{install_id}
   200/202/404 → treat as done
   anything else → local deletion still completed; UI says the server request will retry
 ```
@@ -489,9 +529,9 @@ Still no call sites and no UI. Everything here is exercised only by tests.
 - `backend/apps/maestro_telemetry/consent.py` — `telemetry_enabled()`, `p_base_url()`, `p_env_truthy()`.
   `p_base_url()` reads `MAESTRO_TELEMETRY_URL` (moved from `client.py:213`, same semantics).
 - `backend/apps/maestro_telemetry/envelope.py` — `build_envelope() -> Envelope` (pydantic). Salvage
-  `resolve_timezone`, `resolve_locale`, `p_get_install_id` from `client.py`. **Ship none of**
+  `resolve_locale` from `client.py` (NOT `resolve_timezone` — timezone is dropped, and NOT
+  `p_get_install_id` — see Decision 0). **Ship none of**
   `user_id`, `user_email`, `device_type`, or `platform.platform()`.
-  Add `rotate_install_id()` for the deletion flow.
 - `backend/apps/maestro_telemetry/event.py` — the closed model:
   ```python
   EventName = Literal["app.crash_recovered", "app.backend_respawn", "app.boot",
@@ -528,8 +568,8 @@ Still no call sites and no UI. Everything here is exercised only by tests.
   URL-unset is off; consent read fresh on every call (flip the file mid-test, no restart).
 - `test_telemetry_killswitch.py` — the three cases in the Kill Switch section.
 - `test_telemetry_envelope.py` — the 8 envelope fields present; `user_id`/`user_email`/`platform`
-  absent even when set in settings; `install_id` stable across calls and changed by
-  `rotate_install_id()`.
+  absent even when set in settings; `run_id` stable within a process and **different in a fresh
+  process** (assert two separately-spawned envelopes disagree — that is the anonymity property).
 - `test_telemetry_allowlist.py` — **the load-bearing test.** Assert
   `set(TelemetryEvent.model_fields)` equals a hardcoded literal set copied from the Privacy
   Contract table. A new field fails this test until someone edits both the model and the set,
@@ -705,7 +745,7 @@ telemetry.journalCopied     "Copiado"
 
 **Create test**
 - `backend/tests/test_telemetry_forget.py` — `POST /api/telemetry/forget` sets consent to
-  `denied`, empties the spool, deletes the journal, and rotates `install_id`; and it does all four
+  `denied`, empties the spool, and deletes the journal; and it does all three
   **even when the server DELETE fails** (stub the transport to raise).
 
 **DoD**
@@ -837,7 +877,8 @@ Final manual pass, packaged build, `MAESTRO_TELEMETRY_URL` set to a real sink:
 3. Kill an agent turn → `agent.turn_failed` with a scrubbed preview.
 4. Pull the network → events spool; restore it → they drain; spool never exceeds 2 MB.
 5. `MAESTRO_TELEMETRY_DISABLED=1` with consent granted → nothing on the wire, journal untouched.
-6. "Excluir meus diagnósticos" → toggle off, journal empty, next event carries a new `install_id`.
+6. "Excluir meus diagnósticos" → toggle off, spool empty, journal empty. No server call: there is
+   no identifier to delete by, and the copy must not imply otherwise.
 
 ---
 
@@ -883,7 +924,8 @@ Final manual pass, packaged build, `MAESTRO_TELEMETRY_URL` set to a real sink:
 
 2. **Ingest authentication.** *Recommendation:* a per-channel `MAESTRO_TELEMETRY_TOKEN` baked at
    build time, with the honest acknowledgement that anyone can extract it from the bundle, so the
-   server must rate-limit per `install_id` and treat all input as hostile. The alternative — no auth
+   server must rate-limit per source IP (there is no `install_id` to key on) and treat all input as
+   hostile. The alternative — no auth
    at all — is defensible for a write-only diagnostic sink and is less misleading. Decide before
    Phase 6 writes the build scripts; Phases 1-5 are unaffected either way.
 
@@ -901,10 +943,9 @@ Final manual pass, packaged build, `MAESTRO_TELEMETRY_URL` set to a real sink:
    pressure inverts that, TLM's JSON change is additive and rebasable, but say so out loud rather
    than discovering it in a conflict.
 
-6. **`install_id` rotation on deletion breaks crash de-duplication across the boundary** — a user
-   who deletes and keeps crashing looks like a new install. *Recommendation:* rotate anyway. LGPD
-   art. 18 deletion that leaves a stable re-identifier is not deletion. Losing continuity for the
-   handful of users who exercise the right is the correct trade.
+6. **~~`install_id` rotation vs crash de-dup~~ — moot under Decision 0.** No stable id ships at
+   all, so there is no rotation boundary. The de-dup strategy is the `(app_version, os, event_name,
+   error_preview)` grouping described there.
 
 7. **`electron/crash-watchdog.js` is mac-only** (`process.platform !== 'darwin'` ⇒ exit), so
    `app.crash_recovered` will only ever fire on macOS while our primary target is Windows.
