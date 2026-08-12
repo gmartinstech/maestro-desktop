@@ -1,4 +1,4 @@
-"""Kill app-runtime processes left behind by a previous OpenSwarm that died badly.
+"""Kill app-runtime processes left behind by a previous Maestro Studio that died badly.
 
 `stop_all()` reaps runtimes on a CLEAN shutdown. A crash, a SIGKILL, or a force-quit skips it, and
 every `bash run.sh` plus its vite/uvicorn descendants reparents to PID 1 and keeps running: measured
