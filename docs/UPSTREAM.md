@@ -88,7 +88,13 @@ precisely what we removed. Take fixes, not features.
 | `50d60108` | 1334-line browser refactor merge; surgical fixes above cover the same bugs |
 | `2e0572ca` | whisper/voice — feature we don't ship |
 
-Worth revisiting: `bb906d81`, `b537a4ed`, `dec16d78` refine the ghost reaper we just took. They
-conflict only because our debrand commit sits between them and their base — mechanical to
-resolve if the reaper needs sharpening. `f1f8464f` (idle browser-card reaping) and `8e904f21`
-(evict a wedged card) are medium-risk and untried.
+**Tried and rejected: the ghost-reaper refinement chain.** `dec16d78`, `08694d18`, `b537a4ed`,
+`bb906d81` all look like small hardening commits on the reaper we took in `10b019bd`, and I
+recommended them as "mechanical to resolve". They are not. Applied in upstream order, each one
+conflicts in `backend/tests/test_reap_ghost_runtimes.py` because the chain's tests assume an
+**idle-LRU reaping feature we never took** — `AppRuntimeManager.reap_stale_idle`, `idle_lru`,
+`p_idle_since`. Adopting them means adopting that feature. Skip unless you want idle-LRU reaping
+on purpose, in which case start from its own commits, not from these.
+
+`f1f8464f` (idle browser-card reaping) and `8e904f21` (evict a wedged card) are medium-risk and
+untried — and likely belong to the same idle-LRU family, so check that before starting.
