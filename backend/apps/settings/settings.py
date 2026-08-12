@@ -181,7 +181,6 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
     that must never be blanked by this write (the agent tool passes the field
     powering the live run): a SECOND, independent wall behind the endpoint's
     suicide-guard, so a guard bug still can't disconnect a run."""
-    from backend.apps.service.client import sync as p_sync
 
     old = load_settings()
     for k in SERVER_OWNED_FIELDS:
@@ -192,30 +191,14 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
         if getattr(old, f, None) and not getattr(body, f, None):
             setattr(body, f, getattr(old, f, None))
 
-    secret_keys = {"anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
-                   "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
-                   "maestro_bearer_token", "installation_id", "analytics_token"}
-    safe = {k: v for k, v in body.model_dump().items() if k not in secret_keys}
-    p_sync(safe)
-
-    if (body.user_email and body.user_email != getattr(old, "user_email", None)) or \
-       (body.user_name and body.user_name != getattr(old, "user_name", None)):
-        from backend.apps.service.client import identify as p_identify
-        id_props = {}
-        if body.user_email:
-            id_props["email"] = body.user_email
-        if body.user_name:
-            id_props["name"] = body.user_name
-        if body.user_use_case:
-            id_props["use_case"] = body.user_use_case
-        if body.user_referral_source:
-            id_props["referral_source"] = body.user_referral_source
-        if id_props:
-            p_identify(id_props)
-        if body.user_email:
-            from backend.apps.service.analytics.client import track_link_email
-            track_link_email(body.user_email)
-
+    # Saving settings used to forward the whole object to the upstream telemetry sink, filtered by
+    # a hand-maintained DENYLIST of top-level scalars. model_dump() serializes nested models, so
+    # custom_providers[].api_key — a plain str — was never covered, and neither was the free-text
+    # default_system_prompt. A user's own provider keys left the machine on every save. The identify
+    # call below it shipped email/name/use_case/referral_source for good measure. Nothing here is
+    # recoverable by fixing the denylist: an allowlist is the only safe shape, and maestro-telemetry
+    # (docs/plans/2026-08-12-tlm-first-party-telemetry.md) builds one with a typed event schema.
+    # Until then this forwards nothing.
     await save_settings_async(body)
 
     google_changed = (
