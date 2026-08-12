@@ -811,9 +811,16 @@ async def list_models():
                 "is_free": False,
                 "billing_kind": "api_key",
                 "tiers": [3, 3, 1],
+                "max_completion_tokens": m.get("max_completion_tokens"),
             })
         if entries:
             result[cp_name] = entries
+
+    # provedor-ia is the app's own gateway, so it heads the picker instead of trailing the third-party groups.
+    from backend.apps.settings.provedor_ia import PROVEDOR_IA_NAME
+    if PROVEDOR_IA_NAME in result:
+        result = {PROVEDOR_IA_NAME: result[PROVEDOR_IA_NAME],
+                  **{k: v for k, v in result.items() if k != PROVEDOR_IA_NAME}}
 
     return {"models": result, "notes": notes}
 

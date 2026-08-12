@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { API_BASE } from '@/shared/config';
+import { API_BASE, PROVEDOR_IA_DEFAULT_MODEL } from '@/shared/config';
 
 const SETTINGS_API = `${API_BASE}/settings`;
 
@@ -41,6 +41,7 @@ export interface AppSettings {
   openai_api_key?: string | null;
   google_api_key?: string | null;
   openrouter_api_key?: string | null;
+  provedor_ia_token?: string | null;
   custom_providers?: CustomProvider[];
   browser_homepage: string;
   auto_select_mode_on_new_agent: boolean;
@@ -87,7 +88,7 @@ interface SettingsState {
 export const DEFAULT_SETTINGS: AppSettings = {
   default_system_prompt: DEFAULT_SYSTEM_PROMPT,
   default_folder: null,
-  default_model: 'sonnet',
+  default_model: PROVEDOR_IA_DEFAULT_MODEL,
   default_mode: 'agent',
   default_max_turns: null,
   default_thinking_level: 'auto',

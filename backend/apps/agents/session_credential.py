@@ -30,6 +30,7 @@ from backend.apps.agents.providers.registry import (
     find_custom_provider_for_value,
     get_api_type,
 )
+from backend.apps.settings.provedor_ia import PROVEDOR_IA_SLUG, PROVEDOR_IA_TOKEN_FIELD
 
 if TYPE_CHECKING:
     from backend.apps.settings.models import AppSettings
@@ -43,8 +44,8 @@ P_API_KEY_FIELD_BY_API: dict[str, str] = {
     "openrouter": "openrouter_api_key",
 }
 
-# Every settings field that can hold an API key (the full guarded set). Custom providers keep their keys inside the custom_providers list, guarded separately.
-ALL_API_KEY_FIELDS: frozenset[str] = frozenset(P_API_KEY_FIELD_BY_API.values())
+# Every settings field that can hold an API key (the full guarded set). Custom providers keep their keys inside the custom_providers list, guarded separately, except provedor-ia whose bearer is a top-level field.
+ALL_API_KEY_FIELDS: frozenset[str] = frozenset(P_API_KEY_FIELD_BY_API.values()) | {PROVEDOR_IA_TOKEN_FIELD}
 
 CredentialKind = Literal["api_key", "subscription", "unknown"]
 
@@ -93,8 +94,10 @@ def resolve_powering_credential(model_value: str, settings: AppSettings) -> Powe
     # Custom provider (LM Studio, Ollama, Together, ...). Local servers use a placeholder key, so suicide is removing the provider ENTRY, not blanking its key; the guard keys off the slug.
     if api == "custom":
         slug = p_custom_slug_for_model(model_value, settings)
+        # provedor-ia is seeded from a top-level bearer field, so blanking THAT is the suicide the guard must also catch.
         return PoweringCredential(
             kind="api_key", provider="custom",
+            protected_field=PROVEDOR_IA_TOKEN_FIELD if slug == PROVEDOR_IA_SLUG else None,
             protected_custom_slug=slug,
             label=f"custom provider '{slug}'" if slug else "custom provider",
         )

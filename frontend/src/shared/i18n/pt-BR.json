@@ -31,6 +31,10 @@
     "updateDownloadedSnackbar": "Maestro Studio{{verSuffix}} baixado; reinicie para atualizar"
   },
   "settings": {
+    "models": {
+      "provedorIaDesc": "Os modelos Maestro, via MartinsTech.",
+      "provedorIaGetToken": "Obter token"
+    },
     "interface": {
       "sectionTitle": "Interface",
       "language": "Idioma",

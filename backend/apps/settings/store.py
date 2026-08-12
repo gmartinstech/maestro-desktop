@@ -1,8 +1,8 @@
 """Settings persistence primitives (read/write/migrate the settings.json file).
 
-A leaf: imports only settings.models + config.paths, never service or
-nine_router. Lets service.client reach load/save downward instead of looping
-back up through settings.settings.
+A leaf: imports only settings.models, settings.apply_provedor_ia_defaults and
+config.paths, never service or nine_router. Lets service.client reach load/save
+downward instead of looping back up through settings.settings.
 """
 
 import json
@@ -16,6 +16,7 @@ from typing import List, Tuple
 from pydantic import ValidationError
 
 from backend.config.paths import SETTINGS_DIR as DATA_DIR
+from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -106,18 +107,19 @@ def load_settings() -> AppSettings:
                 raw = json.load(f)
         except (json.JSONDecodeError, OSError, ValueError):
             p_preserve_corrupt_settings()
-            return AppSettings()
+            return apply_provedor_ia_defaults(AppSettings())
         if not isinstance(raw, dict):
             # Valid JSON but not an object (e.g. a bare list/number); unusable.
             p_preserve_corrupt_settings()
-            return AppSettings()
+            return apply_provedor_ia_defaults(AppSettings())
         settings = p_coerce_settings(migrate_legacy_fields(raw))
         if settings.default_system_prompt is None:
             settings.default_system_prompt = DEFAULT_SYSTEM_PROMPT
+        apply_provedor_ia_defaults(settings)
         p_cached_settings = settings.model_copy(deep=True)
         p_cached_sig = sig
         return settings
-    return AppSettings()
+    return apply_provedor_ia_defaults(AppSettings())
 
 
 # threading.Lock guards every SETTINGS_FILE write; works for sync paths and async run_in_executor paths.
@@ -141,6 +143,7 @@ def atomic_write_settings(payload: dict) -> None:
                     p_cached_settings = p_coerce_settings(migrate_legacy_fields(dict(payload)))
                     if p_cached_settings.default_system_prompt is None:
                         p_cached_settings.default_system_prompt = DEFAULT_SYSTEM_PROMPT
+                    apply_provedor_ia_defaults(p_cached_settings)
                     p_cached_sig = p_settings_sig()
                     return
                 except PermissionError:

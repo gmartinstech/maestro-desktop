@@ -12,6 +12,10 @@ export const API_BASE = `http://${host}:${port}/api`;
 export const WS_BASE = `ws://${host}:${port}`;
 // provedor-ia, the MartinsTech OpenAI-compatible gateway; must match backend MAESTRO_DEFAULT_PROXY_URL.
 export const MAESTRO_DEFAULT_PROXY_URL = 'https://llm.martinstech.net/v1';
+// Picker group name + default model value for provedor-ia; must match backend apps/settings/provedor_ia.py.
+export const PROVEDOR_IA_PROVIDER_NAME = 'provedor-ia';
+export const PROVEDOR_IA_DEFAULT_MODEL = 'custom/provedor-ia/maestro';
+export const PROVEDOR_IA_LOGIN_URL = 'https://llm.martinstech.net/login';
 
 // Per-install token from Electron preload; cached after first resolve. Call refreshAuthToken() on 4401.
 let _authTokenCache: string = '';

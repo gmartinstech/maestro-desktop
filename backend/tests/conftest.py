@@ -22,6 +22,8 @@ import pytest
 
 # Tests mock claude_agent_sdk.query, not ClaudeSDKClient; the now-default-ON persistent client would route mocked turns onto a REAL CLI spawn and wedge the suite. Pin it OFF explicitly; the persistent path has its own tests (test_client_pool.py + live gates).
 os.environ["MAESTRO_PERSISTENT_CLIENT"] = "0"
+# A dev machine that ran the provedor-ia installer exports PROVEDOR_IA_TOKEN, which would seed the provider into every settings load and make default-model assertions pass/fail by machine. Deterministic tests carry no tokens; test_provedor_ia.py sets it explicitly where it means to.
+os.environ.pop("PROVEDOR_IA_TOKEN", None)
 
 
 @pytest.fixture(autouse=True)

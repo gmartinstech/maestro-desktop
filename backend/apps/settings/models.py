@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Any, Literal
 
+from backend.apps.settings.provedor_ia import PROVEDOR_IA_DEFAULT_MODEL
+
 DEFAULT_SYSTEM_PROMPT = (
     "You are a personal AI assistant running inside Maestro.\n\n"
     "## Core Behavior\n"
@@ -34,7 +36,8 @@ DEFAULT_SYSTEM_PROMPT = (
 class AppSettings(BaseModel):
     default_system_prompt: Optional[str] = DEFAULT_SYSTEM_PROMPT
     default_folder: Optional[str] = None
-    default_model: str = "sonnet"
+    # provedor-ia's fast model; apply_provedor_ia_defaults downgrades it to "sonnet" when there is no token to reach the gateway with.
+    default_model: str = PROVEDOR_IA_DEFAULT_MODEL
     default_mode: str = "agent"
     default_max_turns: Optional[int] = None
     default_thinking_level: Literal["off", "low", "medium", "high", "auto"] = "auto"
@@ -48,6 +51,8 @@ class AppSettings(BaseModel):
     openai_api_key: Optional[str] = None
     google_api_key: Optional[str] = None
     openrouter_api_key: Optional[str] = None
+    # provedor-ia bearer; also readable from the PROVEDOR_IA_TOKEN env var.
+    provedor_ia_token: Optional[str] = None
     custom_providers: list["CustomProvider"] = Field(default_factory=list)
     auto_select_mode_on_new_agent: bool = False
     expand_new_chats_in_dashboard: bool = True

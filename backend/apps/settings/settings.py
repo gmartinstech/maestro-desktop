@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import Literal, Optional
 
 from backend.config.Apps import SubApp
+from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
 from backend.apps.settings.store import (
     DATA_DIR,
@@ -191,6 +192,9 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
         if getattr(old, f, None) and not getattr(body, f, None):
             setattr(body, f, getattr(old, f, None))
 
+    # Re-derive provedor-ia from the (possibly rotated) token, so a token change surfaces as a custom_providers diff and re-syncs its 9Router node below.
+    apply_provedor_ia_defaults(body)
+
     # Saving settings used to forward the whole object to the upstream telemetry sink, filtered by
     # a hand-maintained DENYLIST of top-level scalars. model_dump() serializes nested models, so
     # custom_providers[].api_key — a plain str — was never covered, and neither was the free-text
@@ -333,6 +337,7 @@ P_RESET_PRESERVE_FIELDS = SERVER_OWNED_FIELDS + (
     "openai_api_key",
     "google_api_key",
     "openrouter_api_key",
+    "provedor_ia_token",
     "custom_providers",
     "user_name",
     "user_email",

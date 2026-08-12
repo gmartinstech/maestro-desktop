@@ -17,6 +17,7 @@ P_DENY_SUBSTRINGS = (
 # Exact field names that are sensitive or per-install identity (the substring pass alone would miss these).
 P_DENY_EXACT = {
     "token", "installation_id", "user_id", "maestro_bearer_token",
+    "provedor_ia_token",
     "connected_account_email", "oauth_tokens",
     "credentials", "sdk_session_id",
 }

@@ -25,6 +25,7 @@ import ImportEntryPoint from './components/share/ImportEntryPoint';
 import DashboardSelection from './pages/DashboardSelection/DashboardSelection';
 import ErrorBoundary from './components/feedback/ErrorBoundary';
 import { setPanelMode, disableOnboardingAfterCrash } from '@/shared/state/onboardingProgressSlice';
+import { PROVEDOR_IA_DEFAULT_MODEL, PROVEDOR_IA_PROVIDER_NAME } from '@/shared/config';
 
 const Analytics = React.lazy(() => import('./pages/Analytics/Analytics'));
 const OnboardingRoot = React.lazy(() =>
@@ -252,12 +253,14 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 const DEFAULT_MODEL_PRIORITY: string[] = [
+  PROVEDOR_IA_PROVIDER_NAME,
   'Anthropic',
   'OpenAI',
   'Google',
 ];
 
 const DEFAULT_MODEL_PICKS: Record<string, string[]> = {
+  [PROVEDOR_IA_PROVIDER_NAME]: [PROVEDOR_IA_DEFAULT_MODEL],
   Anthropic: ['sonnet-cc', 'sonnet'],
   OpenAI: ['gpt-5.4-mini', 'gpt-5.4'],
   Google: ['gemini-2.5-flash', 'gemini-3-flash', 'gemini-2.5-pro'],
