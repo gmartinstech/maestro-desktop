@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Re-vendor the upstream webapp template into backend/apps/outputs/webapp_template/.
 #
-# NOTE: $REPO below is a FACTUAL upstream source, not our branding. It is the
-# third-party repo this snapshot is pulled from; repointing it at a
-# gmartinstech/ repo that does not exist would silently break re-vendoring.
-# Change it only once we actually host our own fork of the template.
+# $REPO is our own fork of the third-party template, so re-vendoring no longer
+# reaches openswarm-ai. Sync the fork from its upstream parent before bumping REF
+# if you want newer template changes.
 #
 # Idempotent — wipes the existing vendored dir and re-clones at the pinned ref.
 # Strips files we don't want shipped (LICENSE, README.md, .gitignore — we
@@ -19,7 +18,7 @@
 
 set -euo pipefail
 
-REPO="openswarm-ai/webapp-template"   # upstream source of the vendored snapshot
+REPO="gmartinstech/webapp-template"   # our fork of the vendored template snapshot
 REF="main"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="$ROOT/backend/apps/outputs/webapp_template"
