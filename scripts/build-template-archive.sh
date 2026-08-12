@@ -4,7 +4,7 @@
 # in view_builder_templates.py) unpacks this on first-app create instead
 # of running a live `npm install`, dropping cold-start ~22 s → ~3 s.
 #
-# Run this once before packaging (CI / publish.sh / publish-win.ps1).
+# Run this once before packaging (CI / publish-win.ps1).
 # Local dev installs that skip this step transparently fall through to
 # live `npm install` — the archive is purely an optimization.
 

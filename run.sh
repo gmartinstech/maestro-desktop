@@ -173,14 +173,6 @@ if [ ! -d "$PROJECT_ROOT/electron/node_modules" ]; then
     done
 fi
 
-# --- Sign Electron VMP for DRM (if EVS account exists) ---
-if [ -f "$PROJECT_ROOT/electron/scripts/sign-vmp.sh" ]; then
-    echo -e "${YELLOW}${BOLD}[vmp]${RESET}      Checking VMP signature..."
-    bash "$PROJECT_ROOT/electron/scripts/sign-vmp.sh" 2>&1 | while IFS= read -r line; do
-        printf "${YELLOW}${BOLD}%s${RESET}\n" "$line"
-    done
-fi
-
 # --- Start Electron in dev mode ---
 echo -e "${MAGENTA}${BOLD}[electron]${RESET} Launching Electron dev shell..."
 (cd "$PROJECT_ROOT/electron" && unset ELECTRON_RUN_AS_NODE && ELECTRON_DEV=1 npx electron .) > >(

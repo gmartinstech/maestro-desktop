@@ -7,22 +7,15 @@
   "scripts": {
     "start": "electron .",
     "dev": "cross-env ELECTRON_DEV=1 electron .",
-    "postinstall": "node scripts/sign-vmp.js",
-    "sign-vmp": "node scripts/sign-vmp.js",
-    "dist": "electron-builder --mac --publish never",
-    "dist:publish": "electron-builder --mac --publish always",
     "dist:win": "electron-builder --win --x64 --publish never",
     "dist:win:publish": "electron-builder --win --x64 --publish always",
-    "dist:all": "electron-builder --mac --win --linux",
-    "test": "node --test *.test.js",
-    "test:mouseclamp": "bash native/mouseclamp/run-tests.sh"
+    "test": "node --test *.test.js"
   },
   "dependencies": {
     "electron-updater": "6.8.3",
     "get-port": "5.1.1"
   },
   "devDependencies": {
-    "@electron/notarize": "3.1.1",
     "cross-env": "7.0.3",
     "electron": "github:castlabs/electron-releases#v42.3.3+wvcus",
     "electron-builder": "^26.8.1",
@@ -50,55 +43,6 @@
       "!build-staging/**"
     ],
     "icon": "build/icon.png",
-    "mac": {
-      "icon": "build/icon.icns",
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.developer-tools",
-      "hardenedRuntime": true,
-      "notarize": false,
-      "extendInfo": {
-        "NSFaceIDUsageDescription": "Maestro Studio uses Touch ID to sign you in to websites with passkeys."
-      },
-      "provisioningProfile": "build/embedded.provisionprofile",
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "extraResources": [
-        {
-          "from": "build-staging/mouseclamp/${arch}",
-          "to": "mouseclamp",
-          "filter": [
-            "**/*"
-          ]
-        },
-        {
-          "from": "build-staging/python-env/${arch}",
-          "to": "python-env",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
-    },
-    "dmg": {
-      "artifactName": "MaestroStudio-${arch}.${ext}",
-      "title": "Maestro Studio ${version}",
-      "size": "5000000K",
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
     "win": {
       "icon": "build/icon.ico",
       "extraResources": [
@@ -192,7 +136,6 @@
       "provider": "github",
       "owner": "gmartinstech",
       "repo": "maestro-desktop"
-    },
-    "afterSign": "scripts/notarize.js"
+    }
   }
 }

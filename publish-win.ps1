@@ -1,15 +1,11 @@
-# Windows mirror of publish.sh.
 # Builds + signs + publishes the Windows installer to the GitHub Release
-# matching electron/package.json's version.
+# matching electron/package.json's version. Windows is the only shipped target.
 #
 # Usage:
 #   pwsh publish-win.ps1     (or)     powershell -File publish-win.ps1
 #
 # Prereqs:
 #   - .env.windows populated with AZURE_* secrets + GH_TOKEN
-#   - For a clean release flow: run `bash publish.sh` on a Mac first so
-#     the v<version> release exists with Mac assets. The build script will
-#     warn if the Mac release isn't found.
 
 $ErrorActionPreference = 'Stop'
 

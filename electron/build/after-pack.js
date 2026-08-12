@@ -17,7 +17,7 @@ const { execFileSync } = require('child_process');
 // at npm-install time on node_modules: the OS code-sign electron-builder runs
 // right after this seals the VMP signature into the bundle, so signing the source
 // electron earlier gets stripped/relocated and Spotify's license server then 500s.
-// Lenient by default (a dev `npm run dist` without an EVS account still produces an
+// Lenient by default (a dev `npm run dist:win` without an EVS account still produces an
 // app, just with limited DRM); VMP_REQUIRE_SIGN=1 (set by the signed release paths)
 // turns a missing/failed signature into a hard build failure so prod never ships
 // an unsigned-for-DRM client silently.

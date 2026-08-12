@@ -749,8 +749,8 @@ function getPythonPath() {
   // bundleless python3.13 binary appears as a generic "exec" placeholder
   // in the Dock on fresh user Macs, bouncing for the entire boot window.
   // sys.prefix / sys.executable still resolve via realpath so all stdlib
-  // and site-packages discovery is unchanged. See scripts/build-python-env.sh
-  // for the wrapper layout invariants.
+  // and site-packages discovery is unchanged. (The mac env builder that created
+  // the wrapper went away with the macOS pipeline; this branch is dead on Win.)
   if (isPackaged) {
     const envPath = path.join(process.resourcesPath, 'python-env');
     if (process.platform === 'win32') {
@@ -778,15 +778,12 @@ function getPythonPath() {
 // (which has flaky Dock behavior + slow cold-start). Used by 9Router and
 // MCP bundle spawning.
 //
-// Layout shipped by scripts/build-app.sh:
-//   <resources>/node/arm64/bin/node
-//   <resources>/node/x64/bin/node
-// Both arches are staged so a single extraResources entry covers
-// publish-mode dual-arch builds without per-arch staging hooks; the
-// runtime picks the matching one by process.arch. Wasted ~25 MB per
-// DMG of cross-arch payload is the cost of avoiding electron-builder's
-// per-arch beforePack complexity. Windows uses node.exe at the root of
-// the per-arch subdir.
+// Layout shipped by scripts/build-app-win.ps1:
+//   <resources>/node/x64/node.exe
+// Staged under a per-arch subdir so one extraResources entry covers every
+// arch; the runtime picks the matching one by process.arch. The posix
+// <resources>/node/<arch>/bin/node shape resolved below is vestigial (it
+// came from the deleted mac build) and costs nothing to keep.
 function getBundledNodePath() {
   if (!isPackaged) return null;
   const arch = process.arch === 'x64' ? 'x64' : (process.arch === 'arm64' ? 'arm64' : null);
@@ -1736,27 +1733,6 @@ function killBackend() {
   }
 }
 
-// macOS only: dodge the Chromium RootView::UpdateCursor null-deref (a browser-process
-// SIGSEGV when the mouse is released OUTSIDE the window mid-drag, easy with a second
-// display) by snapping off-window releases to the window edge before Chromium hit-tests
-// them. The fault is upstream of our renderer so JS can't catch it; this native addon
-// sits on an AppKit local event monitor. Fail-open: any miss leaves behavior as today.
-function installMacMouseClamp() {
-  if (process.platform !== 'darwin') return;
-  try {
-    const nodePath = isPackaged
-      ? path.join(process.resourcesPath, 'mouseclamp', 'mouseclamp.node')
-      : path.join(__dirname, 'build-staging', 'mouseclamp', process.arch, 'mouseclamp.node');
-    if (!fs.existsSync(nodePath)) {
-      console.log('[mouseclamp] addon not present, skipping:', nodePath);
-      return;
-    }
-    console.log('[mouseclamp] install =>', require(nodePath).install());
-  } catch (e) {
-    console.log('[mouseclamp] install failed (continuing):', e && e.message);
-  }
-}
-
 app.whenReady().then(async () => {
   // Register before any window exists so the accelerators are live from the first frame.
   Menu.setApplicationMenu(buildAppMenu());
@@ -1768,19 +1744,6 @@ app.whenReady().then(async () => {
   // app continues normally (silent fail by design). Guards inside the
   // watchdog itself prevent false-positive relaunches.
   spawnCrashWatchdog();
-
-  // Off-window mouse-release crash dodge (macOS). Safe to call before windows exist.
-  installMacMouseClamp();
-
-  // PASSKEY SPIKE (macOS only): turn on the Secure-Enclave/Touch ID WebAuthn authenticator that Electron 42 added. Without this, isUserVerifyingPlatformAuthenticatorAvailable() is hardwired false (why the old reject-shim existed). keychainAccessGroup MUST match the keychain-access-groups entitlement (Y26NUZH4NG.<bundle>.webauthn) or this throws. Windows has no equivalent, so the reject-shim still runs there.
-  if (process.platform === 'darwin' && typeof app.configureWebAuthn === 'function') {
-    try {
-      app.configureWebAuthn({ touchID: { keychainAccessGroup: 'Y26NUZH4NG.com.clusterlabs.openswarm.webauthn', promptReason: 'sign in to $1' } });
-      console.log('[passkey] configureWebAuthn(touchID) enabled');
-    } catch (e) {
-      console.warn('[passkey] configureWebAuthn failed (entitlement missing? unsigned dev build?):', e && e.message);
-    }
-  }
 
   // Cold-launch: if the OS opened us via maestro:// (Windows/Linux it's
   // in argv; macOS fires open-url AFTER whenReady which we handle above)
@@ -2443,7 +2406,7 @@ app.on('web-contents-created', (_event, contents) => {
     // navigator.credentials so passkey calls reject cleanly and post a
     // tagged message back; webview-preload.js listens and forwards to the
     // embedder, which surfaces the "Passkeys aren't supported" dialog.
-    // PASSKEY SPIKE: Windows ONLY now. On macOS the real Secure-Enclave authenticator (app.configureWebAuthn above) handles passkeys, so rejecting would defeat the whole point; Windows still has no platform authenticator in Electron, so the reject-shim stays there.
+    // PASSKEY SPIKE: Windows ONLY. Windows has no platform authenticator in Electron, so the reject-shim runs there. (The macOS Secure-Enclave/Touch ID path was removed with the macOS build pipeline — it needed a signed Apple provisioning profile.)
     if (process.platform === 'win32') contents.on('dom-ready', () => {
       contents.executeJavaScript(`
         (function() {

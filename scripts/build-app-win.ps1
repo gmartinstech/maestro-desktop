@@ -122,8 +122,8 @@ $NeedUv = -not (Test-Path (Join-Path $UvBinDir 'uv.exe')) -or `
 if ($NeedUv) {
     # Pinned uv version. "latest" used to mean a fresh uv could appear in any
     # build with zero warning, breaking reproducibility (pillar 3). Override
-    # with $env:UV_VERSION when deliberately bumping; keep mac (build-app.sh)
-    # in lockstep. 0.11.16 is what "latest" resolved to when this was pinned.
+    # with $env:UV_VERSION when deliberately bumping. 0.11.16 is what "latest"
+    # resolved to when this was pinned.
     $UvVersion = if ($env:UV_VERSION) { $env:UV_VERSION } else { '0.11.16' }
     Write-Host "[0] Downloading uv + uvx $UvVersion for Windows..."
     $UvUrl = "https://github.com/astral-sh/uv/releases/download/$UvVersion/uv-x86_64-pc-windows-msvc.zip"
@@ -542,29 +542,10 @@ try {
         # update feed are skipped (verify-update-feed skips cleanly when absent).
         & npx electron-builder --win --x64 --dir $TargetOverride --publish never
     } elseif ($Publish) {
-        # Safety check: warn if the matching Mac release isn't on GitHub yet.
-        # Mac and Windows publishes don't conflict (different asset names,
-        # different latest*.yml manifests), but a Windows-only release means
-        # Mac users will skip this version entirely. Better to know now than
-        # explain it after the fact. Non-fatal; sleeps 8s to let the user
-        # Ctrl+C if it surprises them.
-        try {
-            $pkgJson = Get-Content -Raw (Join-Path $ProjectRoot 'electron\package.json') | ConvertFrom-Json
-            $version = $pkgJson.version
-            $macYmlUrl = "https://github.com/gmartinstech/maestro-desktop/releases/download/v$version/latest-mac.yml"
-            $null = Invoke-WebRequest -Uri $macYmlUrl -Method Head -UseBasicParsing -ErrorAction Stop -TimeoutSec 10
-            Write-Host "  > Mac release v$version detected on GitHub (latest-mac.yml present). OK to proceed."
-        } catch {
-            Write-Host ""
-            Write-Host "WARNING: Mac release v$version is NOT yet published on GitHub." -ForegroundColor Yellow
-            Write-Host "  -> Uploading Windows assets to a release with no Mac assets means" -ForegroundColor Yellow
-            Write-Host "     Mac users will skip v$version entirely (electron-updater on Mac" -ForegroundColor Yellow
-            Write-Host "     will see no latest-mac.yml). Recommended order:" -ForegroundColor Yellow
-            Write-Host "       1. bash publish.sh   (on the Mac)" -ForegroundColor Yellow
-            Write-Host "       2. pwsh publish-win.ps1   (here)" -ForegroundColor Yellow
-            Write-Host "  -> Continuing in 8s. Press Ctrl+C to abort." -ForegroundColor Yellow
-            Start-Sleep -Seconds 8
-        }
+        # Windows is the only shipped target, so there is nothing to converge
+        # with: this publish produces the whole release (assets + latest.yml).
+        # (A pre-flight HEAD check for latest-mac.yml used to live here and
+        # warned that "Mac users will skip this version" — macOS is dropped.)
         & npx electron-builder --win --x64 $TargetOverride --publish always
     } else {
         & npx electron-builder --win --x64 $TargetOverride --publish never
