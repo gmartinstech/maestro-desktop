@@ -459,9 +459,40 @@ const AppShell: React.FC = () => {
           WebkitAppRegion: 'drag',
           userSelect: 'none',
           pl: IS_MAC ? `${TRAFFIC_LIGHT_GUTTER}px` : '8px',
+          // Nothing renders in the trailing region any more, but the inset stays so the native button overlay keeps its reserved strip.
+          pr: IS_MAC ? 1.5 : `${WINDOW_CONTROLS_GUTTER}px`,
           gap: 0.25,
         }}
       >
+        {/* Brand leads the bar; it holds no controls, so it stays inside the drag region rather than punching a no-drag hole. */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            flexShrink: 0,
+            mr: 1.25,
+          }}
+        >
+          <Box
+            component="img"
+            src="./maestro-mark.png"
+            alt=""
+            sx={{ width: 20, height: 20, flexShrink: 0, display: 'block' }}
+          />
+          <Typography
+            sx={{
+              color: c.text.secondary,
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              letterSpacing: 0.2,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('appShell.appTitle')}
+          </Typography>
+        </Box>
         {!IS_MAC && (
           <Tooltip title={t('appShell.menuTooltip')}>
             <IconButton
@@ -544,35 +575,6 @@ const AppShell: React.FC = () => {
         <DynamicIsland />
 
         <Box sx={{ flex: 1 }} />
-
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.75,
-            // Clear the native button overlay on Windows/Linux; macOS has nothing here.
-            pr: IS_MAC ? 1.5 : `${WINDOW_CONTROLS_GUTTER}px`,
-            WebkitAppRegion: 'no-drag',
-          }}
-        >
-          <Box
-            component="img"
-            src="./maestro-mark.png"
-            alt=""
-            sx={{ width: 20, height: 20, flexShrink: 0, display: 'block' }}
-          />
-          <Typography
-            sx={{
-              color: c.text.secondary,
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              letterSpacing: 0.2,
-              lineHeight: 1,
-            }}
-          >
-            {t('appShell.appTitle')}
-          </Typography>
-        </Box>
       </Box>
 
       <Collapse in={showWarningBanner} timeout={350} unmountOnExit>
