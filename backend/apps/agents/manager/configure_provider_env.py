@@ -84,6 +84,9 @@ async def configure_provider_env(
         }
         logger.info(f"[MCP-DEBUG] Using direct OpenAI API key (route=api) for {session.model} via openai-passthrough")
     elif is_pinned_api_route and api_route_provider == "custom":
+        # Dead provedor-ia session: fail as auth HERE, before 9Router is even consulted, or the missing node surfaces as "that model may not exist" (see guard_provedor_ia_session for the full chain).
+        from backend.apps.agents.manager.guard_provedor_ia_session import guard_provedor_ia_session as p_guard_pi
+        p_guard_pi(session.model, global_settings)
         # User OpenAI-compatible endpoint (Ollama/Together/LM Studio) via 9Router's synced provider node.
         from backend.apps.nine_router import ensure_running as p_9r_ensure_c
         if not nine_router_running():
