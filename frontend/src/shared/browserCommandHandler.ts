@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { getWebview, findWebviewByDomain, type BrowserWebview } from './browserRegistry';
 import { store } from './state/store';
 import { resumeBrowserCard } from './state/dashboardLayoutSlice';
@@ -50,26 +51,27 @@ export function subscribeActivity(fn: ActivityListener): () => void {
   return () => { listeners.delete(fn); };
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  screenshot: 'Capturing...',
-  get_text: 'Reading...',
-  navigate: 'Navigating...',
-  click: 'Clicking...',
-  type: 'Typing...',
-  evaluate: 'Evaluating...',
-  get_elements: 'Inspecting...',
-  scroll: 'Scrolling...',
-  wait: 'Waiting...',
-  press_key: 'Pressing key...',
-  list_interactives: 'Reading page structure...',
-  click_index: 'Clicking element...',
-  click_point: 'Tapping screen...',
-  click_by_name: 'Clicking element...',
-  batch: 'Running batch...',
+// Locale keys, not text: this module loads before i18next is ready, so the label is only resolved when a component renders it.
+const ACTION_LABEL_KEYS: Record<string, string> = {
+  screenshot: 'dashboard.browserAction.screenshot',
+  get_text: 'dashboard.browserAction.getText',
+  navigate: 'dashboard.browserAction.navigate',
+  click: 'dashboard.browserAction.click',
+  type: 'dashboard.browserAction.type',
+  evaluate: 'dashboard.browserAction.evaluate',
+  get_elements: 'dashboard.browserAction.getElements',
+  scroll: 'dashboard.browserAction.scroll',
+  wait: 'dashboard.browserAction.wait',
+  press_key: 'dashboard.browserAction.pressKey',
+  list_interactives: 'dashboard.browserAction.listInteractives',
+  click_index: 'dashboard.browserAction.clickElement',
+  click_point: 'dashboard.browserAction.clickPoint',
+  click_by_name: 'dashboard.browserAction.clickElement',
+  batch: 'dashboard.browserAction.batch',
 };
 
-export function getActionLabel(action: string): string {
-  return ACTION_LABELS[action] ?? 'Working...';
+export function getActionLabel(action: string, t: TFunction): string {
+  return t(ACTION_LABEL_KEYS[action] ?? 'dashboard.browserAction.working');
 }
 
 // Draw each cached element's index as a colored chip on the live page right before capture (browser-use's trick): the screenshot then speaks the same numbers as BrowserListInteractives, so the vision side can act by index.

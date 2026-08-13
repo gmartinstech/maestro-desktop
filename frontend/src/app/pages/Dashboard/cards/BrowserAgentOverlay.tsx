@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -24,7 +26,8 @@ interface Props {
   browserHeight: number;
 }
 
-function summarizeMessage(msg: AgentMessage): { type: 'thought' | 'action' | 'result' | 'skip'; text: string } {
+// Takes `t` rather than resolving at module scope: i18next isn't initialized when this file loads.
+function summarizeMessage(msg: AgentMessage, t: TFunction): { type: 'thought' | 'action' | 'result' | 'skip'; text: string } {
   if (msg.role === 'assistant' && typeof msg.content === 'string') {
     const trimmed = msg.content.trim();
     if (!trimmed) return { type: 'skip', text: '' };
@@ -37,13 +40,13 @@ function summarizeMessage(msg: AgentMessage): { type: 'thought' | 'action' | 're
     const input = content?.input || {};
     let brief = '';
     switch (tool) {
-      case 'BrowserNavigate': brief = `Navigate → ${input.url || '...'}`; break;
-      case 'BrowserClick': brief = `Click ${input.selector || '...'}`; break;
-      case 'BrowserType': brief = `Type "${(input.text || '').slice(0, 30)}${(input.text || '').length > 30 ? '…' : ''}" into ${input.selector || '...'}`; break;
-      case 'BrowserScreenshot': brief = 'Screenshot'; break;
-      case 'BrowserGetText': brief = 'Read page text'; break;
-      case 'BrowserGetElements': brief = `Inspect elements${input.selector ? ` (${input.selector})` : ''}`; break;
-      case 'BrowserEvaluate': brief = `Evaluate JS`; break;
+      case 'BrowserNavigate': brief = t('dashboard.browserOverlay.step.navigate', { url: input.url || '...' }); break;
+      case 'BrowserClick': brief = t('dashboard.browserOverlay.step.click', { selector: input.selector || '...' }); break;
+      case 'BrowserType': brief = t('dashboard.browserOverlay.step.type', { text: `${(input.text || '').slice(0, 30)}${(input.text || '').length > 30 ? '…' : ''}`, selector: input.selector || '...' }); break;
+      case 'BrowserScreenshot': brief = t('dashboard.browserOverlay.step.screenshot'); break;
+      case 'BrowserGetText': brief = t('dashboard.browserOverlay.step.readPageText'); break;
+      case 'BrowserGetElements': brief = t('dashboard.browserOverlay.step.inspectElements') + (input.selector ? ` (${input.selector})` : ''); break;
+      case 'BrowserEvaluate': brief = t('dashboard.browserOverlay.step.evaluateJs'); break;
       default: brief = tool;
     }
     return { type: 'action', text: brief };
@@ -58,6 +61,7 @@ function summarizeMessage(msg: AgentMessage): { type: 'thought' | 'action' | 're
 
 const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHeight }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -86,7 +90,7 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
   const intervention = session.pending_approvals?.find(
     (a) => a.tool_name === 'RequestHumanIntervention',
   );
-  const interventionProblem = (intervention?.tool_input as any)?.problem || 'The browser agent needs your help.';
+  const interventionProblem = (intervention?.tool_input as any)?.problem || t('dashboard.browserOverlay.needsHelpBody');
   const interventionInstruction = (intervention?.tool_input as any)?.instruction || '';
 
   const prevSessionId = useRef(session.id);
@@ -146,7 +150,7 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
   const accentColor = c.accent.primary;
 
   const entries = session.messages
-    .map(summarizeMessage)
+    .map((msg) => summarizeMessage(msg, t))
     .filter((e) => e.type !== 'skip' && e.type !== 'result');
 
   if (streamingMessage && streamingMessage.role === 'assistant' && streamingMessage.content) {
@@ -245,13 +249,13 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
           }}
         >
           {isDone
-            ? session.status === 'completed' ? 'Done' : session.status === 'error' ? 'Error' : 'Stopped'
-            : intervention ? 'Needs Help'
-            : browserDone && parentStillActive ? 'Waiting…'
-            : 'Browser Agent'}
+            ? session.status === 'completed' ? t('dashboard.browserOverlay.done') : session.status === 'error' ? t('dashboard.browserOverlay.error') : t('dashboard.browserOverlay.stopped')
+            : intervention ? t('dashboard.browserOverlay.needsHelp')
+            : browserDone && parentStillActive ? t('dashboard.browserOverlay.waiting')
+            : t('dashboard.browserOverlay.title')}
         </Typography>
 
-        <Tooltip title={expanded ? 'Collapse' : 'Expand'} placement="top">
+        <Tooltip title={expanded ? t('dashboard.browserOverlay.collapse') : t('dashboard.browserOverlay.expand')} placement="top">
           <IconButton
             size="small"
             onClick={() => setExpanded((e) => !e)}
@@ -269,7 +273,7 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
         </Tooltip>
 
         {isRunning && (
-          <Tooltip title={confirmStop ? 'Click again to confirm' : 'Stop'} placement="top">
+          <Tooltip title={confirmStop ? t('dashboard.browserOverlay.clickAgainToConfirm') : t('dashboard.browserOverlay.stop')} placement="top">
             <IconButton
               size="small"
               onClick={handleStop}
@@ -302,13 +306,13 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
             </Typography>
           )}
           <Typography sx={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', lineHeight: 1.4 }}>
-            Resolve the issue in the browser above, then click Done.
+            {t('dashboard.browserOverlay.resolveHint')}
           </Typography>
           {showSkipInput ? (
             <Box sx={{ display: 'flex', gap: 0.5, mt: 'auto', pt: 0.5, alignItems: 'center' }}>
               <InputBase
                 autoFocus
-                placeholder="Why? (optional)"
+                placeholder={t('dashboard.browserOverlay.skipReasonPlaceholder')}
                 value={skipReason}
                 onChange={(e) => setSkipReason(e.target.value)}
                 onKeyDown={(e) => {
@@ -358,7 +362,7 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
                   color: '#000',
                 }}
               >
-                Done, continue
+                {t('dashboard.browserOverlay.doneContinue')}
               </Button>
               <Button
                 size="small"
@@ -374,7 +378,7 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
                   minWidth: 'auto',
                 }}
               >
-                Skip
+                {t('dashboard.browserOverlay.skip')}
               </Button>
             </Box>
           )}
@@ -401,7 +405,7 @@ const BrowserAgentOverlay: React.FC<Props> = ({ session, browserWidth, browserHe
         >
           {entries.length === 0 && isRunning && (
             <Typography sx={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' }}>
-              Starting...
+              {t('dashboard.browserOverlay.starting')}
             </Typography>
           )}
 

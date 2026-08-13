@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '@/shared/hooks';
 import { collapseSession, expandSession, type AgentSession } from '@/shared/state/agentsSlice';
 import {
@@ -33,6 +34,7 @@ export function useSubAgentLifecycle({
   expandedSessionIds,
 }: UseSubAgentLifecycleArgs) {
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
 
   const autoRevealedRef = useRef(new Set<string>());
   const prevSubStatusRef = useRef<Record<string, string>>({});
@@ -94,7 +96,7 @@ export function useSubAgentLifecycle({
         expandedSessionIds,
       }));
       dispatch(expandSession(sub.id));
-      const label = sub.mode === 'sub-agent' ? 'Create Agent' : 'Invoke Agent';
+      const label = sub.mode === 'sub-agent' ? t('dashboard.tether.createAgent') : t('dashboard.tether.invokeAgent');
       dispatch(setGlowingAgentCard({ sessionId: sub.id, sourceId: sub.parent_session_id!, label }));
 
       if (sub.status === 'completed' || sub.status === 'error' || sub.status === 'stopped') {
@@ -141,5 +143,5 @@ export function useSubAgentLifecycle({
       if (parent) newParentStatuses[pid] = parent.status;
     }
     prevParentStatusRef.current = newParentStatuses;
-  }, [isActive, sessions, cards, workflowOpenCards, layoutInitialized, autoRevealSubAgents, dispatch]);
+  }, [isActive, sessions, cards, workflowOpenCards, layoutInitialized, autoRevealSubAgents, dispatch, t]);
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -15,6 +16,7 @@ interface Props {
 
 const CloseAgentDialog: React.FC<Props> = ({ open, onCancel, onConfirm }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   return (
   <Dialog
     open={open}
@@ -29,17 +31,16 @@ const CloseAgentDialog: React.FC<Props> = ({ open, onCancel, onConfirm }) => {
     }}
   >
     <DialogTitle sx={{ color: c.status.warning, fontWeight: 700, fontSize: '1rem', pb: 0.5 }}>
-      Agent still running
+      {t('dashboard.closeAgent.title')}
     </DialogTitle>
     <DialogContent>
       <DialogContentText sx={{ color: c.text.muted, fontSize: '0.875rem' }}>
-        This agent is still running. Closing it will pause the agent.
-        You can resume it later from the chat history.
+        {t('dashboard.closeAgent.body')}
       </DialogContentText>
     </DialogContent>
     <DialogActions sx={{ px: 3, pb: 2 }}>
       <Button onClick={onCancel} sx={{ color: c.text.tertiary }}>
-        Cancel
+        {t('common.cancel')}
       </Button>
       <Button
         onClick={onConfirm}
@@ -50,7 +51,7 @@ const CloseAgentDialog: React.FC<Props> = ({ open, onCancel, onConfirm }) => {
           fontWeight: 600,
         }}
       >
-        Close &amp; Pause
+        {t('dashboard.closeAgent.confirm')}
       </Button>
     </DialogActions>
   </Dialog>

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
@@ -91,10 +92,11 @@ interface Props {
 // The app card's loading state while its runtime spins up. One soft pulse, calm copy, and an honest hint only after 9s, a freshly-imported app installs its deps on first open, which is the slow case worth explaining instead of leaving the user staring at a dead screen.
 const BootingBody: React.FC = () => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const [slow, setSlow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setSlow(true), 9000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setSlow(true), 9000);
+    return () => clearTimeout(timer);
   }, []);
   return (
     <Box
@@ -113,10 +115,10 @@ const BootingBody: React.FC = () => {
           },
         }}
       />
-      <Typography sx={{ fontSize: '0.85rem', color: c.text.muted }}>Starting preview</Typography>
+      <Typography sx={{ fontSize: '0.85rem', color: c.text.muted }}>{t('dashboard.viewCard.startingPreview')}</Typography>
       <Fade in={slow} timeout={400} unmountOnExit>
         <Typography sx={{ fontSize: '0.72rem', color: c.text.ghost, maxWidth: 240 }}>
-          First run sets the app up, this can take a moment.
+          {t('dashboard.viewCard.firstRunHint')}
         </Typography>
       </Fade>
     </Box>
@@ -130,6 +132,7 @@ const DashboardViewCard: React.FC<Props> = ({
 }) => {
   const cardKey = cardKeyProp ?? output.id;
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
   const previewRef = useRef<ViewPreviewHandle>(null);
@@ -553,12 +556,12 @@ const DashboardViewCard: React.FC<Props> = ({
                 }}
               >
                 {([
-                  { view: 'preview' as const, label: 'Preview', Icon: VisibilityRoundedIcon },
-                  { view: 'code' as const, label: 'Code', Icon: CodeRoundedIcon },
-                  { view: 'terminal' as const, label: 'Terminal', Icon: TerminalRoundedIcon },
-                  { view: 'history' as const, label: 'History', Icon: HistoryRoundedIcon },
-                ]).map(({ view, label, Icon }) => (
-                  <Tooltip key={view} title={label} placement="top">
+                  { view: 'preview' as const, labelKey: 'dashboard.viewCard.preview', Icon: VisibilityRoundedIcon },
+                  { view: 'code' as const, labelKey: 'dashboard.viewCard.code', Icon: CodeRoundedIcon },
+                  { view: 'terminal' as const, labelKey: 'dashboard.viewCard.terminal', Icon: TerminalRoundedIcon },
+                  { view: 'history' as const, labelKey: 'dashboard.viewCard.history', Icon: HistoryRoundedIcon },
+                ]).map(({ view, labelKey, Icon }) => (
+                  <Tooltip key={view} title={t(labelKey)} placement="top">
                     <IconButton
                       size="small"
                       onClick={(e) => { e.stopPropagation(); setActiveView(view); }}
@@ -582,7 +585,7 @@ const DashboardViewCard: React.FC<Props> = ({
             </Box>
 
             <Tooltip
-              title={activeView === 'terminal' ? 'Hard reload (restart runtime + reload app)' : 'Reload preview; right-click for Hard Reload'}
+              title={activeView === 'terminal' ? t('dashboard.viewCard.hardReloadHint') : t('dashboard.viewCard.reloadHint')}
               placement="top"
             >
               <IconButton
@@ -602,7 +605,7 @@ const DashboardViewCard: React.FC<Props> = ({
             </Tooltip>
 
             {hasWorkspace && (
-              <Tooltip title="Open another window" placement="top">
+              <Tooltip title={t('dashboard.viewCard.openAnotherWindow')} placement="top">
                 <IconButton
                   size="small"
                   onClick={handleOpenAnother}
@@ -616,7 +619,7 @@ const DashboardViewCard: React.FC<Props> = ({
           </>
         )}
 
-        <Tooltip title={headerCollapsed ? 'Show toolbar' : 'Hide toolbar'} placement="top">
+        <Tooltip title={headerCollapsed ? t('dashboard.viewCard.showToolbar') : t('dashboard.viewCard.hideToolbar')} placement="top">
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); setHeaderPeek(false); setHeaderCollapsed((v) => !v); }}
@@ -627,7 +630,7 @@ const DashboardViewCard: React.FC<Props> = ({
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Remove from dashboard" placement="top">
+        <Tooltip title={t('dashboard.viewCard.removeFromDashboard')} placement="top">
           <IconButton
             size="small"
             onClick={handleRemove}
@@ -751,6 +754,7 @@ export default React.memo(DashboardViewCard);
 // Calm overlay shown while the App Builder chat that owns this output is actively editing it (and through the post-turn reload). Hides whatever transient half-broken state the agent might be writing through so the user sees "Building..." instead of an error iframe. Fades in/out.
 const BuildingOverlay: React.FC<{ show: boolean }> = ({ show }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   return (
     <Fade in={show} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
       <Box
@@ -781,7 +785,7 @@ const BuildingOverlay: React.FC<{ show: boolean }> = ({ show }) => {
           }}
         />
         <Typography sx={{ color: c.text.secondary, fontSize: '0.85rem', fontWeight: 500 }}>
-          Building…
+          {t('dashboard.viewCard.building')}
         </Typography>
       </Box>
     </Fade>

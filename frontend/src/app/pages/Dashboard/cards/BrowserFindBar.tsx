@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
@@ -17,6 +18,7 @@ interface BrowserFindBarProps {
 // In-page find (Ctrl/Cmd+F): drives the active tab's webview findInPage with a Chrome-style match counter + up/down/Enter nav, clearing the highlight on close.
 export default function BrowserFindBar({ browserId, focusSignal, onClose }: BrowserFindBarProps): React.ReactElement {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<{ active: number; total: number }>({ active: 0, total: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,7 +105,7 @@ export default function BrowserFindBar({ browserId, focusSignal, onClose }: Brow
         value={query}
         onChange={onChange}
         onKeyDown={onKeyDown}
-        placeholder="Find in page"
+        placeholder={t('dashboard.findBar.placeholder')}
         sx={{ fontSize: 13, color: c.text.primary, width: 160, '& input': { p: 0 } }}
       />
       <Box sx={{ fontSize: 12, color: c.text.tertiary, minWidth: 44, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>

@@ -1,6 +1,7 @@
 // Shared visual helpers for the workflow card UI tier: schedule/permission pill chips, status dot, run-status sparkline, step connector, step icon auto-classifier. Kept as plain functions/components so individual views can compose without owning the styling.
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
@@ -26,7 +27,7 @@ import CodeIcon from '@mui/icons-material/CodeRounded';
 import SearchIcon from '@mui/icons-material/SearchRounded';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { Workflow, WorkflowRun, ScheduleConfig, PermissionTier } from '@/shared/state/workflowsSlice';
-import { formatTime, WEEKDAY_LABEL, isScheduleConfigured } from './scheduleUtils';
+import { describeScheduleShort, weekdayNames, isScheduleConfigured } from './scheduleUtils';
 
 // ---------- Title placeholders ----------
 
@@ -83,33 +84,13 @@ export function StatusDot({ status }: { status: LastRunStatus | null | undefined
 
 // ---------- Pill chips ----------
 
-function scheduleShort(sched: ScheduleConfig): string {
-  if (!sched.enabled || !isScheduleConfigured(sched)) return 'Not scheduled';
-  const time = formatTime(sched.hour, sched.minute);
-  if (sched.repeat_unit === 'minute') return `Every ${sched.repeat_every}m`;
-  if (sched.repeat_unit === 'hour') return sched.repeat_every === 1 ? 'Hourly' : `Every ${sched.repeat_every}h`;
-  if (sched.repeat_unit === 'day') {
-    return sched.repeat_every === 1 ? `Daily ${time}` : `Every ${sched.repeat_every}d ${time}`;
-  }
-  if (sched.repeat_unit === 'month') {
-    const day = sched.day_of_month ? ` day ${sched.day_of_month}` : '';
-    return sched.repeat_every === 1 ? `Monthly${day} ${time}` : `Every ${sched.repeat_every}mo${day} ${time}`;
-  }
-  if (sched.on_days.length === 5 && [1, 2, 3, 4, 5].every((d) => sched.on_days.includes(d))) return `Weekdays ${time}`;
-  if (sched.on_days.length === 2 && [0, 6].every((d) => sched.on_days.includes(d))) return `Weekends ${time}`;
-  if (sched.on_days.length === 1) {
-    const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return `${labels[sched.on_days[0]]} ${time}`;
-  }
-  return `${sched.on_days.length}×/wk ${time}`;
-}
-
-// Weekday-dot strip "S M T W T F S" with active days filled. Rendered inline next to the chip when the schedule is weekly so users can pattern-match days without parsing prose. Active = filled accent dot.
+// Weekday-dot strip ("S M T W T F S" in en, "D S T Q Q S S" in pt-BR) with active days filled. Rendered inline next to the chip when the schedule is weekly so users can pattern-match days without parsing prose. Active = filled accent dot.
 export function WeekdayDots({ on_days }: { on_days: number[] }) {
   const c = useClaudeTokens();
+  const { i18n } = useTranslation();
   return (
     <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.35, ml: 0.5 }}>
-      {WEEKDAY_LABEL.map((lbl, idx) => {
+      {weekdayNames(i18n.language, 'narrow').map((lbl, idx) => {
         const active = on_days.includes(idx);
         return (
           <Box key={`${lbl}-${idx}`} sx={{
@@ -168,6 +149,7 @@ export function PermissionChip({ workflow }: { workflow: Workflow }) {
 
 export function ScheduleChip({ workflow }: { workflow: Workflow }) {
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
   const dispatch = useAppDispatch();
   const enabled = workflow.schedule.enabled && isScheduleConfigured(workflow.schedule);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -183,7 +165,7 @@ export function ScheduleChip({ workflow }: { workflow: Workflow }) {
   };
   return (
     <>
-      <Tooltip title={enabled ? `Click to tweak time. Full editor lives in the Edit tab.` : 'Not scheduled'}>
+      <Tooltip title={enabled ? t('workflows.scheduleChip.tweakHint') : t('workflows.schedule.notScheduled')}>
         <Box
           onClick={(e) => enabled && setAnchor(e.currentTarget as HTMLElement)}
           role={enabled ? 'button' : undefined}
@@ -198,7 +180,7 @@ export function ScheduleChip({ workflow }: { workflow: Workflow }) {
             '&:hover': enabled ? { bgcolor: c.accent.primary + '22' } : undefined,
           }}>
           <ScheduleIcon sx={{ fontSize: 13 }} />
-          {scheduleShort(workflow.schedule)}
+          {describeScheduleShort(workflow.schedule, t, i18n.language)}
           {enabled && workflow.schedule.repeat_unit === 'week' && (
             <WeekdayDots on_days={workflow.schedule.on_days} />
           )}

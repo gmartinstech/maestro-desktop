@@ -1354,7 +1354,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   // Status speaks only when it needs the user; finished work sits quiet.
                   <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                     <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: c.text.tertiary, whiteSpace: 'nowrap' }}>
-                      {friendlyStatusLabel(session.status)}
+                      {friendlyStatusLabel(session.status, t)}
                     </Typography>
                   </Box>
                 )}

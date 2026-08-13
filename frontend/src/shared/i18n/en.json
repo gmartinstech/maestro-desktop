@@ -12,7 +12,14 @@
     "copy": "Copy",
     "edit": "Edit",
     "remove": "Remove",
-    "delete": "Delete"
+    "delete": "Delete",
+    "status": {
+      "working": "working",
+      "needsYourOk": "needs your OK",
+      "done": "done",
+      "needsAttention": "needs attention"
+    },
+    "back": "back"
   },
   "appShell": {
     "appTitle": "Maestro Studio",
@@ -481,6 +488,156 @@
       "tidyLayout": "Tidy layout",
       "hideMinimap": "Hide minimap",
       "showMinimap": "Show minimap"
+    },
+    "browserAction": {
+      "screenshot": "Capturing...",
+      "getText": "Reading...",
+      "navigate": "Navigating...",
+      "click": "Clicking...",
+      "type": "Typing...",
+      "evaluate": "Evaluating...",
+      "getElements": "Inspecting...",
+      "scroll": "Scrolling...",
+      "wait": "Waiting...",
+      "pressKey": "Pressing key...",
+      "listInteractives": "Reading page structure...",
+      "clickElement": "Clicking element...",
+      "clickPoint": "Tapping screen...",
+      "batch": "Running batch...",
+      "working": "Working..."
+    },
+    "emptyState": {
+      "prompt": "What do you want done?",
+      "connectModel": "Connect a model in Settings to get started."
+    },
+    "starters": {
+      "pickOneOrTell": "pick one, or just tell me below",
+      "pickOneOrType": "pick one, or just type below",
+      "research": {
+        "label": "Research",
+        "prompt1": "Plan a 3-day Tokyo trip and turn it into a printable PDF itinerary",
+        "prompt2": "Make a slideshow presentation on black holes",
+        "prompt3": "Look at what I've been working on lately and write me a quick recap",
+        "prompt4": "Send 3 agents to plan my weekend at once: where to eat, what to do, what to watch"
+      },
+      "build": {
+        "label": "Build an app",
+        "prompt1": "Make me Minecraft I can play right now",
+        "prompt2": "Build me a personal site from my resume",
+        "prompt3": "Turn a spreadsheet on my computer into a live dashboard",
+        "prompt4": "Build a habit tracker that remembers my streaks between visits"
+      },
+      "browse": {
+        "label": "Use the web",
+        "prompt1": "Send an agent to find the cheapest flights to Tokyo and show me the best options",
+        "prompt2": "Have an agent hunt down the best price on something I want to buy",
+        "prompt3": "Find and screenshot the top-rated coffee shops in my city",
+        "prompt4": "Watch an agent sign me up for a free newsletter on a site"
+      },
+      "connect": {
+        "label": "Connect your apps",
+        "prompt1": "Summarize my Gmail inbox and flag what actually needs a reply",
+        "prompt2": "Turn my Notion notes into a clear action plan",
+        "prompt3": "Look at my calendar and lay out a realistic plan for my week",
+        "prompt4": "Pull a sheet from my Google Drive and chart what matters"
+      }
+    },
+    "header": {
+      "agents": "Agents",
+      "views": "Views",
+      "browsers": "Browsers"
+    },
+    "agentCard": {
+      "queued": "queued",
+      "closeChat": "Close chat",
+      "questionPending": "Question pending",
+      "learned": "Learned",
+      "remembered": "Remembered",
+      "memoryLearnedHint": "Saved what worked here, so it is faster next time",
+      "memoryRecalledHint": "Using what it learned here on a past visit",
+      "approve": "Approve",
+      "deny": "Deny",
+      "approveAll": "Approve All",
+      "denyAll": "Deny All",
+      "pendingApprovals_one": "{{count}} pending approval",
+      "pendingApprovals_other": "{{count}} pending approvals"
+    },
+    "viewCard": {
+      "startingPreview": "Starting preview",
+      "firstRunHint": "First run sets the app up, this can take a moment.",
+      "building": "Building…",
+      "preview": "Preview",
+      "code": "Code",
+      "terminal": "Terminal",
+      "history": "History",
+      "hardReloadHint": "Hard reload (restart runtime + reload app)",
+      "reloadHint": "Reload preview; right-click for Hard Reload",
+      "openAnotherWindow": "Open another window",
+      "showToolbar": "Show toolbar",
+      "hideToolbar": "Hide toolbar",
+      "removeFromDashboard": "Remove from dashboard"
+    },
+    "cardSearch": {
+      "placeholder": "Search cards...",
+      "noCards": "No cards found",
+      "agentFallback": "Agent {{id}}",
+      "viewFallback": "View: {{id}}",
+      "browserFallback": "Browser {{id}}"
+    },
+    "noteCard": {
+      "placeholder": "Type a note…"
+    },
+    "findBar": {
+      "placeholder": "Find in page"
+    },
+    "closeAgent": {
+      "title": "Agent still running",
+      "body": "This agent is still running. Closing it will pause the agent. You can resume it later from the chat history.",
+      "confirm": "Close & Pause"
+    },
+    "replayOverlay": {
+      "ariaLabel": "fast data read",
+      "results_one": "{{count}} result",
+      "results_other": "{{count}} results",
+      "feedEmpty": "{{site}}'s feed came back empty, browsing instead",
+      "readingFeed": "Reading {{site}}'s data feed"
+    },
+    "browserOverlay": {
+      "title": "Browser Agent",
+      "done": "Done",
+      "error": "Error",
+      "stopped": "Stopped",
+      "waiting": "Waiting…",
+      "needsHelp": "Needs Help",
+      "needsHelpBody": "The browser agent needs your help.",
+      "collapse": "Collapse",
+      "expand": "Expand",
+      "stop": "Stop",
+      "clickAgainToConfirm": "Click again to confirm",
+      "resolveHint": "Resolve the issue in the browser above, then click Done.",
+      "skipReasonPlaceholder": "Why? (optional)",
+      "doneContinue": "Done, continue",
+      "skip": "Skip",
+      "starting": "Starting...",
+      "step": {
+        "navigate": "Navigate → {{url}}",
+        "click": "Click {{selector}}",
+        "type": "Type \"{{text}}\" into {{selector}}",
+        "screenshot": "Screenshot",
+        "readPageText": "Read page text",
+        "inspectElements": "Inspect elements",
+        "evaluateJs": "Evaluate JS"
+      }
+    },
+    "tether": {
+      "browser": "Browser",
+      "useBrowser": "Use Browser",
+      "makeWorkflow": "Make workflow",
+      "testing": "Testing",
+      "watching": "Watching",
+      "viewing": "Viewing",
+      "createAgent": "Create Agent",
+      "invokeAgent": "Invoke Agent"
     }
   },
   "overlays": {
@@ -911,7 +1068,8 @@
         "Month": "Month"
       },
       "expand": "Expand",
-      "today": "Today"
+      "today": "Today",
+      "notScheduled": "Not scheduled"
     },
     "calendar": {
       "runNow": "Run now",
@@ -969,6 +1127,29 @@
         "weeklyEveryNAt_one": "Every {{days}} at {{time}}",
         "weeklyEveryNAt_other": "Every {{count}} weeks on {{days}} at {{time}}"
       }
+    },
+    "scheduleCard": {
+      "title": "Schedule",
+      "on": "On",
+      "off": "Off",
+      "noStepsWarning": "This workflow has no steps, so a scheduled run won't do anything. Add a step first.",
+      "notTestedWarning": "Not test-run yet. A scheduled run can't pause for permission prompts, so if this needs tool access it may fail silently. Hit Run once to grant access.",
+      "dayOfMonth": "Day of month",
+      "lastDay": "Last day",
+      "last": "Last",
+      "shortMonthHint": "Short months fire on their last day. Pick \"Last\" to always hit month-end.",
+      "runAt": "Run at",
+      "runEvery": "Run every",
+      "minutes": "minutes",
+      "hours": "hours",
+      "minimumHours_one": "Minimum is {{count}} hour.",
+      "minimumHours_other": "Minimum is {{count}} hours.",
+      "minimumMinutes_one": "Minimum is {{count}} minute.",
+      "minimumMinutes_other": "Minimum is {{count}} minutes.",
+      "repeat": "Repeat"
+    },
+    "scheduleChip": {
+      "tweakHint": "Click to tweak time"
     }
   }
 }

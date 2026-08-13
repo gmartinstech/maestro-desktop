@@ -12,7 +12,7 @@ import { API_BASE } from '@/shared/config';
 import type { Workflow } from '@/shared/state/workflowsSlice';
 import { runWorkflowNow, deleteWorkflow, updateWorkflow, openWorkflowCard } from '@/shared/state/workflowsSlice';
 import { addWorkflowCard } from '@/shared/state/dashboardLayoutSlice';
-import { addDays, sameDay, startOfMonthGrid, startOfWeek, stepsSignature } from './scheduleUtils';
+import { addDays, formatClock, formatHourLabel, sameDay, startOfMonthGrid, startOfWeek, stepsSignature } from './scheduleUtils';
 import { labelForStatus } from './WorkflowCardSubviews';
 import { useWindowedList } from '@/shared/hooks/useWindowedList';
 
@@ -35,20 +35,6 @@ function weekdayNames(locale: string): string[] {
     const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' });
     return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 1 + i)));
   } catch { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; }
-}
-
-// Locale-aware clock label: pt-BR renders 24h ("15:00"), en keeps 12h am/pm.
-function formatClock(hour: number, minute: number, locale: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hour, minute));
-  } catch { return `${hour}:${String(minute).padStart(2, '0')}`; }
-}
-
-// Left-column hour label in the Week grid ("10 AM" in en, "10" in pt-BR).
-function formatHourLabel(hour: number, locale: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour));
-  } catch { return String(hour); }
 }
 
 interface CalendarEvent {

@@ -2,11 +2,12 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft } from 'lucide-react';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { useAppSelector } from '@/shared/hooks';
 import { hasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
-import { STARTER_CATEGORIES } from '@/shared/starterCategories';
+import { useStarterCategories } from '@/shared/starterCategories';
 
 // Returning-user empty state (the first-run greeting now lives in the auto-popped welcome chat). Quiet: a one-line prompt + the shared starter chips for users who can run, or a connect-a-model hint for users who can't. Two-level: category -> concrete prompts.
 const DashboardEmptyState: React.FC<{
@@ -14,12 +15,14 @@ const DashboardEmptyState: React.FC<{
   onLaunch?: (prompt: string, mode: string, model: string) => void;
   onStarter?: (prompt: string, mode?: string) => void;
 }> = ({ c, onLaunch, onStarter }) => {
+  const { t } = useTranslation();
+  const categories = useStarterCategories();
   const model = useAppSelector((s) => s.settings.data.default_model);
   const mode = useAppSelector((s) => s.settings.data.default_mode);
   const canRun = useAppSelector((s) => hasModelConnected(s));
   const [launching, setLaunching] = React.useState(false);
   const [expanded, setExpanded] = React.useState<string | null>(null);
-  const currentCategory = STARTER_CATEGORIES.find((cat) => cat.id === expanded);
+  const currentCategory = categories.find((cat) => cat.id === expanded);
   const currentPrompts = currentCategory?.prompts ?? [];
 
   const showChips = !!onLaunch && canRun;
@@ -48,7 +51,7 @@ const DashboardEmptyState: React.FC<{
       }}
     >
       <Typography sx={{ color: c.text.secondary, fontSize: '1.3rem', fontWeight: 500, mb: 2.2, textAlign: 'center' }}>
-        What do you want done?
+        {t('dashboard.emptyState.prompt')}
       </Typography>
 
       {showChips ? (
@@ -64,10 +67,10 @@ const DashboardEmptyState: React.FC<{
                 style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
               >
                 <Typography sx={{ color: c.text.ghost, fontSize: '0.9rem', mb: 1.4 }}>
-                  pick one, or just tell me below
+                  {t('dashboard.starters.pickOneOrTell')}
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.2, width: '100%', maxWidth: 460 }}>
-                  {STARTER_CATEGORIES.map((cat) => (
+                  {categories.map((cat) => (
                     <Box
                       component="button"
                       key={cat.id}
@@ -112,7 +115,7 @@ const DashboardEmptyState: React.FC<{
                     '&:hover': { color: c.text.secondary },
                   }}
                 >
-                  <ArrowLeft size={15} /> back
+                  <ArrowLeft size={15} /> {t('common.back')}
                 </Box>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.9, width: '100%', maxWidth: 480 }}>
                   {currentPrompts.map((prompt) => (
@@ -146,7 +149,7 @@ const DashboardEmptyState: React.FC<{
         </Box>
       ) : (
         <Typography sx={{ color: c.text.ghost, fontSize: '0.95rem' }}>
-          Connect a model in Settings to get started.
+          {t('dashboard.emptyState.connectModel')}
         </Typography>
       )}
     </Box>

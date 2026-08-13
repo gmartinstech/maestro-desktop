@@ -44,6 +44,8 @@ import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canv
 import { setCardSidecar } from '@/shared/state/workflowsSlice';
 import { openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 import { getAgentWorkTime, fmtSeconds } from '@/shared/agentWorkTime';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
 
 /** Extract up to 3 substantive user-prompt steps to seed a workflow. */
@@ -183,7 +185,8 @@ const ElapsedTimer: React.FC<{
   return <>{fmtSeconds(getAgentWorkTime(messages, status).last)}</>;
 });
 
-function summarizeToolInput(toolName: string, toolInput: Record<string, any>): string {
+// Takes `t` rather than resolving at module scope: i18next isn't initialized when this file loads.
+function summarizeToolInput(toolName: string, toolInput: Record<string, any>, t: TFunction): string {
   const mcp = parseMcpToolName(toolName);
   if (mcp.isMcp) {
     const keys = Object.keys(toolInput || {});
@@ -214,9 +217,9 @@ function summarizeToolInput(toolName: string, toolInput: Record<string, any>): s
     case 'AskUserQuestion': {
       const questions = toolInput.questions;
       if (Array.isArray(questions) && questions.length > 0) {
-        return questions[0].question || questions[0].prompt || questions[0].text || 'Question pending';
+        return questions[0].question || questions[0].prompt || questions[0].text || t('dashboard.agentCard.questionPending');
       }
-      return 'Question pending';
+      return t('dashboard.agentCard.questionPending');
     }
     default: {
       return toolInput.command || toolInput.file_path || toolInput.path || toolInput.query
@@ -309,6 +312,7 @@ const AgentCard: React.FC<Props> = ({
   shakeDirection,
 }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const isDashboardActive = useDashboardActive();
   const hasApiKey = !!useAppSelector((s) => s.settings.data.anthropic_api_key);
@@ -924,7 +928,7 @@ const AgentCard: React.FC<Props> = ({
             {session.status !== 'completed' && session.status !== 'stopped' && !session.is_welcome_draft && (
               <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                 <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: c.text.tertiary, whiteSpace: 'nowrap' }}>
-                  {session.queued && session.status === 'running' ? 'queued' : friendlyStatusLabel(session.status)}
+                  {session.queued && session.status === 'running' ? t('dashboard.agentCard.queued') : friendlyStatusLabel(session.status, t)}
                 </Typography>
               </Box>
             )}
@@ -938,11 +942,11 @@ const AgentCard: React.FC<Props> = ({
                 this site, so the user feels it getting smarter on its own. */}
             <Fade in={session.memory_recalled || session.memory_learned} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
               <Tooltip title={session.memory_learned
-                ? 'Saved what worked here, so it is faster next time'
-                : 'Using what it learned here on a past visit'}>
+                ? t('dashboard.agentCard.memoryLearnedHint')
+                : t('dashboard.agentCard.memoryRecalledHint')}>
                 <Chip
                   icon={<AutoAwesomeIcon sx={{ fontSize: 13, color: `${accentColor} !important` }} />}
-                  label={session.memory_learned ? 'Learned' : 'Remembered'}
+                  label={session.memory_learned ? t('dashboard.agentCard.learned') : t('dashboard.agentCard.remembered')}
                   size="small"
                   sx={{
                     bgcolor: c.bg.secondary,
@@ -962,7 +966,7 @@ const AgentCard: React.FC<Props> = ({
             onPointerDown={(e) => e.stopPropagation()}
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, ml: 0.5 }}
           >
-            <Tooltip title={isDraft ? 'Remove' : 'Close chat'}>
+            <Tooltip title={isDraft ? t('common.remove') : t('dashboard.agentCard.closeChat')}>
               <IconButton
                 size="small"
                 onClick={handleRemove}
@@ -1115,13 +1119,13 @@ const AgentCard: React.FC<Props> = ({
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {summarizeToolInput(pendingReq.tool_name, pendingReq.tool_input)}
+                        {summarizeToolInput(pendingReq.tool_name, pendingReq.tool_input, t)}
                       </Typography>
                     </Box>
                   </Box>
                   {session.pending_approvals.length === 1 && (
                     <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
-                      <Tooltip title="Approve">
+                      <Tooltip title={t('dashboard.agentCard.approve')}>
                         <IconButton
                           size="small"
                           onClick={() => dispatch(handleApproval({ requestId: pendingReq.id, behavior: 'allow' }))}
@@ -1130,7 +1134,7 @@ const AgentCard: React.FC<Props> = ({
                           <CheckCircleIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Deny">
+                      <Tooltip title={t('dashboard.agentCard.deny')}>
                         <IconButton
                           size="small"
                           onClick={() => dispatch(handleApproval({ requestId: pendingReq.id, behavior: 'deny' }))}
@@ -1157,7 +1161,7 @@ const AgentCard: React.FC<Props> = ({
                   }}
                 >
                   <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: c.status.warning, flex: 1 }}>
-                    {session.pending_approvals.length} pending approvals
+                    {t('dashboard.agentCard.pendingApprovals', { count: session.pending_approvals.length })}
                   </Typography>
                   <Button
                     variant="contained"
@@ -1182,7 +1186,7 @@ const AgentCard: React.FC<Props> = ({
                       minWidth: 0,
                     }}
                   >
-                    Approve All
+                    {t('dashboard.agentCard.approveAll')}
                   </Button>
                   <Button
                     variant="outlined"
@@ -1207,7 +1211,7 @@ const AgentCard: React.FC<Props> = ({
                       minWidth: 0,
                     }}
                   >
-                    Deny All
+                    {t('dashboard.agentCard.denyAll')}
                   </Button>
                 </Box>
               )}

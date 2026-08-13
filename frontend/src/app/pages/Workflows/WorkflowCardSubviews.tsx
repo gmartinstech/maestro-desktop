@@ -28,7 +28,7 @@ import { placeCard, removeWorkflowCard } from '@/shared/state/dashboardLayoutSli
 import { setPendingFocusAgentId } from '@/shared/state/tempStateSlice';
 import { CostChip, humanDuration, routingFor, StreakBadge } from './workflowVisuals';
 import StepList from './StepList';
-import { isScheduleConfigured, needsScheduleTestWarning, stepsSignature } from './scheduleUtils';
+import { describeSchedule, isScheduleConfigured, needsScheduleTestWarning, stepsSignature } from './scheduleUtils';
 import ScheduleTestWarningDialog from './ScheduleTestWarningDialog';
 import { runWorkflowTest } from './runWorkflowTest';
 import { useOpenSidecar } from './WorkflowCardLiveViews';
@@ -62,13 +62,6 @@ export function formatRunDate(iso: string, locale: string): string {
     const d = new Date(iso);
     return d.toLocaleString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
   } catch { return iso; }
-}
-
-// Locale-aware clock label: pt-BR renders 24h ("15:00"), en keeps 12h am/pm.
-function formatTimeOfDay(hour: number, minute: number, locale: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hour, minute));
-  } catch { return `${hour}:${String(minute).padStart(2, '0')}`; }
 }
 
 type ActionBtnTone = 'muted' | 'success' | 'danger';
@@ -305,38 +298,6 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   );
 }
 
-// Render the workflow's permission tiers as a flat prose line so the SavedView reads like a sentence, not a chip salad. Mirrors target #54.
-function describePermissions(workflow: Workflow): string {
-  const tiers = workflow.permissions || [];
-  if (tiers.length === 0) return 'Notify me in Maestro Studio';
-  const parts: string[] = [];
-  for (const t of tiers) {
-    if (t.kind === 'notify') parts.push('notify in app');
-    else if (t.kind === 'text') parts.push('text');
-    else if (t.kind === 'call') parts.push('call');
-  }
-  return `First ${parts.join(', then ')}`;
-}
-
-function describeSchedule(workflow: Workflow, t: TFunction, locale: string): string {
-  const s = workflow.schedule;
-  const k = 'workflows.subviews.schedule';
-  if (!s.enabled) return t(`${k}.notScheduled`);
-  const time = formatTimeOfDay(s.hour, s.minute, locale);
-  if (s.repeat_unit === 'minute') return t(`${k}.everyMinutes`, { count: s.repeat_every });
-  if (s.repeat_unit === 'hour') return s.repeat_every === 1 ? t(`${k}.hourlyAt`, { minute: String(s.minute).padStart(2, '0') }) : t(`${k}.everyHours`, { count: s.repeat_every });
-  if (s.repeat_unit === 'day') return s.repeat_every === 1 ? t(`${k}.dailyAt`, { time }) : t(`${k}.everyDaysAt`, { count: s.repeat_every, time });
-  if (s.repeat_unit === 'month') {
-    const day = s.day_of_month ? t(`${k}.onDayOfMonth`, { day: s.day_of_month }) : '';
-    return s.repeat_every === 1 ? t(`${k}.monthlyAt`, { day, time }) : t(`${k}.everyMonthsAt`, { count: s.repeat_every, day, time });
-  }
-  if (s.on_days.length === 5 && [1,2,3,4,5].every((d) => s.on_days.includes(d))) return t(`${k}.weekdaysAt`, { time });
-  if (s.on_days.length === 2 && [0,6].every((d) => s.on_days.includes(d))) return t(`${k}.weekendsAt`, { time });
-  // Image #50: a single day reads as a plural weekday ("Mondays at 3pm"), which Intl can't produce, so the plural forms live as their own keys.
-  if (s.on_days.length === 1) return t(`${k}.singleDayAt`, { day: t(`${k}.dayPlural.${s.on_days[0]}`), time });
-  return t(`${k}.weeklyAt`, { time });
-}
-
 export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Workflow; steps: Workflow['steps']; runs?: WorkflowRun[]; activeRunId?: string | null }) {
   const c = useClaudeTokens();
   const { t, i18n } = useTranslation();
@@ -403,7 +364,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
 
   const scheduleConfigured = isScheduleConfigured(workflow.schedule);
   const scheduleLine = workflow.schedule.enabled && scheduleConfigured
-    ? describeSchedule(workflow, t, i18n.language)
+    ? describeSchedule(workflow.schedule, t, i18n.language)
     : t('workflows.subviews.scheduleThisWorkflow');
   const scheduleClickable = !scheduleConfigured;
   // One-shot prompt right after a convert; hub-opened cards never set the flag, so they fall straight to the quiet schedule line below.

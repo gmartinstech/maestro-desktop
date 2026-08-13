@@ -19,6 +19,7 @@
  *   - unmountOnExit => literally zero cost when not replaying.
  */
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Fade from '@mui/material/Fade';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -43,19 +44,20 @@ function BrowserReplayOverlay({
   active, site, rows, total, status, elapsedMs,
 }: BrowserReplayOverlayProps) {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const shown = rows.length > MAX_VISIBLE ? rows.slice(0, MAX_VISIBLE) : rows;
 
   const header =
     status === 'done'
-      ? `✓ ${total} result${total === 1 ? '' : 's'}${elapsedMs != null ? ` · ${(elapsedMs / 1000).toFixed(1)}s` : ''}`
+      ? `✓ ${t('dashboard.replayOverlay.results', { count: total })}${elapsedMs != null ? ` · ${(elapsedMs / 1000).toFixed(1)}s` : ''}`
       : status === 'empty'
-        ? `${site}'s feed came back empty, browsing instead`
-        : `Reading ${site}'s data feed`;
+        ? t('dashboard.replayOverlay.feedEmpty', { site })
+        : t('dashboard.replayOverlay.readingFeed', { site });
 
   return (
     <Fade in={active} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
       <Box
-        aria-label="fast data read"
+        aria-label={t('dashboard.replayOverlay.ariaLabel')}
         sx={{
           position: 'absolute', inset: 0, zIndex: 5,
           bgcolor: c.bg.surface,             // opaque on purpose (see file header)
