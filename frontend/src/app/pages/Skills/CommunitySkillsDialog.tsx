@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -30,6 +31,7 @@ interface Props {
 
 // The skills.sh wild registry is unvetted community code (skills can ship scripts). So this dialog never installs blind: picking a skill fetches a disclosure (files + scripts) the user confirms before anything lands on disk.
 const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CommunitySkill[]>([]);
@@ -53,12 +55,12 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
       setResults(res);
     } catch (e) {
       if (seq !== searchSeq.current) return;
-      setError(e instanceof Error ? e.message : 'Search failed');
+      setError(e instanceof Error ? e.message : t('skills.community.searchFailed'));
       setResults([]);
     } finally {
       if (seq === searchSeq.current) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!open) return;
@@ -85,7 +87,7 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
       setDisclosure(res.disclosure);
     } catch (e) {
       if (seq !== previewSeq.current) return;
-      setError(e instanceof Error ? e.message : 'Could not load skill');
+      setError(e instanceof Error ? e.message : t('skills.community.loadFailed'));
       setSelected(null);
     } finally {
       if (seq === previewSeq.current) setBusy(false);
@@ -102,7 +104,7 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
       setSelected(null);
       setDisclosure(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Install failed');
+      setError(e instanceof Error ? e.message : t('skills.community.installFailed'));
     } finally {
       setBusy(false);
     }
@@ -112,9 +114,9 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
       PaperProps={{ sx: { bgcolor: c.bg.secondary, borderRadius: `${c.radius.md}px` } }}>
       <DialogTitle sx={{ color: c.text.primary, fontSize: '1rem', fontWeight: 700, pb: 0.5 }}>
-        Browse community skills
+        {t('skills.community.title')}
         <Typography sx={{ fontSize: '0.78rem', color: c.text.tertiary, fontWeight: 400 }}>
-          From the skills.sh registry. Community-published and unvetted; you'll see exactly what installs before it lands.
+          {t('skills.community.subtitle')}
         </Typography>
       </DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 360 }}>
@@ -124,7 +126,7 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
           <>
             <TextField
               autoFocus
-              placeholder="Search skills.sh (e.g. pdf, slides, video)…"
+              placeholder={t('skills.community.searchPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               size="small"
@@ -133,7 +135,7 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
             {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={22} /></Box>}
             {!loading && results.length === 0 && (
               <Typography sx={{ fontSize: '0.82rem', color: c.text.tertiary, textAlign: 'center', py: 3 }}>
-                {query.trim() ? 'No matching skills.' : 'Type to search the community registry.'}
+                {query.trim() ? t('skills.community.noResults') : t('skills.community.typeToSearch')}
               </Typography>
             )}
             {!loading && results.map((s) => (
@@ -146,7 +148,7 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
                 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                   <Typography sx={{ fontSize: '0.86rem', fontWeight: 600, color: c.text.primary }}>{s.name}</Typography>
-                  <Chip label={`${s.installs.toLocaleString()} installs`} size="small"
+                  <Chip label={t('skills.community.installsCount', { count: s.installs, formattedCount: s.installs.toLocaleString() })} size="small"
                     sx={{ height: 18, fontSize: '0.66rem', bgcolor: c.bg.elevated, color: c.text.tertiary }} />
                 </Box>
                 <Typography sx={{ fontSize: '0.74rem', color: c.text.tertiary, fontFamily: c.font.mono }}>{s.source}</Typography>
@@ -159,7 +161,7 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Button onClick={() => { previewSeq.current++; setSelected(null); setDisclosure(null); }} size="small"
               sx={{ alignSelf: 'flex-start', textTransform: 'none', color: c.text.tertiary, fontSize: '0.78rem' }}>
-              ← Back to results
+              {t('skills.community.backToResults')}
             </Button>
             {busy && !disclosure && <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={22} /></Box>}
             {disclosure && (
@@ -177,23 +179,26 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
                 {/* The real risk for an agent platform: SKILL.md is injected as instructions the
                     agent follows, with its full tool surface. Say that plainly, not just "scripts". */}
                 <Alert severity="info" icon={<WarningAmberIcon fontSize="small" />} sx={{ fontSize: '0.78rem', py: 0 }}>
-                  This is an unvetted community skill. Its SKILL.md becomes instructions your agent will follow, and it can use your agent's tools (files, browser, settings). Only install from a source you trust, read it below first.
+                  {t('skills.community.unvettedWarning')}
                 </Alert>
 
                 {disclosure.secret_findings.length > 0 && (
                   <Alert severity="error" icon={<WarningAmberIcon fontSize="small" />} sx={{ fontSize: '0.78rem', py: 0 }}>
-                    {disclosure.secret_findings.length} file{disclosure.secret_findings.length === 1 ? '' : 's'} contain secret-shaped text ({disclosure.secret_findings.slice(0, 3).join(', ')}{disclosure.secret_findings.length > 3 ? '…' : ''}). A trustworthy skill shouldn't ship credentials; treat this as a red flag.
+                    {t('skills.community.secretFindings', {
+                      count: disclosure.secret_findings.length,
+                      files: `${disclosure.secret_findings.slice(0, 3).join(', ')}${disclosure.secret_findings.length > 3 ? '…' : ''}`,
+                    })}
                   </Alert>
                 )}
 
                 {disclosure.has_scripts && (
                   <Alert severity="warning" icon={<WarningAmberIcon fontSize="small" />} sx={{ fontSize: '0.78rem', py: 0 }}>
-                    Includes {disclosure.scripts.length} script file{disclosure.scripts.length === 1 ? '' : 's'} that can run code when an agent uses this skill. Installing only writes the files; nothing runs until an agent does, and that still goes through normal command approval.
+                    {t('skills.community.scriptsWarning', { count: disclosure.scripts.length })}
                   </Alert>
                 )}
 
                 <Typography sx={{ fontSize: '0.72rem', color: c.text.tertiary, mt: 0.5 }}>
-                  {disclosure.files.length} file{disclosure.files.length === 1 ? '' : 's'} will be installed:
+                  {t('skills.community.filesToInstall', { count: disclosure.files.length })}
                 </Typography>
                 <Box sx={{ maxHeight: 120, overflow: 'auto', border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.sm}px`, p: 1 }}>
                   {disclosure.files.map((f) => (
@@ -208,11 +213,11 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} sx={{ textTransform: 'none', color: c.text.tertiary }}>Close</Button>
+        <Button onClick={onClose} sx={{ textTransform: 'none', color: c.text.tertiary }}>{t('common.close')}</Button>
         {selected && disclosure && (
           <Button onClick={confirmInstall} disabled={busy} variant="contained"
             sx={{ textTransform: 'none', bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.primary } }}>
-            {busy ? 'Installing…' : 'Install skill'}
+            {busy ? t('skills.community.installing') : t('skills.community.installSkill')}
           </Button>
         )}
       </DialogActions>

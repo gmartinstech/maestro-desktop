@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
@@ -69,6 +70,7 @@ const SectionHeader: React.FC<{
 );
 
 export const CommandsContent: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const skills = useAppSelector((state) => state.skills.items);
@@ -103,14 +105,14 @@ export const CommandsContent: React.FC = () => {
       id: m.id,
       type: 'mode' as const,
       name: m.name,
-      description: m.description || 'Switch to this mode',
+      description: m.description || t('commands.page.switchToMode'),
       command: m.name.toLowerCase().replace(/\s+/g, '-'),
     })),
-  ], [skills, modesMap]);
+  ], [skills, modesMap, t]);
 
   const atCommands: AtCommand[] = useMemo(() => {
     const items: AtCommand[] = [
-      { prefix: '@file', label: 'File', description: 'Attach a file or folder as context', icon: <InsertDriveFileOutlinedIcon sx={{ fontSize: 18 }} />, source: 'builtin' },
+      { prefix: '@file', label: t('commands.page.fileLabel'), description: t('commands.page.fileDesc'), icon: <InsertDriveFileOutlinedIcon sx={{ fontSize: 18 }} />, source: 'builtin' },
     ];
 
     const hasWebSearch = builtinTools.some((t) => t.name === 'WebSearch' && t.deferred);
@@ -119,7 +121,7 @@ export const CommandsContent: React.FC = () => {
       items.push({
         prefix: '@web',
         label: 'Web',
-        description: 'Search the web and fetch URLs',
+        description: t('commands.page.webDesc'),
         icon: <LanguageIcon sx={{ fontSize: 18 }} />,
         source: 'builtin',
       });
@@ -155,7 +157,7 @@ export const CommandsContent: React.FC = () => {
           items.push({
             prefix: `@${groupCmd}`,
             label: groupName,
-            description: `Use all ${groupName} actions`,
+            description: t('commands.page.useAllActions', { group: groupName }),
             icon: groupIcon,
             source: tool.name,
           });
@@ -163,7 +165,7 @@ export const CommandsContent: React.FC = () => {
             items.push({
               prefix: `@${groupCmd}/${svc.name.toLowerCase().replace(/\s+/g, '-')}`,
               label: svc.name,
-              description: `Use ${svc.name} actions from ${tool.name}`,
+              description: t('commands.page.useServiceActions', { service: svc.name, tool: tool.name }),
               icon: groupIcon,
               source: tool.name,
               isChild: true,
@@ -174,7 +176,7 @@ export const CommandsContent: React.FC = () => {
           items.push({
             prefix: `@${svc.name.toLowerCase().replace(/\s+/g, '-')}`,
             label: svc.name,
-            description: `Use ${svc.name} actions from ${tool.name}`,
+            description: t('commands.page.useServiceActions', { service: svc.name, tool: tool.name }),
             icon: groupIcon,
             source: tool.name,
           });
@@ -186,7 +188,7 @@ export const CommandsContent: React.FC = () => {
         items.push({
           prefix: `@${svc.name.toLowerCase().replace(/\s+/g, '-')}`,
           label: svc.name,
-          description: `Use ${svc.name} actions from ${tool.name}`,
+          description: t('commands.page.useServiceActions', { service: svc.name, tool: tool.name }),
           icon: <BuildOutlinedIcon sx={{ fontSize: 18 }} />,
           source: tool.name,
         });
@@ -198,22 +200,22 @@ export const CommandsContent: React.FC = () => {
       items.push({
         prefix: `@${cmd}`,
         label: out.name,
-        description: out.description || `Render ${out.name} view`,
+        description: out.description || t('commands.page.renderView', { name: out.name }),
         icon: <ViewQuiltOutlinedIcon sx={{ fontSize: 18 }} />,
         source: 'view',
       });
     }
 
     return items;
-  }, [builtinTools, customTools, outputItems]);
+  }, [builtinTools, customTools, outputItems, t]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
         <Box>
           <SectionHeader
             icon={<TerminalIcon sx={{ fontSize: 22 }} />}
-            title="Slash Commands"
-            subtitle="Type / in chat to invoke skills and modes"
+            title={t('commands.page.slashTitle')}
+            subtitle={t('commands.page.slashSubtitle')}
             count={slashCommands.length}
             c={c}
           />
@@ -231,7 +233,7 @@ export const CommandsContent: React.FC = () => {
             >
               <TerminalIcon sx={{ fontSize: 36, opacity: 0.3 }} />
               <Typography sx={{ fontSize: '0.85rem' }}>
-                No slash commands yet. Create skills or modes to see them here.
+                {t('commands.page.slashEmpty')}
               </Typography>
             </Box>
           ) : (
@@ -273,7 +275,7 @@ export const CommandsContent: React.FC = () => {
                     /{cmd.command}
                   </Typography>
                   <Chip
-                    label={cmd.type}
+                    label={cmd.type === 'mode' ? t('commands.page.typeMode') : t('commands.page.typeSkill')}
                     size="small"
                     sx={{
                       height: 20,
@@ -309,8 +311,8 @@ export const CommandsContent: React.FC = () => {
         <Box>
           <SectionHeader
             icon={<AlternateEmailIcon sx={{ fontSize: 22 }} />}
-            title="@ Context Commands"
-            subtitle="Type @ in chat to attach context and activate actions"
+            title={t('commands.page.atTitle')}
+            subtitle={t('commands.page.atSubtitle')}
             count={atCommands.length}
             c={c}
           />
@@ -328,7 +330,7 @@ export const CommandsContent: React.FC = () => {
             >
               <AlternateEmailIcon sx={{ fontSize: 36, opacity: 0.3 }} />
               <Typography sx={{ fontSize: '0.85rem' }}>
-                No @ commands yet. Install MCP actions to see them here.
+                {t('commands.page.atEmpty')}
               </Typography>
             </Box>
           ) : (

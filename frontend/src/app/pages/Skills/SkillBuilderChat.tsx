@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -41,6 +42,7 @@ const MIN_H = 300;
 const MAX_H = 900;
 
 const SkillBuilderChat: React.FC<SkillBuilderChatProps> = ({ onSkillPreview, onSkillSaved, expanded, onExpandedChange }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
 
@@ -233,7 +235,7 @@ const SkillBuilderChat: React.FC<SkillBuilderChatProps> = ({ onSkillPreview, onS
         content: currentPreview.content,
         command: currentPreview.command,
       })).unwrap();
-      onSkillSaved(`Skill "${currentPreview.name}" saved successfully`);
+      onSkillSaved(t('skills.builder.savedMessage', { name: currentPreview.name }));
     } catch (err) {
       console.error('Failed to save skill:', err);
     } finally {
@@ -256,7 +258,7 @@ const SkillBuilderChat: React.FC<SkillBuilderChatProps> = ({ onSkillPreview, onS
 
   if (!expanded) {
     return (
-      <Tooltip title="Build skill with AI" placement="left">
+      <Tooltip title={t('skills.builder.fabTooltip')} placement="left">
         <Fab
           onClick={() => setExpanded(true)}
           data-onboarding="skill-builder-fab"
@@ -380,23 +382,23 @@ const SkillBuilderChat: React.FC<SkillBuilderChatProps> = ({ onSkillPreview, onS
               boxShadow: 'none',
             }}
           >
-            {saving ? 'Saving...' : 'Save Skill'}
+            {saving ? t('skills.builder.saving') : t('skills.builder.saveSkill')}
           </Button>
         )}
 
-        <Tooltip title="Reset session">
+        <Tooltip title={t('skills.builder.resetSession')}>
           <IconButton size="small" onClick={handleReset} sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
             <RestartAltIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Minimize">
+        <Tooltip title={t('skills.builder.minimize')}>
           <IconButton size="small" onClick={() => setExpanded(false)} sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
             <MinimizeIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Close">
+        <Tooltip title={t('common.close')}>
           <IconButton
             size="small"
             onClick={() => {
@@ -421,7 +423,7 @@ const SkillBuilderChat: React.FC<SkillBuilderChatProps> = ({ onSkillPreview, onS
         ) : (
           <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Typography sx={{ color: c.text.ghost, fontSize: '0.85rem' }}>
-              Initializing skill builder...
+              {t('skills.builder.initializing')}
             </Typography>
           </Box>
         )}

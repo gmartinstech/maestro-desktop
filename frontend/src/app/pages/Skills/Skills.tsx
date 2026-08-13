@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -79,6 +80,7 @@ const emptyForm: SkillForm = { name: '', description: '', content: '', command: 
 const SIDEBAR_W = 260;
 
 const Skills: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const { items, loading } = useAppSelector((s) => s.skills);
@@ -131,12 +133,12 @@ const Skills: React.FC = () => {
     const q = searchFilter.trim().toLowerCase();
     for (const sk of regSkills) {
       if (q && !sk.name.toLowerCase().includes(q) && !sk.description.toLowerCase().includes(q)) continue;
-      const cat = sk.category || 'General';
+      const cat = sk.category || t('skills.page.categoryGeneral');
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(sk);
     }
     return groups;
-  }, [regSkills, searchFilter]);
+  }, [regSkills, searchFilter, t]);
 
   const filteredLocal = useMemo(() => {
     const q = searchFilter.trim().toLowerCase();
@@ -195,13 +197,13 @@ const Skills: React.FC = () => {
       await dispatch(installCuratedSkill(selectedReg.folder)).unwrap();
     } catch (e) {
       // unwrap() rejects with a plain serialized object, not an Error instance, so read .message off it directly.
-      const msg = (e as { message?: string })?.message || 'unknown error';
-      setSnackbar({ open: true, message: `Install failed: ${msg}` });
+      const msg = (e as { message?: string })?.message || t('skills.page.unknownError');
+      setSnackbar({ open: true, message: t('skills.page.installFailed', { message: msg }) });
       return;
     }
     await dispatch(fetchSkills());
     onboardingBus.emit('skill:installed');
-    setSnackbar({ open: true, message: `Installed "${selectedReg.name}" as a local skill` });
+    setSnackbar({ open: true, message: t('skills.page.installedLocal', { name: selectedReg.name }) });
   };
 
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -211,17 +213,17 @@ const Skills: React.FC = () => {
     try {
       result = await dispatch(updateInstalledSkill(skill.id)).unwrap();
     } catch (e) {
-      const msg = (e as { message?: string })?.message || 'unknown error';
-      setSnackbar({ open: true, message: `Update failed: ${msg}` });
+      const msg = (e as { message?: string })?.message || t('skills.page.unknownError');
+      setSnackbar({ open: true, message: t('skills.page.updateFailed', { message: msg }) });
       setUpdatingId(null);
       return;
     }
     await Promise.all([dispatch(fetchSkills()), dispatch(fetchSkillUpdates())]);
     setUpdatingId(null);
     const flagged = result?.secret_findings?.length
-      ? ` (heads up: the update ships ${result.secret_findings.length} file(s) with secret-shaped content)`
+      ? t('skills.page.updateSecretWarning', { count: result.secret_findings.length })
       : '';
-    setSnackbar({ open: true, message: `Updated "${skill.name}" to the latest version${flagged}` });
+    setSnackbar({ open: true, message: t('skills.page.updatedLatest', { name: skill.name, flagged }) });
   };
 
   const handleEditInstall = () => {
@@ -259,8 +261,8 @@ const Skills: React.FC = () => {
             },
           }}
         >
-          <ToggleButton value="preview"><VisibilityIcon sx={{ fontSize: 14, mr: 0.5 }} />Preview</ToggleButton>
-          <ToggleButton value="raw"><CodeIcon sx={{ fontSize: 14, mr: 0.5 }} />Raw</ToggleButton>
+          <ToggleButton value="preview"><VisibilityIcon sx={{ fontSize: 14, mr: 0.5 }} />{t('skills.page.previewToggle')}</ToggleButton>
+          <ToggleButton value="raw"><CodeIcon sx={{ fontSize: 14, mr: 0.5 }} />{t('skills.page.rawToggle')}</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
@@ -350,7 +352,7 @@ const Skills: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, pt: 2, pb: 1 }}>
           <Typography sx={{ fontSize: '0.92rem', fontWeight: 700, color: c.text.primary }}>Skills</Typography>
           <Box sx={{ display: 'flex', gap: 0.25 }}>
-            <Tooltip title="Import .swarm">
+            <Tooltip title={t('skills.page.importSwarm')}>
               <IconButton
                 size="small"
                 onClick={() => window.dispatchEvent(new CustomEvent(IMPORT_OPEN_EVENT))}
@@ -359,7 +361,7 @@ const Skills: React.FC = () => {
                 <UploadFileIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Search">
+            <Tooltip title={t('skills.page.search')}>
               <IconButton
                 size="small"
                 onClick={() => setSearchFilter((p) => (p === '' ? ' ' : ''))}
@@ -368,7 +370,7 @@ const Skills: React.FC = () => {
                 <SearchIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Browse community skills (skills.sh)">
+            <Tooltip title={t('skills.page.browseCommunity')}>
               <IconButton
                 size="small"
                 onClick={() => setCommunityOpen(true)}
@@ -377,7 +379,7 @@ const Skills: React.FC = () => {
                 <PublicIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Create skill">
+            <Tooltip title={t('skills.page.createSkill')}>
               <IconButton size="small" onClick={openCreate} sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
                 <AddIcon sx={{ fontSize: 18 }} />
               </IconButton>
@@ -404,14 +406,14 @@ const Skills: React.FC = () => {
               '&:hover': { bgcolor: `${c.accent.primary}10`, borderColor: c.accent.primary },
             }}
           >
-            Build with AI
+            {t('skills.page.buildWithAi')}
           </Button>
         </Box>
 
         <Collapse in={searchFilter !== ''} timeout={0} unmountOnExit>
           <Box sx={{ px: 1.5, pb: 1 }}>
             <TextField
-              placeholder="Filter skills..."
+              placeholder={t('skills.page.filterPlaceholder')}
               value={searchFilter.trim()}
               onChange={(e) => setSearchFilter(e.target.value)}
               fullWidth
@@ -455,7 +457,7 @@ const Skills: React.FC = () => {
                   ? <KeyboardArrowRightIcon sx={{ fontSize: 16, color: c.text.ghost }} />
                   : <KeyboardArrowDownIcon sx={{ fontSize: 16, color: c.text.ghost }} />}
                 <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: c.text.tertiary, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  My Skills
+                  {t('skills.page.mySkills')}
                 </Typography>
                 <Typography sx={{ fontSize: '0.68rem', color: c.text.ghost, ml: 0.5 }}>({filteredLocal.length})</Typography>
               </Box>
@@ -469,7 +471,7 @@ const Skills: React.FC = () => {
                       onClick={() => selectLocal(sk.id)}
                       icon={<FolderIcon sx={{ fontSize: 15, color: c.text.tertiary, flexShrink: 0 }} />}
                       trailing={regOutdated.includes(sk.id)
-                        ? <Tooltip title="Update available"><Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: c.status.warning }} /></Tooltip>
+                        ? <Tooltip title={t('skills.page.updateAvailable')}><Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: c.status.warning }} /></Tooltip>
                         : undefined}
                     />
                   ))}
@@ -533,10 +535,10 @@ const Skills: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5, flexShrink: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '1.4rem', fontWeight: 700, color: c.text.primary, fontFamily: c.font.sans }}>
-                  {builderPreview.name || 'Untitled Skill'}
+                  {builderPreview.name || t('skills.page.untitledSkill')}
                 </Typography>
                 <Chip
-                  label="AI Preview"
+                  label={t('skills.page.aiPreview')}
                   size="small"
                   sx={{
                     bgcolor: `${c.accent.primary}15`,
@@ -565,13 +567,13 @@ const Skills: React.FC = () => {
 
             <Box sx={{ mb: 1, flexShrink: 0 }}>
               <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost }}>
-                Generated by <strong style={{ color: c.accent.primary, fontWeight: 600 }}>Skill Builder</strong>
+                {t('skills.page.generatedBy')}{' '}<strong style={{ color: c.accent.primary, fontWeight: 600 }}>Skill Builder</strong>
               </Typography>
             </Box>
 
             {builderPreview.description && (
               <Box sx={{ mb: 2, flexShrink: 0 }}>
-                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost, mb: 0.5 }}>Description</Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost, mb: 0.5 }}>{t('skills.page.descriptionLabel')}</Typography>
                 <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary, lineHeight: 1.6 }}>
                   {builderPreview.description}
                 </Typography>
@@ -583,7 +585,7 @@ const Skills: React.FC = () => {
         ) : !selection ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: c.text.ghost, gap: 2 }}>
             <DescriptionIcon sx={{ fontSize: 48, opacity: 0.3 }} />
-            <Typography sx={{ fontSize: '0.9rem' }}>Select a skill to view its details</Typography>
+            <Typography sx={{ fontSize: '0.9rem' }}>{t('skills.page.emptyState')}</Typography>
           </Box>
         ) : selection.type === 'registry' ? (
           regDetailLoading && !selectedReg ? (
@@ -609,7 +611,7 @@ const Skills: React.FC = () => {
                       fontSize: '0.8rem', fontWeight: 600, boxShadow: 'none',
                     }}
                   >
-                    Install
+                    {t('skills.page.install')}
                   </Button>
                   <Button
                     variant="outlined"
@@ -623,10 +625,10 @@ const Skills: React.FC = () => {
                       fontSize: '0.8rem', fontWeight: 600,
                     }}
                   >
-                    Edit & Install
+                    {t('skills.page.editAndInstall')}
                   </Button>
                   {selectedReg.repositoryUrl && (
-                    <Tooltip title="View on GitHub">
+                    <Tooltip title={t('skills.page.viewOnGithub')}>
                       <IconButton
                         size="small"
                         component="a"
@@ -641,11 +643,11 @@ const Skills: React.FC = () => {
               </Box>
 
               <Box sx={{ mb: 1, flexShrink: 0 }}>
-                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost }}>Added by <strong style={{ color: c.text.secondary, fontWeight: 600 }}>Anthropic</strong></Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost }}>{t('skills.page.addedBy')}{' '}<strong style={{ color: c.text.secondary, fontWeight: 600 }}>Anthropic</strong></Typography>
               </Box>
 
               <Box sx={{ mb: 2, flexShrink: 0 }}>
-                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost, mb: 0.5 }}>Description</Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost, mb: 0.5 }}>{t('skills.page.descriptionLabel')}</Typography>
                 <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary, lineHeight: 1.6 }}>
                   {selectedReg.description}
                 </Typography>
@@ -663,7 +665,7 @@ const Skills: React.FC = () => {
                 </Typography>
                 {selectedLocal.built_in && (
                   <Chip
-                    label="Built-in"
+                    label={t('skills.page.builtIn')}
                     size="small"
                     sx={{
                       bgcolor: 'rgba(174,86,48,0.12)',
@@ -676,7 +678,7 @@ const Skills: React.FC = () => {
                 )}
                 {regOutdated.includes(selectedLocal.id) && (
                   <Chip
-                    label="Update available"
+                    label={t('skills.page.updateAvailable')}
                     size="small"
                     sx={{ bgcolor: `${c.status.warning}22`, color: c.status.warning, fontWeight: 600, fontSize: '0.7rem', height: 20 }}
                   />
@@ -692,17 +694,17 @@ const Skills: React.FC = () => {
                     onClick={() => handleUpdate(selectedLocal)}
                     sx={{ textTransform: 'none', fontSize: '0.78rem', py: 0.3, bgcolor: c.status.warning, '&:hover': { bgcolor: c.status.warning } }}
                   >
-                    {updatingId === selectedLocal.id ? 'Updating...' : 'Update'}
+                    {updatingId === selectedLocal.id ? t('skills.page.updating') : t('skills.page.update')}
                   </Button>
                 )}
                 <ShareButton target={{ kind: 'skill', id: selectedLocal.id, name: selectedLocal.name }} />
-                <Tooltip title="Edit">
+                <Tooltip title={t('common.edit')}>
                   <IconButton size="small" onClick={() => openEdit(selectedLocal)} sx={{ color: c.text.tertiary, '&:hover': { color: c.accent.primary } }}>
                     <EditIcon sx={{ fontSize: 18 }} />
                   </IconButton>
                 </Tooltip>
                 {!selectedLocal.built_in && (
-                  <Tooltip title="Delete">
+                  <Tooltip title={t('common.delete')}>
                     <IconButton size="small" onClick={() => handleDelete(selectedLocal.id)} sx={{ color: c.text.tertiary, '&:hover': { color: c.status.error } }}>
                       <DeleteIcon sx={{ fontSize: 18 }} />
                     </IconButton>
@@ -726,12 +728,12 @@ const Skills: React.FC = () => {
             )}
 
             <Box sx={{ mb: 1, flexShrink: 0 }}>
-              <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost }}>Added by <strong style={{ color: c.text.secondary, fontWeight: 600 }}>You</strong></Typography>
+              <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost }}>{t('skills.page.addedBy')}{' '}<strong style={{ color: c.text.secondary, fontWeight: 600 }}>{t('skills.page.you')}</strong></Typography>
             </Box>
 
             {selectedLocal.description && (
               <Box sx={{ mb: 2, flexShrink: 0 }}>
-                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost, mb: 0.5 }}>Description</Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: c.text.ghost, mb: 0.5 }}>{t('skills.page.descriptionLabel')}</Typography>
                 <Typography sx={{ fontSize: '0.88rem', color: c.text.secondary, lineHeight: 1.6 }}>
                   {selectedLocal.description}
                 </Typography>
@@ -753,11 +755,11 @@ const Skills: React.FC = () => {
         }}
       >
         <DialogTitle sx={{ color: c.text.primary, fontWeight: 600, fontFamily: c.font.sans }}>
-          {editingId ? 'Edit Skill' : 'New Skill'}
+          {editingId ? t('skills.page.editSkillTitle') : t('skills.page.newSkillTitle')}
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
           <TextField
-            label="Name"
+            label={t('skills.page.nameLabel')}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             fullWidth
@@ -765,7 +767,7 @@ const Skills: React.FC = () => {
             sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.secondary } }}
           />
           <TextField
-            label="Description"
+            label={t('skills.page.descriptionLabel')}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             fullWidth
@@ -773,16 +775,16 @@ const Skills: React.FC = () => {
             sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.secondary } }}
           />
           <TextField
-            label="Command (slash command name)"
+            label={t('skills.page.commandLabel')}
             value={form.command}
             onChange={(e) => setForm({ ...form, command: e.target.value })}
             fullWidth
             size="small"
-            placeholder="e.g. my-skill"
+            placeholder={t('skills.page.commandPlaceholder')}
             sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.secondary } }}
           />
           <TextField
-            label="Content (Markdown)"
+            label={t('skills.page.contentLabel')}
             value={form.content}
             onChange={(e) => setForm({ ...form, content: e.target.value })}
             fullWidth
@@ -798,7 +800,7 @@ const Skills: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setDialogOpen(false)} sx={{ color: c.text.tertiary, textTransform: 'none' }}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant="contained"
@@ -809,7 +811,7 @@ const Skills: React.FC = () => {
               textTransform: 'none', borderRadius: `${c.radius.md}px`,
             }}
           >
-            {editingId ? 'Save Changes' : 'Create Skill'}
+            {editingId ? t('skills.page.saveChanges') : t('skills.page.createSkillCta')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -820,7 +822,7 @@ const Skills: React.FC = () => {
         onInstalled={(name) => {
           dispatch(fetchSkills());
           onboardingBus.emit('skill:installed');
-          setSnackbar({ open: true, message: `Installed "${name}" from skills.sh` });
+          setSnackbar({ open: true, message: t('skills.page.installedFromCommunity', { name }) });
         }}
       />
 
