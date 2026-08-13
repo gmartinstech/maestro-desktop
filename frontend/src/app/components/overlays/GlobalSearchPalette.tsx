@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import InputBase from '@mui/material/InputBase';
 import Typography from '@mui/material/Typography';
@@ -46,17 +47,23 @@ interface ActionResult {
 
 type Result = DashboardResult | SessionResult | ActionResult;
 
-// Spotlight-style commands; matched against name + keywords once the user types.
-const ACTIONS: ActionResult[] = [
-  { kind: 'action', id: 'new-dashboard', name: 'New dashboard', keywords: 'create board canvas workspace' },
-  { kind: 'action', id: 'settings', name: 'Open Settings', keywords: 'preferences general theme options' },
-  { kind: 'action', id: 'settings-models', name: 'Connect a model', keywords: 'settings models api key provider subscription' },
-  { kind: 'action', id: 'go-skills', name: 'Go to Skills', keywords: 'customize skills' },
-  { kind: 'action', id: 'go-actions', name: 'Go to Actions', keywords: 'customize tools actions mcp' },
-  { kind: 'action', id: 'all-dashboards', name: 'All dashboards', keywords: 'overview picker browse boards' },
+interface ActionDefinition {
+  id: string;
+  nameKey: string;
+  keywordsKey: string;
+}
+// Spotlight-style commands; matched against name + keywords once the user types. Keys only, resolved at render.
+const ACTION_DEFINITIONS: ActionDefinition[] = [
+  { id: 'new-dashboard', nameKey: 'overlays.globalSearch.actions.newDashboard.name', keywordsKey: 'overlays.globalSearch.actions.newDashboard.keywords' },
+  { id: 'settings', nameKey: 'overlays.globalSearch.actions.settings.name', keywordsKey: 'overlays.globalSearch.actions.settings.keywords' },
+  { id: 'settings-models', nameKey: 'overlays.globalSearch.actions.connectModel.name', keywordsKey: 'overlays.globalSearch.actions.connectModel.keywords' },
+  { id: 'go-skills', nameKey: 'overlays.globalSearch.actions.goSkills.name', keywordsKey: 'overlays.globalSearch.actions.goSkills.keywords' },
+  { id: 'go-actions', nameKey: 'overlays.globalSearch.actions.goActions.name', keywordsKey: 'overlays.globalSearch.actions.goActions.keywords' },
+  { id: 'all-dashboards', nameKey: 'overlays.globalSearch.actions.allDashboards.name', keywordsKey: 'overlays.globalSearch.actions.allDashboards.keywords' },
 ];
 
 const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -100,7 +107,10 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
     const q = query.trim().toLowerCase();
     // Commands surface only once typed, Spotlight-style; the empty palette stays content-first.
     const actionResults: ActionResult[] = q
-      ? ACTIONS.filter((a) => `${a.name} ${a.keywords}`.toLowerCase().includes(q)).slice(0, 4)
+      ? ACTION_DEFINITIONS
+        .map((a): ActionResult => ({ kind: 'action', id: a.id, name: t(a.nameKey), keywords: t(a.keywordsKey) }))
+        .filter((a) => `${a.name} ${a.keywords}`.toLowerCase().includes(q))
+        .slice(0, 4)
       : [];
     const dashboardResults: DashboardResult[] = Object.values(dashboards)
       .filter((d) => !q || d.name.toLowerCase().includes(q))
@@ -131,7 +141,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
       sessionMap.set(h.id, {
         kind: 'session',
         id: h.id,
-        name: h.name || 'Untitled',
+        name: h.name || t('overlays.globalSearch.untitled'),
         dashboardId: h.dashboard_id || null,
         status: h.status,
         closedAt: h.closed_at,
@@ -139,7 +149,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
     }
     const sessionResults = Array.from(sessionMap.values()).slice(0, 30);
     return [...actionResults, ...dashboardResults, ...sessionResults];
-  }, [query, dashboards, sessions, history, searchResults]);
+  }, [query, dashboards, sessions, history, searchResults, t]);
 
   const runAction = useCallback((id: string) => {
     switch (id) {
@@ -240,7 +250,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
             inputRef={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search, or type a command…"
+            placeholder={t('overlays.globalSearch.placeholder')}
             fullWidth
             sx={{
               fontSize: '1.05rem',
@@ -259,7 +269,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
         <Box sx={{ overflowY: 'auto', flex: 1 }}>
           {results.length === 0 ? (
             <Typography sx={{ px: 2, py: 3, fontSize: '0.85rem', color: c.text.muted, textAlign: 'center' }}>
-              {query.trim() ? 'No matches' : 'No dashboards or chats yet'}
+              {query.trim() ? t('overlays.globalSearch.noMatches') : t('overlays.globalSearch.emptyState')}
             </Typography>
           ) : (
             <>
@@ -278,7 +288,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
                 );
               })}
               {dashSection.length > 0 && (
-                <SectionHeader label="Dashboards" c={c} />
+                <SectionHeader label={t('overlays.globalSearch.dashboards')} c={c} />
               )}
               {dashSection.map((r) => {
                 const idx = flatIndexOf(r);
@@ -287,7 +297,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
                     key={`d-${r.id}`}
                     icon={<DashboardIcon sx={{ fontSize: 19, color: c.accent.primary }} />}
                     title={r.name}
-                    subtitle="Dashboard"
+                    subtitle={t('overlays.globalSearch.dashboard')}
                     selected={idx === selectedIndex}
                     onClick={() => handleSelect(r)}
                     onMouseEnter={() => setSelectedIndex(idx)}
@@ -296,14 +306,14 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
                 );
               })}
               {sessSection.length > 0 && (
-                <SectionHeader label="Chats" c={c} />
+                <SectionHeader label={t('overlays.globalSearch.chats')} c={c} />
               )}
               {sessSection.map((r) => {
                 const idx = flatIndexOf(r);
                 const dashName = r.dashboardId ? dashboards[r.dashboardId]?.name : null;
                 const subtitle = [
-                  dashName && `in ${dashName}`,
-                  r.closedAt ? 'closed' : friendlyStatusLabel(r.status),
+                  dashName && t('overlays.globalSearch.inDashboard', { name: dashName }),
+                  r.closedAt ? t('overlays.globalSearch.closed') : friendlyStatusLabel(r.status),
                 ].filter(Boolean).join(' · ');
                 return (
                   <ResultRow
@@ -335,9 +345,9 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
             fontSize: '0.7rem',
           }}
         >
-          <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>esc close</span>
+          <span>{t('overlays.globalSearch.hintNavigate')}</span>
+          <span>{t('overlays.globalSearch.hintOpen')}</span>
+          <span>{t('overlays.globalSearch.hintClose')}</span>
         </Box>
       </Box>
     </>

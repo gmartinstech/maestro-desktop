@@ -8,7 +8,10 @@
     "save": "Save",
     "close": "Close",
     "settings": "Settings",
-    "submit": "Submit"
+    "submit": "Submit",
+    "copy": "Copy",
+    "edit": "Edit",
+    "remove": "Remove"
   },
   "appShell": {
     "appTitle": "Maestro Studio",
@@ -346,6 +349,73 @@
         "title": "That request hit a snag",
         "detail": "Something went wrong on that one. Send your message again to retry."
       }
+    },
+    "chat": {
+      "sessionNotFound": "Session not found",
+      "toolCalls": "Tool calls",
+      "toolCallsCount_one": "{{count}} tool call",
+      "toolCallsCount_other": "{{count}} tool calls",
+      "useBrowserLabel": "Use Browser",
+      "subscription": "subscription",
+      "subscriptionTooltip": "Routed through subscription, flat-rate, per-call cost not metered",
+      "toolsConnected_one": "{{count}} tool",
+      "toolsConnected_other": "{{count}} tools",
+      "toolsConnectedTooltip_one": "{{count}} tool connected.",
+      "toolsConnectedTooltip_other": "{{count}} tools connected.",
+      "resetHistory": "Reset history",
+      "outOfTokens": "Out of tokens",
+      "signInRequired": "Sign-in required",
+      "contextFull": "Context full",
+      "gotIt": "Got it",
+      "openSettings": "Open Settings",
+      "startFreshChat": "Start a fresh chat",
+      "outOfTokensWorkflowMessage": "{{message}} Whichever model you switch to here becomes the model this workflow runs on.",
+      "connectSuggestion": "Connect {{title}} so the agent can do this",
+      "connecting": "Connecting…",
+      "connect": "Connect",
+      "activationFailedStatus": "Activation failed ({{status}})",
+      "activationFailed": "Activation failed",
+      "resumeAgentResponse": "Resume Agent Response",
+      "scrollToBottom": "Scroll to bottom",
+      "continueChat": "Continue chat",
+      "queued_one": "{{count}} queued",
+      "queued_other": "{{count}} queued",
+      "clearAll": "Clear all",
+      "haikuWarningTitle": "Haiku may run out of room with {{apps}} apps connected",
+      "haikuWarningBody": "Haiku is the fastest Claude model but holds the least at once. Each connected app adds instructions Claude has to read first. If your message fails with “Prompt is too long,” turn off a few apps (Microsoft 365 is the heaviest) or switch to Sonnet/Opus, both have 5× more room.",
+      "dismissIntegrationSuggestion": "Dismiss integration suggestion",
+      "integrationSuggestionTitle": "Looks like this might need an integration",
+      "integrationSuggestionBody": "Activating one of these will let the agent answer in a single round-trip.",
+      "activating": "Activating…",
+      "activate": "Activate",
+      "askAboutRun": "Ask about this run...",
+      "workflowModelNotice": "This workflow will now be using {{model}}."
+    },
+    "messageActions": {
+      "comingSoon": "Coming soon",
+      "copied": "Copied!",
+      "positiveFeedback": "Give positive feedback",
+      "negativeFeedback": "Give negative feedback",
+      "regenerate": "Regenerate",
+      "branchChat": "Branch chat"
+    },
+    "contextDrawer": {
+      "title": "Session context",
+      "contextUsed": "Context used",
+      "tokensUsage": "{{used}} / {{total}} tokens",
+      "cacheHit": "Cache hit",
+      "cachedTokens_one": "{{formatted}} cached token",
+      "cachedTokens_other": "{{formatted}} cached tokens",
+      "activeMcpServers": "Active MCP servers",
+      "noActiveMcp": "None; model must MCPSearch + MCPActivate to use one",
+      "compaction": "Compaction",
+      "compactedThrough": "Earlier history compacted through {{id}}…",
+      "historyIntact": "Original history intact (no compaction yet).",
+      "autoCompactNote": "Auto-compacts at 65% mid-turn; if a send would overflow, history is compacted automatically and the message sent. Big files auto-shrink to fit.",
+      "tips": "Tips",
+      "tipCompact": "summarize old turns now",
+      "tipClear": "fresh SDK session, keep chat history visible",
+      "tipContext": "open this side panel"
     }
   },
   "provedorIa": {
@@ -369,6 +439,117 @@
     "warning": {
       "message": "Your Maestro Studio session ends in {{minutes}} min. Sign in again now so you don't stop mid-task.",
       "action": "Sign in again"
+    }
+  },
+  "dashboard": {
+    "toolbar": {
+      "newAgent": "New Agent",
+      "addApp": "Add App",
+      "browser": "Browser",
+      "workflows": "Workflows",
+      "workflowsSub": "Schedule and calendar",
+      "addNote": "Add note",
+      "addNoteSub": "Sticky note on the canvas",
+      "history": "History",
+      "searchAppsPlaceholder": "Search apps...",
+      "noAppsYet": "No apps created yet",
+      "noMatchingApps": "No matching apps"
+    },
+    "browserCard": {
+      "newTab": "New Tab",
+      "closeBrowser": "Close browser",
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload",
+      "urlPlaceholder": "Search Google or enter URL...",
+      "taskEndedError": "Task ended with an error.",
+      "taskDone": "Task done.",
+      "keep": "Keep",
+      "pageStoppedResponding": "This page stopped responding.",
+      "passkeysTitle": "Passkeys aren't supported",
+      "passkeysBody": "Sorry, Maestro Studio doesn't support passkeys. Please sign in with a password or another method.",
+      "ok": "OK",
+      "iframeTitle": "Browser",
+      "tab": "Tab"
+    },
+    "canvasControls": {
+      "zoomOut": "Zoom out",
+      "resetZoom": "Reset to 100%",
+      "zoomIn": "Zoom in",
+      "fitToView": "Fit to view",
+      "tidyLayout": "Tidy layout",
+      "hideMinimap": "Hide minimap",
+      "showMinimap": "Show minimap"
+    }
+  },
+  "overlays": {
+    "globalSearch": {
+      "actions": {
+        "newDashboard": {
+          "name": "New dashboard",
+          "keywords": "create board canvas workspace"
+        },
+        "settings": {
+          "name": "Open Settings",
+          "keywords": "preferences general theme options"
+        },
+        "connectModel": {
+          "name": "Connect a model",
+          "keywords": "settings models api key provider subscription"
+        },
+        "goSkills": {
+          "name": "Go to Skills",
+          "keywords": "customize skills"
+        },
+        "goActions": {
+          "name": "Go to Actions",
+          "keywords": "customize tools actions mcp"
+        },
+        "allDashboards": {
+          "name": "All dashboards",
+          "keywords": "overview picker browse boards"
+        }
+      },
+      "placeholder": "Search, or type a command…",
+      "untitled": "Untitled",
+      "noMatches": "No matches",
+      "emptyState": "No dashboards or chats yet",
+      "dashboards": "Dashboards",
+      "chats": "Chats",
+      "dashboard": "Dashboard",
+      "inDashboard": "in {{name}}",
+      "closed": "closed",
+      "hintNavigate": "↑↓ navigate",
+      "hintOpen": "↵ open",
+      "hintClose": "esc close"
+    },
+    "dynamicIsland": {
+      "status": {
+        "running": "Running",
+        "waiting": "Waiting",
+        "done": "Done",
+        "error": "Error",
+        "stopped": "Stopped"
+      },
+      "stopAgent": "Stop agent",
+      "runningCount_one": "{{count}} running",
+      "runningCount_other": "{{count}} running",
+      "doneCount_one": "{{count}} done",
+      "doneCount_other": "{{count}} done",
+      "agents": "Agents",
+      "searchTooltip": "Search ({{hotkey}})",
+      "searchPlaceholder": "Search…",
+      "browserAgentNeedsHelp": "Browser agent needs help",
+      "doneContinue": "Done, continue",
+      "skip": "Skip",
+      "approveAllTooltip": "Approve all {{total}} (stops re-asking for these tools)",
+      "all": "All",
+      "showDetails": "Show details",
+      "approvalRequired": "Approval Required",
+      "notifications": "Notifications",
+      "approvals": "Approvals",
+      "completedCount": "Completed ({{total}})",
+      "clearAll": "Clear all"
     }
   }
 }

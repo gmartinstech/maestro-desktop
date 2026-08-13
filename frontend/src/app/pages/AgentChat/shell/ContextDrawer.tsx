@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import Typography from '@mui/material/Typography';
@@ -9,6 +10,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
 /** /context drawer: shows session MCPs, ctx%, cache hits, compaction. Opened via window CustomEvent from ChatInput's slash handler. */
 export default function ContextDrawer() {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [openFor, setOpenFor] = useState<string | null>(null);
   const session = useAppSelector((state) => (openFor ? state.agents.sessions[openFor] : undefined));
@@ -38,7 +40,7 @@ export default function ContextDrawer() {
     >
       <Box sx={{ p: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6">Session context</Typography>
+          <Typography variant="h6">{t('agentChat.contextDrawer.title')}</Typography>
           <IconButton size="small" onClick={() => setOpenFor(null)} sx={{ color: c.text.tertiary }}>
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -47,54 +49,60 @@ export default function ContextDrawer() {
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
           <Box sx={{ p: 1.5, borderRadius: 1, border: `1px solid ${c.border.medium}` }}>
             <Typography variant="caption" sx={{ color: c.text.tertiary, display: 'block' }}>
-              Context used
+              {t('agentChat.contextDrawer.contextUsed')}
             </Typography>
             <Typography variant="h5" sx={{ color: ctxColor, fontVariantNumeric: 'tabular-nums' }}>
               {Math.round(ctxPct * 100)}%
             </Typography>
             <Typography variant="caption" sx={{ color: c.text.tertiary }}>
-              {(session.tokens?.input || 0).toLocaleString()} / {session.context_window ? `${Math.round(session.context_window / 1000)}K` : '200K'} tokens
+              {t('agentChat.contextDrawer.tokensUsage', {
+                used: (session.tokens?.input || 0).toLocaleString(),
+                total: session.context_window ? `${Math.round(session.context_window / 1000)}K` : '200K',
+              })}
             </Typography>
           </Box>
           <Box sx={{ p: 1.5, borderRadius: 1, border: `1px solid ${c.border.medium}` }}>
             <Typography variant="caption" sx={{ color: c.text.tertiary, display: 'block' }}>
-              Cache hit
+              {t('agentChat.contextDrawer.cacheHit')}
             </Typography>
             <Typography variant="h5" sx={{ color: c.text.primary, fontVariantNumeric: 'tabular-nums' }}>
               {Math.round(cachePct * 100)}%
             </Typography>
             <Typography variant="caption" sx={{ color: c.text.tertiary }}>
-              {(session.cache_read_tokens || 0).toLocaleString()} cached tokens
+              {t('agentChat.contextDrawer.cachedTokens', {
+                count: session.cache_read_tokens || 0,
+                formatted: (session.cache_read_tokens || 0).toLocaleString(),
+              })}
             </Typography>
           </Box>
         </Box>
 
-        <Section title="Active MCP servers" emptyText="None; model must MCPSearch + MCPActivate to use one">
+        <Section title={t('agentChat.contextDrawer.activeMcpServers')} emptyText={t('agentChat.contextDrawer.noActiveMcp')}>
           {(session.active_mcps || []).map((m) => (
             <Pill key={m} label={m} color={c.accent.primary} />
           ))}
         </Section>
 
-        <Section title="Compaction" emptyText="">
+        <Section title={t('agentChat.contextDrawer.compaction')} emptyText="">
           <Typography variant="caption" sx={{ color: c.text.secondary }}>
             {session.compacted_through_msg_id
-              ? `Earlier history compacted through ${String(session.compacted_through_msg_id).slice(0, 8)}…`
-              : 'Original history intact (no compaction yet).'}
+              ? t('agentChat.contextDrawer.compactedThrough', { id: String(session.compacted_through_msg_id).slice(0, 8) })
+              : t('agentChat.contextDrawer.historyIntact')}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: c.text.tertiary }}>
-            Auto-compacts at 65% mid-turn; if a send would overflow, history is compacted automatically and the message sent. Big files auto-shrink to fit.
+            {t('agentChat.contextDrawer.autoCompactNote')}
           </Typography>
         </Section>
 
-        <Section title="Tips" emptyText="">
+        <Section title={t('agentChat.contextDrawer.tips')} emptyText="">
           <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 0.5 }}>
-            • <code>/compact</code>: summarize old turns now
+            • <code>/compact</code>: {t('agentChat.contextDrawer.tipCompact')}
           </Typography>
           <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 0.5 }}>
-            • <code>/clear</code>: fresh SDK session, keep chat history visible
+            • <code>/clear</code>: {t('agentChat.contextDrawer.tipClear')}
           </Typography>
           <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block' }}>
-            • <code>/context</code>: open this drawer
+            • <code>/context</code>: {t('agentChat.contextDrawer.tipContext')}
           </Typography>
         </Section>
       </Box>

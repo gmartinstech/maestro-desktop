@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -34,6 +35,7 @@ function readMinimapPref(): boolean {
 }
 
 const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, minimapProps, onMinimapPan }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const pct = Math.round(zoom * 100);
   const [minimapOpen, setMinimapOpen] = useState<boolean>(() => readMinimapPref());
@@ -79,13 +81,13 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
         }}
         data-onboarding="canvas-controls"
       >
-        <Tooltip title="Zoom out" placement="top">
+        <Tooltip title={t('dashboard.canvasControls.zoomOut')} placement="top">
           <IconButton size="small" onClick={actions.zoomOut} sx={{ color: c.text.muted }}>
             <RemoveIcon sx={{ fontSize: '1rem' }} />
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Reset to 100%" placement="top">
+        <Tooltip title={t('dashboard.canvasControls.resetZoom')} placement="top">
           <Typography
             onClick={actions.resetZoom}
             sx={{
@@ -103,7 +105,7 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
           </Typography>
         </Tooltip>
 
-        <Tooltip title="Zoom in" placement="top">
+        <Tooltip title={t('dashboard.canvasControls.zoomIn')} placement="top">
           <IconButton size="small" onClick={actions.zoomIn} sx={{ color: c.text.muted }}>
             <AddIcon sx={{ fontSize: '1rem' }} />
           </IconButton>
@@ -111,7 +113,7 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
 
         <Box sx={{ width: 1, height: 16, bgcolor: c.border.medium, mx: 0.5 }} />
 
-        <Tooltip title="Fit to view" placement="top">
+        <Tooltip title={t('dashboard.canvasControls.fitToView')} placement="top">
           <IconButton
             size="small"
             onClick={onFitToView}
@@ -122,7 +124,7 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Tidy layout" placement="top">
+        <Tooltip title={t('dashboard.canvasControls.tidyLayout')} placement="top">
           <IconButton
             size="small"
             onClick={onTidy}
@@ -135,7 +137,7 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
 
         <Box sx={{ width: 1, height: 16, bgcolor: c.border.medium, mx: 0.5 }} />
 
-        <Tooltip title={minimapOpen ? 'Hide minimap' : 'Show minimap'} placement="top">
+        <Tooltip title={minimapOpen ? t('dashboard.canvasControls.hideMinimap') : t('dashboard.canvasControls.showMinimap')} placement="top">
           <IconButton
             size="small"
             onClick={() => setAndPersistMinimap(!minimapOpen)}

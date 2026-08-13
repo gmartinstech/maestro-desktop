@@ -1,4 +1,5 @@
 import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -50,12 +51,13 @@ type TrackedAgent = {
   dashboardId?: string;
 };
 
-const STATUS_CONFIG: Record<string, { label: string; tokenKey?: string }> = {
-  running:          { label: 'Running',  tokenKey: 'success' },
-  waiting_approval: { label: 'Waiting',  tokenKey: 'warning' },
-  completed:        { label: 'Done',     tokenKey: 'success' },
-  error:            { label: 'Error',    tokenKey: 'error' },
-  stopped:          { label: 'Stopped',  tokenKey: 'info' },
+// labelKey, not a label: module scope can't call t, so the row resolves it at render.
+const STATUS_CONFIG: Record<string, { labelKey: string; tokenKey?: string }> = {
+  running:          { labelKey: 'overlays.dynamicIsland.status.running',  tokenKey: 'success' },
+  waiting_approval: { labelKey: 'overlays.dynamicIsland.status.waiting',  tokenKey: 'warning' },
+  completed:        { labelKey: 'overlays.dynamicIsland.status.done',     tokenKey: 'success' },
+  error:            { labelKey: 'overlays.dynamicIsland.status.error',    tokenKey: 'error' },
+  stopped:          { labelKey: 'overlays.dynamicIsland.status.stopped',  tokenKey: 'info' },
 };
 
 const SPRING_LAYOUT = { type: 'spring' as const, stiffness: 400, damping: 30 };
@@ -93,8 +95,9 @@ const AgentStatusRow: React.FC<{
   onDismiss: (id: string) => void;
   onNavigate: (dashboardId: string, agentId: string) => void;
 }> = ({ agent, c, onStop, onDismiss, onNavigate }) => {
+  const { t } = useTranslation();
   const isActive = agent.status === 'running' || agent.status === 'waiting_approval';
-  const cfg = STATUS_CONFIG[agent.status] ?? { label: agent.status };
+  const cfg = STATUS_CONFIG[agent.status];
 
   return (
     <Box
@@ -134,10 +137,10 @@ const AgentStatusRow: React.FC<{
           flexShrink: 0,
         }}
       >
-        {cfg.label}
+        {cfg ? t(cfg.labelKey) : agent.status}
       </Typography>
       {isActive ? (
-        <Tooltip title="Stop agent" arrow>
+        <Tooltip title={t('overlays.dynamicIsland.stopAgent')} arrow>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); onStop(agent.id); }}
@@ -147,7 +150,7 @@ const AgentStatusRow: React.FC<{
           </IconButton>
         </Tooltip>
       ) : (
-        <Tooltip title="Dismiss" arrow>
+        <Tooltip title={t('common.dismiss')} arrow>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); onDismiss(agent.id); }}
@@ -226,6 +229,7 @@ const selectDynamicIslandSessions = createSelector(
 );
 
 const DynamicIsland: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -483,13 +487,13 @@ const DynamicIsland: React.FC = () => {
   const compactText = useMemo(() => {
     const parts: string[] = [];
     if (activeAgents.length > 0) {
-      parts.push(`${activeAgents.length} running`);
+      parts.push(t('overlays.dynamicIsland.runningCount', { count: activeAgents.length }));
     }
     if (finishedAgents.length > 0) {
-      parts.push(`${finishedAgents.length} done`);
+      parts.push(t('overlays.dynamicIsland.doneCount', { count: finishedAgents.length }));
     }
-    return parts.join(' · ') || 'Agents';
-  }, [activeAgents.length, finishedAgents.length]);
+    return parts.join(' · ') || t('overlays.dynamicIsland.agents');
+  }, [activeAgents.length, finishedAgents.length, t]);
 
   const glowKeyframes = useMemo(() => `
     @keyframes approvalGlow {
@@ -592,14 +596,16 @@ const DynamicIsland: React.FC = () => {
 const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 const SEARCH_HOTKEY = isMac ? '⌘K' : 'Ctrl+K';
 
-const IdlePill: React.FC<{ c: ReturnType<typeof useClaudeTokens>; onClick: () => void }> = ({ c, onClick }) => (
+const IdlePill: React.FC<{ c: ReturnType<typeof useClaudeTokens>; onClick: () => void }> = ({ c, onClick }) => {
+  const { t } = useTranslation();
+  return (
   <motion.div
     initial={{ opacity: 0, scale: 0.92 }}
     animate={{ opacity: 1, scale: 1 }}
     exit={{ opacity: 0, scale: 0.92 }}
     transition={{ duration: 0.2 }}
   >
-    <Tooltip title={`Search (${SEARCH_HOTKEY})`} arrow placement="bottom">
+    <Tooltip title={t('overlays.dynamicIsland.searchTooltip', { hotkey: SEARCH_HOTKEY })} arrow placement="bottom">
       <Box
         onClick={(e) => { e.stopPropagation(); onClick(); }}
         sx={{
@@ -625,7 +631,7 @@ const IdlePill: React.FC<{ c: ReturnType<typeof useClaudeTokens>; onClick: () =>
             flex: 1,
           }}
         >
-          Search…
+          {t('overlays.dynamicIsland.searchPlaceholder')}
         </Typography>
         <Typography
           sx={{
@@ -641,7 +647,8 @@ const IdlePill: React.FC<{ c: ReturnType<typeof useClaudeTokens>; onClick: () =>
       </Box>
     </Tooltip>
   </motion.div>
-);
+  );
+};
 
 const CompactPill: React.FC<{
   c: ReturnType<typeof useClaudeTokens>;
@@ -704,12 +711,13 @@ const CompactActionablePill: React.FC<{
   onDeny: (requestId: string) => void;
   onExpand: () => void;
 }> = ({ c, request, remainingCount, onApprove, onApproveAll, onDeny, onExpand }) => {
+  const { t } = useTranslation();
   const parsed = useMemo(() => parseMcpToolName(request.tool_name), [request.tool_name]);
   const meta = useMcpToolMeta(parsed);
 
   const isIntervention = request.tool_name === 'RequestHumanIntervention';
   const interventionProblem = isIntervention
-    ? ((request.tool_input as any)?.problem || 'Browser agent needs help')
+    ? ((request.tool_input as any)?.problem || t('overlays.dynamicIsland.browserAgentNeedsHelp'))
     : '';
 
   const icon = isIntervention
@@ -776,7 +784,7 @@ const CompactActionablePill: React.FC<{
             +{remainingCount - 1}
           </Typography>
         )}
-        <Tooltip title={isIntervention ? 'Done, continue' : 'Approve'} arrow>
+        <Tooltip title={isIntervention ? t('overlays.dynamicIsland.doneContinue') : t('agentChat.approvalBar.approve')} arrow>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); onApprove(request.id); }}
@@ -793,7 +801,7 @@ const CompactActionablePill: React.FC<{
           </IconButton>
         </Tooltip>
         {remainingCount > 1 && !isIntervention && (
-          <Tooltip title={`Approve all ${remainingCount} (stops re-asking for these tools)`} arrow>
+          <Tooltip title={t('overlays.dynamicIsland.approveAllTooltip', { total: remainingCount })} arrow>
             <Box
               component="button"
               onClick={(e: React.MouseEvent) => { e.stopPropagation(); onApproveAll(); }}
@@ -814,11 +822,11 @@ const CompactActionablePill: React.FC<{
                 whiteSpace: 'nowrap',
               }}
             >
-              ✓&thinsp;All
+              ✓&thinsp;{t('overlays.dynamicIsland.all')}
             </Box>
           </Tooltip>
         )}
-        <Tooltip title={isIntervention ? 'Skip' : 'Deny'} arrow>
+        <Tooltip title={isIntervention ? t('overlays.dynamicIsland.skip') : t('agentChat.approvalBar.deny')} arrow>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); onDeny(request.id); }}
@@ -834,7 +842,7 @@ const CompactActionablePill: React.FC<{
             <CloseIcon sx={{ fontSize: 11 }} />
           </IconButton>
         </Tooltip>
-        <Tooltip title="Show details" arrow>
+        <Tooltip title={t('overlays.dynamicIsland.showDetails')} arrow>
           <IconButton
             size="small"
             onClick={(e) => { e.stopPropagation(); onExpand(); }}
@@ -868,12 +876,13 @@ const ExpandedCard: React.FC<{
   activeAgents, finishedAgents, hasApprovals, hasAgents,
   onApprove, onDeny, onStopAgent, onDismissAgent, onNavigateToDashboard, onClearAllFinished, onCollapse,
 }) => {
+  const { t } = useTranslation();
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const headerTitle = hasApprovals && !hasAgents
-    ? 'Approval Required'
+    ? t('overlays.dynamicIsland.approvalRequired')
     : hasAgents && !hasApprovals
-      ? 'Agents'
-      : 'Notifications';
+      ? t('overlays.dynamicIsland.agents')
+      : t('overlays.dynamicIsland.notifications');
 
   const badgeCount = totalApprovals + activeAgents.length;
 
@@ -963,7 +972,7 @@ const ExpandedCard: React.FC<{
                   pb: 0.5,
                 }}
               >
-                Approvals
+                {t('overlays.dynamicIsland.approvals')}
               </Typography>
             )}
             {groups.map((group) => (
@@ -1023,7 +1032,7 @@ const ExpandedCard: React.FC<{
                   pt: 0.25,
                 }}
               >
-                Agents
+                {t('overlays.dynamicIsland.agents')}
               </Typography>
             )}
             {activeAgents.map((agent) => (
@@ -1065,7 +1074,7 @@ const ExpandedCard: React.FC<{
                       flex: 1,
                     }}
                   >
-                    Completed ({finishedAgents.length})
+                    {t('overlays.dynamicIsland.completedCount', { total: finishedAgents.length })}
                   </Typography>
                   <Typography
                     component="span"
@@ -1079,7 +1088,7 @@ const ExpandedCard: React.FC<{
                       transition: 'color 0.15s',
                     }}
                   >
-                    Clear all
+                    {t('overlays.dynamicIsland.clearAll')}
                   </Typography>
                   <IconButton size="small" sx={{ p: 0, color: c.text.ghost }}>
                     {completedExpanded

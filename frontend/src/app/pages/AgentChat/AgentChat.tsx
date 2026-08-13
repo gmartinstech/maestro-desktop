@@ -434,7 +434,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
           const realId = action.payload.session.id;
           dispatch(generateTitle({ sessionId: realId, prompt: msg.prompt }));
           if (msg.selectedBrowserIds?.length) {
-            dispatch(setGlowingBrowserCards({ browserIds: msg.selectedBrowserIds, sessionId: realId, label: 'Use Browser' }));
+            dispatch(setGlowingBrowserCards({ browserIds: msg.selectedBrowserIds, sessionId: realId, label: t('agentChat.chat.useBrowserLabel') }));
           }
         }
       });
@@ -443,7 +443,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       onSendRunQuestionRef.current(msg.prompt, msg.attachedRunId).catch(() => setAwaitingResponse(false));
     } else {
       if (msg.selectedBrowserIds?.length) {
-        dispatch(setGlowingBrowserCards({ browserIds: msg.selectedBrowserIds, sessionId: id, label: 'Use Browser' }));
+        dispatch(setGlowingBrowserCards({ browserIds: msg.selectedBrowserIds, sessionId: id, label: t('agentChat.chat.useBrowserLabel') }));
       }
       dispatch(sendMessageThunk({ sessionId: id, prompt: msg.prompt, mode, model, images: msg.images, contextPaths: msg.contextPaths, forcedTools: msg.forcedTools, attachedSkills: msg.attachedSkills, selectedBrowserIds: msg.selectedBrowserIds, selectedAppIds: msg.selectedAppIds, selectedSettingIds: msg.selectedSettingIds }))
         .then((action) => {
@@ -452,7 +452,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
           }
         });
     }
-  }, [id, isDraft, mode, model, session?.system_prompt, session?.target_directory, session?.dashboard_id, dispatch]);
+  }, [id, isDraft, mode, model, session?.system_prompt, session?.target_directory, session?.dashboard_id, dispatch, t]);
 
   statusRef.current = session?.status;
 
@@ -1071,7 +1071,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             calls.map((m) => (typeof m.content === 'object' ? m.content.tool : ''))
           );
           const label =
-            toolNames.size === 1 ? calls[0].content?.tool || 'Tool calls' : `${calls.length} tool calls`;
+            toolNames.size === 1
+              ? calls[0].content?.tool || t('agentChat.chat.toolCalls')
+              : t('agentChat.chat.toolCallsCount', { count: calls.length });
           items.push({
             type: 'tool_group',
             id: `group-${group[0].id}`,
@@ -1087,7 +1089,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             calls.map((m) => (typeof m.content === 'object' ? m.content.tool : ''))
           );
           const label =
-            toolNames.size === 1 ? calls[0].content?.tool || 'Tool calls' : `${calls.length} tool calls`;
+            toolNames.size === 1
+              ? calls[0].content?.tool || t('agentChat.chat.toolCalls')
+              : t('agentChat.chat.toolCallsCount', { count: calls.length });
           items.push({
             type: 'tool_group',
             id: `group-${group[0].id}`,
@@ -1104,7 +1108,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       }
     }
     return items;
-  }, [activeBranchMessages]);
+  }, [activeBranchMessages, t]);
 
   React.useLayoutEffect(() => {
     const total = renderItems.length;
@@ -1313,7 +1317,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 2 }}>
         <Typography sx={{ color: c.text.tertiary, fontSize: '1rem' }}>
-          Session not found
+          {t('agentChat.chat.sessionNotFound')}
         </Typography>
       </Box>
     );
@@ -1387,9 +1391,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                         <Typography
                           variant="caption"
                           sx={{ color: c.text.tertiary }}
-                          title="Routed through subscription, flat-rate, per-call cost not metered"
+                          title={t('agentChat.chat.subscriptionTooltip')}
                         >
-                          subscription
+                          {t('agentChat.chat.subscription')}
                         </Typography>
                       );
                     }
@@ -1407,10 +1411,10 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                       <Typography
                         variant="caption"
                         sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontVariantNumeric: 'tabular-nums' }}
-                        title={`${mcpCount} tool${mcpCount === 1 ? '' : 's'} connected.`}
+                        title={t('agentChat.chat.toolsConnectedTooltip', { count: mcpCount })}
                       >
                         <Box component="span" sx={{ color: c.text.tertiary }}>
-                          {mcpCount} tool{mcpCount === 1 ? '' : 's'}
+                          {t('agentChat.chat.toolsConnected', { count: mcpCount })}
                         </Box>
                       </Typography>
                     );
@@ -1419,7 +1423,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               )}
             </Box>
             {!isDraft && id && (
-              <Tooltip title="Reset history">
+              <Tooltip title={t('agentChat.chat.resetHistory')}>
                 <IconButton
                   size="small"
                   onClick={async () => {
@@ -1492,15 +1496,17 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               const isProvedorIa = reason === 'provedor_ia_token_expired';
               const isAuth = isProvedorIa || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
               const isOutOfTokens = reason === 'out_of_tokens';
-              const title = isOutOfTokens ? 'Out of tokens'
+              const title = isOutOfTokens
+                ? t('agentChat.chat.outOfTokens')
                 : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.title')
-                : isAuth ? 'Sign-in required' : 'Context full';
-              const primaryLabel = isOutOfTokens ? 'Got it'
+                : isAuth ? t('agentChat.chat.signInRequired') : t('agentChat.chat.contextFull');
+              const primaryLabel = isOutOfTokens
+                ? t('agentChat.chat.gotIt')
                 : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.cta')
-                : isAuth ? 'Open Settings' : 'Start a fresh chat';
+                : isAuth ? t('agentChat.chat.openSettings') : t('agentChat.chat.startFreshChat');
               // In the workflow build chat, switching models here also sets the workflow's scheduled run model, so spell that consequence out.
               const message = isOutOfTokens && workflowEditId
-                ? `${session.context_overflow.message} Whichever model you switch to here becomes the model this workflow runs on.`
+                ? t('agentChat.chat.outOfTokensWorkflowMessage', { message: session.context_overflow.message })
                 : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.detail')
                 : session.context_overflow.message;
               const onPrimary = () => {
@@ -1679,9 +1685,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 {session.mcp_suggestions.map((s) => (
                   <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="caption" sx={{ color: c.text.secondary, flex: 1, minWidth: 0 }}>
-                      Connect{' '}
-                      <Box component="span" sx={{ color: c.text.primary, fontWeight: 500 }}>{s.title}</Box>
-                      {' '}so the agent can do this
+                      {t('agentChat.chat.connectSuggestion', { title: s.title })}
                     </Typography>
                     <Typography
                       component="button"
@@ -1706,7 +1710,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                           });
                           const body = await r.json().catch(() => ({} as any));
                           if (!r.ok) {
-                            setActivateError(`Activation failed (${r.status})`);
+                            setActivateError(t('agentChat.chat.activationFailedStatus', { status: r.status }));
                           } else if (body?.status === 'unknown_server') {
                             // Not yet connected; jump to Actions so the user can finish OAuth.
                             dispatch(openSettingsModal('tools'));
@@ -1714,7 +1718,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                             dispatch(clearMcpSuggestions({ sessionId: id }));
                           }
                         } catch (e: any) {
-                          setActivateError(e?.message || 'Activation failed');
+                          setActivateError(e?.message || t('agentChat.chat.activationFailed'));
                         } finally {
                           setActivatingMcp(null);
                         }
@@ -1730,7 +1734,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                         flexShrink: 0,
                       }}
                     >
-                      {activatingMcp === s.id ? 'Connecting…' : 'Connect'}
+                      {activatingMcp === s.id ? t('agentChat.chat.connecting') : t('agentChat.chat.connect')}
                     </Typography>
                   </Box>
                 ))}
@@ -1741,11 +1745,11 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 )}
                 <Box
                   role="button"
-                  aria-label="Dismiss"
+                  aria-label={t('common.dismiss')}
                   onClick={() => id && dispatch(clearMcpSuggestions({ sessionId: id }))}
                   sx={{ alignSelf: 'flex-start', color: c.text.muted, cursor: 'pointer', fontSize: '0.72rem', '&:hover': { color: c.text.secondary } }}
                 >
-                  Dismiss
+                  {t('common.dismiss')}
                 </Box>
               </Box>
             )}
@@ -1789,7 +1793,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 >
                   <PlayArrowIcon sx={{ fontSize: 14, color: c.accent.primary }} />
                   <Typography sx={{ fontSize: '0.78rem', fontWeight: 500, color: c.accent.primary }}>
-                    Resume Agent Response
+                    {t('agentChat.chat.resumeAgentResponse')}
                   </Typography>
                 </Box>
               </Box>
@@ -1797,7 +1801,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             </Box>
           </Box>
           {showScrollButton && (
-            <Tooltip title="Scroll to bottom">
+            <Tooltip title={t('agentChat.chat.scrollToBottom')}>
               <IconButton
                 onClick={scrollToBottom}
                 sx={{
@@ -1857,7 +1861,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               },
             }}
           >
-            Continue chat
+            {t('agentChat.chat.continueChat')}
           </Box>
         ) : (
           <ClickAwayListener onClickAway={() => { if (queueExpanded) { setQueueExpanded(false); setEditingQueueIdx(null); } }}>
@@ -1887,9 +1891,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                       : <KeyboardArrowUpIcon sx={{ fontSize: 12, color: c.text.tertiary }} />
                     }
                     <Typography sx={{ fontSize: '0.68rem', fontWeight: 600, color: c.text.muted, letterSpacing: 0.2 }}>
-                      {queueLength} queued
+                      {t('agentChat.chat.queued', { count: queueLength })}
                     </Typography>
-                    <Tooltip title="Clear all">
+                    <Tooltip title={t('agentChat.chat.clearAll')}>
                       <IconButton
                         size="small"
                         onClick={(e) => { e.stopPropagation(); messageQueueRef.current = []; setQueueLength(0); setQueueExpanded(false); setEditingQueueIdx(null); }}
@@ -2031,7 +2035,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                           )}
                           {editingQueueIdx !== idx && (
                             <Box sx={{ display: 'flex', gap: 0.25, flexShrink: 0, mt: 0.15 }}>
-                              <Tooltip title="Edit">
+                              <Tooltip title={t('common.edit')}>
                                 <IconButton
                                   size="small"
                                   onClick={() => { setEditingQueueIdx(idx); setEditingQueueText(msg.prompt); }}
@@ -2040,7 +2044,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                                   <EditOutlinedIcon sx={{ fontSize: 13 }} />
                                 </IconButton>
                               </Tooltip>
-                              <Tooltip title="Remove">
+                              <Tooltip title={t('common.remove')}>
                                 <IconButton
                                   size="small"
                                   onClick={() => {
@@ -2087,14 +2091,10 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography sx={{ fontSize: '0.86rem', fontWeight: 600, color: c.text.primary, mb: 0.4 }}>
-                        Haiku may run out of room with {enabledMcpCount} apps connected
+                        {t('agentChat.chat.haikuWarningTitle', { apps: enabledMcpCount })}
                       </Typography>
                       <Typography sx={{ fontSize: '0.78rem', color: c.text.secondary, lineHeight: 1.45 }}>
-                        Haiku is the fastest Claude model but holds the least at once.
-                        Each connected app adds instructions Claude has to read first.
-                        If your message fails with “Prompt is too long,” turn off a few
-                        apps (Microsoft 365 is the heaviest) or switch to Sonnet/Opus,
-                        both have 5× more room.
+                        {t('agentChat.chat.haikuWarningBody')}
                       </Typography>
                     </Box>
                   </Box>
@@ -2117,7 +2117,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                     }}>
                       <Box
                         role="button"
-                        aria-label="Dismiss integration suggestion"
+                        aria-label={t('agentChat.chat.dismissIntegrationSuggestion')}
                         onClick={() => {
                           if (!id) return;
                           dispatch(clearMcpSuggestions({ sessionId: id }));
@@ -2143,10 +2143,10 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                         ×
                       </Box>
                       <Typography variant="body2" sx={{ color: c.text.primary, fontWeight: 500, mb: 0.5, pr: 3 }}>
-                        Looks like this might need an integration
+                        {t('agentChat.chat.integrationSuggestionTitle')}
                       </Typography>
                       <Typography variant="caption" sx={{ color: c.text.secondary, display: 'block', mb: 1 }}>
-                        Activating one of these will let the agent answer in a single round-trip.
+                        {t('agentChat.chat.integrationSuggestionBody')}
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                         {display.map((s) => (
@@ -2184,7 +2184,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                                   });
                                   const body = await r.json().catch(() => ({} as any));
                                   if (!r.ok) {
-                                    setActivateError(`Activation failed (${r.status})`);
+                                    setActivateError(t('agentChat.chat.activationFailedStatus', { status: r.status }));
                                   } else if (body?.status === 'unknown_server') {
                                     // Not yet connected; jump straight to Actions so the user can finish OAuth. Nothing here can do it on their behalf.
                                     dispatch(openSettingsModal('tools'));
@@ -2193,7 +2193,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                                     dispatch(clearMcpSuggestions({ sessionId: id }));
                                   }
                                 } catch (e: any) {
-                                  setActivateError(e?.message || 'Activation failed');
+                                  setActivateError(e?.message || t('agentChat.chat.activationFailed'));
                                 } finally {
                                   setActivatingMcp(null);
                                 }
@@ -2211,7 +2211,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                                 flexShrink: 0,
                               }}
                             >
-                              {activatingMcp === s.id ? 'Activating…' : 'Activate'}
+                              {activatingMcp === s.id ? t('agentChat.chat.activating') : t('agentChat.chat.activate')}
                             </Typography>
                           </Box>
                         ))}
@@ -2245,7 +2245,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   sessionId={id}
                   autoFocus={autoFocus}
                   prefillPrompt={prefillPrompt}
-                  placeholderOverride={runContext ? 'Ask about this run...' : undefined}
+                  placeholderOverride={runContext ? t('agentChat.chat.askAboutRun') : undefined}
                   runContext={runContext}
                   onClearRunContext={onClearRunContext}
                   thinkingLevel={session?.thinking_level ?? 'auto'}
@@ -2264,6 +2264,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
 
 // Brief toast above the build chat's composer confirming a model switch also changes the model the scheduled workflow will run on. Holds the last label in a ref so the exit fade renders content instead of blanking mid-animation.
 function WorkflowModelNotice({ c, label }: { c: ReturnType<typeof useClaudeTokens>; label: string | null }) {
+  const { t } = useTranslation();
   const last = React.useRef<string | null>(null);
   if (label) last.current = label;
   const display = last.current;
@@ -2279,7 +2280,7 @@ function WorkflowModelNotice({ c, label }: { c: ReturnType<typeof useClaudeToken
       }}>
         <SwapHorizRoundedIcon sx={{ fontSize: 17, color: c.accent.primary, flexShrink: 0 }} />
         <Box sx={{ fontSize: '0.83rem', color: c.text.primary, lineHeight: 1.4 }}>
-          This workflow will now be using <b>{display}</b>.
+          {t('agentChat.chat.workflowModelNotice', { model: display })}
         </Box>
       </Box>
     </Fade>

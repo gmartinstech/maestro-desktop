@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
@@ -54,6 +55,7 @@ const MessageActionBar: React.FC<Props> = ({
   sessionId,
   messageId,
 }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [copied, setCopied] = useState(false);
   const [dialogSentiment, setDialogSentiment] = useState<Sentiment | null>(null);
@@ -85,20 +87,20 @@ const MessageActionBar: React.FC<Props> = ({
     >
       {isUser ? (
         <>
-          <Tooltip title="Coming soon" arrow>
+          <Tooltip title={t('agentChat.messageActions.comingSoon')} arrow>
             <span>
               <IconButton size="small" disabled sx={btnSx(c)}>
                 <BookmarkBorderIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title={copied ? 'Copied!' : 'Copy'} arrow>
+          <Tooltip title={copied ? t('agentChat.messageActions.copied') : t('common.copy')} arrow>
             <IconButton size="small" onClick={handleCopy} sx={btnSx(c)}>
               {copied ? <CheckIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
             </IconButton>
           </Tooltip>
           {onEdit && (
-            <Tooltip title="Edit" arrow>
+            <Tooltip title={t('common.edit')} arrow>
               <IconButton size="small" onClick={onEdit} sx={btnSx(c)}>
                 <EditIcon sx={{ fontSize: 16 }} />
               </IconButton>
@@ -138,21 +140,21 @@ const MessageActionBar: React.FC<Props> = ({
         </>
       ) : (
         <>
-          <Tooltip title={copied ? 'Copied!' : 'Copy'} arrow>
+          <Tooltip title={copied ? t('agentChat.messageActions.copied') : t('common.copy')} arrow>
             <IconButton size="small" onClick={handleCopy} sx={btnSx(c)}>
               {copied ? <CheckIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
             </IconButton>
           </Tooltip>
           {canRate && (
             <>
-              <Tooltip title="Give positive feedback" arrow>
+              <Tooltip title={t('agentChat.messageActions.positiveFeedback')} arrow>
                 <IconButton size="small" onClick={() => setDialogSentiment('up')} sx={btnSx(c)}>
                   {submitted === 'up'
                     ? <ThumbUpAltIcon sx={{ fontSize: 16, color: c.accent.primary }} />
                     : <ThumbUpOffAltIcon sx={{ fontSize: 16 }} />}
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Give negative feedback" arrow>
+              <Tooltip title={t('agentChat.messageActions.negativeFeedback')} arrow>
                 <IconButton size="small" onClick={() => setDialogSentiment('down')} sx={btnSx(c)}>
                   {submitted === 'down'
                     ? <ThumbDownAltIcon sx={{ fontSize: 16, color: c.accent.primary }} />
@@ -162,14 +164,14 @@ const MessageActionBar: React.FC<Props> = ({
             </>
           )}
           {onRegenerate && (
-            <Tooltip title="Regenerate" arrow>
+            <Tooltip title={t('agentChat.messageActions.regenerate')} arrow>
               <IconButton size="small" onClick={onRegenerate} sx={btnSx(c)}>
                 <ReplayIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </Tooltip>
           )}
           {onBranch && (
-            <Tooltip title="Branch chat" arrow>
+            <Tooltip title={t('agentChat.messageActions.branchChat')} arrow>
               <IconButton size="small" onClick={onBranch} sx={btnSx(c)}>
                 <CallSplitIcon sx={{ fontSize: 16 }} />
               </IconButton>

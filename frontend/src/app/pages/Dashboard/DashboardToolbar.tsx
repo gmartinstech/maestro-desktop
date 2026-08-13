@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import InputBase from '@mui/material/InputBase';
@@ -110,6 +111,7 @@ function formatRelativeTime(dateStr: string | null): string {
 
 const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
   ({ inputOpen, onNewAgent, onCancel, onSend, onAddView, onHistoryResume, onAddBrowser, onAddNote, dashboardId, newAgentBounce, onNewAgentBounceEnd, prefillPrompt, prefillMode }, ref) => {
+    const { t } = useTranslation();
     const c = useClaudeTokens();
     const dispatch = useAppDispatch();
     const elementSelection = useElementSelection();
@@ -499,7 +501,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                 inputRef={searchInputRef}
                 value={viewSearch}
                 onChange={(e) => setViewSearch(e.target.value)}
-                placeholder="Search apps..."
+                placeholder={t('dashboard.toolbar.searchAppsPlaceholder')}
                 sx={{
                   flex: 1,
                   fontSize: '0.85rem',
@@ -527,7 +529,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               {filteredOutputs.length === 0 ? (
                 <Box sx={{ px: 2, py: 3, textAlign: 'center' }}>
                   <Typography sx={{ fontSize: '0.82rem', color: c.text.muted }}>
-                    {outputList.length === 0 ? 'No apps created yet' : 'No matching apps'}
+                    {outputList.length === 0 ? t('dashboard.toolbar.noAppsYet') : t('dashboard.toolbar.noMatchingApps')}
                   </Typography>
                 </Box>
               ) : (
@@ -614,10 +616,10 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <WarmTooltip tokens={c} title={`New Agent  ${shortcutLabel}`} placement="top" arrow enterDelay={400}>
+            <WarmTooltip tokens={c} title={`${t('dashboard.toolbar.newAgent')}  ${shortcutLabel}`} placement="top" arrow enterDelay={400}>
               <Box
                 role="button"
-                aria-label="New Agent"
+                aria-label={t('dashboard.toolbar.newAgent')}
                 data-onboarding="new-agent-button"
                 tabIndex={0}
                 onClick={() => {
@@ -664,13 +666,13 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>Add App  ⌘M</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.addApp')}  ⌘M</Box>
                 </Box>
               }
             >
               <Box
                 role="button"
-                aria-label="Add App"
+                aria-label={t('dashboard.toolbar.addApp')}
                 tabIndex={0}
                 onClick={handleOpenViewPicker}
                 data-onboarding="dashboard-toolbar-apps"
@@ -699,13 +701,13 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>Browser  ⌘N</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.browser')}  ⌘N</Box>
                 </Box>
               }
             >
               <Box
                 role="button"
-                aria-label="Browser"
+                aria-label={t('dashboard.toolbar.browser')}
                 data-onboarding="browser-button"
                 tabIndex={0}
                 onClick={onAddBrowser}
@@ -734,14 +736,14 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>Workflows</Box>
-                  <Box sx={{ opacity: 0.6, fontSize: '0.7rem', mt: '1px' }}>Schedule and calendar</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.workflows')}</Box>
+                  <Box sx={{ opacity: 0.6, fontSize: '0.7rem', mt: '1px' }}>{t('dashboard.toolbar.workflowsSub')}</Box>
                 </Box>
               }
             >
               <Box
                 role="button"
-                aria-label="Workflows"
+                aria-label={t('dashboard.toolbar.workflows')}
                 tabIndex={0}
                 onClick={() => dispatch(workflowsHubOpen ? closeWorkflowsApp() : openWorkflowsApp())}
                 sx={{
@@ -770,14 +772,14 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>Add note</Box>
-                  <Box sx={{ opacity: 0.6, fontSize: '0.7rem', mt: '1px' }}>Sticky note on the canvas</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.addNote')}</Box>
+                  <Box sx={{ opacity: 0.6, fontSize: '0.7rem', mt: '1px' }}>{t('dashboard.toolbar.addNoteSub')}</Box>
                 </Box>
               }
             >
               <Box
                 role="button"
-                aria-label="Add note"
+                aria-label={t('dashboard.toolbar.addNote')}
                 tabIndex={0}
                 onClick={onAddNote}
                 sx={{
@@ -805,13 +807,13 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>History  ⌘O</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.history')}  ⌘O</Box>
                 </Box>
               }
             >
               <Box
                 role="button"
-                aria-label="History"
+                aria-label={t('dashboard.toolbar.history')}
                 tabIndex={0}
                 onClick={handleOpenHistory}
                 sx={{

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -181,6 +182,7 @@ const BrowserCard: React.FC<Props> = ({
   isSelected = false, isHighlighted = false, keepAliveHidden = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
   cardZOrder = 0, onDoubleClick, onBringToFront,
 }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   // Read via ref inside the webview-attach effect so a new onDoubleClick identity doesn't re-run that effect (which would re-register the webview).
@@ -985,7 +987,7 @@ const BrowserCard: React.FC<Props> = ({
                     lineHeight: 1.2,
                   }}
                 >
-                  {tab.title || 'New Tab'}
+                  {tab.title || t('dashboard.browserCard.newTab')}
                 </Typography>
 
                 <Box
@@ -1072,7 +1074,7 @@ const BrowserCard: React.FC<Props> = ({
             </Box>
           )}
 
-          <Tooltip title="Close browser" placement="top">
+          <Tooltip title={t('dashboard.browserCard.closeBrowser')} placement="top">
             <IconButton
               size="small"
               onClick={handleRemove}
@@ -1098,7 +1100,7 @@ const BrowserCard: React.FC<Props> = ({
           flexShrink: 0,
         }}
       >
-        <Tooltip title="Back" placement="top">
+        <Tooltip title={t('dashboard.browserCard.back')} placement="top">
           <span>
             <IconButton
               size="small"
@@ -1112,7 +1114,7 @@ const BrowserCard: React.FC<Props> = ({
           </span>
         </Tooltip>
 
-        <Tooltip title="Forward" placement="top">
+        <Tooltip title={t('dashboard.browserCard.forward')} placement="top">
           <span>
             <IconButton
               size="small"
@@ -1126,7 +1128,7 @@ const BrowserCard: React.FC<Props> = ({
           </span>
         </Tooltip>
 
-        <Tooltip title="Reload" placement="top">
+        <Tooltip title={t('dashboard.browserCard.reload')} placement="top">
           <IconButton
             size="small"
             onClick={handleRefresh}
@@ -1164,7 +1166,7 @@ const BrowserCard: React.FC<Props> = ({
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             onFocus={(e) => (e.target as HTMLInputElement).select()}
-            placeholder="Search Google or enter URL..."
+            placeholder={t('dashboard.browserCard.urlPlaceholder')}
             sx={{
               flex: 1,
               fontSize: '0.74rem',
@@ -1287,7 +1289,7 @@ const BrowserCard: React.FC<Props> = ({
                 }}
               >
                 <Typography sx={{ color: c.text.primary, fontSize: '0.95rem', fontWeight: 500 }}>
-                  {endingState?.status === 'error' ? 'Task ended with an error.' : 'Task done.'}
+                  {endingState?.status === 'error' ? t('dashboard.browserCard.taskEndedError') : t('dashboard.browserCard.taskDone')}
                 </Typography>
                 <Button
                   onClick={() => dispatch(cancelBrowserCardEnding(browserId))}
@@ -1303,7 +1305,7 @@ const BrowserCard: React.FC<Props> = ({
                     '&:hover': { bgcolor: c.accent.hover || c.accent.primary },
                   }}
                 >
-                  Keep
+                  {t('dashboard.browserCard.keep')}
                 </Button>
               </Box>
             </Fade>
@@ -1322,7 +1324,7 @@ const BrowserCard: React.FC<Props> = ({
                 }}
               >
                 <Typography sx={{ color: c.text.primary, fontSize: '0.95rem', fontWeight: 500 }}>
-                  This page stopped responding.
+                  {t('dashboard.browserCard.pageStoppedResponding')}
                 </Typography>
                 <Button
                   onClick={() => webviewMap.current.get(activeTabId)?.reload()}
@@ -1339,7 +1341,7 @@ const BrowserCard: React.FC<Props> = ({
                     '&:hover': { bgcolor: c.accent.hover || c.accent.primary },
                   }}
                 >
-                  Reload
+                  {t('dashboard.browserCard.reload')}
                 </Button>
               </Box>
             </Fade>
@@ -1359,11 +1361,11 @@ const BrowserCard: React.FC<Props> = ({
           }}
         >
           <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700, color: c.text.primary, pb: 1 }}>
-            Passkeys aren't supported
+            {t('dashboard.browserCard.passkeysTitle')}
           </DialogTitle>
           <DialogContent sx={{ pb: 1 }}>
             <Typography sx={{ fontSize: '0.85rem', color: c.text.secondary, lineHeight: 1.5 }}>
-              Sorry, Maestro Studio doesn't support passkeys. Please sign in with a password or another method.
+              {t('dashboard.browserCard.passkeysBody')}
             </Typography>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -1381,7 +1383,7 @@ const BrowserCard: React.FC<Props> = ({
                 '&:hover': { bgcolor: c.accent.hover || c.accent.primary },
               }}
             >
-              OK
+              {t('dashboard.browserCard.ok')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1391,7 +1393,7 @@ const BrowserCard: React.FC<Props> = ({
             <iframe
               src={activeUrl}
               style={{ width: '100%', height: '100%', border: 'none', pointerEvents: isElementSelectMode ? 'none' : 'auto' }}
-              title="Browser"
+              title={t('dashboard.browserCard.iframeTitle')}
               referrerPolicy="no-referrer-when-downgrade"
               onError={(e) => {
                 // eslint-disable-next-line no-console
@@ -1618,7 +1620,7 @@ const BrowserCard: React.FC<Props> = ({
                 <LanguageIcon sx={{ fontSize: 14, color: c.text.muted, flexShrink: 0 }} />
               )}
               <Typography sx={{ fontSize: '0.75rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {ghostTab?.title || ghostTab?.url || 'Tab'}
+                {ghostTab?.title || ghostTab?.url || t('dashboard.browserCard.tab')}
               </Typography>
             </Box>
           );
