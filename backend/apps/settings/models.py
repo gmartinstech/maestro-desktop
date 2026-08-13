@@ -43,6 +43,8 @@ class AppSettings(BaseModel):
     default_thinking_level: Literal["off", "low", "medium", "high", "auto"] = "auto"
     zoom_sensitivity: float = 50.0
     theme: str = "light"
+    # User's explicit UI language choice; None means unset (pre-migration or fresh install), NOT a third language. Distinct from `locale` below (the detected OS locale, used for telemetry/env).
+    language: Optional[Literal["pt-BR", "en"]] = None
     # Shared across App Builder workspaces (each runs its own vite port / localStorage origin); null = follow system.
     app_template_theme_override: Optional[Literal["light", "dark"]] = None
     new_agent_shortcut: str = "Meta+l"

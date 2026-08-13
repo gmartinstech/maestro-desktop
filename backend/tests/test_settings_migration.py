@@ -73,6 +73,9 @@ def test_no_file_returns_defaults(settings_file):
     assert isinstance(s, AppSettings)
     assert s.default_system_prompt == DEFAULT_SYSTEM_PROMPT
     assert s.theme == "light"
+    # A fresh install's backend `language` is unset (not yet migrated); the renderer resolves that
+    # None to the pt-BR default itself (frontend/src/shared/i18n/languageSync.ts), never a third value.
+    assert s.language is None
 
 
 def test_minimal_old_file_fills_missing_with_defaults(settings_file):
@@ -192,3 +195,17 @@ def test_save_then_load_roundtrip(settings_file):
     assert loaded.theme == "light"
     assert loaded.default_model == "opus"
     assert loaded.installation_id == "keep-me"
+
+
+def test_language_field_roundtrips(settings_file):
+    s = AppSettings(language="en")
+    store.save_settings(s)
+    loaded = store.load_settings()
+    assert loaded.language == "en"
+
+
+def test_retired_language_value_reverts_to_unset(settings_file):
+    # Same never-brick-boot contract as other Literal fields: a value outside {"pt-BR", "en"} must not raise.
+    p_write(settings_file, {"language": "es"})
+    s = store.load_settings()
+    assert s.language is None
