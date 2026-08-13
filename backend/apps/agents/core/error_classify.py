@@ -116,6 +116,8 @@ def is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
         return False
     return bool(re.search(
         r"\b(401|403)\b"
+        # The provedor-ia gateway rejects a dead Keycloak access token with exactly this reason string.
+        r"|jwt\s+expired"
         r"|invalid\s+authentication\s+credentials"
         r"|invalid.*api[_\s-]?key"
         r"|missing\s+bearer\s+token"

@@ -16,6 +16,7 @@ from backend.apps.agents.manager.streaming.state import ThinkingState, TurnState
 from backend.apps.agents.manager.streaming.upsert_message import upsert_message
 from backend.apps.agents.manager.streaming.PartialReply import PartialReply
 from backend.apps.agents.manager.streaming import thinking as thinking_mod
+from backend.apps.settings.provedor_ia import PROVEDOR_IA_NAME
 
 try:
     from claude_agent_sdk import AssistantMessage
@@ -93,6 +94,8 @@ async def handle_assistant_message(
             or ("authentication token is expired" in lower_text)
             or ("authentication token has expired" in lower_text)
             or ("provided authentication token" in lower_text and ("401" in lower_text or "expired" in lower_text))
+            # The provedor-ia gateway's own rejection reason for a dead Keycloak access token.
+            or "jwt expired" in lower_text
         )
         if looks_like_router_auth_error:
             if "codex/" in lower_text or "[codex" in lower_text:
@@ -108,6 +111,13 @@ async def handle_assistant_message(
                     "Reconnect on the Google / Gemini row, then send your message again."
                 )
                 reason = "gemini_token_expired"
+            elif "jwt expired" in lower_text or PROVEDOR_IA_NAME in (session.model or "").lower():
+                # A provedor-ia token is a 10h Keycloak access token with no refresh; the renderer replaces this text with the sign-in card.
+                friendly = (
+                    "Maestro Studio sign-in expired. Sign in again to get a "
+                    "fresh access code, then send your message again."
+                )
+                reason = "provedor_ia_token_expired"
             else:
                 friendly = (
                     "Provider authentication expired. Open Settings → Models and "
