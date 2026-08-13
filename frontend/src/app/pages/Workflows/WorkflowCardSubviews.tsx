@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Popover from '@mui/material/Popover';
@@ -46,20 +48,27 @@ export function statusBg(s: string, c: ReturnType<typeof useClaudeTokens>): stri
   return c.bg.secondary;
 }
 
-export function labelForStatus(s: string): string {
-  if (s === 'success') return 'Success';
-  if (s === 'failure') return 'Failure';
-  if (s === 'ran_late') return 'Ran late';
-  if (s === 'running') return 'Running';
-  if (s === 'skipped') return 'Skipped';
+export function labelForStatus(s: string, t: TFunction): string {
+  if (s === 'success') return t('workflows.subviews.status.success');
+  if (s === 'failure') return t('workflows.subviews.status.failure');
+  if (s === 'ran_late') return t('workflows.subviews.status.ranLate');
+  if (s === 'running') return t('workflows.subviews.status.running');
+  if (s === 'skipped') return t('workflows.subviews.status.skipped');
   return s;
 }
 
-export function formatRunDate(iso: string): string {
+export function formatRunDate(iso: string, locale: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString('en', { weekday: 'short', month: 'short', day: 'numeric' });
+    return d.toLocaleString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
   } catch { return iso; }
+}
+
+// Locale-aware clock label: pt-BR renders 24h ("15:00"), en keeps 12h am/pm.
+function formatTimeOfDay(hour: number, minute: number, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hour, minute));
+  } catch { return `${hour}:${String(minute).padStart(2, '0')}`; }
 }
 
 type ActionBtnTone = 'muted' | 'success' | 'danger';
@@ -110,13 +119,14 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   closeRequestNonce?: number;
 }) {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [busy, setBusy] = useState(false);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   // Title + description live in the openCard draft so the parent header (which renders the inline-editable title) and PreviewView body (which renders the inline-editable description + steps) stay in sync. On Save we pull whatever's currently in the draft, falling back to the initialDraft passed at mount time.
   const card = useAppSelector((s) => s.workflows.openCards[workflowId]);
   const liveDraft = (card?.draft ?? initialDraft ?? {}) as Partial<Workflow>;
-  const title = (liveDraft.title as string) || 'New workflow';
+  const title = (liveDraft.title as string) || t('workflows.subviews.newWorkflow');
   const description = (liveDraft.description as string) || '';
   const canSave = steps.some((s) => (s.text || '').trim().length > 0);
   // The new workflow runs with the user's configured default model/mode (their subscription, etc.), falling back to whatever the source chat used. Without this the backend picks its own default, which surprised users who'd set a subscription default but saw the workflow created on an API-key model.
@@ -227,10 +237,10 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: c.text.primary, lineHeight: 1.3 }}>
-            Schedule this workflow?
+            {t('workflows.subviews.scheduleNudgeTitle')}
           </Typography>
           <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, mt: 0.25, lineHeight: 1.45 }}>
-            You can have workflows run on a recurring basis, automatically.
+            {t('workflows.subviews.scheduleNudgeBody')}
           </Typography>
         </Box>
       </Box>
@@ -244,12 +254,12 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
             opacity: busy ? 0.6 : 1,
             '&:hover': { color: c.text.primary },
           }}>
-          Not now
+          {t('workflows.subviews.notNow')}
         </Box>
         <Box
           onClick={canSave ? onSaveThenSchedule : undefined}
           role="button"
-          title={canSave ? undefined : 'Add at least one step before saving'}
+          title={canSave ? undefined : t('workflows.subviews.needStepTooltip')}
           sx={{
             display: 'inline-flex', alignItems: 'center', gap: 0.5,
             fontSize: '0.88rem', fontWeight: 700,
@@ -259,14 +269,14 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
             opacity: busy || !canSave ? 0.6 : 1,
             '&:hover': { bgcolor: c.accent.primary, filter: 'brightness(1.06)' },
           }}>
-          Schedule Workflow
+          {t('workflows.subviews.scheduleWorkflow')}
         </Box>
       </Box>
       <Dialog open={savePromptOpen} onClose={() => setSavePromptOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700 }}>Save workflow?</DialogTitle>
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700 }}>{t('workflows.subviews.savePromptTitle')}</DialogTitle>
         <DialogContent>
           <Typography sx={{ fontSize: '0.86rem', color: c.text.secondary }}>
-            Save this workflow under Unscheduled. It will not run until you choose a schedule.
+            {t('workflows.subviews.savePromptBody')}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
@@ -274,20 +284,20 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
             role="button"
             onClick={onDontSave}
             sx={{ fontSize: '0.84rem', fontWeight: 600, color: c.status.error, cursor: busy ? 'wait' : 'pointer', px: 1, py: 0.5, opacity: busy ? 0.6 : 1 }}>
-            Don't Save
+            {t('workflows.subviews.dontSave')}
           </Box>
           <Box
             role="button"
             onClick={() => setSavePromptOpen(false)}
             sx={{ fontSize: '0.84rem', fontWeight: 600, color: c.text.secondary, cursor: busy ? 'wait' : 'pointer', px: 1, py: 0.5, opacity: busy ? 0.6 : 1 }}>
-            Cancel
+            {t('common.cancel')}
           </Box>
           <Box
             role="button"
             onClick={canSave ? onSaveDraft : undefined}
-            title={canSave ? undefined : 'Add at least one step before saving'}
+            title={canSave ? undefined : t('workflows.subviews.needStepTooltip')}
             sx={{ fontSize: '0.84rem', fontWeight: 700, color: '#fff', bgcolor: c.accent.primary, borderRadius: c.radius.full, cursor: busy ? 'wait' : canSave ? 'pointer' : 'not-allowed', px: 1.5, py: 0.6, opacity: busy || !canSave ? 0.6 : 1, '&:hover': { filter: 'brightness(1.06)' } }}>
-            Save
+            {t('common.save')}
           </Box>
         </DialogActions>
       </Dialog>
@@ -308,31 +318,28 @@ function describePermissions(workflow: Workflow): string {
   return `First ${parts.join(', then ')}`;
 }
 
-function describeSchedule(workflow: Workflow): string {
+function describeSchedule(workflow: Workflow, t: TFunction, locale: string): string {
   const s = workflow.schedule;
-  if (!s.enabled) return 'Not scheduled';
-  const h12 = ((s.hour + 11) % 12) + 1;
-  const ampm = s.hour < 12 ? 'am' : 'pm';
-  const time = s.minute === 0 ? `${h12}${ampm}` : `${h12}:${String(s.minute).padStart(2, '0')}${ampm}`;
-  if (s.repeat_unit === 'minute') return `Every ${s.repeat_every} minutes`;
-  if (s.repeat_unit === 'hour') return s.repeat_every === 1 ? `Hourly at :${String(s.minute).padStart(2, '0')}` : `Every ${s.repeat_every} hours`;
-  if (s.repeat_unit === 'day') return s.repeat_every === 1 ? `Daily at ${time}` : `Every ${s.repeat_every} days at ${time}`;
+  const k = 'workflows.subviews.schedule';
+  if (!s.enabled) return t(`${k}.notScheduled`);
+  const time = formatTimeOfDay(s.hour, s.minute, locale);
+  if (s.repeat_unit === 'minute') return t(`${k}.everyMinutes`, { count: s.repeat_every });
+  if (s.repeat_unit === 'hour') return s.repeat_every === 1 ? t(`${k}.hourlyAt`, { minute: String(s.minute).padStart(2, '0') }) : t(`${k}.everyHours`, { count: s.repeat_every });
+  if (s.repeat_unit === 'day') return s.repeat_every === 1 ? t(`${k}.dailyAt`, { time }) : t(`${k}.everyDaysAt`, { count: s.repeat_every, time });
   if (s.repeat_unit === 'month') {
-    const day = s.day_of_month ? ` on day ${s.day_of_month}` : '';
-    return s.repeat_every === 1 ? `Monthly${day} at ${time}` : `Every ${s.repeat_every} months${day} at ${time}`;
+    const day = s.day_of_month ? t(`${k}.onDayOfMonth`, { day: s.day_of_month }) : '';
+    return s.repeat_every === 1 ? t(`${k}.monthlyAt`, { day, time }) : t(`${k}.everyMonthsAt`, { count: s.repeat_every, day, time });
   }
-  if (s.on_days.length === 5 && [1,2,3,4,5].every((d) => s.on_days.includes(d))) return `Weekdays at ${time}`;
-  if (s.on_days.length === 2 && [0,6].every((d) => s.on_days.includes(d))) return `Weekends at ${time}`;
-  if (s.on_days.length === 1) {
-    // Image #50: "Mondays at 3pm" (plural day, no "Every" prefix). Reads more naturally than "Every Mon at 3pm".
-    const plurals = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
-    return `${plurals[s.on_days[0]]} at ${time}`;
-  }
-  return `Weekly at ${time}`;
+  if (s.on_days.length === 5 && [1,2,3,4,5].every((d) => s.on_days.includes(d))) return t(`${k}.weekdaysAt`, { time });
+  if (s.on_days.length === 2 && [0,6].every((d) => s.on_days.includes(d))) return t(`${k}.weekendsAt`, { time });
+  // Image #50: a single day reads as a plural weekday ("Mondays at 3pm"), which Intl can't produce, so the plural forms live as their own keys.
+  if (s.on_days.length === 1) return t(`${k}.singleDayAt`, { day: t(`${k}.dayPlural.${s.on_days[0]}`), time });
+  return t(`${k}.weeklyAt`, { time });
 }
 
 export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Workflow; steps: Workflow['steps']; runs?: WorkflowRun[]; activeRunId?: string | null }) {
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
   const dispatch = useAppDispatch();
   void runs; void activeRunId;
   const card = useAppSelector((s) => s.workflows.openCards[workflow.id]);
@@ -395,7 +402,9 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
   }, [dispatch, sourceId, sourceExists, wfCardPos, expandedSessionIds, workflow.id]);
 
   const scheduleConfigured = isScheduleConfigured(workflow.schedule);
-  const scheduleLine = workflow.schedule.enabled && scheduleConfigured ? describeSchedule(workflow) : 'Schedule this workflow';
+  const scheduleLine = workflow.schedule.enabled && scheduleConfigured
+    ? describeSchedule(workflow, t, i18n.language)
+    : t('workflows.subviews.scheduleThisWorkflow');
   const scheduleClickable = !scheduleConfigured;
   // One-shot prompt right after a convert; hub-opened cards never set the flag, so they fall straight to the quiet schedule line below.
   const showNudge = !!card?.showScheduleNudge && !scheduleConfigured;
@@ -427,10 +436,10 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: c.text.primary, lineHeight: 1.3 }}>
-              Schedule this workflow?
+              {t('workflows.subviews.scheduleNudgeTitle')}
             </Typography>
             <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, mt: 0.25, lineHeight: 1.45 }}>
-              You can have workflows run on a recurring basis, automatically.
+              {t('workflows.subviews.scheduleNudgeBody')}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5, mt: 1.25 }}>
               <Box
@@ -441,7 +450,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
                   cursor: 'pointer', px: 0.75, py: 0.5,
                   '&:hover': { color: c.text.primary },
                 }}>
-                Not now
+                {t('workflows.subviews.notNow')}
               </Box>
               <Box
                 onClick={requestSchedule}
@@ -454,7 +463,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
                   cursor: 'pointer',
                   '&:hover': { bgcolor: c.accent.primary, filter: 'brightness(1.06)' },
                 }}>
-                Schedule Workflow
+                {t('workflows.subviews.scheduleWorkflow')}
               </Box>
             </Box>
           </Box>
@@ -490,7 +499,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
             '&:hover': { bgcolor: c.bg.elevated, borderColor: c.border.strong, color: c.text.primary },
           }}>
           <EditOutlined sx={{ fontSize: 15 }} />
-          Edit
+          {t('common.edit')}
         </Box>
       </Box>
       <ScheduleTestWarningDialog
@@ -519,6 +528,7 @@ function StreakBadgeRow({ runs }: { runs?: WorkflowRun[] }) {
 // Audit-trace popover. Lazy-fetches the last N edits from /workflows/{id}/audit on open, renders a compact list. The trigger sits inline with the chip row so power users can spot it without cluttering the title.
 function AuditTraceLink({ workflowId }: { workflowId: string }) {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [entries, setEntries] = useState<Array<{ ts: string; who: string; diff: Record<string, { before: unknown; after: unknown }> }> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -565,7 +575,7 @@ function AuditTraceLink({ workflowId }: { workflowId: string }) {
   const count = entries?.length ?? 0;
   return (
     <>
-      <Tooltip title="Recent edits to this workflow">
+      <Tooltip title={t('workflows.subviews.audit.tooltip')}>
         <Box onClick={open} role="button" sx={{
           display: 'inline-flex', alignItems: 'center', gap: 0.3,
           fontSize: '0.7rem', color: c.text.muted, cursor: 'pointer',
@@ -573,7 +583,7 @@ function AuditTraceLink({ workflowId }: { workflowId: string }) {
           '&:hover': { color: c.accent.primary, bgcolor: c.bg.elevated },
         }}>
           <HistoryIcon sx={{ fontSize: 12 }} />
-          {entries === null ? 'edits' : `${count} edit${count === 1 ? '' : 's'}`}
+          {t('workflows.subviews.audit.editCount', { count })}
         </Box>
       </Tooltip>
       <Popover
@@ -584,20 +594,24 @@ function AuditTraceLink({ workflowId }: { workflowId: string }) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
         <Box sx={{ minWidth: 280, maxWidth: 360, p: 1 }}>
           <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: c.text.muted, letterSpacing: '0.06em', mb: 0.5 }}>
-            RECENT EDITS
+            {t('workflows.subviews.audit.heading')}
           </Typography>
-          {loading && <Typography sx={{ fontSize: '0.78rem', color: c.text.muted }}>Loading…</Typography>}
+          {loading && <Typography sx={{ fontSize: '0.78rem', color: c.text.muted }}>{t('workflows.subviews.loading')}</Typography>}
           {!loading && (entries === null || entries.length === 0) && (
-            <Typography sx={{ fontSize: '0.78rem', color: c.text.muted }}>No edits yet.</Typography>
+            <Typography sx={{ fontSize: '0.78rem', color: c.text.muted }}>{t('workflows.subviews.audit.empty')}</Typography>
           )}
           {!loading && entries && entries.map((e, idx) => {
             const fields = Object.keys(e.diff || {}).filter((k) => k !== 'updated_at');
-            const summary = fields.length === 0 ? 'no field changes' : fields.slice(0, 3).join(', ') + (fields.length > 3 ? `, +${fields.length - 3} more` : '');
+            const summary = fields.length === 0
+              ? t('workflows.subviews.audit.noFieldChanges')
+              : fields.length > 3
+                ? t('workflows.subviews.audit.fieldsMore', { fields: fields.slice(0, 3).join(', '), count: fields.length - 3 })
+                : fields.slice(0, 3).join(', ');
             return (
               <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', py: 0.5, borderTop: idx === 0 ? 'none' : `1px solid ${c.border.subtle}` }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography sx={{ fontSize: '0.78rem', color: c.text.primary, fontWeight: 600 }}>{e.who || 'user'}</Typography>
-                  <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost }}>{relTimeShort(e.ts)}</Typography>
+                  <Typography sx={{ fontSize: '0.78rem', color: c.text.primary, fontWeight: 600 }}>{e.who || t('workflows.subviews.audit.userFallback')}</Typography>
+                  <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost }}>{relTimeShort(e.ts, t)}</Typography>
                 </Box>
                 <Typography sx={{ fontSize: '0.74rem', color: c.text.secondary }}>{summary}</Typography>
               </Box>
@@ -609,16 +623,16 @@ function AuditTraceLink({ workflowId }: { workflowId: string }) {
   );
 }
 
-function relTimeShort(iso: string): string {
+function relTimeShort(iso: string, t: TFunction): string {
   try {
     const ms = Date.now() - new Date(iso).getTime();
-    if (ms < 60000) return 'just now';
+    if (ms < 60000) return t('workflows.relTime.justNow');
     const m = Math.floor(ms / 60000);
-    if (m < 60) return `${m}m ago`;
+    if (m < 60) return t('workflows.relTime.minutes', { count: m });
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
+    if (h < 24) return t('workflows.relTime.hours', { count: h });
     const d = Math.floor(h / 24);
-    return `${d}d ago`;
+    return t('workflows.relTime.days', { count: d });
   } catch { return ''; }
 }
 
@@ -632,7 +646,7 @@ function runDuration(r: WorkflowRun): string | null {
 }
 
 // Groups runs into "This week / Last week / Month YYYY" buckets so a long history list reads as eras rather than 50 same-looking dates.
-function groupKey(iso: string): string {
+function groupKey(iso: string, t: TFunction, locale: string): string {
   try {
     const d = new Date(iso);
     const now = new Date();
@@ -640,14 +654,15 @@ function groupKey(iso: string): string {
     const startOfWeek = (x: Date) => { const y = new Date(x); y.setHours(0, 0, 0, 0); y.setDate(y.getDate() - y.getDay()); return y; };
     const thisWeekStart = startOfWeek(now).getTime();
     const lastWeekStart = thisWeekStart - 7 * day;
-    if (d.getTime() >= thisWeekStart) return 'This week';
-    if (d.getTime() >= lastWeekStart) return 'Last week';
-    return d.toLocaleString('en', { month: 'long', year: 'numeric' });
-  } catch { return 'Earlier'; }
+    if (d.getTime() >= thisWeekStart) return t('workflows.subviews.history.thisWeek');
+    if (d.getTime() >= lastWeekStart) return t('workflows.subviews.history.lastWeek');
+    return d.toLocaleString(locale, { month: 'long', year: 'numeric' });
+  } catch { return t('workflows.subviews.history.earlier'); }
 }
 
 export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleFor }: { runs: WorkflowRun[]; onOpen: (r: WorkflowRun) => void; showWorkflow?: boolean; workflowTitleFor?: (workflowId: string) => string }) {
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // Filter chips: all / success / failures / skipped. Power-users debugging a flaky workflow shouldn't have to scroll past the runs they don't care about.
   const [filter, setFilter] = useState<'all' | 'success' | 'failure' | 'skipped'>('all');
@@ -658,15 +673,15 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
   const groups = useMemo(() => {
     const out: Array<{ key: string; runs: WorkflowRun[] }> = [];
     for (const r of filtered || []) {
-      const k = groupKey(r.started_at);
+      const k = groupKey(r.started_at, t, i18n.language);
       const last = out[out.length - 1];
       if (last && last.key === k) last.runs.push(r);
       else out.push({ key: k, runs: [r] });
     }
     return out;
-  }, [filtered]);
+  }, [filtered, t, i18n.language]);
   if (!runs || runs.length === 0) {
-    return <Typography sx={{ fontSize: '0.88rem', color: c.text.muted, py: 1.5, textAlign: 'center' }}>No runs yet</Typography>;
+    return <Typography sx={{ fontSize: '0.88rem', color: c.text.muted, py: 1.5, textAlign: 'center' }}>{t('workflows.subviews.history.noRuns')}</Typography>;
   }
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -686,7 +701,7 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
             px: 0.75, py: 0.3, borderRadius: c.radius.full, cursor: 'pointer',
             '&:hover': { color: c.accent.primary },
           }}>
-            {k === 'all' ? 'All' : k === 'success' ? 'Success' : k === 'failure' ? 'Failures' : 'Skipped'}
+            {t(`workflows.subviews.history.filter.${k}`)}
           </Box>
         ))}
       </Box>
@@ -706,15 +721,15 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
                   onClick={() => setExpandedId(expanded ? null : r.id)}
                   sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 0.6, px: 0.5, cursor: 'pointer', borderRadius: c.radius.sm, '&:hover': { bgcolor: c.bg.elevated } }}>
                   <Box sx={{ fontSize: '0.72rem', fontWeight: 700, color: statusColor(r.status, c), bgcolor: statusBg(r.status, c), px: 0.8, py: 0.3, borderRadius: c.radius.sm, minWidth: 64, textAlign: 'center' }}>
-                    {labelForStatus(r.status)}
+                    {labelForStatus(r.status, t)}
                   </Box>
                   {showWorkflow && workflowTitleFor ? (
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography sx={{ fontSize: '0.84rem', fontWeight: 600, color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{workflowTitleFor(r.workflow_id)}</Typography>
-                      <Typography sx={{ fontSize: '0.72rem', color: c.text.ghost }}>{formatRunDate(r.started_at)}</Typography>
+                      <Typography sx={{ fontSize: '0.72rem', color: c.text.ghost }}>{formatRunDate(r.started_at, i18n.language)}</Typography>
                     </Box>
                   ) : (
-                    <Typography sx={{ fontSize: '0.88rem', color: c.text.primary, flex: 1 }}>{formatRunDate(r.started_at)}</Typography>
+                    <Typography sx={{ fontSize: '0.88rem', color: c.text.primary, flex: 1 }}>{formatRunDate(r.started_at, i18n.language)}</Typography>
                   )}
                   {dur && <Typography sx={{ fontSize: '0.74rem', color: c.text.ghost }}>{dur}</Typography>}
                   {r.cost_usd > 0 && <Typography sx={{ fontSize: '0.74rem', color: c.text.ghost }}>${r.cost_usd.toFixed(4)}</Typography>}
@@ -730,10 +745,10 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
                       <Typography sx={{ fontSize: '0.78rem', color: c.status.error, lineHeight: 1.4 }}>{r.error}</Typography>
                     ) : r.session_id ? (
                       <Box onClick={(e) => { e.stopPropagation(); onOpen(r); }} role="button" sx={{ fontSize: '0.78rem', fontWeight: 600, color: c.accent.primary, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
-                        Click to see the full conversation →
+                        {t('workflows.subviews.history.openConversation')}
                       </Box>
                     ) : (
-                      <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.4 }}>No session was recorded for this run.</Typography>
+                      <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.4 }}>{t('workflows.subviews.history.noSession')}</Typography>
                     )}
                   </Box>
                 )}
@@ -748,20 +763,26 @@ export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleF
 
 export function HistoryDetail({ run, onBack }: { run: WorkflowRun | null; onBack: () => void }) {
   const c = useClaudeTokens();
-  if (!run) return <Typography sx={{ fontSize: '0.88rem', color: c.text.muted }}>Run not found</Typography>;
+  const { t, i18n } = useTranslation();
+  if (!run) return <Typography sx={{ fontSize: '0.88rem', color: c.text.muted }}>{t('workflows.subviews.detail.notFound')}</Typography>;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box onClick={onBack} role="button" sx={{ fontSize: '0.82rem', color: c.text.muted, cursor: 'pointer', '&:hover': { color: c.accent.primary } }}>← back</Box>
-        <Box sx={{ fontSize: '0.72rem', fontWeight: 700, color: statusColor(run.status, c), bgcolor: statusBg(run.status, c), px: 0.8, py: 0.3, borderRadius: c.radius.sm }}>{labelForStatus(run.status)}</Box>
-        <Typography sx={{ fontSize: '0.88rem', color: c.text.primary, fontWeight: 600 }}>{formatRunDate(run.started_at)}</Typography>
+        <Box onClick={onBack} role="button" sx={{ fontSize: '0.82rem', color: c.text.muted, cursor: 'pointer', '&:hover': { color: c.accent.primary } }}>{t('workflows.subviews.detail.back')}</Box>
+        <Box sx={{ fontSize: '0.72rem', fontWeight: 700, color: statusColor(run.status, c), bgcolor: statusBg(run.status, c), px: 0.8, py: 0.3, borderRadius: c.radius.sm }}>{labelForStatus(run.status, t)}</Box>
+        <Typography sx={{ fontSize: '0.88rem', color: c.text.primary, fontWeight: 600 }}>{formatRunDate(run.started_at, i18n.language)}</Typography>
       </Box>
       {run.error && (
         <Typography sx={{ fontSize: '0.85rem', color: c.status.error, bgcolor: c.status.errorBg, p: 1, borderRadius: c.radius.sm }}>{run.error}</Typography>
       )}
-      <Typography sx={{ fontSize: '0.85rem', color: c.text.secondary, lineHeight: 1.5 }}>Started {formatRunDate(run.started_at)}, finished {run.finished_at ? formatRunDate(run.finished_at) : 'in progress'}.</Typography>
+      <Typography sx={{ fontSize: '0.85rem', color: c.text.secondary, lineHeight: 1.5 }}>
+        {t('workflows.subviews.detail.startedFinished', {
+          started: formatRunDate(run.started_at, i18n.language),
+          finished: run.finished_at ? formatRunDate(run.finished_at, i18n.language) : t('workflows.subviews.detail.inProgress'),
+        })}
+      </Typography>
       {run.session_id && (
-        <Box sx={{ fontSize: '0.82rem', color: c.accent.primary, mt: 0.5 }}>Session: {run.session_id.slice(0, 8)}</Box>
+        <Box sx={{ fontSize: '0.82rem', color: c.accent.primary, mt: 0.5 }}>{t('workflows.subviews.detail.session', { id: run.session_id.slice(0, 8) })}</Box>
       )}
     </Box>
   );

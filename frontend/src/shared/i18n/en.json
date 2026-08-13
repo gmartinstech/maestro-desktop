@@ -767,5 +767,208 @@
       "atSubtitle": "Type @ in chat to attach context and activate actions",
       "atEmpty": "No @ commands yet. Install MCP actions to see them here."
     }
+  },
+  "workflows": {
+    "relTime": {
+      "justNow": "just now",
+      "minutes_one": "{{count}}m ago",
+      "minutes_other": "{{count}}m ago",
+      "hours_one": "{{count}}h ago",
+      "hours_other": "{{count}}h ago",
+      "days_one": "{{count}}d ago",
+      "days_other": "{{count}}d ago"
+    },
+    "liveViews": {
+      "completeOf": "{{done}} of {{total}} complete",
+      "stopWatching": "Stop Watching",
+      "watchLive": "Watch Live",
+      "successTitle": "Workflow Success!",
+      "successBody": "If you're curious, you can click the green button below to see exactly what the agent did.",
+      "done": "Done",
+      "stopViewing": "Stop Viewing",
+      "viewAgent": "View Agent",
+      "fixTitle": "Fix with an Agent",
+      "fixBody": "Have an agent modify, test, and iterate on the workflow until it works as expected.",
+      "viewError": "View Error",
+      "ignore": "Ignore",
+      "fixWithAgent": "Fix with Agent",
+      "stepNumber": "Step {{number}}",
+      "stepFailed": "Step failed.",
+      "history": "History",
+      "run": "Run",
+      "stop": "Stop",
+      "pause": "Pause"
+    },
+    "steps": {
+      "title": "Steps",
+      "count_one": "{{count}} step",
+      "count_other": "{{count}} steps",
+      "titlePlaceholder": "Step title",
+      "disable": "Disable step",
+      "enable": "Enable step",
+      "remove": "Remove step",
+      "prompt": "Prompt",
+      "promptPlaceholder": "What should this step do?",
+      "addPlaceholder": "Add a step…",
+      "removeConfirmTitle": "Remove step?",
+      "removeConfirmBody": "<name>{{name}}</name> will be removed from this workflow.",
+      "thisStep": "This step"
+    },
+    "subviews": {
+      "newWorkflow": "New workflow",
+      "loading": "Loading…",
+      "notNow": "Not now",
+      "needStepTooltip": "Add at least one step before saving",
+      "scheduleWorkflow": "Schedule Workflow",
+      "scheduleThisWorkflow": "Schedule this workflow",
+      "scheduleNudgeTitle": "Schedule this workflow?",
+      "scheduleNudgeBody": "You can have workflows run on a recurring basis, automatically.",
+      "savePromptTitle": "Save workflow?",
+      "savePromptBody": "Save this workflow under Unscheduled. It will not run until you choose a schedule.",
+      "dontSave": "Don't Save",
+      "status": {
+        "success": "Success",
+        "failure": "Failure",
+        "ranLate": "Ran late",
+        "running": "Running",
+        "skipped": "Skipped"
+      },
+      "schedule": {
+        "notScheduled": "Not scheduled",
+        "everyMinutes_one": "Every minute",
+        "everyMinutes_other": "Every {{count}} minutes",
+        "hourlyAt": "Hourly at :{{minute}}",
+        "everyHours_one": "Every hour",
+        "everyHours_other": "Every {{count}} hours",
+        "dailyAt": "Daily at {{time}}",
+        "everyDaysAt_one": "Daily at {{time}}",
+        "everyDaysAt_other": "Every {{count}} days at {{time}}",
+        "monthlyAt": "Monthly{{day}} at {{time}}",
+        "everyMonthsAt_one": "Monthly{{day}} at {{time}}",
+        "everyMonthsAt_other": "Every {{count}} months{{day}} at {{time}}",
+        "onDayOfMonth": " on day {{day}}",
+        "weekdaysAt": "Weekdays at {{time}}",
+        "weekendsAt": "Weekends at {{time}}",
+        "singleDayAt": "{{day}} at {{time}}",
+        "weeklyAt": "Weekly at {{time}}",
+        "dayPlural": {
+          "0": "Sundays",
+          "1": "Mondays",
+          "2": "Tuesdays",
+          "3": "Wednesdays",
+          "4": "Thursdays",
+          "5": "Fridays",
+          "6": "Saturdays"
+        }
+      },
+      "audit": {
+        "tooltip": "Recent edits to this workflow",
+        "editCount_one": "{{count}} edit",
+        "editCount_other": "{{count}} edits",
+        "heading": "RECENT EDITS",
+        "empty": "No edits yet.",
+        "noFieldChanges": "no field changes",
+        "fieldsMore_one": "{{fields}}, +{{count}} more",
+        "fieldsMore_other": "{{fields}}, +{{count}} more",
+        "userFallback": "user"
+      },
+      "history": {
+        "thisWeek": "This week",
+        "lastWeek": "Last week",
+        "earlier": "Earlier",
+        "noRuns": "No runs yet",
+        "filter": {
+          "all": "All",
+          "success": "Success",
+          "failure": "Failures",
+          "skipped": "Skipped"
+        },
+        "openConversation": "Click to see the full conversation →",
+        "noSession": "No session was recorded for this run."
+      },
+      "detail": {
+        "notFound": "Run not found",
+        "back": "← back",
+        "startedFinished": "Started {{started}}, finished {{finished}}.",
+        "inProgress": "in progress",
+        "session": "Session: {{id}}"
+      }
+    },
+    "schedule": {
+      "search": "Search",
+      "schedule": "Schedule",
+      "chatHistory": "Chat history",
+      "scheduledTasks": "Scheduled tasks",
+      "searchPlaceholder": "Search past chats...",
+      "new": "New",
+      "noMatchingChats": "No matching chats",
+      "noChatHistory": "No chat history yet",
+      "savedAsWorkflow": "This chat is saved as a workflow",
+      "loadingRuns": "Loading runs...",
+      "view": {
+        "List": "List",
+        "Week": "Week",
+        "Month": "Month"
+      },
+      "expand": "Expand",
+      "today": "Today"
+    },
+    "calendar": {
+      "runNow": "Run now",
+      "pauseSchedule": "Pause schedule",
+      "resumeSchedule": "Resume schedule",
+      "edit": "Edit…",
+      "deleteConfirm": "Delete \"{{title}}\"? Scheduled runs will stop.",
+      "noScheduled": "No scheduled",
+      "noEventsToday": "No events today",
+      "moreCount": "{{n}} more",
+      "moreAtThisHour": "{{n}} more at this hour",
+      "plusMore": "+{{n}} more",
+      "scheduledOn": "{{n}} scheduled · {{date}}",
+      "firesAt": "Fires at {{time}}",
+      "lastRun": "Last run: {{status}}",
+      "lastRunCost": "Last run cost: ${{cost}}",
+      "estMonthly": "Est. monthly: ${{cost}}"
+    },
+    "repeat": {
+      "forever": "Forever",
+      "once": "Once",
+      "threeTimes": "3 times",
+      "tenTimes": "10 times",
+      "times_one": "{{count}} time",
+      "times_other": "{{count}} times",
+      "optionsAriaLabel": "Repeat options"
+    },
+    "leftRail": {
+      "searchPlaceholder": "Search",
+      "home": "Home",
+      "calendar": "Calendar",
+      "newWorkflow": "New Workflow",
+      "sectionWorkflows": "Workflows",
+      "paused": "Paused",
+      "moveToTrash": "Move to trash",
+      "noWorkflows": "No workflows yet.",
+      "trash": "Trash",
+      "schedule": {
+        "notScheduled": "Not scheduled",
+        "everyMinutes_one": "Every minute",
+        "everyMinutes_other": "Every {{count}} minutes",
+        "hourly": "Every hour{{at}}",
+        "everyHours_one": "Every hour{{at}}",
+        "everyHours_other": "Every {{count}} hours{{at}}",
+        "atMinute": " at :{{minute}}",
+        "everyDayAt": "Every day at {{time}}",
+        "everyDaysAt_one": "Every day at {{time}}",
+        "everyDaysAt_other": "Every {{count}} days at {{time}}",
+        "everyMonthAt": "Every month{{day}} at {{time}}",
+        "everyMonthsAt_one": "Every month{{day}} at {{time}}",
+        "everyMonthsAt_other": "Every {{count}} months{{day}} at {{time}}",
+        "onDayOfMonth": " on day {{day}}",
+        "weeklyAt": "Every week at {{time}}",
+        "weeklyDaysAt": "Every {{days}} at {{time}}",
+        "weeklyEveryNAt_one": "Every {{days}} at {{time}}",
+        "weeklyEveryNAt_other": "Every {{count}} weeks on {{days}} at {{time}}"
+      }
+    }
   }
 }

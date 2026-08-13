@@ -767,5 +767,208 @@
       "atSubtitle": "Digite @ no chat para anexar contexto e ativar ações",
       "atEmpty": "Nenhum comando @ ainda. Instale ações MCP para vê-los aqui."
     }
+  },
+  "workflows": {
+    "relTime": {
+      "justNow": "agora mesmo",
+      "minutes_one": "há {{count}}min",
+      "minutes_other": "há {{count}}min",
+      "hours_one": "há {{count}}h",
+      "hours_other": "há {{count}}h",
+      "days_one": "há {{count}}d",
+      "days_other": "há {{count}}d"
+    },
+    "liveViews": {
+      "completeOf": "{{done}} de {{total}} concluídas",
+      "stopWatching": "Parar de acompanhar",
+      "watchLive": "Acompanhar ao vivo",
+      "successTitle": "Workflow concluído!",
+      "successBody": "Se quiser conferir, clique no botão verde abaixo para ver exatamente o que o agente fez.",
+      "done": "Concluído",
+      "stopViewing": "Parar de visualizar",
+      "viewAgent": "Ver agente",
+      "fixTitle": "Corrigir com um agente",
+      "fixBody": "Deixe um agente ajustar, testar e iterar o workflow até ele funcionar como esperado.",
+      "viewError": "Ver erro",
+      "ignore": "Ignorar",
+      "fixWithAgent": "Corrigir com agente",
+      "stepNumber": "Etapa {{number}}",
+      "stepFailed": "A etapa falhou.",
+      "history": "Histórico",
+      "run": "Executar",
+      "stop": "Parar",
+      "pause": "Pausar"
+    },
+    "steps": {
+      "title": "Etapas",
+      "count_one": "{{count}} etapa",
+      "count_other": "{{count}} etapas",
+      "titlePlaceholder": "Título da etapa",
+      "disable": "Desativar etapa",
+      "enable": "Ativar etapa",
+      "remove": "Remover etapa",
+      "prompt": "Prompt",
+      "promptPlaceholder": "O que esta etapa deve fazer?",
+      "addPlaceholder": "Adicionar uma etapa…",
+      "removeConfirmTitle": "Remover etapa?",
+      "removeConfirmBody": "<name>{{name}}</name> será removida deste workflow.",
+      "thisStep": "Esta etapa"
+    },
+    "subviews": {
+      "newWorkflow": "Novo workflow",
+      "loading": "Carregando…",
+      "notNow": "Agora não",
+      "needStepTooltip": "Adicione pelo menos uma etapa antes de salvar",
+      "scheduleWorkflow": "Agendar workflow",
+      "scheduleThisWorkflow": "Agendar este workflow",
+      "scheduleNudgeTitle": "Agendar este workflow?",
+      "scheduleNudgeBody": "Os workflows podem rodar de forma recorrente, automaticamente.",
+      "savePromptTitle": "Salvar workflow?",
+      "savePromptBody": "Salve este workflow em Sem agendamento. Ele não vai rodar até você escolher um agendamento.",
+      "dontSave": "Não salvar",
+      "status": {
+        "success": "Sucesso",
+        "failure": "Falha",
+        "ranLate": "Rodou atrasado",
+        "running": "Em execução",
+        "skipped": "Ignorado"
+      },
+      "schedule": {
+        "notScheduled": "Sem agendamento",
+        "everyMinutes_one": "A cada minuto",
+        "everyMinutes_other": "A cada {{count}} minutos",
+        "hourlyAt": "Toda hora, aos :{{minute}}",
+        "everyHours_one": "A cada hora",
+        "everyHours_other": "A cada {{count}} horas",
+        "dailyAt": "Todo dia às {{time}}",
+        "everyDaysAt_one": "Todo dia às {{time}}",
+        "everyDaysAt_other": "A cada {{count}} dias às {{time}}",
+        "monthlyAt": "Todo mês{{day}} às {{time}}",
+        "everyMonthsAt_one": "Todo mês{{day}} às {{time}}",
+        "everyMonthsAt_other": "A cada {{count}} meses{{day}} às {{time}}",
+        "onDayOfMonth": " no dia {{day}}",
+        "weekdaysAt": "De segunda a sexta às {{time}}",
+        "weekendsAt": "Nos fins de semana às {{time}}",
+        "singleDayAt": "{{day}} às {{time}}",
+        "weeklyAt": "Toda semana às {{time}}",
+        "dayPlural": {
+          "0": "Domingos",
+          "1": "Segundas",
+          "2": "Terças",
+          "3": "Quartas",
+          "4": "Quintas",
+          "5": "Sextas",
+          "6": "Sábados"
+        }
+      },
+      "audit": {
+        "tooltip": "Edições recentes deste workflow",
+        "editCount_one": "{{count}} edição",
+        "editCount_other": "{{count}} edições",
+        "heading": "EDIÇÕES RECENTES",
+        "empty": "Nenhuma edição ainda.",
+        "noFieldChanges": "sem alterações de campos",
+        "fieldsMore_one": "{{fields}}, +{{count}} a mais",
+        "fieldsMore_other": "{{fields}}, +{{count}} a mais",
+        "userFallback": "usuário"
+      },
+      "history": {
+        "thisWeek": "Esta semana",
+        "lastWeek": "Semana passada",
+        "earlier": "Anteriores",
+        "noRuns": "Nenhuma execução ainda",
+        "filter": {
+          "all": "Todas",
+          "success": "Sucesso",
+          "failure": "Falhas",
+          "skipped": "Ignoradas"
+        },
+        "openConversation": "Clique para ver a conversa completa →",
+        "noSession": "Nenhuma sessão foi registrada para esta execução."
+      },
+      "detail": {
+        "notFound": "Execução não encontrada",
+        "back": "← voltar",
+        "startedFinished": "Começou {{started}}, terminou {{finished}}.",
+        "inProgress": "em andamento",
+        "session": "Sessão: {{id}}"
+      }
+    },
+    "schedule": {
+      "search": "Buscar",
+      "schedule": "Agenda",
+      "chatHistory": "Histórico de conversas",
+      "scheduledTasks": "Tarefas agendadas",
+      "searchPlaceholder": "Buscar conversas anteriores...",
+      "new": "Novo",
+      "noMatchingChats": "Nenhuma conversa encontrada",
+      "noChatHistory": "Nenhum histórico de conversas ainda",
+      "savedAsWorkflow": "Esta conversa está salva como um workflow",
+      "loadingRuns": "Carregando execuções...",
+      "view": {
+        "List": "Lista",
+        "Week": "Semana",
+        "Month": "Mês"
+      },
+      "expand": "Expandir",
+      "today": "Hoje"
+    },
+    "calendar": {
+      "runNow": "Executar agora",
+      "pauseSchedule": "Pausar agendamento",
+      "resumeSchedule": "Retomar agendamento",
+      "edit": "Editar…",
+      "deleteConfirm": "Excluir \"{{title}}\"? As execuções agendadas vão parar.",
+      "noScheduled": "Nada agendado",
+      "noEventsToday": "Nenhum evento hoje",
+      "moreCount": "mais {{n}}",
+      "moreAtThisHour": "mais {{n}} nesta hora",
+      "plusMore": "+{{n}} mais",
+      "scheduledOn": "{{n}} agendados · {{date}}",
+      "firesAt": "Dispara às {{time}}",
+      "lastRun": "Última execução: {{status}}",
+      "lastRunCost": "Custo da última execução: US$ {{cost}}",
+      "estMonthly": "Estimativa mensal: US$ {{cost}}"
+    },
+    "repeat": {
+      "forever": "Para sempre",
+      "once": "Uma vez",
+      "threeTimes": "3 vezes",
+      "tenTimes": "10 vezes",
+      "times_one": "{{count}} vez",
+      "times_other": "{{count}} vezes",
+      "optionsAriaLabel": "Opções de repetição"
+    },
+    "leftRail": {
+      "searchPlaceholder": "Buscar",
+      "home": "Início",
+      "calendar": "Calendário",
+      "newWorkflow": "Novo Workflow",
+      "sectionWorkflows": "Workflows",
+      "paused": "Pausado",
+      "moveToTrash": "Mover para a lixeira",
+      "noWorkflows": "Nenhum workflow ainda.",
+      "trash": "Lixeira",
+      "schedule": {
+        "notScheduled": "Sem agendamento",
+        "everyMinutes_one": "A cada minuto",
+        "everyMinutes_other": "A cada {{count}} minutos",
+        "hourly": "A cada hora{{at}}",
+        "everyHours_one": "A cada hora{{at}}",
+        "everyHours_other": "A cada {{count}} horas{{at}}",
+        "atMinute": ", aos :{{minute}}",
+        "everyDayAt": "Todo dia às {{time}}",
+        "everyDaysAt_one": "Todo dia às {{time}}",
+        "everyDaysAt_other": "A cada {{count}} dias às {{time}}",
+        "everyMonthAt": "Todo mês{{day}} às {{time}}",
+        "everyMonthsAt_one": "Todo mês{{day}} às {{time}}",
+        "everyMonthsAt_other": "A cada {{count}} meses{{day}} às {{time}}",
+        "onDayOfMonth": " no dia {{day}}",
+        "weeklyAt": "Toda semana às {{time}}",
+        "weeklyDaysAt": "{{days}} às {{time}}",
+        "weeklyEveryNAt_one": "{{days}} às {{time}}",
+        "weeklyEveryNAt_other": "A cada {{count}} semanas em {{days}} às {{time}}"
+      }
+    }
   }
 }

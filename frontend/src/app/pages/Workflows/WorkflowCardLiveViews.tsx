@@ -1,6 +1,7 @@
 // Run-state views for the workflow card. The card's `view` field flips to 'running' / 'completed' / 'failed' off of the workflow:run ws stream (see upsertRun reducer). Each view here renders the same step list with a different status overlay + a different footer.
 
 import React, { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import HistoryIcon from '@mui/icons-material/HistoryRounded';
@@ -140,6 +141,7 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
   mode?: ViewMode;
 }) {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const card = useAppSelector((s) => s.workflows.openCards[workflow.id]);
   const runId = card?.runId || null;
@@ -172,7 +174,7 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
         <Typography sx={{ fontSize: '0.92rem', fontWeight: 700, color: c.status.success }}>
-          {completeCount} of {total} complete
+          {t('workflows.liveViews.completeOf', { done: completeCount, total })}
         </Typography>
       </Box>
       <ProgressBar value={total > 0 ? completeCount / total : 0} color={c.status.success} />
@@ -187,7 +189,7 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
         {isLinked ? (
           <PillButton
-            label="Stop Watching"
+            label={t('workflows.liveViews.stopWatching')}
             tone="danger"
             filled={false}
             icon={<VisibilityOffOutlined sx={{ fontSize: 16 }} />}
@@ -195,7 +197,7 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
           />
         ) : (
           <PillButton
-            label="Watch Live"
+            label={t('workflows.liveViews.watchLive')}
             tone="muted"
             filled={false}
             icon={<VisibilityOutlined sx={{ fontSize: 16 }} />}
@@ -249,6 +251,7 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
   mode?: ViewMode;
 }) {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const card = useAppSelector((s) => s.workflows.openCards[workflow.id]);
   const runId = card?.runId || null;
@@ -276,7 +279,7 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.6 }}>
         <Box component="span" sx={{ color: c.status.success, fontSize: 18, lineHeight: 1, mr: 0.25 }}>✓</Box>
         <Typography sx={{ fontSize: '0.92rem', fontWeight: 700, color: c.status.success }}>
-          {steps.length} of {steps.length} complete
+          {t('workflows.liveViews.completeOf', { done: steps.length, total: steps.length })}
         </Typography>
       </Box>
       <ProgressBar value={1} color={c.status.success} />
@@ -301,16 +304,16 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: c.text.primary, lineHeight: 1.3 }}>
-            Workflow Success!
+            {t('workflows.liveViews.successTitle')}
           </Typography>
           <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, mt: 0.25, lineHeight: 1.45 }}>
-            If you&apos;re curious, you can click the green button below to see exactly what the agent did.
+            {t('workflows.liveViews.successBody')}
           </Typography>
         </Box>
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
         <PillButton
-          label="Edit"
+          label={t('common.edit')}
           tone="muted"
           filled={false}
           icon={<EditOutlined sx={{ fontSize: 15 }} />}
@@ -319,10 +322,10 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
         <Box sx={{ flex: 1 }} />
         {/* Image #43: Done is hidden in sidecar mode; Stop Viewing alone
             fills the right slot. Default mode keeps Done + View Agent. */}
-        {!isLinked && <GhostTextBtn label="Done" onClick={onDone} />}
+        {!isLinked && <GhostTextBtn label={t('workflows.liveViews.done')} onClick={onDone} />}
         {isLinked ? (
           <PillButton
-            label="Stop Viewing"
+            label={t('workflows.liveViews.stopViewing')}
             tone="success"
             filled={false}
             icon={<VisibilityOffOutlined sx={{ fontSize: 16 }} />}
@@ -330,7 +333,7 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
           />
         ) : (
           <PillButton
-            label="View Agent"
+            label={t('workflows.liveViews.viewAgent')}
             tone="success"
             filled
             onClick={onViewAgent}
@@ -350,6 +353,7 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
   mode?: ViewMode;
 }) {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const card = useAppSelector((s) => s.workflows.openCards[workflow.id]);
   const runId = card?.runId || null;
@@ -373,17 +377,17 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
   }, [dispatch, workflow.id, card?.sidecarSessionId]);
   const onFixWithAgent = useCallback(() => {
     if (!run) return;
-    const stepLabel = steps[failedIdx]?.label || steps[failedIdx]?.text?.slice(0, 60) || `Step ${failedIdx + 1}`;
+    const stepLabel = steps[failedIdx]?.label || steps[failedIdx]?.text?.slice(0, 60) || t('workflows.liveViews.stepNumber', { number: failedIdx + 1 });
     dispatch(updateWorkflowCard({
       workflowId: workflow.id,
       patch: {
         view: 'fix_agent',
         sidecarSessionId: null,
         sidecarKind: null,
-        fixSeed: { runId: run.id, stepIdx: failedIdx, stepLabel, error: run.error || 'Step failed.' },
+        fixSeed: { runId: run.id, stepIdx: failedIdx, stepLabel, error: run.error || t('workflows.liveViews.stepFailed') },
       },
     }));
-  }, [dispatch, workflow.id, run, steps, failedIdx]);
+  }, [dispatch, workflow.id, run, steps, failedIdx, t]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
@@ -408,17 +412,17 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: c.text.primary, lineHeight: 1.3 }}>
-            Fix with an Agent
+            {t('workflows.liveViews.fixTitle')}
           </Typography>
           <Typography sx={{ fontSize: '0.82rem', color: c.text.secondary, mt: 0.25, lineHeight: 1.45 }}>
-            Have an agent modify, test, and iterate on the workflow until it works as expected.
+            {t('workflows.liveViews.fixBody')}
           </Typography>
         </Box>
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
         {isLinked ? (
           <PillButton
-            label="Stop Viewing"
+            label={t('workflows.liveViews.stopViewing')}
             tone="danger"
             filled={false}
             icon={<VisibilityOffOutlined sx={{ fontSize: 16 }} />}
@@ -426,7 +430,7 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
           />
         ) : (
           <PillButton
-            label="View Error"
+            label={t('workflows.liveViews.viewError')}
             tone="muted"
             filled={false}
             icon={<VisibilityOutlined sx={{ fontSize: 16 }} />}
@@ -434,9 +438,9 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
           />
         )}
         <Box sx={{ flex: 1 }} />
-        <GhostTextBtn label="Ignore" onClick={onIgnore} />
+        <GhostTextBtn label={t('workflows.liveViews.ignore')} onClick={onIgnore} />
         <PillButton
-          label="Fix with Agent"
+          label={t('workflows.liveViews.fixWithAgent')}
           tone="danger"
           filled
           onClick={onFixWithAgent}
@@ -471,6 +475,7 @@ export interface HeaderActions {
 
 export function useHeaderActions(workflow: Workflow | null, view: string): HeaderActions {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   return useMemo<HeaderActions>(() => {
     if (!workflow) return { right: null };
@@ -481,7 +486,7 @@ export function useHeaderActions(workflow: Workflow | null, view: string): Heade
           role="button"
           sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4, fontSize: '0.82rem', fontWeight: 600, px: 1, py: 0.4, color: c.text.secondary, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>
           <HistoryIcon sx={{ fontSize: 15 }} />
-          History
+          {t('workflows.liveViews.history')}
         </Box>
         <Box
           onClick={() => dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'saved' } }))}
@@ -494,7 +499,7 @@ export function useHeaderActions(workflow: Workflow | null, view: string): Heade
             '&:hover': { filter: 'brightness(1.05)' },
           }}>
           <PlayArrowIcon sx={{ fontSize: 15 }} />
-          Run
+          {t('workflows.liveViews.run')}
         </Box>
       </>
     );
@@ -504,7 +509,7 @@ export function useHeaderActions(workflow: Workflow | null, view: string): Heade
           <>
             <Box role="button" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.35, fontSize: '0.82rem', fontWeight: 600, px: 1, py: 0.4, color: c.text.secondary, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>
               <StopRounded sx={{ fontSize: 15 }} />
-              Stop
+              {t('workflows.liveViews.stop')}
             </Box>
             <Box role="button" sx={{
               display: 'inline-flex', alignItems: 'center', gap: 0.35,
@@ -514,12 +519,12 @@ export function useHeaderActions(workflow: Workflow | null, view: string): Heade
               '&:hover': { filter: 'brightness(1.05)' },
             }}>
               <PauseRounded sx={{ fontSize: 15 }} />
-              Pause
+              {t('workflows.liveViews.pause')}
             </Box>
           </>
         ),
       };
     }
     return { right: HistoryRun };
-  }, [workflow, view, dispatch, c]);
+  }, [workflow, view, dispatch, c, t]);
 }

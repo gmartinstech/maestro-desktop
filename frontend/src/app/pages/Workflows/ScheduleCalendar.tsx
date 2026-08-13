@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
@@ -11,7 +12,8 @@ import { API_BASE } from '@/shared/config';
 import type { Workflow } from '@/shared/state/workflowsSlice';
 import { runWorkflowNow, deleteWorkflow, updateWorkflow, openWorkflowCard } from '@/shared/state/workflowsSlice';
 import { addWorkflowCard } from '@/shared/state/dashboardLayoutSlice';
-import { WEEKDAY_FULL, WEEKDAY_LABEL_SHORT, addDays, sameDay, startOfMonthGrid, startOfWeek, formatTime, formatHourLabel, stepsSignature } from './scheduleUtils';
+import { addDays, sameDay, startOfMonthGrid, startOfWeek, stepsSignature } from './scheduleUtils';
+import { labelForStatus } from './WorkflowCardSubviews';
 import { useWindowedList } from '@/shared/hooks/useWindowedList';
 
 interface Props {
@@ -27,6 +29,28 @@ const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
 // At/above this many list rows (day headers + event rows), window the list so only near-viewport rows stay mounted. Below it, render whole; spacers aren't worth the churn on a short list.
 const LIST_WINDOW_MIN_ROWS = 60;
 
+// Weekday names come from Intl so they follow the active language instead of a hard-coded English array. 2023-01-01 was a Sunday, so index 0..6 lines up with Date.getDay().
+function weekdayNames(locale: string): string[] {
+  try {
+    const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+    return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 1 + i)));
+  } catch { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; }
+}
+
+// Locale-aware clock label: pt-BR renders 24h ("15:00"), en keeps 12h am/pm.
+function formatClock(hour: number, minute: number, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hour, minute));
+  } catch { return `${hour}:${String(minute).padStart(2, '0')}`; }
+}
+
+// Left-column hour label in the Week grid ("10 AM" in en, "10" in pt-BR).
+function formatHourLabel(hour: number, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour));
+  } catch { return String(hour); }
+}
+
 interface CalendarEvent {
   workflow_id: string;
   fire_at: string;
@@ -40,6 +64,9 @@ type ListRow =
 
 export default function ScheduleCalendar({ view, density, onSelectWorkflow, refDate }: Props) {
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language;
+  const weekdayShort = useMemo(() => weekdayNames(locale), [locale]);
   const dispatch = useAppDispatch();
   const workflows = useAppSelector((s) => Object.values(s.workflows.items));
   const allPaused = useAppSelector((s) => s.workflows.paused);
@@ -79,7 +106,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   };
   const onDelete = () => {
     if (!ctxMenu) return;
-    const ok = window.confirm(`Delete "${ctxMenu.workflow.title}"? Scheduled runs will stop.`);
+    const ok = window.confirm(t('workflows.calendar.deleteConfirm', { title: ctxMenu.workflow.title }));
     if (!ok) { closeMenu(); return; }
     dispatch(deleteWorkflow(ctxMenu.workflow.id));
     closeMenu();
@@ -90,10 +117,10 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
       onClose={closeMenu}
       anchorReference="anchorPosition"
       anchorPosition={ctxMenu ? { top: ctxMenu.y, left: ctxMenu.x } : undefined}>
-      <MenuItem onClick={onRunNow}>Run now</MenuItem>
-      <MenuItem onClick={onPauseToggle}>{ctxMenu?.workflow.schedule.enabled ? 'Pause schedule' : 'Resume schedule'}</MenuItem>
-      <MenuItem onClick={onEdit}>Edit…</MenuItem>
-      <MenuItem onClick={onDelete} sx={{ color: c.status.error }}>Delete</MenuItem>
+      <MenuItem onClick={onRunNow}>{t('workflows.calendar.runNow')}</MenuItem>
+      <MenuItem onClick={onPauseToggle}>{ctxMenu?.workflow.schedule.enabled ? t('workflows.calendar.pauseSchedule') : t('workflows.calendar.resumeSchedule')}</MenuItem>
+      <MenuItem onClick={onEdit}>{t('workflows.calendar.edit')}</MenuItem>
+      <MenuItem onClick={onDelete} sx={{ color: c.status.error }}>{t('common.delete')}</MenuItem>
     </Menu>
   );
   // refDate is recreated on every render unless the caller memoizes it. Pin the calendar to a day-precision key so occurrence fetches only change when the visible day, view, or schedule set changes.
@@ -216,10 +243,10 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     const HOURS = HOURS_24;
     const nowColIdx = days.findIndex((d) => sameDay(d, now));
     const nowTopPx = (now.getHours() + now.getMinutes() / 60) * SLOT_H;
-    // Prefer the short zone name ("PDT", "EST", "JST") so the label reads in plain English instead of "GMT-7". formatToParts is wide- supported; if it ever fails we degrade silently rather than show a confusing fallback.
+    // Prefer the short zone name ("PDT", "EST", "JST") over "GMT-7", in the active locale. formatToParts is wide-supported; if it ever fails we degrade silently rather than show a confusing fallback.
     const TZ_LABEL = (() => {
       try {
-        const parts = new Intl.DateTimeFormat('en', { timeZoneName: 'short' }).formatToParts(new Date());
+        const parts = new Intl.DateTimeFormat(locale, { timeZoneName: 'short' }).formatToParts(new Date());
         return parts.find((p) => p.type === 'timeZoneName')?.value || '';
       } catch { return ''; }
     })();
@@ -258,7 +285,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
             return (
               <Box key={d.toISOString()} sx={{ textAlign: 'center', pb: 0.5 }}>
                 <Typography sx={{ fontSize: DAY_LABEL, color: c.text.muted, fontWeight: 600, letterSpacing: '0.08em', lineHeight: 1.3, textTransform: 'uppercase' }}>
-                  {WEEKDAY_LABEL_SHORT[d.getDay()]}
+                  {weekdayShort[d.getDay()]}
                 </Typography>
                 <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxSizing: 'border-box', width: compact ? 26 : 32, height: compact ? 26 : 32, borderRadius: '50%', bgcolor: isToday ? c.accent.primary : 'transparent', color: isToday ? '#fff' : c.text.primary, fontWeight: isToday ? 600 : 500, fontSize: DAY_NUM, lineHeight: 1, mt: 0.25, boxShadow: isToday ? `0 0 0 1.5px ${c.bg.surface}, 0 0 0 3px ${c.accent.primary}` : 'none' }}>{d.getDate()}</Box>
               </Box>
@@ -278,7 +305,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
                 textAlign: 'right', pr: 1, pt: 0.25,
                 borderTop: hourIdx === 0 ? 'none' : `1px solid ${c.border.subtle}`,
               }}>
-                {formatHourLabel(hour)}
+                {formatHourLabel(hour, locale)}
               </Box>
               {days.map((d) => {
                 const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -345,7 +372,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
             calendar body scrolls. Slightly bigger + tinted bg so it
             reads cleanly in both light and dark themes. */}
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flexShrink: 0, position: 'sticky', top: 0, bgcolor: c.bg.surface, zIndex: 2, borderBottom: `1px solid ${c.border.subtle}`, pt: 1.25, pb: 0.6 }}>
-          {WEEKDAY_LABEL_SHORT.map((l, i) => (
+          {weekdayShort.map((l, i) => (
             <Typography key={`${l}-${i}`} sx={{ textAlign: 'center', fontSize: '0.74rem', color: c.text.muted, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{l}</Typography>
           ))}
         </Box>
@@ -371,7 +398,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
                     onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ x: ev.clientX, y: ev.clientY, workflow: e.workflow }); }}
                     sx={{ mt: 0.3, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: EVENT_FS, color: c.text.primary, cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', '&:hover': { color: accent } }}>
                     <Box sx={{ width: 6, height: 6, borderRadius: '50%', boxSizing: 'border-box', bgcolor: accent, flexShrink: 0 }} />
-                    <span style={{ color: c.text.muted, flexShrink: 0 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</span>
+                    <span style={{ color: c.text.muted, flexShrink: 0 }}>{formatClock(e.date.getHours(), e.date.getMinutes(), locale)}</span>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{e.workflow.title}</span>
                   </Box>
                 ))}
@@ -403,7 +430,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
       onScroll={windowing.onScroll}
       sx={{ display: 'flex', flexDirection: 'column', maxHeight: '100%', overflow: 'auto', overflowAnchor: 'auto', bgcolor: c.bg.surface }}>
       {rows.length === 0 && (
-        <Typography sx={{ fontSize: '0.85rem', color: c.text.muted, textAlign: 'center', py: 3 }}>No scheduled</Typography>
+        <Typography sx={{ fontSize: '0.85rem', color: c.text.muted, textAlign: 'center', py: 3 }}>{t('workflows.calendar.noScheduled')}</Typography>
       )}
       {windowing.topSpacer > 0 && (
         <Box aria-hidden sx={{ height: windowing.topSpacer, flexShrink: 0, overflowAnchor: 'none' }} />
@@ -424,10 +451,10 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
                 {row.date.getDate()}
               </Typography>
               <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: row.isToday ? accent : c.text.secondary, lineHeight: 1 }}>
-                {WEEKDAY_FULL[row.date.getDay()]}
+                {weekdayShort[row.date.getDay()]}
               </Typography>
               <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1 }}>
-                {row.date.toLocaleString('en', { month: 'short' })}
+                {row.date.toLocaleString(locale, { month: 'short' })}
               </Typography>
             </Box>
           );
@@ -435,7 +462,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
         if (row.kind === 'empty') {
           return (
             <Box key={row.id} data-wl-id={row.id} sx={{ px: 2, pb: 1 }}>
-              <Typography sx={{ fontSize: '0.85rem', color: c.text.ghost }}>No events today</Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: c.text.ghost }}>{t('workflows.calendar.noEventsToday')}</Typography>
             </Box>
           );
         }
@@ -455,7 +482,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
             <Box sx={{ width: 3, alignSelf: 'stretch', minHeight: 22, bgcolor: accent, borderRadius: c.radius.sm, flexShrink: 0 }} />
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               <Typography className="ev-title" sx={{ fontSize: '0.9rem', fontWeight: 500, color: c.text.primary, lineHeight: 1.3 }}>{e.workflow.title}</Typography>
-              <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.3 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</Typography>
+              <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, lineHeight: 1.3 }}>{formatClock(e.date.getHours(), e.date.getMinutes(), locale)}</Typography>
             </Box>
           </Box>
         );
@@ -479,6 +506,7 @@ function EventStack({ events, paused, now, maxVisible, onSelectWorkflow, eventFo
   onContextWorkflow?: (workflow: Workflow, e: React.MouseEvent) => void;
 }) {
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   if (events.length === 0) return null;
   const visible = events.slice(0, maxVisible);
@@ -488,7 +516,7 @@ function EventStack({ events, paused, now, maxVisible, onSelectWorkflow, eventFo
   return (
     <Box sx={{ position: 'absolute', left: 4, right: 4, top: 3, bottom: 2, zIndex: 1, display: 'flex', flexDirection: 'column', gap: 0.25, overflow: 'hidden' }}>
       {visible.map((event, idx) => {
-        const timeLabel = formatTime(event.date.getHours(), event.date.getMinutes());
+        const timeLabel = formatClock(event.date.getHours(), event.date.getMinutes(), i18n.language);
         return (
           <Tooltip key={`${event.workflow.id}-${event.date.getTime()}-${idx}`} title={<EventTooltipBody event={event} />} placement="top" arrow>
             <Box
@@ -533,7 +561,7 @@ function EventStack({ events, paused, now, maxVisible, onSelectWorkflow, eventFo
             px: 0.35,
             '&:hover': { color: accent },
           }}>
-          {rest.length} more
+          {t('workflows.calendar.moreCount', { n: rest.length })}
         </Box>
       )}
       <Popover
@@ -544,7 +572,7 @@ function EventStack({ events, paused, now, maxVisible, onSelectWorkflow, eventFo
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
         <Box sx={{ minWidth: 220, p: 1 }}>
           <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: c.text.muted, letterSpacing: '0.06em', mb: 0.5 }}>
-            {rest.length} more at this hour
+            {t('workflows.calendar.moreAtThisHour', { n: rest.length })}
           </Typography>
           {rest.map((e, idx) => (
             <Box
@@ -553,7 +581,7 @@ function EventStack({ events, paused, now, maxVisible, onSelectWorkflow, eventFo
               sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.5, borderRadius: `${c.radius.md}px`, cursor: 'pointer', '&:hover': { bgcolor: c.bg.elevated } }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '50%', boxSizing: 'border-box', bgcolor: accent, flexShrink: 0 }} />
               <Typography sx={{ flex: 1, fontSize: '0.82rem', color: c.text.primary, fontWeight: 600 }}>{e.workflow.title}</Typography>
-              <Typography sx={{ fontSize: '0.74rem', color: c.text.muted }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</Typography>
+              <Typography sx={{ fontSize: '0.74rem', color: c.text.muted }}>{formatClock(e.date.getHours(), e.date.getMinutes(), i18n.language)}</Typography>
             </Box>
           ))}
         </Box>
@@ -572,6 +600,7 @@ function MonthDayOverflow({ date, count, events, now, fontSize, onSelectWorkflow
   onSelectWorkflow?: (id: string, fireAt?: Date) => void;
 }) {
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const accent = c.accent.primary;
   return (
@@ -580,7 +609,7 @@ function MonthDayOverflow({ date, count, events, now, fontSize, onSelectWorkflow
         onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
         role="button"
         sx={{ fontSize, color: c.text.muted, mt: 0.3, pl: 1.4, cursor: 'pointer', '&:hover': { color: accent } }}>
-        +{count} more
+        {t('workflows.calendar.plusMore', { n: count })}
       </Typography>
       <Popover
         open={Boolean(anchor)}
@@ -590,7 +619,10 @@ function MonthDayOverflow({ date, count, events, now, fontSize, onSelectWorkflow
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
         <Box sx={{ minWidth: 240, maxHeight: 360, overflowY: 'auto', p: 1 }}>
           <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: c.text.muted, letterSpacing: '0.06em', mb: 0.5 }}>
-            {`${events.length} scheduled · ${date.toLocaleString('en', { weekday: 'short', month: 'short', day: 'numeric' })}`}
+            {t('workflows.calendar.scheduledOn', {
+              n: events.length,
+              date: date.toLocaleString(i18n.language, { weekday: 'short', month: 'short', day: 'numeric' }),
+            })}
           </Typography>
           {events.map((e, idx) => (
             <Box
@@ -599,7 +631,7 @@ function MonthDayOverflow({ date, count, events, now, fontSize, onSelectWorkflow
               sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.5, borderRadius: `${c.radius.md}px`, cursor: 'pointer', '&:hover': { bgcolor: c.bg.elevated } }}>
               <Box sx={{ width: 6, height: 6, borderRadius: '50%', boxSizing: 'border-box', bgcolor: accent, flexShrink: 0 }} />
               <Typography sx={{ flex: 1, fontSize: '0.82rem', color: c.text.primary, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.workflow.title}</Typography>
-              <Typography sx={{ fontSize: '0.74rem', color: c.text.muted, flexShrink: 0 }}>{formatTime(e.date.getHours(), e.date.getMinutes())}</Typography>
+              <Typography sx={{ fontSize: '0.74rem', color: c.text.muted, flexShrink: 0 }}>{formatClock(e.date.getHours(), e.date.getMinutes(), i18n.language)}</Typography>
             </Box>
           ))}
         </Box>
@@ -609,6 +641,7 @@ function MonthDayOverflow({ date, count, events, now, fontSize, onSelectWorkflow
 }
 
 function EventTooltipBody({ event }: { event: { workflow: Workflow; date: Date } }) {
+  const { t, i18n } = useTranslation();
   const wf = event.workflow;
   const status = wf.last_run_status;
   const cost = wf.cost_estimate?.last_run_usd;
@@ -616,10 +649,10 @@ function EventTooltipBody({ event }: { event: { workflow: Workflow; date: Date }
   return (
     <Box sx={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
       <div style={{ fontWeight: 700 }}>{wf.title}</div>
-      <div>{`Fires at ${formatTime(event.date.getHours(), event.date.getMinutes())}`}</div>
-      {status && <div>{`Last run: ${status}`}</div>}
-      {typeof cost === 'number' && cost > 0 && <div>{`Last run cost: $${cost.toFixed(4)}`}</div>}
-      {typeof monthly === 'number' && monthly > 0 && <div>{`Est. monthly: $${monthly.toFixed(2)}`}</div>}
+      <div>{t('workflows.calendar.firesAt', { time: formatClock(event.date.getHours(), event.date.getMinutes(), i18n.language) })}</div>
+      {status && <div>{t('workflows.calendar.lastRun', { status: labelForStatus(status, t) })}</div>}
+      {typeof cost === 'number' && cost > 0 && <div>{t('workflows.calendar.lastRunCost', { cost: cost.toFixed(4) })}</div>}
+      {typeof monthly === 'number' && monthly > 0 && <div>{t('workflows.calendar.estMonthly', { cost: monthly.toFixed(2) })}</div>}
     </Box>
   );
 }

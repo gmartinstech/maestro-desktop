@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useWC } from './uiKit';
 
 // Combobox for the run limit: pick a preset OR type any count. Self-rendered (no native <select>, no portal) because a native popup over the canvas card is a separate compositor layer and gets dismissed before you can click it.
-const OPTIONS: Array<{ label: string; val: number | null }> = [
-  { label: 'Forever', val: null },
-  { label: 'Once', val: 1 },
-  { label: '3 times', val: 3 },
-  { label: '10 times', val: 10 },
+const OPTIONS: Array<{ labelKey: string; val: number | null }> = [
+  { labelKey: 'workflows.repeat.forever', val: null },
+  { labelKey: 'workflows.repeat.once', val: 1 },
+  { labelKey: 'workflows.repeat.threeTimes', val: 3 },
+  { labelKey: 'workflows.repeat.tenTimes', val: 10 },
 ];
 
 const RepeatField: React.FC<{ value: number | null; onChange: (n: number | null) => void }> = ({ value, onChange }) => {
   const WC = useWC();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -25,7 +27,7 @@ const RepeatField: React.FC<{ value: number | null; onChange: (n: number | null)
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const display = value == null ? '' : `${value} time${value === 1 ? '' : 's'}`;
+  const display = value == null ? '' : t('workflows.repeat.times', { count: value });
 
   const commit = (raw: string) => {
     const digits = raw.replace(/[^0-9]/g, '').slice(0, 4);
@@ -45,7 +47,7 @@ const RepeatField: React.FC<{ value: number | null; onChange: (n: number | null)
       <div style={{ display: 'flex', alignItems: 'center', background: WC.raised, border: `1px solid ${open ? WC.accent : `rgba(${WC.inkRGB},0.12)`}`, borderRadius: 8, height: 32, padding: '0 2px 0 9px' }}>
         <input
           value={editing ? draft : display}
-          placeholder="Forever"
+          placeholder={t('workflows.repeat.forever')}
           inputMode="numeric"
           onFocus={() => { setEditing(true); setDraft(value == null ? '' : String(value)); setOpen(true); }}
           onChange={(e) => commit(e.target.value)}
@@ -54,7 +56,7 @@ const RepeatField: React.FC<{ value: number | null; onChange: (n: number | null)
         <button
           onMouseDown={(e) => { e.preventDefault(); setOpen((o) => !o); }}
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 5, color: WC.muted }}
-          aria-label="Repeat options"
+          aria-label={t('workflows.repeat.optionsAriaLabel')}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 150ms ease-in-out' }}><path d="M6 9l6 6 6-6" /></svg>
         </button>
@@ -65,11 +67,11 @@ const RepeatField: React.FC<{ value: number | null; onChange: (n: number | null)
             const active = (o.val == null && value == null) || o.val === value;
             return (
               <div
-                key={o.label}
+                key={o.labelKey}
                 onMouseDown={(e) => { e.preventDefault(); pick(o.val); }}
                 style={{ padding: '7px 9px', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: WC.ink, background: active ? WC.selBg : 'transparent', fontWeight: active ? 600 : 400 }}
               >
-                {o.label}
+                {t(o.labelKey)}
               </div>
             );
           })}

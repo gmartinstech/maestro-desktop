@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import Dialog from '@mui/material/Dialog';
 import { useAppDispatch } from '@/shared/hooks';
 import { commitDraft } from '@/shared/state/workflowsSlice';
@@ -18,6 +19,7 @@ function newStepId(): string {
 
 const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
   const WC = useWC();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const patch = useWorkflowPatch();
   const [local, setLocal] = useState<LocalStep[]>(() => toLocal(workflow.steps));
@@ -94,8 +96,8 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
   return (
     <div style={{ background: WC.paper, border: `1px solid rgba(${WC.inkRGB},0.08)`, borderRadius: WC.radius.lg, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13 }}>
-        <span style={{ fontFamily: FONT_SERIF, fontSize: 16, fontWeight: 500, color: WC.ink }}>Steps</span>
-        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: WC.muted2 }}>{local.length} step{local.length === 1 ? '' : 's'}</span>
+        <span style={{ fontFamily: FONT_SERIF, fontSize: 16, fontWeight: 500, color: WC.ink }}>{t('workflows.steps.title')}</span>
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: WC.muted2 }}>{t('workflows.steps.count', { count: local.length })}</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -107,14 +109,14 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
                 value={s.label}
                 onChange={(e) => update(s.id, { label: e.target.value })}
                 onBlur={() => commit(local)}
-                placeholder="Step title"
+                placeholder={t('workflows.steps.titlePlaceholder')}
                 style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 600, color: WC.ink, textDecoration: s.enabled ? 'none' : 'line-through' }}
               />
-              <div onClick={() => toggleEnabled(s.id)} title={s.enabled ? 'Disable step' : 'Enable step'} style={{ ...track(s.enabled, WC), transform: 'scale(0.82)' }}><div style={knob(s.enabled)} /></div>
+              <div onClick={() => toggleEnabled(s.id)} title={s.enabled ? t('workflows.steps.disable') : t('workflows.steps.enable')} style={{ ...track(s.enabled, WC), transform: 'scale(0.82)' }}><div style={knob(s.enabled)} /></div>
               <div onClick={() => update(s.id, { open: !s.open })} style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.muted, flex: 'none' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ transform: s.open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><path d="M6 9l6 6 6-6" /></svg>
               </div>
-              <div onClick={() => onDelete(s.id)} title="Remove step" style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.faint, flex: 'none' }} aria-label="Delete step">
+              <div onClick={() => onDelete(s.id)} title={t('workflows.steps.remove')} style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.faint, flex: 'none' }} aria-label={t('workflows.steps.remove')}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14" /></svg>
               </div>
             </div>
@@ -123,12 +125,12 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
             )}
             {s.open && (
               <div style={{ padding: '0 11px 12px 34px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: WC.muted2, marginBottom: 6 }}>Prompt</div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: WC.muted2, marginBottom: 6 }}>{t('workflows.steps.prompt')}</div>
                 <textarea
                   value={s.text}
                   onChange={(e) => update(s.id, { text: e.target.value })}
                   onBlur={() => commit(local)}
-                  placeholder="What should this step do?"
+                  placeholder={t('workflows.steps.promptPlaceholder')}
                   style={{ width: '100%', boxSizing: 'border-box', border: `1px solid rgba(${WC.inkRGB},0.12)`, borderRadius: 8, background: WC.paper, padding: '9px 11px', fontSize: 12.5, lineHeight: 1.5, color: WC.ink2, resize: 'vertical', minHeight: 76, fontFamily: FONT_SANS }}
                 />
               </div>
@@ -142,7 +144,7 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAdd(); } }}
-          placeholder="Add a step…"
+          placeholder={t('workflows.steps.addPlaceholder')}
           style={{ flex: 1, background: WC.raised, border: `1px solid rgba(${WC.inkRGB},0.12)`, borderRadius: 8, padding: '8px 11px', fontSize: 13, color: WC.ink }}
         />
         <button onClick={onAdd} style={{ background: WC.ink, color: WC.paper, border: 'none', borderRadius: 8, width: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flex: 'none' }}>
@@ -160,15 +162,18 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
             <div style={{ width: 30, height: 30, borderRadius: 8, background: WC.dangerBg, color: WC.danger, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
             </div>
-            <span style={{ fontFamily: FONT_SERIF, fontSize: 18, fontWeight: 500, color: WC.ink }}>Remove step?</span>
+            <span style={{ fontFamily: FONT_SERIF, fontSize: 18, fontWeight: 500, color: WC.ink }}>{t('workflows.steps.removeConfirmTitle')}</span>
           </div>
           <div style={{ fontSize: 13.5, color: WC.muted, lineHeight: 1.55 }}>
-            <span style={{ color: WC.ink3, fontWeight: 600 }}>{(pendingDelete?.label || pendingDelete?.text || 'This step').trim()}</span>
-            {' '}will be removed from this workflow.
+            <Trans
+              i18nKey="workflows.steps.removeConfirmBody"
+              values={{ name: (pendingDelete?.label || pendingDelete?.text || t('workflows.steps.thisStep')).trim() }}
+              components={{ name: <span style={{ color: WC.ink3, fontWeight: 600 }} /> }}
+            />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-            <button onClick={() => setPendingDelete(null)} style={{ background: 'transparent', border: `1px solid rgba(${WC.inkRGB},0.14)`, borderRadius: 8, padding: '8px 15px', fontSize: 13, fontWeight: 600, color: WC.ink3, cursor: 'pointer', fontFamily: FONT_SANS }}>Cancel</button>
-            <button onClick={confirmDelete} style={{ background: WC.danger, border: 'none', borderRadius: 8, padding: '8px 15px', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: FONT_SANS }}>Remove</button>
+            <button onClick={() => setPendingDelete(null)} style={{ background: 'transparent', border: `1px solid rgba(${WC.inkRGB},0.14)`, borderRadius: 8, padding: '8px 15px', fontSize: 13, fontWeight: 600, color: WC.ink3, cursor: 'pointer', fontFamily: FONT_SANS }}>{t('common.cancel')}</button>
+            <button onClick={confirmDelete} style={{ background: WC.danger, border: 'none', borderRadius: 8, padding: '8px 15px', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: FONT_SANS }}>{t('common.remove')}</button>
           </div>
         </div>
       </Dialog>

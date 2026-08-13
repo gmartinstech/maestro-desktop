@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import InputBase from '@mui/material/InputBase';
@@ -56,27 +58,29 @@ export default function SchedulePopover({
 }: Props) {
   const showSearch = chatHistoryOnly || mode === 'search';
   const c = useClaudeTokens();
+  const { t, i18n } = useTranslation();
   // List leads: it's the at-a-glance "what's coming up" the user wants first, with Week/Month as the calendar grids behind it.
   const [calendarView, setCalendarView] = useState<'Week' | 'Month' | 'List'>('List');
   const [refDate, setRefDate] = useState<Date>(() => new Date());
   const workflows = useAppSelector((s) => s.workflows.items);
 
   const periodLabel = useMemo(() => {
+    const locale = i18n.language;
     if (calendarView === 'Month') {
-      return refDate.toLocaleString('en', { month: 'long', year: 'numeric' });
+      return refDate.toLocaleString(locale, { month: 'long', year: 'numeric' });
     }
     if (calendarView === 'Week') {
       const start = startOfWeek(refDate);
       const end = addDays(start, 6);
-      const sameMonth = start.getMonth() === end.getMonth();
-      const startStr = start.toLocaleString('en', { month: 'short', day: 'numeric' });
-      const endStr = sameMonth
-        ? String(end.getDate())
-        : end.toLocaleString('en', { month: 'short', day: 'numeric' });
-      return `${startStr} to ${endStr}, ${end.getFullYear()}`;
+      // formatRange collapses the shared month/year exactly how each locale expects, so no hand-built "Mar 3 to 9" phrasing is needed.
+      try {
+        return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' }).formatRange(start, end);
+      } catch {
+        return `${start.toLocaleDateString(locale)} – ${end.toLocaleDateString(locale)}`;
+      }
     }
-    return refDate.toLocaleString('en', { month: 'long', day: 'numeric', year: 'numeric' });
-  }, [refDate, calendarView]);
+    return refDate.toLocaleString(locale, { month: 'long', day: 'numeric', year: 'numeric' });
+  }, [refDate, calendarView, i18n.language]);
 
   const onPrev = useCallback(() => {
     setRefDate((d) => addDays(d, calendarView === 'Month' ? -28 : calendarView === 'Week' ? -7 : -1));
@@ -104,8 +108,8 @@ export default function SchedulePopover({
           that surface Schedule mode still have a way in. */}
       {!hideTopChrome && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, px: 0.5 }}>
-          <ModeChip label="Search" icon={<SearchIcon sx={{ fontSize: 14 }} />} active={mode === 'search'} onClick={() => onModeChange('search')} />
-          <ModeChip label="Schedule" icon={<CalendarMonthIcon sx={{ fontSize: 14 }} />} active={mode === 'schedule'} onClick={() => onModeChange('schedule')} />
+          <ModeChip label={t('workflows.schedule.search')} icon={<SearchIcon sx={{ fontSize: 14 }} />} active={mode === 'search'} onClick={() => onModeChange('search')} />
+          <ModeChip label={t('workflows.schedule.schedule')} icon={<CalendarMonthIcon sx={{ fontSize: 14 }} />} active={mode === 'schedule'} onClick={() => onModeChange('schedule')} />
         </Box>
       )}
 
@@ -129,8 +133,8 @@ export default function SchedulePopover({
             never reaches the calendar from here. */}
         {!chatHistoryOnly && mode !== 'schedule' && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, pt: 1, pb: 0.5, flexShrink: 0 }}>
-            {([['search', 'Chat history'], ['runs', 'Scheduled tasks']] as const).map(([m, label]) => (
-              <Box key={m} onClick={() => onModeChange(m)} role="button" sx={{ fontSize: '0.85rem', fontWeight: mode === m ? 700 : 500, px: 0.75, pt: 0.4, pb: 0.55, color: mode === m ? c.text.primary : c.text.muted, borderBottom: `2px solid ${mode === m ? c.accent.primary : 'transparent'}`, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>{label}</Box>
+            {([['search', 'chatHistory'], ['runs', 'scheduledTasks']] as const).map(([m, labelKey]) => (
+              <Box key={m} onClick={() => onModeChange(m)} role="button" sx={{ fontSize: '0.85rem', fontWeight: mode === m ? 700 : 500, px: 0.75, pt: 0.4, pb: 0.55, color: mode === m ? c.text.primary : c.text.muted, borderBottom: `2px solid ${mode === m ? c.accent.primary : 'transparent'}`, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>{t(`workflows.schedule.${labelKey}`)}</Box>
             ))}
           </Box>
         )}
@@ -150,19 +154,19 @@ export default function SchedulePopover({
               <InputBase
                 value={historyQuery}
                 onChange={(e) => onHistoryQueryChange(e.target.value)}
-                placeholder="Search past chats..."
+                placeholder={t('workflows.schedule.searchPlaceholder')}
                 sx={{ flex: 1, fontSize: '0.85rem', color: c.text.primary, '& input::placeholder': { color: c.text.ghost, opacity: 1 } }}
               />
               {!hideTopChrome && (
                 <Box onClick={onNewChat} role="button" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4, fontSize: '0.78rem', fontWeight: 500, color: c.text.secondary, px: 1, py: 0.45, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, cursor: 'pointer', '&:hover': { color: c.accent.primary, bgcolor: c.bg.elevated } }}>
                   <AddIcon sx={{ fontSize: 12 }} />
-                  New
+                  {t('workflows.schedule.new')}
                 </Box>
               )}
             </Box>
             <Box ref={historyScrollRef} onScroll={onHistoryScroll} sx={{ flex: 1, overflowY: 'auto', borderTop: `1px solid ${c.border.subtle}` }}>
               {historyResults.length === 0 && !historyLoading && (
-                <Typography sx={{ px: 1.5, py: 2.5, fontSize: '0.82rem', color: c.text.muted, textAlign: 'center' }}>{historyQuery ? 'No matching chats' : 'No chat history yet'}</Typography>
+                <Typography sx={{ px: 1.5, py: 2.5, fontSize: '0.82rem', color: c.text.muted, textAlign: 'center' }}>{historyQuery ? t('workflows.schedule.noMatchingChats') : t('workflows.schedule.noChatHistory')}</Typography>
               )}
               {historyResults.map((entry) => {
                 const hasWorkflow = Boolean(workflowIconMap[entry.id]);
@@ -173,13 +177,13 @@ export default function SchedulePopover({
                         A small workflow glyph reads as a tag, where the
                         old single-letter chip read as a random initial. */}
                     {hasWorkflow && (
-                      <Tooltip title="This chat is saved as a workflow">
+                      <Tooltip title={t('workflows.schedule.savedAsWorkflow')}>
                         <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: '4px', color: c.text.muted }}>
                           <BookmarkIcon sx={{ fontSize: 13 }} />
                         </Box>
                       </Tooltip>
                     )}
-                    <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost, flexShrink: 0, whiteSpace: 'nowrap' }}>{relTime(entry.closed_at)}</Typography>
+                    <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost, flexShrink: 0, whiteSpace: 'nowrap' }}>{relTime(entry.closed_at, t)}</Typography>
                   </Box>
                 );
               })}
@@ -191,7 +195,7 @@ export default function SchedulePopover({
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1, borderTop: `1px solid ${c.border.subtle}`, minHeight: 0 }}>
               {allRunsLoading && allRuns.length === 0 ? (
-                <Typography sx={{ px: 0.5, py: 2.5, fontSize: '0.82rem', color: c.text.muted, textAlign: 'center' }}>Loading runs...</Typography>
+                <Typography sx={{ px: 0.5, py: 2.5, fontSize: '0.82rem', color: c.text.muted, textAlign: 'center' }}>{t('workflows.schedule.loadingRuns')}</Typography>
               ) : (
                 <HistoryList runs={allRuns} onOpen={onRunOpen} showWorkflow workflowTitleFor={workflowTitleFor} />
               )}
@@ -203,12 +207,12 @@ export default function SchedulePopover({
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, pt: 1, pb: 0.5, flexShrink: 0 }}>
               {(['List', 'Week', 'Month'] as const).map((v) => (
-                <Box key={v} onClick={() => setCalendarView(v)} role="button" sx={{ fontSize: '0.85rem', fontWeight: calendarView === v ? 700 : 500, px: 0.75, pt: 0.4, pb: 0.55, color: calendarView === v ? c.text.primary : c.text.muted, borderBottom: `2px solid ${calendarView === v ? c.accent.primary : 'transparent'}`, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>{v}</Box>
+                <Box key={v} onClick={() => setCalendarView(v)} role="button" sx={{ fontSize: '0.85rem', fontWeight: calendarView === v ? 700 : 500, px: 0.75, pt: 0.4, pb: 0.55, color: calendarView === v ? c.text.primary : c.text.muted, borderBottom: `2px solid ${calendarView === v ? c.accent.primary : 'transparent'}`, cursor: 'pointer', '&:hover': { color: c.text.primary } }}>{t(`workflows.schedule.view.${v}`)}</Box>
               ))}
               <Box sx={{ flex: 1 }} />
               <Box onClick={onExpand} role="button" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4, fontSize: '0.78rem', fontWeight: 500, color: c.text.secondary, px: 1, py: 0.35, border: `1px solid ${c.border.subtle}`, borderRadius: `${c.radius.md}px`, cursor: 'pointer', '&:hover': { color: c.accent.primary, bgcolor: c.bg.elevated } }}>
                 <OpenInFullIcon sx={{ fontSize: 12 }} />
-                Expand
+                {t('workflows.schedule.expand')}
               </Box>
             </Box>
             {/* Period nav: Today pill, prev/next chevrons, range label.
@@ -223,7 +227,7 @@ export default function SchedulePopover({
                   border: `1px solid ${c.border.subtle}`, px: 0.95, py: 0.3,
                   borderRadius: `${c.radius.md}px`, cursor: 'pointer',
                   '&:hover': { color: c.text.primary, borderColor: c.border.medium },
-                }}>Today</Box>
+                }}>{t('workflows.schedule.today')}</Box>
               <IconButton size="small" onClick={onPrev} sx={{ p: 0.3, color: c.text.muted, '&:hover': { color: c.text.primary } }}><ChevronLeftIcon sx={{ fontSize: 17 }} /></IconButton>
               <IconButton size="small" onClick={onNext} sx={{ p: 0.3, color: c.text.muted, '&:hover': { color: c.text.primary } }}><ChevronRightIcon sx={{ fontSize: 17 }} /></IconButton>
               <Typography sx={{ fontSize: '0.84rem', fontWeight: 600, color: c.text.primary, ml: 0.25 }}>{periodLabel}</Typography>
@@ -266,11 +270,11 @@ function ModeChip({ label, icon, active, onClick }: { label: string; icon: React
   );
 }
 
-function relTime(iso: string | null): string {
+function relTime(iso: string | null, t: TFunction): string {
   if (!iso) return '';
   const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (sec < 60) return 'just now';
-  const m = Math.floor(sec / 60); if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (sec < 60) return t('workflows.relTime.justNow');
+  const m = Math.floor(sec / 60); if (m < 60) return t('workflows.relTime.minutes', { count: m });
+  const h = Math.floor(m / 60); if (h < 24) return t('workflows.relTime.hours', { count: h });
+  return t('workflows.relTime.days', { count: Math.floor(h / 24) });
 }

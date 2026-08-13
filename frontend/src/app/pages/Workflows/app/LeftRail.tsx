@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { deleteWorkflow } from '@/shared/state/workflowsSlice';
-import { isScheduleActive, describeSchedule } from '@/app/pages/Workflows/scheduleUtils';
+import type { ScheduleConfig } from '@/shared/state/workflowsSlice';
+import { isScheduleActive, isScheduleConfigured } from '@/app/pages/Workflows/scheduleUtils';
 import { colorForWorkflow, useWC } from './uiKit';
 import WorkflowTitle from './WorkflowTitle';
 import type { AppNav } from './types';
@@ -12,8 +15,47 @@ const navBase: CSSProperties = {
   borderRadius: 8, cursor: 'pointer', fontSize: 13.5,
 };
 
+// Weekday names come from Intl so they follow the active language. 2023-01-01 was a Sunday, so index 0..6 lines up with Date.getDay().
+function weekdayNames(locale: string): string[] {
+  try {
+    const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+    return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 1 + i)));
+  } catch { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; }
+}
+
+// Locale-aware clock label: pt-BR renders 24h ("15:00"), en keeps 12h am/pm.
+function formatClock(hour: number, minute: number, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hour, minute));
+  } catch { return `${hour}:${String(minute).padStart(2, '0')}`; }
+}
+
+// scheduleUtils.describeSchedule builds an English-only sentence, so the rail composes its own line from the same fields.
+function describeScheduleLocalized(sched: ScheduleConfig, t: TFunction, locale: string): string {
+  const k = 'workflows.leftRail.schedule';
+  if (!sched.enabled || !isScheduleConfigured(sched)) return t(`${k}.notScheduled`);
+  const time = formatClock(sched.hour, sched.minute, locale);
+  if (sched.repeat_unit === 'minute') return t(`${k}.everyMinutes`, { count: sched.repeat_every });
+  if (sched.repeat_unit === 'hour') {
+    const at = sched.minute === 0 ? '' : t(`${k}.atMinute`, { minute: String(sched.minute).padStart(2, '0') });
+    return sched.repeat_every === 1 ? t(`${k}.hourly`, { at }) : t(`${k}.everyHours`, { count: sched.repeat_every, at });
+  }
+  if (sched.repeat_unit === 'day') {
+    return sched.repeat_every === 1 ? t(`${k}.everyDayAt`, { time }) : t(`${k}.everyDaysAt`, { count: sched.repeat_every, time });
+  }
+  if (sched.repeat_unit === 'month') {
+    const day = sched.day_of_month ? t(`${k}.onDayOfMonth`, { day: sched.day_of_month }) : '';
+    return sched.repeat_every === 1 ? t(`${k}.everyMonthAt`, { day, time }) : t(`${k}.everyMonthsAt`, { count: sched.repeat_every, day, time });
+  }
+  if (sched.on_days.length === 0) return t(`${k}.weeklyAt`, { time });
+  const names = weekdayNames(locale);
+  const days = sched.on_days.slice().sort().map((d) => names[d]).join(', ');
+  return sched.repeat_every === 1 ? t(`${k}.weeklyDaysAt`, { days, time }) : t(`${k}.weeklyEveryNAt`, { count: sched.repeat_every, days, time });
+}
+
 const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const WC = useWC();
+  const { t, i18n } = useTranslation();
   const dispatch = useAppDispatch();
   const items = useAppSelector((s) => s.workflows.items);
   const trashCount = useAppSelector((s) => s.workflows.deleted.length);
@@ -58,7 +100,7 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search"
+            placeholder={t('workflows.leftRail.searchPlaceholder')}
             style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 12.5, color: WC.ink }}
           />
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, opacity: 0.6 }}>⌘K</span>
@@ -68,20 +110,20 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
       <div style={{ padding: '4px 8px', flex: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
         <div onClick={nav.goHome} style={homeStyle}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M3 11l9-7 9 7M5 10v9h5v-6h4v6h5v-9" /></svg>
-          <span>Home</span>
+          <span>{t('workflows.leftRail.home')}</span>
         </div>
         <div onClick={nav.goCalendar} style={calStyle}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><rect x="3" y="4.5" width="18" height="16" rx="2.5" /><path d="M3 9h18M8 2.5v4M16 2.5v4" /></svg>
-          <span>Calendar</span>
+          <span>{t('workflows.leftRail.calendar')}</span>
         </div>
         <div onClick={nav.goNew} style={newStyle}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
-          <span>New Workflow</span>
+          <span>{t('workflows.leftRail.newWorkflow')}</span>
         </div>
       </div>
 
       <div style={{ padding: '14px 16px 6px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: WC.muted2 }}>Workflows</span>
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: WC.muted2 }}>{t('workflows.leftRail.sectionWorkflows')}</span>
         <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, color: WC.muted2 }}>{activeCount}</span>
       </div>
 
@@ -101,13 +143,13 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
                   {(t) => <div style={{ fontSize: 13.5, fontWeight: 600, color: active ? WC.ink : WC.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t}</div>}
                 </WorkflowTitle>
                 <div style={{ fontSize: 11, color: WC.muted2, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {active ? describeSchedule(w.schedule) : 'Paused'}
+                  {active ? describeScheduleLocalized(w.schedule, t, i18n.language) : t('workflows.leftRail.paused')}
                 </div>
               </div>
               <div
                 onClick={(e) => { e.stopPropagation(); onDelete(w.id); }}
                 style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.faint, flex: 'none' }}
-                aria-label="Move to trash"
+                aria-label={t('workflows.leftRail.moveToTrash')}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
               </div>
@@ -115,14 +157,14 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
           );
         })}
         {filtered.length === 0 && (
-          <div style={{ padding: '18px 10px', fontSize: 12.5, color: WC.muted2 }}>No workflows yet.</div>
+          <div style={{ padding: '18px 10px', fontSize: 12.5, color: WC.muted2 }}>{t('workflows.leftRail.noWorkflows')}</div>
         )}
       </div>
 
       <div style={{ flex: 'none', borderTop: `1px solid ${WC.line}`, padding: '8px' }}>
         <div onClick={nav.goTrash} style={trashStyle}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
-          <span>Trash</span>
+          <span>{t('workflows.leftRail.trash')}</span>
           {trashCount > 0 && (
             <span style={{ marginLeft: 'auto', fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, color: WC.muted2 }}>{trashCount}</span>
           )}
