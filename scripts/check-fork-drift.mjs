@@ -2,11 +2,14 @@
 // Fails when an upstream merge/cherry-pick drags back something the fork deliberately removed.
 // This is a GUARD: it holds the old names on purpose. Never "clean up" the literals below.
 //
-// Three classes of drift, each of which has actually happened or nearly happened:
+// Four classes of drift, each of which has actually happened or nearly happened:
 //   1. Legacy identifiers (openswarm / self-swarm / Open Swarm) reappearing in source.
 //   2. Deleted subsystems (cloud auth, paid subscription, publish-to-web, edge) coming back.
 //   3. A call-home host or the old proxy default sneaking into a default value.
+//   4. Upstream is English-only; a careless cherry-pick conflict resolution can revert a t() call
+//      back to a hardcoded English literal in a file we localized. See docs/UPSTREAM.md.
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 // Files that legitimately contain the old names, with the reason. Anything here is exempt.
 const ALLOW = [
@@ -38,6 +41,9 @@ const ALLOW_STRINGS = [
   'fork of Open Swarm',
   'legacy `self-swarm-language`',
   'reaches openswarm-ai. Sync the fork',
+  // "Skill Builder" is a feature/brand name kept literal in BOTH locales on purpose (see
+  // pt-BR.json's "Inicializando o Skill Builder…"), not an untranslated English string.
+  '>Skill Builder<',
 ];
 
 // Paths whose reappearance means a deleted subsystem came back with an upstream change.
@@ -75,6 +81,29 @@ const hostHits = sh(`git grep -inIE "api\\.openswarm|openswarm\\.(com|ai|io|net)
 for (const line of hostHits) {
   const file = line.split(':')[0].replace(/\\/g, '/');
   if (!exempt(file) && !exemptLine(line)) bad.push(`call-home host: ${line.slice(0, 160)}`);
+}
+
+// 4. i18n regression: upstream has no i18n at all, so a cherry-pick conflict resolution that takes
+// upstream's version of a file we localized silently ships a hardcoded English literal to every
+// user (pt-BR is the default). Scoped narrowly to avoid noise: only files that import useTranslation,
+// and only a literal JSX text node or a label=/placeholder=/aria-label= attribute value that is at
+// least two capitalized-start words (so single identifiers, URLs, and numbers never match).
+const JSX_TEXT_RE = />\s*([A-Z][a-zA-Z]*(?:\s[a-zA-Z][a-zA-Z']*){1,})[.,!?:;]*\s*</g;
+const ATTR_RE = /\b(label|placeholder|aria-label)=["']([A-Z][a-zA-Z]*(?:\s[a-zA-Z][a-zA-Z']*){1,})["']/g;
+const i18nCandidateFiles = [...tracked].filter((f) => f.endsWith('.tsx') && f.startsWith('frontend/src/'));
+for (const f of i18nCandidateFiles) {
+  let text;
+  try { text = readFileSync(f, 'utf8'); } catch { continue; }
+  if (!text.includes('useTranslation')) continue;
+  text.split('\n').forEach((line, idx) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('//') || trimmed.startsWith('*') || exemptLine(line)) return;
+    let m;
+    JSX_TEXT_RE.lastIndex = 0;
+    while ((m = JSX_TEXT_RE.exec(line))) bad.push(`i18n regression: hardcoded literal in JSX text — ${f}:${idx + 1}: "${m[1]}"`);
+    ATTR_RE.lastIndex = 0;
+    while ((m = ATTR_RE.exec(line))) bad.push(`i18n regression: hardcoded literal in ${m[1]}= — ${f}:${idx + 1}: "${m[2]}"`);
+  });
 }
 
 if (bad.length) {
