@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
@@ -20,11 +21,12 @@ const CustomProvidersEditor: React.FC<{
   styles: SettingsStyles;
 }> = ({ form, setForm, showApiKey, setShowApiKey, styles }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const { fieldSx, descSx, labelSx } = styles;
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.25 }}>
-        <Typography sx={labelSx}>Custom Providers</Typography>
+        <Typography sx={labelSx}>{t('settings.models.customProviders.title')}</Typography>
         {(() => {
           const list = form.custom_providers || [];
           if (list.length === 0) return null;
@@ -41,13 +43,13 @@ const CustomProvidersEditor: React.FC<{
               bgcolor: allReady ? `${c.status.success}15` : `${c.status.warning}1F`,
               px: 0.75, py: 0.15, borderRadius: '3px',
             }}>
-              {readyCount} OF {list.length} READY
+              {t('settings.models.customProviders.readyBadge', { ready: readyCount, total: list.length })}
             </Typography>
           );
         })()}
       </Box>
       <Typography sx={{ ...descSx, mb: 1.25 }}>
-        Add OpenAI-compatible endpoints (Ollama Cloud, Together, Groq, local Ollama, anything that speaks /v1/chat/completions).
+        {t('settings.models.customProviders.desc')}
       </Typography>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
@@ -85,9 +87,9 @@ const CustomProvidersEditor: React.FC<{
             i < idx && (other.name || '').trim().toLowerCase() === (cp.name || '').trim().toLowerCase() && (cp.name || '').trim() !== ''
           ) !== -1;
           const missingLabels: string[] = [];
-          if (nameMissing) missingLabels.push('name');
-          if (urlMissing) missingLabels.push('base URL');
-          if (modelsMissing) missingLabels.push('a model');
+          if (nameMissing) missingLabels.push(t('settings.models.customProviders.missingName'));
+          if (urlMissing) missingLabels.push(t('settings.models.customProviders.missingBaseUrl'));
+          if (modelsMissing) missingLabels.push(t('settings.models.customProviders.missingModel'));
 
           return (
             <Box
@@ -122,12 +124,12 @@ const CustomProvidersEditor: React.FC<{
                     width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
                     bgcolor: isReady ? c.status.success : c.status.warning,
                   }} />
-                  {isReady ? 'Ready' : `Incomplete, add ${missingLabels.join(', ')}`}
+                  {isReady ? t('settings.models.customProviders.statusReady') : t('settings.models.customProviders.statusIncomplete', { missing: missingLabels.join(', ') })}
                 </Typography>
                 <IconButton
                   onClick={removeProvider}
                   size="small"
-                  title="Remove provider"
+                  title={t('settings.models.customProviders.removeProvider')}
                   sx={{
                     color: c.text.tertiary,
                     '&:hover': { color: c.status.error, bgcolor: `${c.status.error}10` },
@@ -142,11 +144,11 @@ const CustomProvidersEditor: React.FC<{
                   onChange={(e) => updateProvider({ name: e.target.value })}
                   size="small"
                   fullWidth
-                  placeholder="e.g. Ollama Cloud"
-                  label="Name"
+                  placeholder={t('settings.models.customProviders.namePlaceholder')}
+                  label={t('settings.models.customProviders.nameLabel')}
                   required
                   error={dupeNameWithEarlier}
-                  helperText={dupeNameWithEarlier ? 'Name must be unique' : undefined}
+                  helperText={dupeNameWithEarlier ? t('settings.models.customProviders.nameNotUnique') : undefined}
                   InputLabelProps={{ shrink: true, sx: { fontSize: '0.72rem', color: c.text.tertiary } }}
                   sx={fieldSx}
                 />
@@ -156,7 +158,7 @@ const CustomProvidersEditor: React.FC<{
                   size="small"
                   fullWidth
                   placeholder="https://ollama.com/v1"
-                  label="Base URL"
+                  label={t('settings.models.customProviders.baseUrlLabel')}
                   required
                   InputLabelProps={{ shrink: true, sx: { fontSize: '0.72rem', color: c.text.tertiary } }}
                   sx={{ ...fieldSx, '& .MuiOutlinedInput-root': { ...fieldSx['& .MuiOutlinedInput-root'], fontFamily: c.font.mono } }}
@@ -167,8 +169,8 @@ const CustomProvidersEditor: React.FC<{
                   onChange={(e) => updateProvider({ api_key: e.target.value })}
                   size="small"
                   fullWidth
-                  placeholder="Leave blank for local servers (LM Studio, Ollama, ...)"
-                  label="API Key (optional)"
+                  placeholder={t('settings.models.customProviders.apiKeyPlaceholder')}
+                  label={t('settings.models.customProviders.apiKeyLabel')}
                   InputLabelProps={{ shrink: true, sx: { fontSize: '0.72rem', color: c.text.tertiary } }}
                   sx={{ ...fieldSx, '& .MuiOutlinedInput-root': { ...fieldSx['& .MuiOutlinedInput-root'], fontFamily: c.font.mono } }}
                   InputProps={{
@@ -185,11 +187,11 @@ const CustomProvidersEditor: React.FC<{
 
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.25 }}>
                 <Typography sx={{ fontSize: '0.65rem', fontWeight: 600, color: c.text.tertiary, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
-                  Models
+                  {t('settings.models.customProviders.modelsHeading')}
                 </Typography>
                 {((cp.models || []).length === 0) ? (
                   <Typography sx={{ fontSize: '0.7rem', color: c.text.muted, fontStyle: 'italic', px: 0.5 }}>
-                    No models yet, add the model IDs this endpoint serves.
+                    {t('settings.models.customProviders.noModels')}
                   </Typography>
                 ) : (
                   (cp.models || []).map((m, mIdx) => (
@@ -199,13 +201,13 @@ const CustomProvidersEditor: React.FC<{
                         onChange={(e) => updateModel(mIdx, e.target.value)}
                         size="small"
                         fullWidth
-                        placeholder="e.g. gpt-oss:120b"
+                        placeholder={t('settings.models.customProviders.modelIdPlaceholder')}
                         sx={{ ...fieldSx, '& .MuiOutlinedInput-root': { ...fieldSx['& .MuiOutlinedInput-root'], fontFamily: c.font.mono, fontSize: '0.78rem' } }}
                       />
                       <IconButton
                         onClick={() => removeModel(mIdx)}
                         size="small"
-                        title="Remove model"
+                        title={t('settings.models.customProviders.removeModel')}
                         sx={{
                           color: c.text.tertiary,
                           '&:hover': { color: c.status.error, bgcolor: `${c.status.error}10` },
@@ -231,7 +233,7 @@ const CustomProvidersEditor: React.FC<{
                     '&:hover': { bgcolor: `${c.accent.primary}10` },
                   }}
                 >
-                  + Add model
+                  {t('settings.models.customProviders.addModel')}
                 </Button>
               </Box>
             </Box>
@@ -261,7 +263,7 @@ const CustomProvidersEditor: React.FC<{
             transition: 'all 0.2s ease',
           }}
         >
-          + Add Custom Provider
+          {t('settings.models.customProviders.addProvider')}
         </Button>
       </Box>
     </Box>

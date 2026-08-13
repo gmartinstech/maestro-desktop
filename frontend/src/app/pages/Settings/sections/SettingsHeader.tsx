@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -14,6 +15,7 @@ const SettingsHeader: React.FC<{
   onClose: () => void;
 }> = ({ activeTab, onTabChange, onClose }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   return (
     <DialogTitle
       sx={{
@@ -23,7 +25,7 @@ const SettingsHeader: React.FC<{
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pt: 1.5, pb: 0.5 }}>
         <Typography sx={{ color: c.text.primary, fontWeight: 600, fontSize: '1rem' }}>
-          Settings
+          {t('common.settings')}
         </Typography>
         <IconButton onClick={onClose} size="small" data-onboarding="settings-close-button" sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
           <X size={18} />
@@ -52,12 +54,12 @@ const SettingsHeader: React.FC<{
           },
         }}
       >
-        <Tab label="General" value="general" disableRipple />
-        <Tab label="Models" value="models" disableRipple data-onboarding="settings-models-tab" />
-        <Tab label="Skills" value="skills" disableRipple />
-        <Tab label="Tools" value="tools" disableRipple />
-        <Tab label="Commands" value="commands" disableRipple />
-        <Tab label="Usage" value="usage" disableRipple />
+        <Tab label={t('settings.header.tabs.general')} value="general" disableRipple />
+        <Tab label={t('settings.header.tabs.models')} value="models" disableRipple data-onboarding="settings-models-tab" />
+        <Tab label={t('settings.header.tabs.skills')} value="skills" disableRipple />
+        <Tab label={t('settings.header.tabs.tools')} value="tools" disableRipple />
+        <Tab label={t('settings.header.tabs.commands')} value="commands" disableRipple />
+        <Tab label={t('settings.header.tabs.usage')} value="usage" disableRipple />
       </Tabs>
     </DialogTitle>
   );

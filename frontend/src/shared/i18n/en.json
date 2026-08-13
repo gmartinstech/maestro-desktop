@@ -33,7 +33,30 @@
   "settings": {
     "models": {
       "provedorIaDesc": "The Maestro models, through MartinsTech.",
-      "provedorIaGetToken": "Get token"
+      "provedorIaGetToken": "Get token",
+      "customProviders": {
+        "title": "Custom Providers",
+        "readyBadge": "{{ready}} OF {{total}} READY",
+        "desc": "Add OpenAI-compatible endpoints (Ollama Cloud, Together, Groq, local Ollama, anything that speaks /v1/chat/completions).",
+        "statusReady": "Ready",
+        "statusIncomplete": "Incomplete, add {{missing}}",
+        "missingName": "name",
+        "missingBaseUrl": "base URL",
+        "missingModel": "a model",
+        "removeProvider": "Remove provider",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. Ollama Cloud",
+        "nameNotUnique": "Name must be unique",
+        "baseUrlLabel": "Base URL",
+        "apiKeyLabel": "API Key (optional)",
+        "apiKeyPlaceholder": "Leave blank for local servers (LM Studio, Ollama, ...)",
+        "modelsHeading": "Models",
+        "noModels": "No models yet, add the model IDs this endpoint serves.",
+        "modelIdPlaceholder": "e.g. gpt-oss:120b",
+        "removeModel": "Remove model",
+        "addModel": "+ Add model",
+        "addProvider": "+ Add Custom Provider"
+      }
     },
     "interface": {
       "sectionTitle": "Interface",
@@ -60,6 +83,118 @@
       "browserSectionTitle": "Browser",
       "defaultHomepage": "Default homepage",
       "defaultHomepageDesc": "URL loaded when opening a new browser card on the dashboard."
+    },
+    "header": {
+      "tabs": {
+        "general": "General",
+        "models": "Models",
+        "skills": "Skills",
+        "tools": "Tools",
+        "commands": "Commands",
+        "usage": "Usage"
+      }
+    },
+    "general": {
+      "agentDefaults": {
+        "sectionTitle": "Agent Defaults",
+        "systemPrompt": "System prompt",
+        "systemPromptDesc": "Prepended to every agent session before mode-specific instructions. Modes can override with their own.",
+        "resetToDefault": "Reset to default",
+        "workingDirectory": "Working directory",
+        "workingDirectoryDesc": "Default folder agents start in. Modes can override per-mode.",
+        "workingDirectoryPlaceholder": "Not set (uses project root)",
+        "browse": "Browse",
+        "model": "Model",
+        "modelDesc": "Default model for new sessions.",
+        "mode": "Mode",
+        "modeDesc": "Default interaction mode for new sessions.",
+        "thinking": "Thinking",
+        "thinkingDesc": "Default thinking level for reasoning-capable models.",
+        "thinkingAuto": "Auto",
+        "thinkingOff": "Off",
+        "thinkingLow": "Low",
+        "thinkingMedium": "Medium",
+        "thinkingHigh": "High",
+        "maxTurns": "Max turns",
+        "maxTurnsDesc": "Auto-stop after this many turns. Empty = unlimited."
+      },
+      "dataPrivacy": {
+        "sectionTitle": "Data & Privacy",
+        "resetAll": "Reset all settings",
+        "resetAllDesc": "Puts your preferences back to defaults. Your apps, chats, skills, and sign-in stay.",
+        "reset": "Reset",
+        "resetting": "Resetting…",
+        "resetDialogTitle": "Reset all settings?",
+        "resetDialogBody": "Your preferences go back to defaults. Apps, chats, skills, and sign-in stay.",
+        "resetError": "Couldn't reset just now. Try again in a moment.",
+        "clearBrowsing": "Clear browsing data",
+        "clearBrowsingDesc": "Signs you out of sites opened in browser cards and clears their cookies, cache, and local storage. Your chats, apps, and settings stay.",
+        "clear": "Clear",
+        "clearing": "Clearing…",
+        "clearDialogTitle": "Clear browsing data?",
+        "clearDialogBody": "This signs you out of sites in browser cards and clears their cookies, cache, and local storage. Your chats, apps, and settings stay.",
+        "clearedTitle": "Browsing data cleared",
+        "clearedBody": "Cookies, cache, and local storage for browser cards are gone. Reload a browser card to see it signed out.",
+        "clearError": "Couldn't clear browsing data just now. Try again in a moment.",
+        "done": "Done",
+        "eraseAll": "Erase all content and settings",
+        "eraseAllDesc": "Removes every chat, app, skill, and setting and restarts Maestro Studio fresh. This can't be undone.",
+        "erase": "Erase",
+        "erasing": "Erasing…",
+        "eraseDialogTitle": "Erase all content and settings?",
+        "eraseDialogBody": "This deletes every chat, app, skill, and setting, then restarts Maestro Studio. It can't be undone.",
+        "erasePlaceholder": "Type {{word}} to confirm",
+        "eraseError": "Couldn't erase just now. Try again in a moment.",
+        "desktopOnly": "This only works in the desktop app."
+      },
+      "advanced": {
+        "sectionTitle": "Advanced",
+        "devMode": "Developer mode",
+        "devModeDesc": "Show transport details, environment variables, raw configs, and other technical metadata throughout the app.",
+        "experimentalUpdates": "Experimental updates",
+        "experimentalUpdatesDesc": "Receive pre-release builds with new features earlier. These versions may be less stable than normal releases.",
+        "aboutTitle": "About",
+        "version": "Version",
+        "build": "Build",
+        "onboardingTour": "Onboarding tour",
+        "onboardingTourDesc": "Re-run the Show me walkthrough at any time.",
+        "restartTour": "Restart tour"
+      }
+    },
+    "usage": {
+      "totalSessions": "Total Sessions",
+      "noSessions": "no sessions",
+      "youSaved": "You Saved",
+      "totalCost": "Total Cost",
+      "savedWithSubscription": "saved with your subscription",
+      "viaApi": "via API",
+      "avgWithSource": "{{avg}} avg, {{source}}",
+      "noCostData": "no cost data",
+      "totalMessages": "Total Messages",
+      "avgPerSession": "{{value}} avg per session",
+      "totalToolCalls": "Total Tool Calls",
+      "totalRunTime": "Total Run Time",
+      "acrossAllSessions": "across all sessions",
+      "avgSession": "Avg Session",
+      "perSessionDuration": "per session duration",
+      "completionRate": "Completion Rate",
+      "sessionsFinished": "sessions finished successfully",
+      "tokensUsed": "Tokens Used",
+      "tokensInOut": "{{in}} in, {{out}} out",
+      "none": "none",
+      "modelsUsed": "Models Used",
+      "noSessionsYet": "No sessions yet",
+      "topTools": "Top Tools",
+      "toolCalls_one": "{{count}} call ({{pct}}%)",
+      "toolCalls_other": "{{count}} calls ({{pct}}%)",
+      "unitMinutes": "min",
+      "unitHours": "hrs",
+      "savingsQuip1": "You've sidestepped {{cost}} in API fees by routing {{sessions}} agent runs through your own subscriptions. The meter never blinked.",
+      "savingsQuip2_one": "{{cost}} saved, about {{count}} oat-milk latte you didn't expense to a token meter.",
+      "savingsQuip2_other": "{{cost}} saved, about {{count}} oat-milk lattes you didn't expense to a token meter.",
+      "savingsQuip3": "Your subscriptions quietly did the work of a {{cost}} API bill. Maestro Studio just drove around the toll booth.",
+      "savingsQuip4": "{{cost}} that stayed in your wallet across {{sessions}} sessions. Per-token guilt: zero.",
+      "noToolCallsYet": "No tool calls yet"
     }
   },
   "onboarding": {
@@ -91,13 +226,34 @@
     "current": "current",
     "jumpToCurrentTodo": "Jump to current todo",
     "steps": {
-      "welcome_open": { "title": "Welcome", "description": "" },
-      "connect_model": { "title": "Keep going: connect your model", "description": "Your free runs are limited. Add your own model to keep building." },
-      "launch_agent": { "title": "Launch your first Agent", "description": "Tell the chat what you want done and a team gets to work." },
-      "use_browser": { "title": "Use the built-in browser", "description": "No more jumping between apps. You and your agents work in one place." },
-      "agent_use_browser": { "title": "Have an agent use the browser", "description": "Let an agent take control of your browser." },
-      "agent_control_agents": { "title": "Have an agent control other agents", "description": "Let an agent orchestrate other agents." },
-      "make_app": { "title": "Make an App", "description": "Prompt interactive applications into existence." }
+      "welcome_open": {
+        "title": "Welcome",
+        "description": ""
+      },
+      "connect_model": {
+        "title": "Keep going: connect your model",
+        "description": "Your free runs are limited. Add your own model to keep building."
+      },
+      "launch_agent": {
+        "title": "Launch your first Agent",
+        "description": "Tell the chat what you want done and a team gets to work."
+      },
+      "use_browser": {
+        "title": "Use the built-in browser",
+        "description": "No more jumping between apps. You and your agents work in one place."
+      },
+      "agent_use_browser": {
+        "title": "Have an agent use the browser",
+        "description": "Let an agent take control of your browser."
+      },
+      "agent_control_agents": {
+        "title": "Have an agent control other agents",
+        "description": "Let an agent orchestrate other agents."
+      },
+      "make_app": {
+        "title": "Make an App",
+        "description": "Prompt interactive applications into existence."
+      }
     },
     "infoByStepId": {
       "connect_model": "Maestro Studio works with any AI model.\n\nIf you already have a subscription to ChatGPT, Claude, or Gemini, plug it directly into Maestro Studio.\n\nWe also offer an Maestro Studio subscription that gives you the same usage as those providers.\n\nOr use your own API keys.",

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
@@ -27,16 +28,17 @@ const GeneralAgentDefaults: React.FC<{
   providerColors: Record<string, string>;
 }> = ({ form, setForm, styles, setBrowseOpen, modelOptions, modesList, providerColors }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const { fieldSx, sectionSx, rowSx, inlineRowSx, inlineRowLastSx, labelSx, descSx } = styles;
 
   return (
     <>
-      <Typography sx={sectionSx}>Agent Defaults</Typography>
+      <Typography sx={sectionSx}>{t('settings.general.agentDefaults.sectionTitle')}</Typography>
 
-      <Box sx={rowSx} {...settingSelectAttrs('default_system_prompt', 'System prompt', 'Agent Defaults', 'Prepended to every agent session before mode-specific instructions.')}>
+      <Box sx={rowSx} {...settingSelectAttrs('default_system_prompt', t('settings.general.agentDefaults.systemPrompt'), 'Agent Defaults', t('settings.general.agentDefaults.systemPromptDesc'))}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography sx={labelSx}>System prompt</Typography>
+          <Typography sx={labelSx}>{t('settings.general.agentDefaults.systemPrompt')}</Typography>
           {form.default_system_prompt !== DEFAULT_SYSTEM_PROMPT && (
             <Button
               size="small"
@@ -53,12 +55,12 @@ const GeneralAgentDefaults: React.FC<{
                 '&:hover': { bgcolor: `${c.accent.primary}10` },
               }}
             >
-              Reset to default
+              {t('settings.general.agentDefaults.resetToDefault')}
             </Button>
           )}
         </Box>
         <Typography sx={{ ...descSx, mb: 1.5 }}>
-          Prepended to every agent session before mode-specific instructions. Modes can override with their own.
+          {t('settings.general.agentDefaults.systemPromptDesc')}
         </Typography>
         <TextField
           value={form.default_system_prompt ?? DEFAULT_SYSTEM_PROMPT}
@@ -79,10 +81,10 @@ const GeneralAgentDefaults: React.FC<{
         />
       </Box>
 
-      <Box sx={rowSx} {...settingSelectAttrs('default_folder', 'Working directory', 'Agent Defaults', 'Default folder agents start in.')}>
-        <Typography sx={labelSx}>Working directory</Typography>
+      <Box sx={rowSx} {...settingSelectAttrs('default_folder', t('settings.general.agentDefaults.workingDirectory'), 'Agent Defaults', t('settings.general.agentDefaults.workingDirectoryDesc'))}>
+        <Typography sx={labelSx}>{t('settings.general.agentDefaults.workingDirectory')}</Typography>
         <Typography sx={{ ...descSx, mb: 1.5 }}>
-          Default folder agents start in. Modes can override per-mode.
+          {t('settings.general.agentDefaults.workingDirectoryDesc')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
@@ -90,7 +92,7 @@ const GeneralAgentDefaults: React.FC<{
             onChange={(e) => setForm({ ...form, default_folder: e.target.value || null })}
             size="small"
             fullWidth
-            placeholder="Not set (uses project root)"
+            placeholder={t('settings.general.agentDefaults.workingDirectoryPlaceholder')}
             sx={{
               ...fieldSx,
               '& .MuiOutlinedInput-root': {
@@ -113,15 +115,15 @@ const GeneralAgentDefaults: React.FC<{
               '&:hover': { color: c.accent.primary, borderColor: c.accent.primary },
             }}
           >
-            Browse
+            {t('settings.general.agentDefaults.browse')}
           </Button>
         </Box>
       </Box>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('default_model', 'Model', 'Agent Defaults', 'Default model for new sessions.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('default_model', t('settings.general.agentDefaults.model'), 'Agent Defaults', t('settings.general.agentDefaults.modelDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Model</Typography>
-          <Typography sx={descSx}>Default model for new sessions.</Typography>
+          <Typography sx={labelSx}>{t('settings.general.agentDefaults.model')}</Typography>
+          <Typography sx={descSx}>{t('settings.general.agentDefaults.modelDesc')}</Typography>
         </Box>
         <FormControl size="small" sx={{ minWidth: 220 }}>
           <Select
@@ -189,10 +191,10 @@ const GeneralAgentDefaults: React.FC<{
         </FormControl>
       </Box>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('default_mode', 'Mode', 'Agent Defaults', 'Default interaction mode for new sessions.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('default_mode', t('settings.general.agentDefaults.mode'), 'Agent Defaults', t('settings.general.agentDefaults.modeDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Mode</Typography>
-          <Typography sx={descSx}>Default interaction mode for new sessions.</Typography>
+          <Typography sx={labelSx}>{t('settings.general.agentDefaults.mode')}</Typography>
+          <Typography sx={descSx}>{t('settings.general.agentDefaults.modeDesc')}</Typography>
         </Box>
         <FormControl size="small" sx={{ minWidth: 170 }}>
           <Select
@@ -208,10 +210,10 @@ const GeneralAgentDefaults: React.FC<{
         </FormControl>
       </Box>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('default_thinking_level', 'Thinking', 'Agent Defaults', 'Default thinking level for reasoning-capable models.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('default_thinking_level', t('settings.general.agentDefaults.thinking'), 'Agent Defaults', t('settings.general.agentDefaults.thinkingDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Thinking</Typography>
-          <Typography sx={descSx}>Default thinking level for reasoning-capable models.</Typography>
+          <Typography sx={labelSx}>{t('settings.general.agentDefaults.thinking')}</Typography>
+          <Typography sx={descSx}>{t('settings.general.agentDefaults.thinkingDesc')}</Typography>
         </Box>
         <FormControl size="small" sx={{ minWidth: 170 }}>
           <Select
@@ -220,19 +222,19 @@ const GeneralAgentDefaults: React.FC<{
             sx={{ fontSize: '0.85rem' }}
             MenuProps={{ PaperProps: { sx: { bgcolor: c.bg.surface, color: c.text.primary } } }}
           >
-            <MenuItem value="auto">Auto</MenuItem>
-            <MenuItem value="off">Off</MenuItem>
-            <MenuItem value="low">Low</MenuItem>
-            <MenuItem value="medium">Medium</MenuItem>
-            <MenuItem value="high">High</MenuItem>
+            <MenuItem value="auto">{t('settings.general.agentDefaults.thinkingAuto')}</MenuItem>
+            <MenuItem value="off">{t('settings.general.agentDefaults.thinkingOff')}</MenuItem>
+            <MenuItem value="low">{t('settings.general.agentDefaults.thinkingLow')}</MenuItem>
+            <MenuItem value="medium">{t('settings.general.agentDefaults.thinkingMedium')}</MenuItem>
+            <MenuItem value="high">{t('settings.general.agentDefaults.thinkingHigh')}</MenuItem>
           </Select>
         </FormControl>
       </Box>
 
-      <Box sx={inlineRowLastSx} {...settingSelectAttrs('default_max_turns', 'Max turns', 'Agent Defaults', 'Auto-stop after this many turns. Empty = unlimited.')}>
+      <Box sx={inlineRowLastSx} {...settingSelectAttrs('default_max_turns', t('settings.general.agentDefaults.maxTurns'), 'Agent Defaults', t('settings.general.agentDefaults.maxTurnsDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Max turns</Typography>
-          <Typography sx={descSx}>Auto-stop after this many turns. Empty = unlimited.</Typography>
+          <Typography sx={labelSx}>{t('settings.general.agentDefaults.maxTurns')}</Typography>
+          <Typography sx={descSx}>{t('settings.general.agentDefaults.maxTurnsDesc')}</Typography>
         </Box>
         <TextField
           type="number"

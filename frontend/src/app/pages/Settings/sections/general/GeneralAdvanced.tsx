@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { report } from '@/shared/serviceClient';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -20,6 +21,7 @@ const GeneralAdvanced: React.FC<{
   styles: SettingsStyles;
 }> = ({ form, setForm, styles }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const appVersion = useAppSelector((s) => s.update.appVersion);
   const { sectionSx, rowSx, inlineRowSx, inlineRowLastSx, labelSx, descSx } = styles;
@@ -35,12 +37,12 @@ const GeneralAdvanced: React.FC<{
 
   return (
     <>
-      <Typography sx={{ ...sectionSx, mt: 3 }}>Advanced</Typography>
+      <Typography sx={{ ...sectionSx, mt: 3 }}>{t('settings.general.advanced.sectionTitle')}</Typography>
 
-      <Box sx={inlineRowSx} {...settingSelectAttrs('dev_mode', 'Developer mode', 'Advanced', 'Show transport details, env vars, and technical metadata throughout the app.')}>
+      <Box sx={inlineRowSx} {...settingSelectAttrs('dev_mode', t('settings.general.advanced.devMode'), 'Advanced', t('settings.general.advanced.devModeDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Developer mode</Typography>
-          <Typography sx={descSx}>Show transport details, environment variables, raw configs, and other technical metadata throughout the app.</Typography>
+          <Typography sx={labelSx}>{t('settings.general.advanced.devMode')}</Typography>
+          <Typography sx={descSx}>{t('settings.general.advanced.devModeDesc')}</Typography>
         </Box>
         <Switch
           checked={form.dev_mode}
@@ -52,10 +54,10 @@ const GeneralAdvanced: React.FC<{
         />
       </Box>
 
-      <Box sx={inlineRowLastSx} {...settingSelectAttrs('allow_experimental_updates', 'Experimental updates', 'Advanced', 'Receive pre-release builds with new features earlier.')}>
+      <Box sx={inlineRowLastSx} {...settingSelectAttrs('allow_experimental_updates', t('settings.general.advanced.experimentalUpdates'), 'Advanced', t('settings.general.advanced.experimentalUpdatesDesc'))}>
         <Box sx={{ mr: 3 }}>
-          <Typography sx={labelSx}>Experimental updates</Typography>
-          <Typography sx={descSx}>Receive pre-release builds with new features earlier. These versions may be less stable than normal releases.</Typography>
+          <Typography sx={labelSx}>{t('settings.general.advanced.experimentalUpdates')}</Typography>
+          <Typography sx={descSx}>{t('settings.general.advanced.experimentalUpdatesDesc')}</Typography>
         </Box>
         <Switch
           checked={form.allow_experimental_updates}
@@ -67,12 +69,12 @@ const GeneralAdvanced: React.FC<{
         />
       </Box>
 
-      <Typography sx={{ ...sectionSx, mt: 3 }}>About</Typography>
+      <Typography sx={{ ...sectionSx, mt: 3 }}>{t('settings.general.advanced.aboutTitle')}</Typography>
 
       <Box sx={rowSx}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Typography sx={labelSx}>Version</Typography>
+            <Typography sx={labelSx}>{t('settings.general.advanced.version')}</Typography>
             <Typography sx={{ ...descSx, fontFamily: c.font.mono }}>
               {appVersion ?? '-'}
             </Typography>
@@ -84,7 +86,7 @@ const GeneralAdvanced: React.FC<{
         <Box sx={rowSx}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box>
-              <Typography sx={labelSx}>Build</Typography>
+              <Typography sx={labelSx}>{t('settings.general.advanced.build')}</Typography>
               <Typography sx={{ ...descSx, fontFamily: c.font.mono }}>
                 {buildLabel}
               </Typography>
@@ -99,9 +101,9 @@ const GeneralAdvanced: React.FC<{
 
       <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
-          <Typography sx={{ ...labelSx, mb: 0.25 }}>Onboarding tour</Typography>
+          <Typography sx={{ ...labelSx, mb: 0.25 }}>{t('settings.general.advanced.onboardingTour')}</Typography>
           <Typography sx={{ ...descSx, mb: 0 }}>
-            Re-run the Show me walkthrough at any time.
+            {t('settings.general.advanced.onboardingTourDesc')}
           </Typography>
         </Box>
         <Button
@@ -128,7 +130,7 @@ const GeneralAdvanced: React.FC<{
             '&:hover': { color: c.accent.primary, borderColor: c.accent.primary },
           }}
         >
-          Restart tour
+          {t('settings.general.advanced.restartTour')}
         </Button>
       </Box>
     </>

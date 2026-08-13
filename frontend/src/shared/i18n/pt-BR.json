@@ -33,7 +33,30 @@
   "settings": {
     "models": {
       "provedorIaDesc": "Os modelos Maestro, via MartinsTech.",
-      "provedorIaGetToken": "Obter token"
+      "provedorIaGetToken": "Obter token",
+      "customProviders": {
+        "title": "Provedores personalizados",
+        "readyBadge": "{{ready}} DE {{total}} PRONTOS",
+        "desc": "Adicione endpoints compatíveis com a API da OpenAI (Ollama Cloud, Together, Groq, Ollama local, qualquer serviço que fale /v1/chat/completions).",
+        "statusReady": "Pronto",
+        "statusIncomplete": "Incompleto, informe {{missing}}",
+        "missingName": "o nome",
+        "missingBaseUrl": "a URL base",
+        "missingModel": "um modelo",
+        "removeProvider": "Remover provedor",
+        "nameLabel": "Nome",
+        "namePlaceholder": "ex.: Ollama Cloud",
+        "nameNotUnique": "O nome deve ser único",
+        "baseUrlLabel": "URL base",
+        "apiKeyLabel": "Chave de API (opcional)",
+        "apiKeyPlaceholder": "Deixe em branco para servidores locais (LM Studio, Ollama, ...)",
+        "modelsHeading": "Modelos",
+        "noModels": "Nenhum modelo ainda; adicione os IDs dos modelos que este endpoint atende.",
+        "modelIdPlaceholder": "ex.: gpt-oss:120b",
+        "removeModel": "Remover modelo",
+        "addModel": "+ Adicionar modelo",
+        "addProvider": "+ Adicionar provedor personalizado"
+      }
     },
     "interface": {
       "sectionTitle": "Interface",
@@ -60,6 +83,118 @@
       "browserSectionTitle": "Navegador",
       "defaultHomepage": "Página inicial padrão",
       "defaultHomepageDesc": "URL carregada ao abrir um novo cartão de navegador no painel."
+    },
+    "header": {
+      "tabs": {
+        "general": "Geral",
+        "models": "Modelos",
+        "skills": "Skills",
+        "tools": "Ferramentas",
+        "commands": "Comandos",
+        "usage": "Uso"
+      }
+    },
+    "general": {
+      "agentDefaults": {
+        "sectionTitle": "Padrões do agente",
+        "systemPrompt": "Prompt do sistema",
+        "systemPromptDesc": "Entra no início de toda sessão de agente, antes das instruções específicas do modo. Cada modo pode substituí-lo pelo seu próprio.",
+        "resetToDefault": "Restaurar o padrão",
+        "workingDirectory": "Diretório de trabalho",
+        "workingDirectoryDesc": "Pasta onde os agentes começam por padrão. Cada modo pode definir a sua.",
+        "workingDirectoryPlaceholder": "Não definido (usa a raiz do projeto)",
+        "browse": "Procurar",
+        "model": "Modelo",
+        "modelDesc": "Modelo padrão para novas sessões.",
+        "mode": "Modo",
+        "modeDesc": "Modo de interação padrão para novas sessões.",
+        "thinking": "Raciocínio",
+        "thinkingDesc": "Nível de raciocínio padrão para modelos que raciocinam.",
+        "thinkingAuto": "Automático",
+        "thinkingOff": "Desligado",
+        "thinkingLow": "Baixo",
+        "thinkingMedium": "Médio",
+        "thinkingHigh": "Alto",
+        "maxTurns": "Máximo de turnos",
+        "maxTurnsDesc": "Para automaticamente depois desse número de turnos. Vazio = sem limite."
+      },
+      "dataPrivacy": {
+        "sectionTitle": "Dados e privacidade",
+        "resetAll": "Redefinir todas as configurações",
+        "resetAllDesc": "Volta suas preferências para os padrões. Seus Apps, conversas, Skills e login continuam como estão.",
+        "reset": "Redefinir",
+        "resetting": "Redefinindo…",
+        "resetDialogTitle": "Redefinir todas as configurações?",
+        "resetDialogBody": "Suas preferências voltam para os padrões. Apps, conversas, Skills e login continuam como estão.",
+        "resetError": "Não foi possível redefinir agora. Tente de novo em instantes.",
+        "clearBrowsing": "Limpar dados de navegação",
+        "clearBrowsingDesc": "Desconecta você dos sites abertos em cartões de navegador e apaga os cookies, o cache e o armazenamento local deles. Suas conversas, Apps e configurações continuam.",
+        "clear": "Limpar",
+        "clearing": "Limpando…",
+        "clearDialogTitle": "Limpar os dados de navegação?",
+        "clearDialogBody": "Isso desconecta você dos sites nos cartões de navegador e apaga os cookies, o cache e o armazenamento local deles. Suas conversas, Apps e configurações continuam.",
+        "clearedTitle": "Dados de navegação apagados",
+        "clearedBody": "Os cookies, o cache e o armazenamento local dos cartões de navegador foram apagados. Recarregue um cartão de navegador para vê-lo desconectado.",
+        "clearError": "Não foi possível limpar os dados de navegação agora. Tente de novo em instantes.",
+        "done": "Concluído",
+        "eraseAll": "Apagar todo o conteúdo e as configurações",
+        "eraseAllDesc": "Remove todas as conversas, Apps, Skills e configurações e reinicia o Maestro Studio do zero. Não dá para desfazer.",
+        "erase": "Apagar",
+        "erasing": "Apagando…",
+        "eraseDialogTitle": "Apagar todo o conteúdo e as configurações?",
+        "eraseDialogBody": "Isso exclui todas as conversas, Apps, Skills e configurações e depois reinicia o Maestro Studio. Não dá para desfazer.",
+        "erasePlaceholder": "Digite {{word}} para confirmar",
+        "eraseError": "Não foi possível apagar agora. Tente de novo em instantes.",
+        "desktopOnly": "Isso só funciona no aplicativo para desktop."
+      },
+      "advanced": {
+        "sectionTitle": "Avançado",
+        "devMode": "Modo desenvolvedor",
+        "devModeDesc": "Mostra detalhes de transporte, variáveis de ambiente, configurações brutas e outros metadados técnicos em todo o app.",
+        "experimentalUpdates": "Atualizações experimentais",
+        "experimentalUpdatesDesc": "Receba versões de pré-lançamento com novidades mais cedo. Elas podem ser menos estáveis que as versões normais.",
+        "aboutTitle": "Sobre",
+        "version": "Versão",
+        "build": "Build",
+        "onboardingTour": "Tour de introdução",
+        "onboardingTourDesc": "Refaça o tour \"Me mostre\" quando quiser.",
+        "restartTour": "Reiniciar o tour"
+      }
+    },
+    "usage": {
+      "totalSessions": "Total de sessões",
+      "noSessions": "nenhuma sessão",
+      "youSaved": "Você economizou",
+      "totalCost": "Custo total",
+      "savedWithSubscription": "economizados com sua assinatura",
+      "viaApi": "via API",
+      "avgWithSource": "{{avg}} em média, {{source}}",
+      "noCostData": "sem dados de custo",
+      "totalMessages": "Total de mensagens",
+      "avgPerSession": "{{value}} em média por sessão",
+      "totalToolCalls": "Total de chamadas de ferramentas",
+      "totalRunTime": "Tempo total de execução",
+      "acrossAllSessions": "somando todas as sessões",
+      "avgSession": "Sessão média",
+      "perSessionDuration": "duração por sessão",
+      "completionRate": "Taxa de conclusão",
+      "sessionsFinished": "sessões concluídas com sucesso",
+      "tokensUsed": "Tokens usados",
+      "tokensInOut": "{{in}} de entrada, {{out}} de saída",
+      "none": "nenhum",
+      "modelsUsed": "Modelos usados",
+      "noSessionsYet": "Nenhuma sessão ainda",
+      "topTools": "Ferramentas mais usadas",
+      "toolCalls_one": "{{count}} chamada ({{pct}}%)",
+      "toolCalls_other": "{{count}} chamadas ({{pct}}%)",
+      "unitMinutes": "min",
+      "unitHours": "h",
+      "savingsQuip1": "Você driblou {{cost}} em taxas de API roteando {{sessions}} execuções de agente pelas suas próprias assinaturas. O medidor nem piscou.",
+      "savingsQuip2_one": "{{cost}} economizados, mais ou menos {{count}} café com leite que você não lançou na conta de tokens.",
+      "savingsQuip2_other": "{{cost}} economizados, mais ou menos {{count}} cafés com leite que você não lançou na conta de tokens.",
+      "savingsQuip3": "Suas assinaturas fizeram, na surdina, o trabalho de uma fatura de API de {{cost}}. O Maestro Studio só passou por fora do pedágio.",
+      "savingsQuip4": "{{cost}} que ficaram no seu bolso ao longo de {{sessions}} sessões. Culpa por token: zero.",
+      "noToolCallsYet": "Nenhuma chamada de ferramenta ainda"
     }
   },
   "onboarding": {
@@ -91,13 +226,34 @@
     "current": "atual",
     "jumpToCurrentTodo": "Ir para a tarefa atual",
     "steps": {
-      "welcome_open": { "title": "Bem-vindo", "description": "" },
-      "connect_model": { "title": "Continue: conecte seu modelo", "description": "Suas execuções gratuitas são limitadas. Adicione seu próprio modelo para continuar construindo." },
-      "launch_agent": { "title": "Inicie seu primeiro Agente", "description": "Diga ao chat o que você quer feito e uma equipe entra em ação." },
-      "use_browser": { "title": "Use o navegador integrado", "description": "Sem precisar alternar entre apps. Você e seus agentes trabalham no mesmo lugar." },
-      "agent_use_browser": { "title": "Faça um agente usar o navegador", "description": "Deixe um agente assumir o controle do seu navegador." },
-      "agent_control_agents": { "title": "Faça um agente controlar outros agentes", "description": "Deixe um agente orquestrar outros agentes." },
-      "make_app": { "title": "Crie um App", "description": "Peça e veja aplicações interativas surgirem." }
+      "welcome_open": {
+        "title": "Bem-vindo",
+        "description": ""
+      },
+      "connect_model": {
+        "title": "Continue: conecte seu modelo",
+        "description": "Suas execuções gratuitas são limitadas. Adicione seu próprio modelo para continuar construindo."
+      },
+      "launch_agent": {
+        "title": "Inicie seu primeiro Agente",
+        "description": "Diga ao chat o que você quer feito e uma equipe entra em ação."
+      },
+      "use_browser": {
+        "title": "Use o navegador integrado",
+        "description": "Sem precisar alternar entre apps. Você e seus agentes trabalham no mesmo lugar."
+      },
+      "agent_use_browser": {
+        "title": "Faça um agente usar o navegador",
+        "description": "Deixe um agente assumir o controle do seu navegador."
+      },
+      "agent_control_agents": {
+        "title": "Faça um agente controlar outros agentes",
+        "description": "Deixe um agente orquestrar outros agentes."
+      },
+      "make_app": {
+        "title": "Crie um App",
+        "description": "Peça e veja aplicações interativas surgirem."
+      }
     },
     "infoByStepId": {
       "connect_model": "O Maestro Studio funciona com qualquer modelo de IA.\n\nSe você já tem uma assinatura do ChatGPT, Claude ou Gemini, conecte ela direto no Maestro Studio.\n\nTambém oferecemos uma assinatura Maestro Studio que dá o mesmo uso desses provedores.\n\nOu use suas próprias chaves de API.",
