@@ -32,6 +32,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 // Settings modal lazy-loaded so its 2.3K LOC + Stripe/OAuth helpers don't ship on first paint.
 const Settings = React.lazy(() => import('@/app/pages/Settings/Settings'));
 import DynamicIsland from '@/app/components/overlays/DynamicIsland';
+import BackendDownToast from '@/app/components/overlays/BackendDownToast';
 import Dashboard from '@/app/pages/Dashboard/Dashboard';
 import DashboardHost from '@/app/components/Layout/DashboardHost';
 import { useLastDashboardId } from '@/shared/hooks/useLastDashboardId';
@@ -1199,6 +1200,8 @@ const AppShell: React.FC = () => {
           {updateStatus === 'downloaded' && t('appShell.updateDownloadedSnackbar', { verSuffix })}
         </Alert>
       </Snackbar>
+      {/* App-wide, not dashboard-scoped: a dead backend can strand the user on any page */}
+      <BackendDownToast />
     </Box>
   );
 };

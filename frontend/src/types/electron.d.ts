@@ -46,6 +46,9 @@ declare global {
     onDownloadProgress: (cb: (progress: MaestroDownloadProgress) => void) => () => void;
     onUpdateDownloaded: (cb: (info: MaestroUpdateInfo) => void) => () => void;
     onUpdateError: (cb: (message: string) => void) => () => void;
+    onBackendUnrecoverable?: (cb: (info: { attempts: number; logs?: string }) => void) => () => void;
+    restartApp?: () => void;
+    openBackendLogs?: () => void;
     onWebviewNewWindow: (cb: (url: string, webContentsId: number, disposition?: string) => void) => () => void;
     onReloadShortcut?: (cb: () => void) => () => void;
     onBrowserShortcut?: (cb: (payload: { action: string; webContentsId: number }) => void) => () => void;
