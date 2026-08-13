@@ -49,6 +49,9 @@ try {
     autoUpdater = require('electron-updater').autoUpdater;
   }
 } catch (_) {}
+const https = require('https');
+const crypto = require('crypto');
+const { CDN_MANIFEST_URL, pickUpdate } = require('./cdnUpdater');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
 const os = require('os');
@@ -1582,17 +1585,102 @@ async function clearStaleFrontendCache() {
   }
 }
 
+// Windows-only: fetches https://cdn.martinstech.net/maestro/version.json over HTTPS and parses
+// it as JSON. Rejects on any network/parse error so the caller's catch handles it the same way
+// as a Squirrel feed failure -- a CDN hiccup must look like "check failed," never crash anything.
+function fetchCdnManifest() {
+  return new Promise((resolve, reject) => {
+    const req = https.get(CDN_MANIFEST_URL, { timeout: 10000 }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`CDN manifest fetch failed: HTTP ${res.statusCode}`));
+        return;
+      }
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); } catch (err) { reject(err); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(new Error('CDN manifest fetch timed out')); });
+  });
+}
+
+// Downloads `release.url` to a fresh temp file and verifies its sha256 against `release.sha256`
+// before returning the path. Deletes the partial/mismatched file on any failure so a half-written
+// or tampered download is never left around to be spawned later.
+function downloadCdnRelease(release) {
+  return new Promise((resolve, reject) => {
+    const dest = path.join(os.tmpdir(), release.file || `maestro-update-${Date.now()}.exe`);
+    const file = fs.createWriteStream(dest);
+    const hash = crypto.createHash('sha256');
+    const cleanupAndReject = (err) => {
+      file.close(() => { try { fs.unlinkSync(dest); } catch (_) {} });
+      reject(err);
+    };
+    const req = https.get(release.url, { timeout: 60000 }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        cleanupAndReject(new Error(`CDN download failed: HTTP ${res.statusCode}`));
+        return;
+      }
+      res.on('data', (chunk) => hash.update(chunk));
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close(() => {
+          const digest = hash.digest('hex');
+          if (digest !== release.sha256) {
+            cleanupAndReject(new Error(`CDN download sha256 mismatch: got ${digest}, expected ${release.sha256}`));
+            return;
+          }
+          resolve(dest);
+        });
+      });
+    });
+    req.on('error', cleanupAndReject);
+    req.on('timeout', () => { req.destroy(new Error('CDN download timed out')); });
+  });
+}
+
+// Path to the last successfully downloaded + sha256-verified installer, set by
+// checkCdnForUpdate() and consumed by installDownloadedUpdate(). Windows-only equivalent of what
+// electron-updater tracks internally for Mac.
+let cdnDownloadedInstallerPath = null;
+
+// Windows equivalent of autoUpdater.checkForUpdates() + its autoDownload=true behavior on Mac:
+// fetch the manifest, and if it names a newer release, download and verify it immediately so the
+// UI can go straight from "available" to "downloaded" without a separate user-triggered fetch.
+async function checkCdnForUpdate() {
+  const manifest = await fetchCdnManifest();
+  const release = pickUpdate(manifest, app.getVersion());
+  if (!release) {
+    console.log('App is up to date');
+    cachedUpdateStatus = { status: 'not-available', info: {}, error: null };
+    sendToRenderer('update-not-available', {});
+    return;
+  }
+  console.log(`Update available: ${release.version}`);
+  cachedUpdateStatus = { status: 'available', info: { version: release.version }, error: null };
+  sendToRenderer('update-available', { version: release.version });
+  try {
+    cdnDownloadedInstallerPath = await downloadCdnRelease(release);
+    console.log(`Update downloaded: ${release.version}`);
+    cachedUpdateStatus = { status: 'downloaded', info: { version: release.version }, error: null };
+    sendToRenderer('update-downloaded', { version: release.version });
+  } catch (err) {
+    console.error('CDN update download failed:', err);
+    cachedUpdateStatus = { status: 'error', info: null, error: t('appShell.update.networkError') };
+    sendToRenderer('update-error', t('appShell.update.networkError'));
+  }
+}
+
 function setupAutoUpdater() {
   if (!autoUpdater) return;
   if (isSquirrelUpdater) {
-    // Squirrel.Windows fetches its RELEASES feed from GH /latest/download/. The
-    // built-in autoUpdater has no autoDownload/allowPrerelease/allowDowngrade knobs.
-    try {
-      autoUpdater.setFeedURL({ url: 'https://github.com/gmartinstech/maestro-desktop/releases/latest/download/' });
-    } catch (err) {
-      console.warn('[updater] Squirrel setFeedURL failed:', err && err.message);
-      return;
-    }
+    // Windows updates come from cdn.martinstech.net/maestro/version.json instead of a Squirrel
+    // RELEASES feed on GitHub (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md).
+    // Nothing to configure here -- checkCdnForUpdate() does its own fetch, no feed URL to set.
   } else {
     // Silent background updates: download on detect, install on next quit.
     // The OS gates the install on main-process exit (can't replace a
@@ -1605,58 +1693,64 @@ function setupAutoUpdater() {
     autoUpdater.allowDowngrade = true;
   }
 
-  // electron-updater (Mac) passes an info object ({version,...}); the built-in
-  // Windows autoUpdater (Squirrel) fires update-available/-not-available with NO
-  // args and update-downloaded with positional (event, releaseNotes, releaseName,
-  // releaseDate, updateURL). Normalize so these handlers work for both.
-  autoUpdater.on('update-available', (info) => {
-    const norm = info && info.version ? info : { version: '' };
-    console.log(`Update available: ${norm.version || '(version not reported by Squirrel)'}`);
-    cachedUpdateStatus = { status: 'available', info: norm, error: null };
-    sendToRenderer('update-available', norm);
-  });
+  if (!isSquirrelUpdater) {
+    // electron-updater (Mac) passes an info object ({version,...}); the built-in
+    // Windows autoUpdater (Squirrel) fires update-available/-not-available with NO
+    // args and update-downloaded with positional (event, releaseNotes, releaseName,
+    // releaseDate, updateURL). Normalize so these handlers work for both.
+    autoUpdater.on('update-available', (info) => {
+      const norm = info && info.version ? info : { version: '' };
+      console.log(`Update available: ${norm.version || '(version not reported by Squirrel)'}`);
+      cachedUpdateStatus = { status: 'available', info: norm, error: null };
+      sendToRenderer('update-available', norm);
+    });
 
-  autoUpdater.on('update-not-available', (info) => {
-    console.log('App is up to date');
-    cachedUpdateStatus = { status: 'not-available', info: info || {}, error: null };
-    sendToRenderer('update-not-available', info || {});
-  });
+    autoUpdater.on('update-not-available', (info) => {
+      console.log('App is up to date');
+      cachedUpdateStatus = { status: 'not-available', info: info || {}, error: null };
+      sendToRenderer('update-not-available', info || {});
+    });
 
-  autoUpdater.on('download-progress', (progress) => {
-    cachedUpdateStatus = { status: 'downloading', info: progress, error: null };
-    sendToRenderer('download-progress', progress);
-  });
+    autoUpdater.on('download-progress', (progress) => {
+      cachedUpdateStatus = { status: 'downloading', info: progress, error: null };
+      sendToRenderer('download-progress', progress);
+    });
 
-  autoUpdater.on('update-downloaded', (info, releaseNotes, releaseName) => {
-    const version = (info && info.version) || releaseName || '';
-    console.log(`Update downloaded: ${version || '(ready to install)'}`);
-    const norm = info && info.version ? info : { version };
-    cachedUpdateStatus = { status: 'downloaded', info: norm, error: null };
-    sendToRenderer('update-downloaded', norm);
-  });
+    autoUpdater.on('update-downloaded', (info, releaseNotes, releaseName) => {
+      const version = (info && info.version) || releaseName || '';
+      console.log(`Update downloaded: ${version || '(ready to install)'}`);
+      const norm = info && info.version ? info : { version };
+      cachedUpdateStatus = { status: 'downloaded', info: norm, error: null };
+      sendToRenderer('update-downloaded', norm);
+    });
 
-  autoUpdater.on('error', (err) => {
-    // Squirrel throws "AutoUpdater process ... is already running" when a check or
-    // download is already in flight (e.g. the user clicked Check twice). Benign.
-    if (/already running/i.test((err && err.message) || '')) {
-      console.log('[updater] check already in progress; ignoring duplicate trigger');
-      return;
-    }
-    // Raw electron-updater errors are verbose (full URL, HTTP status, stack,
-    // sometimes an HTML body). Keep the raw text in the log for debugging, but
-    // never show it to the user. The common case is "Experimental updates is on
-    // but no pre-release exists": the GitHub provider 404s hunting a pre-release
-    // feed, which is not a real failure, just "nothing newer to install".
-    console.error('Auto-update error:', err);
-    const friendly = friendlyUpdateError(err);
-    cachedUpdateStatus = { status: 'error', info: null, error: friendly };
-    sendToRenderer('update-error', friendly);
-  });
+    autoUpdater.on('error', (err) => {
+      // Squirrel throws "AutoUpdater process ... is already running" when a check or
+      // download is already in flight (e.g. the user clicked Check twice). Benign.
+      if (/already running/i.test((err && err.message) || '')) {
+        console.log('[updater] check already in progress; ignoring duplicate trigger');
+        return;
+      }
+      // Raw electron-updater errors are verbose (full URL, HTTP status, stack,
+      // sometimes an HTML body). Keep the raw text in the log for debugging, but
+      // never show it to the user. The common case is "Experimental updates is on
+      // but no pre-release exists": the GitHub provider 404s hunting a pre-release
+      // feed, which is not a real failure, just "nothing newer to install".
+      console.error('Auto-update error:', err);
+      const friendly = friendlyUpdateError(err);
+      cachedUpdateStatus = { status: 'error', info: null, error: friendly };
+      sendToRenderer('update-error', friendly);
+    });
+  }
 
   // electron-updater's checkForUpdates() returns a promise; the built-in Windows
   // autoUpdater (Squirrel) returns nothing and reports via events, so a bare
   // .catch() on it throws. Guard the call so both updaters work.
   const _runUpdateCheck = (label) => {
+    if (isSquirrelUpdater) {
+      checkCdnForUpdate().catch((err) => console.log(`${label}:`, err && err.message));
+      return;
+    }
     try {
       const p = autoUpdater.checkForUpdates();
       if (p && typeof p.catch === 'function') p.catch((err) => console.log(`${label}:`, err && err.message));
@@ -2980,10 +3074,10 @@ ipcMain.handle('check-for-updates', async () => {
     return { success: false, error: 'Not packaged' };
   }
   try {
-    // Built-in Windows autoUpdater (Squirrel) returns nothing and reports via
-    // update-available / update-not-available events, so don't expect a result.
+    // Windows checks the CDN manifest directly; reports via the same update-available /
+    // update-not-available IPC events as the Mac path, so don't expect a result here either.
     if (isSquirrelUpdater) {
-      autoUpdater.checkForUpdates();
+      checkCdnForUpdate().catch((err) => console.log('Update check failed:', err && err.message));
       return { success: true };
     }
     const result = await autoUpdater.checkForUpdates();
@@ -2999,7 +3093,7 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('download-update', async () => {
   if (!autoUpdater) return { success: false, error: 'Updater not available' };
-  // Squirrel built-in autoUpdater auto-downloads on detect; no manual trigger needed.
+  // checkCdnForUpdate() already downloads and verifies as soon as it finds a newer release; no manual trigger needed.
   if (isSquirrelUpdater) return { success: true };
   try {
     await autoUpdater.downloadUpdate();
@@ -3041,8 +3135,27 @@ async function installDownloadedUpdate() {
     } catch (_) {}
   }
   try { await postShutdownAllApps(8000); } catch (_) {}
-  // Built-in autoUpdater (Windows) takes no args; electron-updater (Mac) takes (isSilent, isForceRunAfter).
-  if (isSquirrelUpdater) { autoUpdater.quitAndInstall(); return; }
+  if (isSquirrelUpdater) {
+    if (!cdnDownloadedInstallerPath) {
+      console.warn('[updater] installDownloadedUpdate called with no downloaded installer path');
+      isInstallingUpdate = false;
+      return;
+    }
+    try {
+      // Squirrel's Setup.exe installs unattended (no flags needed) and relaunches the app itself
+      // once done -- same UX as when Squirrel fetched it from its own feed. detached + unref so
+      // it survives this process quitting, since the install can't proceed while our own files
+      // are still open.
+      spawn(cdnDownloadedInstallerPath, [], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    } catch (err) {
+      console.error('[updater] failed to spawn downloaded installer:', err);
+      isInstallingUpdate = false;
+      return;
+    }
+    app.quit();
+    return;
+  }
+  // electron-updater (Mac) takes (isSilent, isForceRunAfter).
   autoUpdater.quitAndInstall(false, true);
   // Safety net: a healthy install terminates us in a few seconds, so this timer
   // dies with the process and never fires. It only runs if Squirrel never quit us
