@@ -2991,6 +2991,8 @@ ipcMain.handle('install-update', async () => {
   await installDownloadedUpdate();
 });
 
+const { CAPTURE_PAGE_TIMEOUT_MS, withCaptureTimeout } = require('./capturePageTimeout');
+
 ipcMain.handle('capture-page', async (event, rect) => {
   // Capturing a webContents whose GPU surface is mid-recycle (a webview navigating
   // a heavy SPA) can crash the renderer (SharedImage 'non-existent mailbox' ->
@@ -3000,7 +3002,7 @@ ipcMain.handle('capture-page', async (event, rect) => {
   try {
     const wc = event.sender;
     if (!wc || wc.isDestroyed() || wc.isCrashed() || wc.isLoading()) return null;
-    const image = await wc.capturePage(rect || undefined);
+    const image = await withCaptureTimeout(wc.capturePage(rect || undefined), CAPTURE_PAGE_TIMEOUT_MS);
     if (!image || image.isEmpty()) return null;
     return image.toDataURL();
   } catch {
