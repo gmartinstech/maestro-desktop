@@ -22,6 +22,8 @@ export interface Output {
   workspace_id?: string | null;
   /** Backend-resolved absolute on-disk folder for this app; API-only, empty when no workspace_id. */
   workspace_path?: string;
+  /** True when boot-time recovery rebuilt this row from a workspace whose record was lost: the work on disk is real, the metadata is only what we could infer. */
+  recovered?: boolean;
   created_at: string;
   updated_at: string;
 }

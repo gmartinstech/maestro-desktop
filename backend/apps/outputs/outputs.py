@@ -58,6 +58,14 @@ async def outputs_lifespan():
             logger.info("outputs lifespan: reaped %d orphaned app runtimes left by a previous session", len(reaped))
     except Exception:
         logger.exception("outputs lifespan: orphan reap failed")
+    # A workspace whose record was lost is invisible in the UI even though the user's work is intact; bring those back before the first list_outputs call.
+    try:
+        from backend.apps.outputs.recover_workspaces import recover_orphan_workspaces
+        restored = recover_orphan_workspaces()
+        if restored:
+            logger.info("outputs lifespan: recovered %d app workspaces with no record", len(restored))
+    except Exception:
+        logger.exception("outputs lifespan: workspace recovery failed")
     try:
         yield
     finally:
@@ -608,7 +616,11 @@ async def update_output(output_id: str, body: OutputUpdate):
 
 @outputs.router.delete("/{output_id}")
 async def delete_output(output_id: str):
-    load(output_id)
+    output = load(output_id)
+    # Tombstone BEFORE dropping the record: the workspace dir stays on disk by design, and without this marker the boot-time recovery would offer the app back on the next launch.
+    if output.workspace_id:
+        from backend.apps.outputs.recover_workspaces import tombstone
+        tombstone(output.workspace_id)
     path = os.path.join(DATA_DIR, f"{output_id}.json")
     if os.path.exists(path):
         os.remove(path)
