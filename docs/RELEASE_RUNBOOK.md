@@ -3,14 +3,17 @@
 How a Maestro Studio desktop release is built, verified, and promoted. The guiding
 rule: **a release is reproducible and provenanced** — anyone can tell exactly
 what commit produced a given EXE, and rebuilding that commit yields the same
-bits. Distribution stays on GitHub Releases (auto-updater feeds live there).
+bits. Distribution is self-hosted: `cdn.martinstech.net/maestro/*`, served from
+the `cloudinha` VPS (see `docs/superpowers/specs/2026-08-13-cdn-version-management-design.md`
+for the full design).
 
 ## Versioning
 
-Source of truth is `electron/package.json` `version`. Bump it only when cutting
-a release (see CONTRIBUTING.md for semver rules). A `-` suffix (e.g.
-`1.2.0-beta.1`) marks an experimental/pre-release build; the Windows CI and the
-build scripts set the pre-release channel automatically from that suffix.
+Version is always `1.{git rev-list --count HEAD}` (e.g. `1.482`) — computed fresh
+at build time by `scripts/build-app-win.ps1`, never stored or committed anywhere.
+There is nothing to bump: the commit count only grows, so two branches can never
+disagree on a version number. `electron/package.json`'s own `version` field is
+just a placeholder overridden per-build via electron-builder's `extraMetadata`.
 
 ## What is pinned (reproducibility)
 
@@ -43,14 +46,15 @@ claude_agent_sdk / uvicorn.
 ## Provenance
 
 Every build writes `electron/build-info.json` (gitignored, regenerated) with the
-`git rev-parse HEAD` sha, build time, channel, and version. It ships in the asar
-and surfaces in two places:
+`git rev-parse HEAD` sha, build time, channel, and the git-commit-count version.
+It ships in the asar and surfaces in two places:
 
 - Startup log line in `backend.log`: `[provenance] Maestro <ver> sha=<short> channel=<...>`
 - Settings → General → Advanced → About → **Build**
 
 To confirm an artifact's provenance: launch it, open Settings, and compare the
-Build sha to `git rev-parse HEAD` of the tag you released.
+Build sha to `git rev-parse HEAD` of the commit you released, and the version to
+`git rev-list --count HEAD` of that same commit (as `1.<count>`).
 
 ## Build (local)
 
@@ -58,70 +62,46 @@ Windows is the only shipped target. macOS was dropped and its build/release
 pipeline (`scripts/build-app.sh`, `publish.sh`, `release-macos.yml`, notarization,
 entitlements) was deleted — do not resurrect it without a decision to re-adopt it.
 
-- Windows: `pwsh scripts/build-app-win.ps1` (unsigned) / `-Sign` / `-Publish`.
-  Signing is Azure Trusted Signing; CI handles it (see below).
+- `pwsh scripts/build-app-win.ps1` — local dev build, unsigned.
+- `pwsh scripts/build-app-win.ps1 -Sign` — signed build (Azure Trusted Signing), not published.
+- `pwsh scripts/build-app-win.ps1 -Publish` — signed build, then scp's the installer to
+  `cloudinha:~/maestro-releases/incoming/` and prints the version + sha256 to paste into the
+  cloudinha publish step below.
 
-## Release (CI)
+## Release (manual, two machines)
 
-Pushing a `v*` tag triggers `.github/workflows/release-windows.yml`, which builds
-+ signs the Windows installer and uploads it to the GitHub Release for that tag.
+1. On your build machine: `pwsh scripts/build-app-win.ps1 -Publish`. Note the printed version
+   and sha256.
+2. On `cloudinha` (the box `cdn.martinstech.net` resolves to): paste the cloudinha publish
+   prompt (kept outside this repo — ask whoever ran the CDN setup for it) with that version and
+   sha256 filled in. It moves the installer into the CDN webroot, rewrites `version.json`, and
+   prunes anything past the 3 most recently published builds.
+3. Confirm: `curl -sI https://cdn.martinstech.net/maestro/version.json` returns 200, and its
+   `latest.version` matches what you just published.
 
-1. Push the `v*` tag (or run `pwsh publish-win.ps1`), producing the installer and
-   `latest.yml`.
-2. Verify `latest.yml` exists on the release and its version matches the tag
-   before the release leaves draft.
+## Update verification (before telling anyone it's live)
 
-## Auto-update verification (before promoting)
+Windows apps check `cdn.martinstech.net/maestro/version.json` on launch and every 4h, download
+in the background on detect, and install on quit (or after a sustained idle period with no
+active agent). To verify a release actually lands:
 
-The auto-updater (electron-updater) checks GitHub Releases on launch and every
-4h, downloads in the background, installs on quit, and can roll back
-(`allowDowngrade`). Two layers verify it:
+1. Install the previous stable build.
+2. Launch it, wait for (or trigger via Settings → Check for Updates) the update-available /
+   update-downloaded flow.
+3. Restart & Update (or quit and relaunch) — confirm it comes back up on the new version
+   (Settings → About → Build sha flips to the new commit).
 
-- Automated (feed integrity): `promotion-gate.yml` runs
-  `scripts/release/verify-release.js` when a release is published, confirming
-  `latest.yml` exists, agrees on version with the tag, and that every referenced
-  asset resolves (HEAD 200). A missing or mismatched feed fails it.
-- Manual (the real cycle), once per release: install the PREVIOUS
-  stable, launch it, and confirm the new release is detected, downloads, installs
-  on quit, and relaunches on the new version (Settings -> About -> Build sha flips
-  to the new commit). Then confirm rollback. This needs two SIGNED releases on the
-  real feed, so local unsigned builds and single-commit CI cannot exercise it; it
-  is a human gate.
+**No staged rollout.** Unlike the old GitHub-Releases flow, a published version is immediately
+live for every Windows install that checks — there is no `stagingPercentage` gate and no
+automated feed-integrity check before it goes out. This is a deliberate simplification (see the
+CDN design spec's "accepted tradeoff"); if the install base grows enough that a bad build reaching
+everyone at once becomes a real risk, re-introduce staged rollout in `version.json` (a stable
+per-install hash bucketed against a percentage field) rather than reverting to GitHub Releases.
 
-## Staged rollout (gated on fleet health)
+## Rolling back a bad release
 
-Do not flip a new release to 100% of users at once. electron-updater honors a
-`stagingPercentage` field in the published `latest.yml`: only
-that fraction of machines (bucketed by a stable per-install hash) take the update.
-
-1. Publish as normal; the promotion gate + signed-artifact verify (`release-*.yml`)
-   + the `verify-all` matrix (`e2e.yml`) must all be green first.
-2. Add `stagingPercentage: 10` to the release's `latest.yml`.
-3. Watch the boot-outcome beacons (the fleet self-report; the desktop posts a
-   boot event through `/api/service` after each launch): confirm the new sha is
-   booting on real machines with no spike in boot-failure or crash beacons.
-4. Widen (25 -> 50 -> 100, or remove the field) only while beacons stay healthy.
-   If failures appear, stop; the un-updated majority is still on the known-good
-   prior version, and `allowDowngrade` lets you point upgraders back.
-
-This is the closest thing to certainty across all hardware: a bad build reaches a
-small slice, reports itself, and never reaches the rest.
-
-## Tag protection (immutable releases)
-
-Release tags must never move once cut — a moved tag silently re-points the
-auto-updater feed at different bits. Configure a GitHub **ruleset** to enforce
-this (Settings → Rules → Rulesets → New ruleset):
-
-1. Target: **Tags**, pattern `v*`.
-2. Enable **Restrict creations** off, **Restrict updates** on, **Restrict
-   deletions** on. (Equivalently: block non-fast-forward / force-push and
-   deletion on the `refs/tags/v*` ref.)
-3. Apply to all users (no bypass list, or restrict bypass to break-glass only).
-
-Verify: push a throwaway tag, then `git push --force origin <tag>` to move it →
-GitHub must reject it. Delete the throwaway afterward (allowed only if you
-temporarily exempt it, or use a non-`v*` name for the test).
-
-GitHub releases are also independently markable immutable; tag protection is the
-load-bearing control because the auto-updater resolves the tag, not the release.
+Re-run the cloudinha publish step against an older build still in
+`~/maestro-releases/incoming/` (or re-scp it there) with a version number attribute matching
+what you want `version.json`'s `latest` to point to. There's no dedicated rollback tooling
+beyond "publish an older build again" — the update check only compares against whatever
+`version.json` currently says is latest.
