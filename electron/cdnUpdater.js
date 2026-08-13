@@ -6,12 +6,14 @@
 
 const CDN_MANIFEST_URL = 'https://cdn.martinstech.net/maestro/version.json';
 
-// Every version is "1.<commitCount>" (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md).
-// Extracting the count lets two versions compare as integers -- "1.9" vs "1.10" would come out
-// backwards under plain string/semver comparison, and the commit count is the only part that
-// ever changes.
+// Every version is "1.<commitCount>.0" (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md).
+// The trailing ".0" isn't decorative -- electron-builder's `${version}` artifactName token and
+// app.getVersion() both resolve to the full package.json version string, and Squirrel/NuGet
+// requires three dotted segments, so the real runtime version is always three-part. Extracting
+// the count lets two versions compare as integers -- "1.9.0" vs "1.10.0" would come out backwards
+// under plain string/semver comparison, and the commit count is the only part that ever changes.
 function commitCountFromVersion(version) {
-  const match = /^1\.(\d+)$/.exec(String(version == null ? '' : version).trim());
+  const match = /^1\.(\d+)\.0$/.exec(String(version == null ? '' : version).trim());
   return match ? Number(match[1]) : null;
 }
 

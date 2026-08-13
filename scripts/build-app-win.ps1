@@ -8,8 +8,10 @@
 #                                                  the cdn.martinstech.net publish step (see
 #                                                  docs/superpowers/specs/2026-08-13-cdn-version-management-design.md)
 #
-# Version is always "1.<git commit count>", computed fresh from git history -- see that spec for
-# why nothing in the tree stores a version number.
+# Version is always "1.<git commit count>.0", computed fresh from git history -- see that spec
+# for why nothing in the tree stores a version number, and for why the trailing ".0" (NuGet/
+# Squirrel needs three dotted segments, and electron-builder's ${version} template + app.getVersion()
+# both resolve to this exact string, so it's kept three-part everywhere rather than truncated).
 #
 # Reads .env.windows (gitignored) for Azure Trusted Signing if -Sign or -Publish. GH_TOKEN is no
 # longer used by this script (Windows releases no longer publish to GitHub).
@@ -586,7 +588,7 @@ Write-Host "========================================" -BackgroundColor Green -Fo
 Write-Host ""
 
 # --- Provenance stamp ---
-# Version = "1.<commit count>" (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md).
+# Version = "1.<commit count>.0" (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md).
 # Computed fresh every build from git history -- nothing in the tree stores a version number, so
 # there is nothing to bump and nothing two branches could ever disagree on. electron\build-info.json
 # ships inside the asar; main.js reads it for the startup [provenance] log line and the About panel.
@@ -595,7 +597,7 @@ $BuildSha = (git -C $ProjectRoot rev-parse HEAD 2>$null)
 if (-not $BuildSha) { $BuildSha = 'unknown' }
 $CommitCount = (git -C $ProjectRoot rev-list --count HEAD 2>$null)
 if (-not $CommitCount) { throw "git rev-list --count HEAD failed -- is $ProjectRoot a git checkout?" }
-$BuildVersion = "1.$($CommitCount.Trim())"
+$BuildVersion = "1.$($CommitCount.Trim()).0"
 $BuildChannel = 'stable'
 $BuildShortSha = if ($BuildSha.Length -ge 12) { $BuildSha.Substring(0, 12) } else { $BuildSha }
 $BuildInfo = [ordered]@{
@@ -611,9 +613,10 @@ Write-Host "Stamped build-info.json: version=$BuildVersion sha=$BuildShortSha"
 # --- Step 5: Package with electron-builder ---
 Write-Host "[5/5] Packaging with electron-builder..."
 # extraMetadata.version overrides electron/package.json's tracked version for THIS build only --
-# nothing on disk changes, so nothing needs reverting after. NuGet/Squirrel needs three dotted
-# segments internally; the two-segment "1.<count>" form is what ships in the manifest/filename/UI.
-$ExtraMetadataArg = "--config.extraMetadata.version=$BuildVersion.0"
+# nothing on disk changes, so nothing needs reverting after. $BuildVersion is already three-part
+# ("1.<count>.0") -- electron-builder's ${version} artifactName token and app.getVersion() both
+# resolve to this exact string, so there is exactly one version format used everywhere.
+$ExtraMetadataArg = "--config.extraMetadata.version=$BuildVersion"
 Push-Location (Join-Path $ProjectRoot 'electron')
 try {
     # npm ci: lockfile-exact, no drift. See Invoke-NpmCiIfNeeded above.

@@ -11,7 +11,7 @@ it keeps its existing GitHub-releases + `electron-updater` path.
 
 ## 1. Versioning scheme
 
-Version = `1.{git rev-list --count HEAD}`, e.g. `1.482`.
+Version = `1.{git rev-list --count HEAD}.0`, e.g. `1.482.0`.
 
 - Computed **only at build time**, never stored or committed.
 - `electron-builder`'s `extraMetadata` overrides `electron/package.json`'s
@@ -21,9 +21,16 @@ Version = `1.{git rev-list --count HEAD}`, e.g. `1.482`.
   electron-builder --win --x64 --config.extraMetadata.version=1.482.0
   ```
 
-- Squirrel/NuGet requires three dotted segments internally, so the build
-  uses `1.482.0`. Everywhere user-facing (filename, manifest, About screen,
-  update prompts) shows the two-segment form `1.482`.
+- The trailing `.0` is not decorative: Squirrel/NuGet requires three dotted
+  segments internally, and electron-builder's `${version}` artifactName
+  token and Electron's `app.getVersion()` both resolve to this exact
+  string. Rather than truncate it for display and risk the two forms
+  drifting apart, `1.482.0` is the one version string used everywhere —
+  filename, manifest, About screen, update prompts, `cdnUpdater.js`'s
+  parsing. (An earlier draft of this design used a truncated `1.482`
+  display form; a live build caught electron-builder ignoring that and
+  always resolving the full three-part string, so the design was
+  corrected to match reality instead.)
 - Monotonic and conflict-free by construction: commit count only grows,
   and no tracked file ever holds a version number that two branches could
   disagree on.
@@ -33,7 +40,7 @@ Version = `1.{git rev-list --count HEAD}`, e.g. `1.482`.
 `electron/package.json` → `build.win.artifactName` changes from
 `MaestroStudio-Setup-${arch}.${ext}` to
 `MaestroStudio-Setup-${version}-${arch}.${ext}`, producing e.g.
-`MaestroStudio-Setup-1.482-x64.exe`.
+`MaestroStudio-Setup-1.482.0-x64.exe`.
 
 ## 3. Release flow (local machine)
 
@@ -54,9 +61,9 @@ A plain `git push` never triggers a build or publish.
 ```
 cdn.martinstech.net/maestro/
   version.json
-  MaestroStudio-Setup-1.482-x64.exe   ← newest
-  MaestroStudio-Setup-1.479-x64.exe
-  MaestroStudio-Setup-1.475-x64.exe   ← oldest kept
+  MaestroStudio-Setup-1.482.0-x64.exe   ← newest
+  MaestroStudio-Setup-1.479.0-x64.exe
+  MaestroStudio-Setup-1.475.0-x64.exe   ← oldest kept
 ```
 
 Only the 3 most recent builds are retained; anything older is deleted
@@ -67,14 +74,14 @@ Only the 3 most recent builds are retained; anything older is deleted
 ```json
 {
   "latest": {
-    "version": "1.482",
+    "version": "1.482.0",
     "commitCount": 482,
-    "file": "MaestroStudio-Setup-1.482-x64.exe",
-    "url": "https://cdn.martinstech.net/maestro/MaestroStudio-Setup-1.482-x64.exe",
+    "file": "MaestroStudio-Setup-1.482.0-x64.exe",
+    "url": "https://cdn.martinstech.net/maestro/MaestroStudio-Setup-1.482.0-x64.exe",
     "sha256": "…",
     "releasedAt": "2026-08-13T18:00:00Z"
   },
-  "history": ["1.482", "1.479", "1.475"]
+  "history": ["1.482.0", "1.479.0", "1.475.0"]
 }
 ```
 

@@ -9,11 +9,16 @@ for the full design).
 
 ## Versioning
 
-Version is always `1.{git rev-list --count HEAD}` (e.g. `1.482`) — computed fresh
-at build time by `scripts/build-app-win.ps1`, never stored or committed anywhere.
-There is nothing to bump: the commit count only grows, so two branches can never
-disagree on a version number. `electron/package.json`'s own `version` field is
-just a placeholder overridden per-build via electron-builder's `extraMetadata`.
+Version is always `1.{git rev-list --count HEAD}.0` (e.g. `1.482.0`) — computed
+fresh at build time by `scripts/build-app-win.ps1`, never stored or committed
+anywhere. There is nothing to bump: the commit count only grows, so two
+branches can never disagree on a version number. `electron/package.json`'s own
+`version` field is just a placeholder overridden per-build via
+electron-builder's `extraMetadata`. The trailing `.0` isn't cosmetic — NuGet/
+Squirrel needs three dotted segments, and electron-builder's `${version}`
+artifactName token and `app.getVersion()` both resolve to this exact string,
+so it's the one version format used everywhere (filename, manifest, About
+screen).
 
 ## What is pinned (reproducibility)
 
@@ -54,7 +59,7 @@ It ships in the asar and surfaces in two places:
 
 To confirm an artifact's provenance: launch it, open Settings, and compare the
 Build sha to `git rev-parse HEAD` of the commit you released, and the version to
-`git rev-list --count HEAD` of that same commit (as `1.<count>`).
+`git rev-list --count HEAD` of that same commit (as `1.<count>.0`).
 
 ## Build (local)
 
