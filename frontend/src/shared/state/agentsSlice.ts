@@ -342,20 +342,36 @@ export const fetchSession = createAsyncThunk(
 
 export const launchAndSendFirstMessage = createAsyncThunk(
   'agents/launchAndSendFirstMessage',
-  async ({ draftId, config, prompt, mode, model, provider, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds, selectedAppIds, selectedSettingIds }: LaunchAndSendPayload) => {
+  async ({ draftId, config, prompt, mode, model, images, contextPaths, forcedTools, attachedSkills, selectedBrowserIds, selectedAppIds, selectedSettingIds }: LaunchAndSendPayload) => {
+    // The prompt rides ALONG WITH the launch. It used to go in a second POST whose response was
+    // never checked, so a failed delivery produced a session that showed as running with nothing in
+    // it and no error anywhere — the "launch silently drops its prompt" hang.
     const launchRes = await fetch(`${AGENTS_API}/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
+      body: JSON.stringify({
+        // mode/model/selected_app_output_ids belong to the session itself, so they stay on the config half.
+        ...config,
+        mode: config.mode ?? mode,
+        model: config.model ?? model,
+        selected_app_output_ids: config.selected_app_output_ids ?? selectedAppIds,
+        initial_message: {
+          prompt,
+          images,
+          context_paths: contextPaths,
+          forced_tools: forcedTools,
+          attached_skills: attachedSkills,
+          selected_browser_ids: selectedBrowserIds,
+          selected_setting_ids: selectedSettingIds,
+        },
+      }),
     });
+    if (!launchRes.ok) throw new Error(`launch failed: ${launchRes.status}`);
     const launchData = await launchRes.json();
-    const session = launchData.session as AgentSession;
-
-    await fetch(`${AGENTS_API}/sessions/${session.id}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, mode, model, provider, images, context_paths: contextPaths, forced_tools: forcedTools, attached_skills: attachedSkills, selected_browser_ids: selectedBrowserIds, selected_app_output_ids: selectedAppIds, selected_setting_ids: selectedSettingIds }),
-    });
+    const session = launchData.session as AgentSession | undefined;
+    // Both guards are the point of this fix: no session id, or a launch that did not deliver the prompt, must REJECT so the caller tears the draft down and the user sees a failure instead of a hang.
+    if (!session?.id) throw new Error('launch returned no session');
+    if (!launchData.prompt_delivered) throw new Error('launch did not deliver the first message');
 
     const refreshRes = await fetch(`${AGENTS_API}/sessions/${session.id}`);
     const updatedSession = await refreshRes.json() as AgentSession;

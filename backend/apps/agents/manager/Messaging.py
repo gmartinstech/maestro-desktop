@@ -42,8 +42,10 @@ class Messaging(AgentManagerProtocol):
         selected_app_output_ids: Optional[List[str]] = None,
         selected_setting_ids: Optional[List[str]] = None,
         client_message_id: Optional[str] = None,
-    ):
-        """Send a follow-up message to an existing session."""
+    ) -> bool:
+        """Send a follow-up message to an existing session. True when a turn was spawned for this
+        prompt, False when it was refused; the caller must surface a False rather than reporting
+        success, or the prompt vanishes with the user seeing an idle run and no error."""
         session = self.sessions.get(session_id)
         if not session:
             data = load_session_data(session_id)
@@ -57,7 +59,12 @@ class Messaging(AgentManagerProtocol):
         
         existing = self.tasks.get(session_id)
         if existing and not existing.done():
-            return
+            # This used to `return` silently while the endpoint still answered ok, so the prompt was gone with nothing logged anywhere. Name it, and hand the refusal back to the caller.
+            logger.warning(
+                "send_message refused for session %s: a turn is already running; %d-char prompt NOT queued",
+                session_id, len(prompt or ""),
+            )
+            return False
 
         session_changed = False
         if model and model != session.model:
@@ -142,6 +149,8 @@ class Messaging(AgentManagerProtocol):
         else:
             task = asyncio.create_task(self.run_agent_loop(session_id, prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids, selected_app_output_ids=selected_app_output_ids, selected_setting_ids=selected_setting_ids))
         self.tasks[session_id] = task
+        logger.info("send_message delivered a %d-char prompt to session %s (fast_path=%s)", len(prompt or ""), session_id, fast_verdict)
+        return True
 
     @typechecked
     async def edit_message(self, session_id: str, message_id: str, new_content: str):

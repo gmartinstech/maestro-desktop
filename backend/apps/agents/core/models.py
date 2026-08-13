@@ -3,6 +3,22 @@ from typing import Optional, Literal, Any
 from datetime import datetime
 from uuid import uuid4
 
+class InitialMessage(BaseModel):
+    """The first turn's payload, carried BY the launch request.
+
+    Delivery used to be a second HTTP call the client made after /launch and never checked, so any
+    failure of that call dropped the prompt in silence: the session existed, launch had already
+    broadcast status "running", and the user saw a run with nothing in it. Riding along with the
+    launch makes "launched" and "prompt delivered" one outcome instead of two."""
+    prompt: str
+    images: Optional[list[dict]] = None
+    context_paths: Optional[list[dict]] = None
+    forced_tools: Optional[list[str]] = None
+    attached_skills: Optional[list[dict]] = None
+    selected_browser_ids: Optional[list[str]] = None
+    selected_setting_ids: Optional[list[str]] = None
+    client_message_id: Optional[str] = None
+
 class AgentConfig(BaseModel):
     name: str = ""
     model: str = "sonnet"
@@ -17,6 +33,8 @@ class AgentConfig(BaseModel):
     workflow_edit_id: Optional[str] = None
     # App cards the user picked to edit. When exactly one resolves, launch binds the chat's cwd to that app instead of seeding a new "Untitled App".
     selected_app_output_ids: Optional[list[str]] = None
+    # Set when the launch carries the user's first prompt; /launch then delivers it in the same request.
+    initial_message: Optional[InitialMessage] = None
 
 class ApprovalRequest(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex)
