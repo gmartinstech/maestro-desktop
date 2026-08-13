@@ -49,6 +49,15 @@ logger = logging.getLogger(__name__)
 async def outputs_lifespan():
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(WORKSPACE_DIR, exist_ok=True)
+    # Boot is the only safe moment to reap: nothing we spawned is running yet, so a record with a dead owner cannot be ours. Publish our own liveness marker FIRST so a second instance booting alongside us never mistakes our runtimes for orphans.
+    from backend.apps.outputs import runtime_ledger
+    try:
+        runtime_ledger.register_owner()
+        reaped = runtime_ledger.reap_orphans()
+        if reaped:
+            logger.info("outputs lifespan: reaped %d orphaned app runtimes left by a previous session", len(reaped))
+    except Exception:
+        logger.exception("outputs lifespan: orphan reap failed")
     try:
         yield
     finally:
@@ -60,6 +69,11 @@ async def outputs_lifespan():
                 logger.info("outputs lifespan: reaped %d workspace runtimes on shutdown", killed)
         except Exception:
             logger.exception("outputs lifespan: stop_all failed")
+        # Retract our liveness marker last: while it exists, another instance's reaper treats our records as owned.
+        try:
+            runtime_ledger.unregister_owner()
+        except Exception:
+            logger.exception("outputs lifespan: owner marker cleanup failed")
 
 
 outputs = SubApp("outputs", outputs_lifespan)
