@@ -62,7 +62,7 @@
           ]
         }
       ],
-      "artifactName": "MaestroStudio-Setup-${arch}.${ext}",
+      "artifactName": "MaestroStudio-Setup-${version}-${arch}.${ext}",
       "signtoolOptions": {
         "sign": "./build/sign-windows.js",
         "signingHashAlgorithms": [
@@ -81,7 +81,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Maestro Studio",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "MaestroStudio-Setup-${arch}.${ext}",
+      "artifactName": "MaestroStudio-Setup-${version}-${arch}.${ext}",
       "include": "build/installer-recovery.nsh"
     },
     "extraResources": [
@@ -131,11 +131,6 @@
           "**/*"
         ]
       }
-    ],
-    "publish": {
-      "provider": "github",
-      "owner": "gmartinstech",
-      "repo": "maestro-desktop"
-    }
+    ]
   }
 }
