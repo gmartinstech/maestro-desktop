@@ -1,5 +1,5 @@
 import { test, expect, ElectronApplication, Page } from '@playwright/test';
-import { launchApp, waitForMainWindow, hasAnyProviderKey } from '../helpers/launch';
+import { launchIsolatedApp, waitForMainWindow, hasAnyProviderKey } from '../helpers/launch';
 import { startVisibility, VisibilityHandle } from '../helpers/visibility';
 import fs from 'fs';
 import os from 'os';
@@ -27,13 +27,20 @@ test.describe('real agent round-trip', () => {
   let page: Page;
   let baselineCrashes = 0;
   let vis: VisibilityHandle;
+  // Isolated temp roots for this run (see launchIsolatedApp): this spec drives
+  // a REAL provider turn, which creates a real, persistent session — running
+  // against the developer's/CI runner's real profile left an orphaned
+  // session/dashboard card behind on every run, with nothing to reap it.
+  let tempRoots: string[] = [];
 
   // Whole describe skips with a clear reason when no key is wired, so we
   // never silently green this on a leg that can't actually test it.
   test.beforeAll(async () => {
     test.skip(!hasAnyProviderKey(), 'no provider env key set; pass ANTHROPIC_API_KEY or OPENAI_API_KEY etc. to enable');
     test.skip(process.env.CI !== 'true' && process.env.MAESTRO_E2E_SEED !== '1', 'seed gate not enabled; set MAESTRO_E2E_SEED=1 for local runs');
-    app = await launchApp();
+    const isolated = await launchIsolatedApp();
+    app = isolated.app;
+    tempRoots = [isolated.dataRoot, isolated.stateHome, isolated.userData];
     page = await waitForMainWindow(app);
     vis = await startVisibility(app, page, 'real-agent-roundtrip');
     baselineCrashes = crashCount();
@@ -41,6 +48,9 @@ test.describe('real agent round-trip', () => {
   test.afterAll(async () => {
     try { await vis?.stop(); } catch {}
     await app?.close().catch(() => {});
+    for (const dir of tempRoots) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+    }
   });
 
   test('compose, send, and receive an assistant reply', async ({}, info) => {
