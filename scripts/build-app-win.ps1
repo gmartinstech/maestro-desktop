@@ -95,7 +95,7 @@ if (Test-Path $EnvFile) {
 
 Write-Host "========================================"
 Write-Host "  Maestro Studio Desktop App Builder (Windows)"
-if     ($Publish) { Write-Host "  Mode: PRODUCTION (sign + publish to GitHub Releases)" }
+if     ($Publish) { Write-Host "  Mode: PRODUCTION (sign + publish to cdn.martinstech.net via cloudinha)" }
 elseif ($Sign)    { Write-Host "  Mode: SIGNED (sign, no publish)" }
 elseif ($DevSign) { Write-Host "  Mode: DEV-SIGNED (self-signed, internal installs only)" }
 else              { Write-Host "  Mode: LOCAL (unsigned)" }
@@ -127,7 +127,7 @@ if ($Sign) {
         'AZURE_TENANT_ID','AZURE_CLIENT_ID','AZURE_CLIENT_SECRET',
         'AZURE_SIGNING_ENDPOINT','AZURE_SIGNING_ACCOUNT','AZURE_SIGNING_CERT_PROFILE'
     )
-    if ($Publish) { $required += 'GH_TOKEN' }
+    # -Publish no longer needs GH_TOKEN -- it scp's to cloudinha instead of `gh release upload`.
     $missing = $required | Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
     if ($missing.Count -gt 0) {
         Write-Host "ERROR: Missing required environment variables:" -ForegroundColor Red
