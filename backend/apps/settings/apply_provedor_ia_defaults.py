@@ -22,6 +22,7 @@ from typeguard import typechecked
 
 from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
 from backend.apps.settings.models import AppSettings, CustomProvider
+from backend.apps.settings.provedor_ia_catalog import catalog_models
 from backend.apps.settings.provedor_ia import (
     FALLBACK_DEFAULT_MODEL,
     PROVEDOR_IA_DEFAULT_MODEL,
@@ -43,12 +44,18 @@ def provedor_ia_token(settings: AppSettings) -> Optional[str]:
 
 @typechecked
 def provedor_ia_provider(token: str) -> CustomProvider:
-    """The managed provedor-ia entry; base_url reuses the one gateway constant."""
+    """The managed provedor-ia entry; base_url reuses the one gateway constant.
+
+    Models come from the gateway when it has answered this session (see
+    provedor_ia_catalog), so a model added server-side needs no app release; the
+    shipped constant is the offline fallback for a cold start.
+    """
+    models = catalog_models() or PROVEDOR_IA_MODELS
     return CustomProvider(
         name=PROVEDOR_IA_NAME,
         base_url=MAESTRO_DEFAULT_PROXY_URL,
         api_key=token,
-        models=[m.model_dump() for m in PROVEDOR_IA_MODELS],
+        models=[m.model_dump() for m in models],
     )
 
 

@@ -1,9 +1,15 @@
 # provedor-ia authentication: what ships today, and the real fix
 
-provedor-ia (`https://llm.martinstech.net/v1`) is Maestro Studio's default provider. Its bearer is a
-**Keycloak access token with a ~10-hour lifetime and no refresh token**, minted by hand: the user
-opens `https://llm.martinstech.net/login`, signs in, and the page renders the token in a textarea for
-them to copy. There is no other way to get one.
+provedor-ia (`https://llm.martinstech.net/v1`) is Maestro Studio's default provider. Its bearer comes
+in two shapes, and the difference decides how much of this document still matters:
+
+- a **Keycloak access token** — a JWT with a ~10-hour lifetime and no refresh token, minted by hand:
+  the user opens `https://llm.martinstech.net/login`, signs in, and the page renders the token in a
+  textarea for them to copy. Everything below about expiry is about this shape.
+- an **opaque static key** (`mtok_…`, no dots, so not a JWT). Verified working against the live
+  gateway on 2026-08-13. It carries no `exp`, so `token_status` reads it as `opaque` and never treats
+  it as dead. **Whether these are officially issued to users and how long they live is still open** —
+  see "The open question" below.
 
 ## The failure this causes
 
@@ -81,6 +87,50 @@ the auth-error routing all stay as they are.
   both already cover `provedor_ia_token`; do not weaken that. It must never be logged, never appear
   in an error message, and never be written outside the settings path.
 - The 401 throttle on the gateway's public listener is 10 failed auths per minute, so a client that
-  retries an expired token in a loop locks itself out on top of being broken.
-- Nothing here has been verified against the live gateway: every token available while this was
-  built was already expired.
+  retries an expired token in a loop locks itself out on top of being broken. `refresh_catalog`
+  therefore returns early on an empty token rather than probing.
+
+## Verified against the live gateway — 2026-08-13
+
+The earlier note that "nothing here has been verified against the live gateway" no longer holds; a
+valid `mtok_…` key was used to probe it directly. What is actually there:
+
+| Path | Result |
+| --- | --- |
+| `GET /v1/models` | **200** — `{"object":"list","data":[…]}`, ids only |
+| `POST /v1/chat/completions` | **200** — answered on `nemotron-3-nano:30b`, `system_fingerprint: fp_ollama` |
+| `GET /login` | **302** to Keycloak |
+| everything else tried (~30 paths) | **404** |
+
+- **The catalog is four models**: `maestro`, `maestro-fast`, `maestro-ultra`, `maestro-code`, all
+  `owned_by: martinstech`. Rows carry `id`/`object`/`created`/`owned_by` and **no** label, context
+  window, or pricing — which is why `provedor_ia_catalog.py` supplies labels and keeps 128k/4096.
+- **The gateway is Ollama-backed**, and the `maestro-*` ids are masks over real models; the chat
+  response names the backing model, not the mask.
+- **Keycloak, straight off the `/login` redirect**: issuer
+  `https://martinstech.net/auth/realms/MartinsTech`, client `provedor-ia-web`, `response_type=code`,
+  `code_challenge_method=S256`, `redirect_uri=https://llm.martinstech.net/callback`, and
+  **`scope=openid` only** — confirming first-hand that no refresh token is ever issued.
+- **There is no billing, plan, quota, usage, or `/me` surface.** Every such path 404s. Any
+  subscription UI in this app would be inventing a contract the server cannot honor, so the gateway
+  has to expose one first. `gmartinssi/provedor-ia` is an **empty repo** (no code, no branches), so
+  the `windows-provider.ps1` reference implementation cited above is not currently retrievable there.
+
+## The open question: are static `mtok_` keys the supported credential?
+
+This decides whether the loopback-OAuth epic above is worth doing at all — a long-lived static key
+removes the 10-hour expiry that the epic exists to fix.
+
+Evidence that static keys are intended, not incidental: the gateway's own installer at
+`https://llm.martinstech.net/launch.ps1?pi` prompts for "your provedor-ia **API token**" and writes it
+to a **permanent user environment variable** (`[Environment]::SetEnvironmentVariable(…, "User")`) with
+no refresh logic and no expiry handling anywhere in the script. Nobody wires a permanent env var for a
+10-hour credential.
+
+Not yet known: their actual TTL, whether they can be minted by ordinary users (the `/login` page only
+ever produced JWTs), and whether they can be revoked. Settle this with whoever runs the gateway before
+investing in the Keycloak asks.
+
+One more reason not to trust hand-kept lists: that same installer offers **three** models and is
+already missing `maestro-fast`, which `/v1/models` returns. That drift is why the catalog is fetched
+(`backend/apps/settings/provedor_ia_catalog.py`) and `PROVEDOR_IA_MODELS` is only the offline fallback.
