@@ -73,6 +73,16 @@ def p_pid_alive(pid: int) -> bool:
 
 
 @typechecked
+def p_windows_tool(name: str) -> str:
+    """Absolute System32 path for a Windows built-in, falling back to the bare name. Some dev shells
+    (Git-for-Windows prepending its own bin) drop System32 from PATH entirely, which would make every
+    image probe return "" — leaving the reaper a permanent silent no-op rather than a safe one."""
+    root = os.environ.get("SystemRoot") or r"C:\Windows"
+    candidate = os.path.join(root, "System32", f"{name}.exe")
+    return candidate if os.path.exists(candidate) else name
+
+
+@typechecked
 def process_image(pid: int) -> str:
     """Lowercased executable/comm name for `pid`, or "" when it cannot be determined. The empty
     return is load-bearing: p_is_orphan refuses to kill anything whose image it cannot read, so a
@@ -82,7 +92,7 @@ def process_image(pid: int) -> str:
     try:
         if os.name == "nt":
             out = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+                [p_windows_tool("tasklist"), "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
                 capture_output=True, text=True, timeout=5,
             )
             line = (out.stdout or "").strip().splitlines()
