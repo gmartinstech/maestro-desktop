@@ -1,11 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { deleteWorkflow } from '@/shared/state/workflowsSlice';
-import type { ScheduleConfig } from '@/shared/state/workflowsSlice';
-import { isScheduleActive, isScheduleConfigured } from '@/app/pages/Workflows/scheduleUtils';
+import { describeSchedule, isScheduleActive } from '@/app/pages/Workflows/scheduleUtils';
 import { colorForWorkflow, useWC } from './uiKit';
 import WorkflowTitle from './WorkflowTitle';
 import type { AppNav } from './types';
@@ -14,44 +12,6 @@ const navBase: CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 9, padding: '6px 9px',
   borderRadius: 8, cursor: 'pointer', fontSize: 13.5,
 };
-
-// Weekday names come from Intl so they follow the active language. 2023-01-01 was a Sunday, so index 0..6 lines up with Date.getDay().
-function weekdayNames(locale: string): string[] {
-  try {
-    const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' });
-    return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 1 + i)));
-  } catch { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; }
-}
-
-// Locale-aware clock label: pt-BR renders 24h ("15:00"), en keeps 12h am/pm.
-function formatClock(hour: number, minute: number, locale: string): string {
-  try {
-    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hour, minute));
-  } catch { return `${hour}:${String(minute).padStart(2, '0')}`; }
-}
-
-// scheduleUtils.describeSchedule builds an English-only sentence, so the rail composes its own line from the same fields.
-function describeScheduleLocalized(sched: ScheduleConfig, t: TFunction, locale: string): string {
-  const k = 'workflows.leftRail.schedule';
-  if (!sched.enabled || !isScheduleConfigured(sched)) return t(`${k}.notScheduled`);
-  const time = formatClock(sched.hour, sched.minute, locale);
-  if (sched.repeat_unit === 'minute') return t(`${k}.everyMinutes`, { count: sched.repeat_every });
-  if (sched.repeat_unit === 'hour') {
-    const at = sched.minute === 0 ? '' : t(`${k}.atMinute`, { minute: String(sched.minute).padStart(2, '0') });
-    return sched.repeat_every === 1 ? t(`${k}.hourly`, { at }) : t(`${k}.everyHours`, { count: sched.repeat_every, at });
-  }
-  if (sched.repeat_unit === 'day') {
-    return sched.repeat_every === 1 ? t(`${k}.everyDayAt`, { time }) : t(`${k}.everyDaysAt`, { count: sched.repeat_every, time });
-  }
-  if (sched.repeat_unit === 'month') {
-    const day = sched.day_of_month ? t(`${k}.onDayOfMonth`, { day: sched.day_of_month }) : '';
-    return sched.repeat_every === 1 ? t(`${k}.everyMonthAt`, { day, time }) : t(`${k}.everyMonthsAt`, { count: sched.repeat_every, day, time });
-  }
-  if (sched.on_days.length === 0) return t(`${k}.weeklyAt`, { time });
-  const names = weekdayNames(locale);
-  const days = sched.on_days.slice().sort().map((d) => names[d]).join(', ');
-  return sched.repeat_every === 1 ? t(`${k}.weeklyDaysAt`, { days, time }) : t(`${k}.weeklyEveryNAt`, { count: sched.repeat_every, days, time });
-}
 
 const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const WC = useWC();
@@ -143,7 +103,7 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
                   {(t) => <div style={{ fontSize: 13.5, fontWeight: 600, color: active ? WC.ink : WC.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t}</div>}
                 </WorkflowTitle>
                 <div style={{ fontSize: 11, color: WC.muted2, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {active ? describeScheduleLocalized(w.schedule, t, i18n.language) : t('workflows.leftRail.paused')}
+                  {active ? describeSchedule(w.schedule, t, i18n.language) : t('workflows.leftRail.paused')}
                 </div>
               </div>
               <div

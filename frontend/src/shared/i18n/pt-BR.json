@@ -1068,7 +1068,8 @@
         "Month": "Mês"
       },
       "expand": "Expandir",
-      "today": "Hoje"
+      "today": "Hoje",
+      "notScheduled": "Sem agendamento"
     },
     "calendar": {
       "runNow": "Executar agora",
@@ -1126,6 +1127,29 @@
         "weeklyEveryNAt_one": "{{days}} às {{time}}",
         "weeklyEveryNAt_other": "A cada {{count}} semanas em {{days}} às {{time}}"
       }
+    },
+    "scheduleCard": {
+      "title": "Agendamento",
+      "on": "Ativo",
+      "off": "Inativo",
+      "noStepsWarning": "Este workflow não tem etapas, então uma execução agendada não fará nada. Adicione uma etapa primeiro.",
+      "notTestedWarning": "Ainda não foi testado. Uma execução agendada não pode parar para pedir permissão, então se precisar de acesso a ferramentas pode falhar silenciosamente. Clique em Executar uma vez para conceder o acesso.",
+      "dayOfMonth": "Dia do mês",
+      "lastDay": "Último dia",
+      "last": "Último",
+      "shortMonthHint": "Meses curtos executam no último dia. Escolha \"Último\" para sempre cair no fim do mês.",
+      "runAt": "Executar às",
+      "runEvery": "Executar a cada",
+      "minutes": "minutos",
+      "hours": "horas",
+      "minimumHours_one": "O mínimo é {{count}} hora.",
+      "minimumHours_other": "O mínimo é {{count}} horas.",
+      "minimumMinutes_one": "O mínimo é {{count}} minuto.",
+      "minimumMinutes_other": "O mínimo é {{count}} minutos.",
+      "repeat": "Repetir"
+    },
+    "scheduleChip": {
+      "tweakHint": "Clique para ajustar o horário"
     }
   }
 }

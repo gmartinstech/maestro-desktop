@@ -1068,7 +1068,8 @@
         "Month": "Month"
       },
       "expand": "Expand",
-      "today": "Today"
+      "today": "Today",
+      "notScheduled": "Not scheduled"
     },
     "calendar": {
       "runNow": "Run now",
@@ -1126,6 +1127,29 @@
         "weeklyEveryNAt_one": "Every {{days}} at {{time}}",
         "weeklyEveryNAt_other": "Every {{count}} weeks on {{days}} at {{time}}"
       }
+    },
+    "scheduleCard": {
+      "title": "Schedule",
+      "on": "On",
+      "off": "Off",
+      "noStepsWarning": "This workflow has no steps, so a scheduled run won't do anything. Add a step first.",
+      "notTestedWarning": "Not test-run yet. A scheduled run can't pause for permission prompts, so if this needs tool access it may fail silently. Hit Run once to grant access.",
+      "dayOfMonth": "Day of month",
+      "lastDay": "Last day",
+      "last": "Last",
+      "shortMonthHint": "Short months fire on their last day. Pick \"Last\" to always hit month-end.",
+      "runAt": "Run at",
+      "runEvery": "Run every",
+      "minutes": "minutes",
+      "hours": "hours",
+      "minimumHours_one": "Minimum is {{count}} hour.",
+      "minimumHours_other": "Minimum is {{count}} hours.",
+      "minimumMinutes_one": "Minimum is {{count}} minute.",
+      "minimumMinutes_other": "Minimum is {{count}} minutes.",
+      "repeat": "Repeat"
+    },
+    "scheduleChip": {
+      "tweakHint": "Click to tweak time"
     }
   }
 }

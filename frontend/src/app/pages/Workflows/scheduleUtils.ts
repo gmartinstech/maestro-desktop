@@ -1,8 +1,13 @@
+import type { TFunction } from 'i18next';
 import type { Workflow, ScheduleConfig, WorkflowStep } from '@/shared/state/workflowsSlice';
 
-export const WEEKDAY_LABEL = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-export const WEEKDAY_LABEL_SHORT = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-export const WEEKDAY_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Weekday names come from Intl, not a hand-built table, so they follow the active language. 2023-01-01 was a Sunday, so index 0..6 lines up with Date.getDay().
+export function weekdayNames(locale: string, width: 'short' | 'long' | 'narrow' = 'short'): string[] {
+  try {
+    const fmt = new Intl.DateTimeFormat(locale, { weekday: width });
+    return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 1 + i)));
+  } catch { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; }
+}
 
 export function defaultSchedule(): ScheduleConfig {
   // Pick the host's IANA tz so new schedules start with an explicit zone instead of the legacy "local" sentinel. Backend storage still coerces "local" if a record predates this default; new records skip that path.
@@ -49,55 +54,74 @@ export function needsScheduleTestWarning(workflow: Workflow): boolean {
   return stepsSignature(steps) !== (workflow.tested_signature ?? '');
 }
 
-export function formatTime(hour: number, minute: number): string {
-  const h12 = ((hour + 11) % 12) + 1;
-  const suffix = hour < 12 ? 'am' : 'pm';
-  const mm = String(minute).padStart(2, '0');
-  return minute === 0 ? `${h12}${suffix}` : `${h12}:${mm}${suffix}`;
+// Clock label straight from Intl so pt-BR renders 24h ("15:00") and en keeps 12h am/pm, instead of hand-rolling a suffix.
+export function formatClock(hour: number, minute: number, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hour, minute));
+  } catch { return `${hour}:${String(minute).padStart(2, '0')}`; }
 }
 
-// Used in the roomy hub calendar: "10 AM", "12 PM", "1 PM"... Matches Figma image #8 styling for the left-column time labels.
-export function formatHourLabel(hour: number): string {
-  const h12 = ((hour + 11) % 12) + 1;
-  const suffix = hour < 12 ? 'AM' : 'PM';
-  return `${h12} ${suffix}`;
+// Left-column hour label in the hub calendar grid ("10 AM" in en, "10" in pt-BR).
+export function formatHourLabel(hour: number, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour));
+  } catch { return String(hour); }
 }
 
-export function describeSchedule(sched: ScheduleConfig): string {
-  if (!sched.enabled || !isScheduleConfigured(sched)) return 'Not scheduled';
-  const time = formatTime(sched.hour, sched.minute);
-  if (sched.repeat_unit === 'minute') {
-    return `Every ${sched.repeat_every} minutes`;
-  }
+/** The one schedule sentence for the whole app: hub rail, saved card, and app-shell card all render this. */
+export function describeSchedule(sched: ScheduleConfig, t: TFunction, locale: string): string {
+  const k = 'workflows.schedule';
+  if (!sched.enabled || !isScheduleConfigured(sched)) return t(`${k}.notScheduled`);
+  const time = formatClock(sched.hour, sched.minute, locale);
+  if (sched.repeat_unit === 'minute') return t(`${k}.everyMinutes`, { count: sched.repeat_every });
   if (sched.repeat_unit === 'hour') {
-    const at = sched.minute === 0 ? '' : ` at :${String(sched.minute).padStart(2, '0')}`;
-    return sched.repeat_every === 1 ? `Every hour${at}` : `Every ${sched.repeat_every} hours${at}`;
+    const at = sched.minute === 0 ? '' : t(`${k}.atMinute`, { minute: String(sched.minute).padStart(2, '0') });
+    return sched.repeat_every === 1 ? t(`${k}.hourly`, { at }) : t(`${k}.everyHours`, { count: sched.repeat_every, at });
   }
   if (sched.repeat_unit === 'day') {
-    return sched.repeat_every === 1 ? `Every day at ${time}` : `Every ${sched.repeat_every} days at ${time}`;
+    return sched.repeat_every === 1 ? t(`${k}.everyDayAt`, { time }) : t(`${k}.everyDaysAt`, { count: sched.repeat_every, time });
   }
   if (sched.repeat_unit === 'month') {
-    const day = sched.day_of_month ? ` on day ${sched.day_of_month}` : '';
-    return sched.repeat_every === 1 ? `Every month${day} at ${time}` : `Every ${sched.repeat_every} months${day} at ${time}`;
+    const day = sched.day_of_month ? t(`${k}.onDayOfMonth`, { day: sched.day_of_month }) : '';
+    return sched.repeat_every === 1 ? t(`${k}.everyMonthAt`, { day, time }) : t(`${k}.everyMonthsAt`, { count: sched.repeat_every, day, time });
   }
-  const days = sched.on_days.length === 0 ? 'week' : sched.on_days
-    .slice()
-    .sort()
-    .map((d) => WEEKDAY_FULL[d])
-    .join(', ');
-  const cadence = sched.repeat_every === 1 ? `Every ${days}` : `Every ${sched.repeat_every} weeks on ${days}`;
-  return `${cadence} at ${time}`;
+  if (sched.on_days.length === 0) return t(`${k}.weeklyAt`, { time });
+  if (sched.on_days.length === 5 && [1, 2, 3, 4, 5].every((d) => sched.on_days.includes(d))) return t(`${k}.weekdaysAt`, { time });
+  if (sched.on_days.length === 2 && [0, 6].every((d) => sched.on_days.includes(d))) return t(`${k}.weekendsAt`, { time });
+  // A single day reads as a plural weekday ("Mondays at 3pm" / "Segundas às 15:00"), which Intl can't produce, so the plural forms live as their own keys.
+  if (sched.on_days.length === 1) return t(`${k}.singleDayAt`, { day: t(`${k}.dayPlural.${sched.on_days[0]}`), time });
+  const days = sched.on_days.slice().sort().map((d) => weekdayNames(locale)[d]).join(', ');
+  return sched.repeat_every === 1 ? t(`${k}.weeklyDaysAt`, { days, time }) : t(`${k}.weeklyEveryNAt`, { count: sched.repeat_every, days, time });
 }
 
-export function describePermissions(workflow: Workflow): string {
-  if (!workflow.permissions || workflow.permissions.length === 0) return 'Notify only';
+/** Compact schedule for the hub pill chip, where the full sentence would not fit. */
+export function describeScheduleShort(sched: ScheduleConfig, t: TFunction, locale: string): string {
+  const k = 'workflows.schedule.short';
+  if (!sched.enabled || !isScheduleConfigured(sched)) return t('workflows.schedule.notScheduled');
+  const time = formatClock(sched.hour, sched.minute, locale);
+  if (sched.repeat_unit === 'minute') return t(`${k}.everyMinutes`, { count: sched.repeat_every });
+  if (sched.repeat_unit === 'hour') return sched.repeat_every === 1 ? t(`${k}.hourly`) : t(`${k}.everyHours`, { count: sched.repeat_every });
+  if (sched.repeat_unit === 'day') return sched.repeat_every === 1 ? t(`${k}.daily`, { time }) : t(`${k}.everyDays`, { count: sched.repeat_every, time });
+  if (sched.repeat_unit === 'month') {
+    const day = sched.day_of_month ? t(`${k}.dayOfMonth`, { day: sched.day_of_month }) : '';
+    return sched.repeat_every === 1 ? t(`${k}.monthly`, { day, time }) : t(`${k}.everyMonths`, { count: sched.repeat_every, day, time });
+  }
+  if (sched.on_days.length === 5 && [1, 2, 3, 4, 5].every((d) => sched.on_days.includes(d))) return t(`${k}.weekdays`, { time });
+  if (sched.on_days.length === 2 && [0, 6].every((d) => sched.on_days.includes(d))) return t(`${k}.weekends`, { time });
+  if (sched.on_days.length === 1) return `${weekdayNames(locale)[sched.on_days[0]]} ${time}`;
+  return t(`${k}.timesPerWeek`, { count: sched.on_days.length, time });
+}
+
+export function describePermissions(workflow: Workflow, t: TFunction): string {
+  const k = 'workflows.permissions';
+  if (!workflow.permissions || workflow.permissions.length === 0) return t(`${k}.notifyOnly`);
   const labels: string[] = [];
   for (const p of workflow.permissions) {
-    if (p.kind === 'notify') labels.push('notify in app');
-    else if (p.kind === 'text') labels.push('text');
-    else if (p.kind === 'call') labels.push('call');
+    if (p.kind === 'notify') labels.push(t(`${k}.notifyInApp`));
+    else if (p.kind === 'text') labels.push(t(`${k}.text`));
+    else if (p.kind === 'call') labels.push(t(`${k}.call`));
   }
-  return `First ${labels.join(', then ')}`;
+  return t(`${k}.firstThen`, { tiers: labels.join(t(`${k}.thenSeparator`)) });
 }
 
 export function startOfWeek(date: Date): Date {
