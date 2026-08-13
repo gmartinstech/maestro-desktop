@@ -621,6 +621,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                 role="button"
                 aria-label={t('dashboard.toolbar.newAgent')}
                 data-onboarding="new-agent-button"
+                data-testid="new-agent-button"
                 tabIndex={0}
                 onClick={() => {
                   if (newAgentBounce) onNewAgentBounceEnd?.();

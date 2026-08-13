@@ -71,6 +71,14 @@ def state_dir(parent: str, *parts: str) -> str:
 
 
 @typechecked
+def p_state_home() -> str:
+    """`$MAESTRO_STATE_HOME` when set, else the real home. The override exists so an e2e run against
+    a packaged build cannot write workspaces and caches into the developer's own `~/.maestro`."""
+    override = (os.environ.get("MAESTRO_STATE_HOME") or "").strip()
+    return os.path.abspath(os.path.expanduser(override)) if override else os.path.expanduser("~")
+
+
+@typechecked
 def home_state_dir(*parts: str) -> str:
     """Path inside `~/.maestro` (workspaces, caches, tool reports)."""
-    return state_dir(os.path.expanduser("~"), *parts)
+    return state_dir(p_state_home(), *parts)

@@ -11,7 +11,14 @@ P_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 p_is_packaged = os.environ.get("MAESTRO_PACKAGED") == "1"
 
-if p_is_packaged:
+# An explicit override wins over BOTH branches below. Without it a packaged build always resolved to
+# the real app-support dir, so an e2e run against the packaged binary read and wrote the developer's
+# own sessions, dashboards and settings — the golden smoke was mutating live user data.
+p_data_root_override = (os.environ.get("MAESTRO_DATA_ROOT") or "").strip()
+
+if p_data_root_override:
+    DATA_ROOT = os.path.abspath(os.path.expanduser(p_data_root_override))
+elif p_is_packaged:
     if sys.platform == "darwin":
         p_app_support = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Maestro Studio")
     elif sys.platform == "win32":

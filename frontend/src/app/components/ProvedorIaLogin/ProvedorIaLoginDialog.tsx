@@ -112,6 +112,7 @@ const ProvedorIaLoginDialog: React.FC = () => {
       </DialogContent>
       <DialogActions>
         <Button
+          data-testid="provedor-ia-later"
           onClick={() => dispatch(closeProvedorIaPrompt())}
           sx={{ textTransform: 'none', color: c.text.secondary }}
         >

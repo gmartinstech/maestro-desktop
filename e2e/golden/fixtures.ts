@@ -18,13 +18,24 @@ async function mainWindow(app: ElectronApplication): Promise<Page> {
 }
 
 export async function launchMaestro() {
-  const dataRoot = mkdtempSync(join(tmpdir(), 'maestro-e2e-'));
-  // Drive the packaged binary, like every other e2e spec. This used to pass args:['.'],
-  // which asked Playwright for an `electron` package the repo root does not depend on —
-  // and the root package.json has no `main`, so it had no app to open either.
+  // THREE roots need redirecting, not one. A packaged build ignored the old bare DATA_ROOT and
+  // resolved %APPDATA%\Maestro Studio\data, so this smoke was reading and writing the developer's
+  // real sessions, dashboards and settings. MAESTRO_DATA_ROOT covers backend state,
+  // MAESTRO_STATE_HOME covers ~/.maestro (workspaces, caches, tool reports), and --user-data-dir
+  // covers Electron's own userData, which holds localStorage and the settings main.js reads.
+  const dataRoot = mkdtempSync(join(tmpdir(), 'maestro-e2e-data-'));
+  const stateHome = mkdtempSync(join(tmpdir(), 'maestro-e2e-home-'));
+  const userData = mkdtempSync(join(tmpdir(), 'maestro-e2e-userdata-'));
   const app = await electron.launch({
     executablePath: packagedAppPath(),
-    env: { ...process.env, MAESTRO_MOCK_AGENT: '1', MAESTRO_DISABLE_PREFLIGHT: '1', DATA_ROOT: dataRoot },
+    args: [`--user-data-dir=${userData}`],
+    env: {
+      ...process.env,
+      MAESTRO_MOCK_AGENT: '1',
+      MAESTRO_DISABLE_PREFLIGHT: '1',
+      MAESTRO_DATA_ROOT: dataRoot,
+      MAESTRO_STATE_HOME: stateHome,
+    },
   });
   const win = await mainWindow(app);
   await win.waitForLoadState('domcontentloaded');
@@ -32,5 +43,12 @@ export async function launchMaestro() {
   // while the backend boots. Waiting for React to actually mount is the difference between
   // driving the app and driving a blank page that merely has the right title.
   await win.waitForFunction(() => (document.querySelector('#root')?.childElementCount ?? 0) > 0, undefined, { timeout: 120_000 });
-  return { app, win, dataRoot };
+  return { app, win, dataRoot, stateHome, userData };
+}
+
+// An isolated profile has no provedor-ia token, so the sign-in gate correctly opens and blocks the
+// canvas. That is real first-run behaviour, not a bug: dismiss it the way a user would.
+export async function dismissSignInPrompt(win: Page): Promise<void> {
+  const later = win.getByTestId('provedor-ia-later');
+  if (await later.count()) await later.first().click();
 }

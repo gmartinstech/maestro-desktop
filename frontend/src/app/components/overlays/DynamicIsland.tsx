@@ -607,6 +607,7 @@ const IdlePill: React.FC<{ c: ReturnType<typeof useClaudeTokens>; onClick: () =>
   >
     <Tooltip title={t('overlays.dynamicIsland.searchTooltip', { hotkey: SEARCH_HOTKEY })} arrow placement="bottom">
       <Box
+        data-testid="global-search-trigger"
         onClick={(e) => { e.stopPropagation(); onClick(); }}
         sx={{
           display: 'flex',
