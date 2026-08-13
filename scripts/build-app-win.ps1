@@ -3,9 +3,16 @@
 # Usage:
 #   pwsh scripts\build-app-win.ps1                Local dev build (unsigned)
 #   pwsh scripts\build-app-win.ps1 -Sign          Signed build (no publish)
-#   pwsh scripts\build-app-win.ps1 -Publish       Production build (sign + publish to GitHub Releases)
+#   pwsh scripts\build-app-win.ps1 -Publish       Production build: sign, then scp the installer
+#                                                  to cloudinha:~/maestro-releases/incoming/ for
+#                                                  the cdn.martinstech.net publish step (see
+#                                                  docs/superpowers/specs/2026-08-13-cdn-version-management-design.md)
 #
-# Reads .env.windows (gitignored) for Azure Trusted Signing + GH_TOKEN if -Sign or -Publish.
+# Version is always "1.<git commit count>", computed fresh from git history -- see that spec for
+# why nothing in the tree stores a version number.
+#
+# Reads .env.windows (gitignored) for Azure Trusted Signing if -Sign or -Publish. GH_TOKEN is no
+# longer used by this script (Windows releases no longer publish to GitHub).
 
 [CmdletBinding()]
 param(
@@ -579,13 +586,17 @@ Write-Host "========================================" -BackgroundColor Green -Fo
 Write-Host ""
 
 # --- Provenance stamp ---
-# Record the exact commit this artifact was built from. electron\build-info.json
-# ships inside the asar; main.js reads it for the startup [provenance] log line
-# and the About panel. Gitignored + regenerated each build.
+# Version = "1.<commit count>" (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md).
+# Computed fresh every build from git history -- nothing in the tree stores a version number, so
+# there is nothing to bump and nothing two branches could ever disagree on. electron\build-info.json
+# ships inside the asar; main.js reads it for the startup [provenance] log line and the About panel.
+# Gitignored + regenerated each build.
 $BuildSha = (git -C $ProjectRoot rev-parse HEAD 2>$null)
 if (-not $BuildSha) { $BuildSha = 'unknown' }
-$BuildVersion = (Get-Content -Raw (Join-Path $ProjectRoot 'electron\package.json') | ConvertFrom-Json).version
-$BuildChannel = if ($BuildVersion -match '-') { 'experimental' } else { 'stable' }
+$CommitCount = (git -C $ProjectRoot rev-list --count HEAD 2>$null)
+if (-not $CommitCount) { throw "git rev-list --count HEAD failed -- is $ProjectRoot a git checkout?" }
+$BuildVersion = "1.$($CommitCount.Trim())"
+$BuildChannel = 'stable'
 $BuildShortSha = if ($BuildSha.Length -ge 12) { $BuildSha.Substring(0, 12) } else { $BuildSha }
 $BuildInfo = [ordered]@{
     sha      = $BuildSha
@@ -595,10 +606,14 @@ $BuildInfo = [ordered]@{
     version  = $BuildVersion
 }
 $BuildInfo | ConvertTo-Json -Compress | Set-Content -Path (Join-Path $ProjectRoot 'electron\build-info.json') -Encoding utf8
-Write-Host "Stamped build-info.json: sha=$BuildShortSha channel=$BuildChannel"
+Write-Host "Stamped build-info.json: version=$BuildVersion sha=$BuildShortSha"
 
 # --- Step 5: Package with electron-builder ---
 Write-Host "[5/5] Packaging with electron-builder..."
+# extraMetadata.version overrides electron/package.json's tracked version for THIS build only --
+# nothing on disk changes, so nothing needs reverting after. NuGet/Squirrel needs three dotted
+# segments internally; the two-segment "1.<count>" form is what ships in the manifest/filename/UI.
+$ExtraMetadataArg = "--config.extraMetadata.version=$BuildVersion.0"
 Push-Location (Join-Path $ProjectRoot 'electron')
 try {
     # npm ci: lockfile-exact, no drift. See Invoke-NpmCiIfNeeded above.
@@ -608,20 +623,18 @@ try {
         $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
     }
 
+    # --publish never unconditionally: this script no longer publishes to GitHub Releases for
+    # Windows (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md). -Publish
+    # below still means "produce a release-ready signed installer," just delivered via scp to the
+    # CDN host instead of `gh release upload`.
     if ($DirOnly) {
         # Unpacked-only build for the fast CI gate. afterPack (router node_modules)
         # and locale-pak filtering still run during the pack phase, so the produced
         # win-unpacked\Maestro Studio.exe is fully functional; only the NSIS installer +
         # update feed are skipped (verify-update-feed skips cleanly when absent).
-        & npx electron-builder --win --x64 --dir $TargetOverride --publish never
-    } elseif ($Publish) {
-        # Windows is the only shipped target, so there is nothing to converge
-        # with: this publish produces the whole release (assets + latest.yml).
-        # (A pre-flight HEAD check for latest-mac.yml used to live here and
-        # warned that "Mac users will skip this version" — macOS is dropped.)
-        & npx electron-builder --win --x64 $TargetOverride --publish always
+        & npx electron-builder --win --x64 --dir $TargetOverride $ExtraMetadataArg --publish never
     } else {
-        & npx electron-builder --win --x64 $TargetOverride --publish never
+        & npx electron-builder --win --x64 $TargetOverride $ExtraMetadataArg --publish never
     }
     if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 } finally { Pop-Location }
@@ -633,27 +646,31 @@ try {
 
 Remove-Item -Recurse -Force $Staging -ErrorAction SilentlyContinue
 
-# --- Step 5b: Stable-named installer alias for the website download button ---
-# Squirrel names the local installer per `artifactName` (in
-# dist\squirrel-windows\) but RENAMES the published asset to
-# `maestro-studio-Setup-<version>.exe`, so any fixed "latest download" link that
-# points at a version-independent filename 404s without this stable-named copy. -Recurse because the .exe sits in the
-# squirrel-windows\ subdir, not the dist\ root. Byte copy keeps the signature;
-# invisible to the updater, which keys off RELEASES + .nupkg, not the filename.
+# --- Step 5b: Publish to the CDN (cloudinha) ---
+# Ships the signed installer to cdn.martinstech.net/maestro/* instead of GitHub Releases.
+# cloudinha-side placement + version.json rotation happens in a separate step (see
+# docs/superpowers/specs/2026-08-13-cdn-version-management-design.md section 5) -- this only
+# gets the file onto the box and tells the operator what to paste into that step.
 if ($Publish) {
-    Write-Host "[5b/5] Uploading stable-named installer alias (MaestroStudio-Setup-x64.exe)..."
-    $version  = (Get-Content -Raw (Join-Path $ProjectRoot 'electron\package.json') | ConvertFrom-Json).version
+    Write-Host "[5b/5] Publishing $BuildVersion to cdn.martinstech.net via cloudinha..."
     $DistDir  = Join-Path $ProjectRoot 'electron\dist'
     $SetupExe = Get-ChildItem -Path $DistDir -Recurse -Filter '*Setup*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $SetupExe) { throw "No Squirrel Setup .exe found under $DistDir to alias" }
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        throw "gh CLI not found; cannot upload MaestroStudio-Setup-x64.exe alias (install gh or upload it manually)"
+    if (-not $SetupExe) { throw "No Squirrel Setup .exe found under $DistDir to publish" }
+    $ExpectedName = "MaestroStudio-Setup-$BuildVersion-x64.exe"
+    if ($SetupExe.Name -ne $ExpectedName) {
+        throw "Built installer is named '$($SetupExe.Name)', expected '$ExpectedName' -- artifactName / version mismatch, refusing to publish"
     }
-    $AliasExe = Join-Path $DistDir 'MaestroStudio-Setup-x64.exe'
-    Copy-Item -Force $SetupExe.FullName $AliasExe
-    & gh release upload "v$version" $AliasExe --repo gmartinstech/maestro-desktop --clobber
-    if ($LASTEXITCODE -ne 0) { throw "gh release upload of MaestroStudio-Setup-x64.exe failed" }
-    Write-Host "Uploaded MaestroStudio-Setup-x64.exe to release v$version."
+    if (-not (Get-Command scp -ErrorAction SilentlyContinue)) {
+        throw "scp not found; cannot publish $ExpectedName to cloudinha (install an OpenSSH client or publish manually)"
+    }
+    $Sha256 = (Get-FileHash -Path $SetupExe.FullName -Algorithm SHA256).Hash.ToLower()
+    & scp $SetupExe.FullName "cloudinha:~/maestro-releases/incoming/$ExpectedName"
+    if ($LASTEXITCODE -ne 0) { throw "scp of $ExpectedName to cloudinha failed" }
+    Write-Host ""
+    Write-Host "Uploaded $ExpectedName to cloudinha:~/maestro-releases/incoming/."
+    Write-Host "Paste these into the cloudinha publish prompt:"
+    Write-Host "  Version: $BuildVersion"
+    Write-Host "  Expected sha256: $Sha256"
 }
 
 Write-Host ""
