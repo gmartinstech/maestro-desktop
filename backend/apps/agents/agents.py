@@ -74,8 +74,35 @@ async def get_session(session_id: str):
 
 @agents.router.post("/launch")
 async def launch_agent(config: AgentConfig):
+    """Create a session and, when the launch carries one, deliver its first prompt in the SAME
+    request. Delivery used to be a second call the client made and never checked its result of, so
+    any failure left a session whose status had already been broadcast as running with no prompt in
+    it: a run that hangs for no visible reason. A caller that sends `initial_message` gets a 500
+    here if the prompt could not be queued, instead of a success it cannot trust."""
     session = await agent_manager.launch_agent(config)
-    return {"session_id": session.id, "session": session.model_dump(mode="json")}
+    initial = config.initial_message
+    if initial is None:
+        return {"session_id": session.id, "session": session.model_dump(mode="json"), "prompt_delivered": False}
+    if not initial.prompt.strip():
+        logger.warning("launch %s carried an empty initial prompt; refusing rather than starting an idle run", session.id)
+        raise HTTPException(status_code=400, detail="initial_message.prompt is empty")
+    delivered = await agent_manager.send_message(
+        session.id,
+        initial.prompt,
+        images=initial.images,
+        context_paths=initial.context_paths,
+        forced_tools=initial.forced_tools,
+        attached_skills=initial.attached_skills,
+        selected_browser_ids=initial.selected_browser_ids,
+        selected_app_output_ids=config.selected_app_output_ids,
+        selected_setting_ids=initial.selected_setting_ids,
+        client_message_id=initial.client_message_id,
+    )
+    if not delivered:
+        # send_message already logged why. Never answer 200 here: that is exactly the silent drop.
+        logger.error("launch %s could not deliver its initial prompt", session.id)
+        raise HTTPException(status_code=500, detail="Session launched but its first message could not be delivered")
+    return {"session_id": session.id, "session": session.model_dump(mode="json"), "prompt_delivered": True}
 
 @agents.router.post("/sessions/{session_id}/message")
 async def send_message(session_id: str, body: dict):
@@ -108,7 +135,7 @@ async def send_message(session_id: str, body: dict):
     except Exception:
         pass
 
-    await agent_manager.send_message(
+    delivered = await agent_manager.send_message(
         session_id,
         prompt,
         mode=body.get("mode"),
@@ -123,7 +150,8 @@ async def send_message(session_id: str, body: dict):
         selected_setting_ids=body.get("selected_setting_ids"),
         client_message_id=body.get("client_message_id"),
     )
-    return {"ok": True}
+    # `ok` stays True for compatibility with every existing caller; `delivered` is the honest answer about whether a turn was actually spawned for this prompt.
+    return {"ok": True, "delivered": delivered}
 
 @agents.router.post("/sessions/{session_id}/stop")
 async def stop_agent(session_id: str):

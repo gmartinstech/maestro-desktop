@@ -540,6 +540,8 @@ function writeCleanQuitLock() {
 let quitInitiated = false;
 app.on('before-quit', () => {
   quitInitiated = true;
+  // Earliest reliable "the user meant to leave" signal; the backend supervisor reads it so a child dying mid-teardown is not respawned.
+  appIsQuitting = true;
   console.log('[diag][main] before-quit (quit initiated)');
 });
 app.on('before-quit', writeCleanQuitLock);
@@ -1034,13 +1036,16 @@ async function startBackend() {
     while (recentBackendStderr.length > 60) recentBackendStderr.shift();
   });
 
-  backendProcess.on('exit', (code) => {
-    console.log(`Backend exited with code ${code}`);
+  const spawned = backendProcess;
+  backendProcess.on('exit', (code, signal) => {
+    console.log(`Backend exited with code ${code} signal ${signal}`);
     if (code !== 0 && code !== null && mainWindow) {
       mainWindow.webContents.executeJavaScript(
         `document.title = "Maestro Studio (backend crashed)";`
       );
     }
+    // Only the CURRENT child's exit may drive a restart; a stale handler from a replaced process would double-spawn.
+    if (spawned === backendProcess) maybeRestartBackend();
   });
 
   emitSplashStatus('Starting backend…');
@@ -1684,9 +1689,63 @@ function setupAutoUpdater() {
   }, 5 * 60 * 1000);
 }
 
+// Bounded restart supervision for the Python child. Without it an unexpected backend exit left the
+// window open and every request failing: the app looked alive and answered nothing, and any app
+// runtimes it owned were orphaned. The policy (bound, backoff, clean-quit veto) lives in
+// backendRestartPolicy.js so it can be tested without spawning Electron.
+const backendRestartPolicy = require('./backendRestartPolicy');
+let backendExitIsIntentional = false;
+let backendRestartAttempts = [];
+let backendRestartTimer = null;
+// Set the moment a quit begins, so a backend that dies while we are tearing down is never respawned into the teardown.
+let appIsQuitting = false;
+
+function maybeRestartBackend() {
+  const decision = backendRestartPolicy.decideRestart({
+    intentional: backendExitIsIntentional,
+    quitting: appIsQuitting || drainingForQuit,
+    installingUpdate: isInstallingUpdate,
+    attemptTimestamps: backendRestartAttempts,
+  });
+  // One-shot: consumed by the exit it was set for, so a later genuine crash is not mistaken for our own kill.
+  backendExitIsIntentional = false;
+  if (!decision.restart) {
+    console.log(`[supervisor] not restarting backend (${decision.reason})`);
+    if (decision.exhausted) reportBackendGaveUp();
+    return;
+  }
+  backendRestartAttempts.push(Date.now());
+  backendRestartAttempts = backendRestartPolicy.recentAttempts(backendRestartAttempts);
+  console.warn(`[supervisor] backend exited unexpectedly; restart ${backendRestartAttempts.length}/${backendRestartPolicy.MAX_RESTARTS} in ${decision.delayMs}ms`);
+  if (backendRestartTimer) clearTimeout(backendRestartTimer);
+  backendRestartTimer = setTimeout(async () => {
+    backendRestartTimer = null;
+    try {
+      // Reuse the same port: the renderer already holds it via IPC, and startBackend keeps it when set.
+      await startBackend();
+      console.log('[supervisor] backend restarted and healthy again');
+    } catch (err) {
+      // startBackend rejects when the health poll sees the child die again; that death fires its own exit handler, which re-enters the policy and eventually exhausts the bound.
+      console.error('[supervisor] backend restart failed:', err && err.message);
+    }
+  }, decision.delayMs);
+}
+
+// The bound is spent and the backend is staying down. Say so instead of leaving a window that
+// renders but answers nothing; the renderer owns the copy because only it has i18n (pt-BR default).
+function reportBackendGaveUp() {
+  console.error('[supervisor] giving up on the backend after the restart bound was exhausted');
+  sendToRenderer('backend-unrecoverable', {
+    attempts: backendRestartPolicy.MAX_RESTARTS,
+    logs: recentBackendStderr.slice(-30).join(''),
+  });
+}
+
 function killBackend() {
   if (backendProcess) {
     console.log('Killing backend process...');
+    // Mark the exit as ours BEFORE the kill lands, so the exit handler's restart policy vetoes.
+    backendExitIsIntentional = true;
     if (process.platform === 'win32') {
       // Windows: Node's child.kill() only terminates the direct child, leaving
       // grandchildren (e.g. the router node process the Python backend
@@ -2640,6 +2699,9 @@ app.on('before-quit', async (event) => {
 
 
 app.on('will-quit', () => {
+  appIsQuitting = true;
+  // Cancel a pending respawn: a timer that fires during teardown would start a Python we are about to abandon.
+  if (backendRestartTimer) { clearTimeout(backendRestartTimer); backendRestartTimer = null; }
   if (!isDev) killBackend();
 });
 
@@ -2991,6 +3053,8 @@ ipcMain.handle('install-update', async () => {
   await installDownloadedUpdate();
 });
 
+const { CAPTURE_PAGE_TIMEOUT_MS, withCaptureTimeout } = require('./capturePageTimeout');
+
 ipcMain.handle('capture-page', async (event, rect) => {
   // Capturing a webContents whose GPU surface is mid-recycle (a webview navigating
   // a heavy SPA) can crash the renderer (SharedImage 'non-existent mailbox' ->
@@ -3000,7 +3064,7 @@ ipcMain.handle('capture-page', async (event, rect) => {
   try {
     const wc = event.sender;
     if (!wc || wc.isDestroyed() || wc.isCrashed() || wc.isLoading()) return null;
-    const image = await wc.capturePage(rect || undefined);
+    const image = await withCaptureTimeout(wc.capturePage(rect || undefined), CAPTURE_PAGE_TIMEOUT_MS);
     if (!image || image.isEmpty()) return null;
     return image.toDataURL();
   } catch {

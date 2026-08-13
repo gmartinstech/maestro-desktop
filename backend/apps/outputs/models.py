@@ -25,6 +25,8 @@ class Output(BaseModel):
     # Linkage so reopening the App Builder reattaches to the in-progress session and reuses the same on-disk workspace folder instead of seeding a fresh one (which would orphan the running agent + lose chat history on every navigate).
     session_id: Optional[str] = None
     workspace_id: Optional[str] = None
+    # Set only by the boot-time workspace recovery: this row was rebuilt from a workspace directory whose record was lost, so its metadata is what we could infer and nothing more. The UI badges it rather than pretending the app is intact.
+    recovered: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 

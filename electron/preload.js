@@ -107,6 +107,15 @@ contextBridge.exposeInMainWorld('maestro', {
     ipcRenderer.on('update-error', listener);
     return () => ipcRenderer.removeListener('update-error', listener);
   },
+  // Reuses the splash's action handler (app.relaunch + app.exit / reveal backend.log); it is not splash-specific, and the backend-down notice needs exactly these two.
+  restartApp: () => ipcRenderer.send('splash:action', 'restart'),
+  openBackendLogs: () => ipcRenderer.send('splash:action', 'open-logs'),
+  // The backend died and the bounded restart gave up. The renderer owns the copy because only it has i18n, and pt-BR is the default language.
+  onBackendUnrecoverable: (cb) => {
+    const listener = (_event, info) => cb(info);
+    ipcRenderer.on('backend-unrecoverable', listener);
+    return () => ipcRenderer.removeListener('backend-unrecoverable', listener);
+  },
 
   onWebviewNewWindow: (cb) => {
     const listener = (_event, url, webContentsId, disposition) => cb(url, webContentsId, disposition);

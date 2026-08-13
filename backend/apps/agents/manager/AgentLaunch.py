@@ -37,6 +37,12 @@ class AgentLaunch(AgentManagerProtocol):
     @typechecked
     async def launch_agent(self, config: AgentConfig) -> AgentSession:
         session_id = uuid4().hex
+        # Phase log: a silent prompt drop used to leave NOTHING in the log to reason from. Each phase below names itself so a future one is diagnosable from a user's backend.log alone. Prompt length only, never its content.
+        carried = len((config.initial_message.prompt if config.initial_message else "") or "")
+        logger.info(
+            "[launch %s] phase=start mode=%s model=%s target_dir=%s carries_prompt=%s prompt_chars=%d",
+            session_id, config.mode, config.model, bool(config.target_directory), config.initial_message is not None, carried,
+        )
 
         # Editing an existing App: when the user selected exactly one App card in App Builder mode, point the chat at that app's workspace so it edits in place. Without this the view-builder seed below fires (no target_directory) and registers a fresh empty "Untitled App" dupe.
         if (
@@ -65,6 +71,7 @@ class AgentLaunch(AgentManagerProtocol):
             effective_cwd = os.path.join(effective_cwd, session_id)
 
         os.makedirs(effective_cwd, exist_ok=True)
+        logger.info("[launch %s] phase=cwd_resolved cwd=%s", session_id, effective_cwd)
 
         # Canvas-chat App Builder launch: when the user picks "App Builder" mode from the chat-input dropdown (no preexisting workspace, no target_directory passed in), the legacy code path only created an empty folder, so the agent could write files but the app never showed up in the Apps sidebar (no Output row, which is what the sidebar reads). Mirror the /workspace/seed endpoint's behavior here: seed the React template + register an Output row with workspace_id = session_id. Idempotent; safe if the session is ever re-launched with the same id.
         if config.mode == "view-builder" and not config.target_directory:
@@ -78,6 +85,7 @@ class AgentLaunch(AgentManagerProtocol):
                     folder=effective_cwd,
                     session_id=session_id,
                 )
+                logger.info("[launch %s] phase=workspace_seeded output_id=%s", session_id, output_id)
                 if output_id:
                     # Broadcast the new row so the Apps sidebar lights up immediately, even before the user clicks into it. The row name is still the placeholder ("Untitled App") at this point; the post-session meta-sync below fires a second upsert with the real name once the agent has written meta.json.
                     try:
@@ -136,6 +144,8 @@ class AgentLaunch(AgentManagerProtocol):
         except Exception:
             pass
 
+        # The session exists and is registered; delivery of any carried prompt happens next, in the endpoint, and logs its own phase.
+        logger.info("[launch %s] phase=session_registered awaiting_prompt=%s", session_id, config.initial_message is not None)
         return session
 
     @typechecked
