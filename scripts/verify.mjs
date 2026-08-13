@@ -63,5 +63,9 @@ catch { failed.push('call-home'); }
 // reintroduces a deleted subsystem or the old branding must not reach main. See docs/UPSTREAM.md.
 try { console.log('\n=== fork-drift ==='); execSync('node scripts/check-fork-drift.mjs', { stdio:'inherit' }); }
 catch { failed.push('fork-drift'); }
+// A key added to one locale only renders as its raw dotted path to the user, and pt-BR is the default
+// language, so locale drift is a shipped-UI bug rather than a cosmetic one. Hard failure.
+try { console.log('\n=== i18n-parity ==='); execSync('node scripts/check-i18n-parity.mjs', { stdio:'inherit' }); }
+catch { failed.push('i18n-parity'); }
 if (failed.length){ console.error(`\nVERIFY FAILED: ${failed.join(', ')}`); process.exit(1); }
 console.log('\nVERIFY GREEN');
