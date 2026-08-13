@@ -11,7 +11,8 @@
     "submit": "Enviar",
     "copy": "Copiar",
     "edit": "Editar",
-    "remove": "Remover"
+    "remove": "Remover",
+    "delete": "Excluir"
   },
   "appShell": {
     "appTitle": "Maestro Studio",
@@ -550,6 +551,127 @@
       "approvals": "Aprovações",
       "completedCount": "Concluídos ({{total}})",
       "clearAll": "Limpar tudo"
+    }
+  },
+  "tools": {
+    "shared": {
+      "toolCount_one": "{{count}} ferramenta",
+      "toolCount_other": "{{count}} ferramentas",
+      "permissionsHeading": "Permissões de ferramentas",
+      "alwaysAllow": "Sempre permitir",
+      "askPermission": "Pedir permissão",
+      "alwaysDeny": "Sempre negar"
+    },
+    "page": {
+      "title": "Biblioteca de ferramentas",
+      "subtitle": "Defina e gerencie ferramentas personalizadas para seus agentes.",
+      "newTool": "Nova ferramenta",
+      "createCustom": "Criar personalizada",
+      "browseRegistry": "Explorar o registro MCP",
+      "builtIn": "Integradas",
+      "coreTools": "Ferramentas essenciais",
+      "extendedTools": "Ferramentas estendidas",
+      "connections": "Conexões",
+      "emptyState": "Nenhuma ferramenta personalizada definida ainda. Crie uma para começar."
+    },
+    "browserPermission": {
+      "title": "Navegador",
+      "description": "Delegação de automação do navegador e ferramentas individuais do navegador",
+      "delegation": "Delegação",
+      "browserTools": "Ferramentas do navegador"
+    },
+    "customTool": {
+      "connected": "Conectado",
+      "connectedWithAccount": "Conectado · {{email}}",
+      "configured": "Configurado",
+      "docs": "docs",
+      "allowReads": "Permitir leituras",
+      "allowReadsTooltip": "Permitir todas as ferramentas de somente leitura",
+      "reset": "Redefinir",
+      "resetTooltip": "Redefinir todas para Pedir permissão",
+      "discoverTooltip": "Descobrir / atualizar as ferramentas do servidor MCP",
+      "noToolsDiscovered": "Nenhuma ferramenta descoberta ainda",
+      "discoverTools": "Descobrir ferramentas",
+      "addMcpConfigHint": "Adicione uma configuração MCP para habilitar a descoberta de ferramentas"
+    },
+    "customToolDevInfo": {
+      "heading": "Informações de desenvolvedor",
+      "mcpConfig": "Configuração MCP",
+      "authType": "Tipo de autenticação:",
+      "status": "Status:",
+      "account": "Conta:",
+      "credentials": "Credenciais:",
+      "credentialConfigured": "{{key}}: configurado"
+    },
+    "browserLogin": {
+      "signedIn": "Conectado",
+      "signIn": "Entrar",
+      "recheck": "Verificar o login novamente"
+    },
+    "serviceGroup": {
+      "readOnly": "Somente leitura",
+      "writeDelete": "Escrita / exclusão",
+      "inputParameters": "Parâmetros de entrada",
+      "required": "obrigatório"
+    },
+    "section": {
+      "onDemand": "sob demanda",
+      "deferredDescription": "Ferramentas sob demanda carregadas via ToolSearch para planejamento, agendamento e operações estendidas",
+      "builtinDescription": "Ferramentas integradas do SDK de agentes para operações com arquivos, comandos de shell e busca",
+      "categories": {
+        "filesystem": "Sistema de arquivos",
+        "system": "Sistema",
+        "search": "Busca",
+        "interaction": "Interação",
+        "planning": "Planejamento",
+        "scheduling": "Agendamento",
+        "agents": "Agentes",
+        "skills": "Skills"
+      }
+    },
+    "dialogs": {
+      "editTool": "Editar ferramenta",
+      "newTool": "Nova ferramenta",
+      "nameLabel": "Nome",
+      "descriptionLabel": "Descrição",
+      "commandLabel": "Comando (nome do comando de barra)",
+      "commandPlaceholder": "ex.: minha-ferramenta",
+      "saveChanges": "Salvar alterações",
+      "createTool": "Criar ferramenta",
+      "connectM365": "Conectar o Microsoft 365",
+      "generatingLoginCode": "Gerando o código de login...",
+      "openLinkAndEnterCode": "Abra o link abaixo e informe o código para entrar:",
+      "waitingForSignIn": "Aguardando você entrar...",
+      "connectedSuccessfully": "Conectado com sucesso!",
+      "loginFailed": "Não foi possível entrar. Tente de novo.",
+      "done": "Concluído",
+      "connect": "Conectar",
+      "slackInstructionsPrefix": "Clique em",
+      "slackInstructionsSuffix": "abaixo; uma janela do Slack vai abrir. Entre normalmente e a janela fecha sozinha quando você chegar no seu workspace.",
+      "slackSignIn": "Entrar com o Slack",
+      "slackWaiting": "Aguardando o login…"
+    },
+    "registryServer": {
+      "community": "Comunidade",
+      "installed": "Instalado",
+      "endpoint": "Endpoint",
+      "website": "Site",
+      "repository": "Repositório",
+      "requiredEnvVars": "Variáveis de ambiente obrigatórias",
+      "install": "Instalar",
+      "editAndInstall": "Editar e instalar"
+    },
+    "mcpConfig": {
+      "title": "Configurar ferramenta MCP",
+      "configLabel": "Configuração MCP (JSON)",
+      "invalidJson": "JSON inválido",
+      "configHelper": "Configuração de transporte enviada ao SDK de agentes (type, url, command, args etc.)",
+      "authTypeLabel": "Tipo de autenticação",
+      "authNone": "Nenhuma",
+      "authEnvVars": "Chaves de API / variáveis de ambiente",
+      "envVarsHeading": "Variáveis de ambiente",
+      "addVariable": "+ Adicionar variável",
+      "installTool": "Instalar ferramenta"
     }
   }
 }

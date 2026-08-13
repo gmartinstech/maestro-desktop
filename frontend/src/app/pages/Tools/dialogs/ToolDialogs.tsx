@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -63,18 +64,19 @@ const ToolDialogs: React.FC<ToolDialogsProps> = ({
   credDialogSaving, onSlackAutoConnect: handleSlackAutoConnect, onCredentialsSave: handleCredentialsSave,
 }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   return (
     <>
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { bgcolor: c.bg.surface, backgroundImage: 'none', borderRadius: 4, border: `1px solid ${c.border.subtle}` } }}>
-        <DialogTitle sx={{ color: c.text.primary, fontWeight: 600 }}>{editingId ? 'Edit Tool' : 'New Tool'}</DialogTitle>
+        <DialogTitle sx={{ color: c.text.primary, fontWeight: 600 }}>{editingId ? t('tools.dialogs.editTool') : t('tools.dialogs.newTool')}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
-          <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.page } }} />
-          <TextField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.page } }} />
-          <TextField label="Command (slash command name)" value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} fullWidth size="small" placeholder="e.g. my-tool" sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.page } }} />
+          <TextField label={t('tools.dialogs.nameLabel')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.page } }} />
+          <TextField label={t('tools.dialogs.descriptionLabel')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.page } }} />
+          <TextField label={t('tools.dialogs.commandLabel')} value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} fullWidth size="small" placeholder={t('tools.dialogs.commandPlaceholder')} sx={{ '& .MuiOutlinedInput-root': { bgcolor: c.bg.page } }} />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDialogOpen(false)} sx={{ color: c.text.tertiary, textTransform: 'none' }}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={!form.name} sx={{ bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.pressed }, textTransform: 'none', borderRadius: 2 }}>{editingId ? 'Save Changes' : 'Create Tool'}</Button>
+          <Button onClick={() => setDialogOpen(false)} sx={{ color: c.text.tertiary, textTransform: 'none' }}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={handleSave} disabled={!form.name} sx={{ bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.pressed }, textTransform: 'none', borderRadius: 2 }}>{editingId ? t('tools.dialogs.saveChanges') : t('tools.dialogs.createTool')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -104,19 +106,19 @@ const ToolDialogs: React.FC<ToolDialogsProps> = ({
           <Box sx={{ width: 32, height: 32, borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#0078D418' }}>
             <svg viewBox="0 0 24 24" width="20" height="20"><path d="M11.4 24H0V12.6L11.4 24zM24 24H12.6V12.6L24 24zM11.4 11.4H0V0l11.4 11.4zM24 11.4H12.6V0L24 11.4z" fill="#0078D4"/></svg>
           </Box>
-          Connect Microsoft 365
+          {t('tools.dialogs.connectM365')}
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
           {deviceCodeStatus === 'loading' && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3, justifyContent: 'center' }}>
               <CircularProgress size={20} />
-              <Typography sx={{ color: c.text.muted, fontSize: '0.9rem' }}>Generating login code...</Typography>
+              <Typography sx={{ color: c.text.muted, fontSize: '0.9rem' }}>{t('tools.dialogs.generatingLoginCode')}</Typography>
             </Box>
           )}
           {deviceCodeStatus === 'awaiting' && (
             <>
               <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.6 }}>
-                Open the link below and enter the code to sign in:
+                {t('tools.dialogs.openLinkAndEnterCode')}
               </Typography>
               <Box sx={{ bgcolor: c.bg.page, border: `1px solid ${c.border.subtle}`, borderRadius: 2, p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, alignItems: 'center' }}>
                 <Typography component="a" href={deviceCodeUrl} target="_blank" rel="noopener" sx={{ color: c.status.info, fontSize: '0.9rem', fontWeight: 500 }}>
@@ -128,25 +130,25 @@ const ToolDialogs: React.FC<ToolDialogsProps> = ({
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center', py: 1 }}>
                 <CircularProgress size={14} />
-                <Typography sx={{ color: c.text.ghost, fontSize: '0.8rem' }}>Waiting for you to sign in...</Typography>
+                <Typography sx={{ color: c.text.ghost, fontSize: '0.8rem' }}>{t('tools.dialogs.waitingForSignIn')}</Typography>
               </Box>
             </>
           )}
           {deviceCodeStatus === 'connected' && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2, justifyContent: 'center' }}>
               <CheckCircleIcon sx={{ color: c.status.success, fontSize: 20 }} />
-              <Typography sx={{ color: c.status.success, fontSize: '0.9rem', fontWeight: 500 }}>Connected successfully!</Typography>
+              <Typography sx={{ color: c.status.success, fontSize: '0.9rem', fontWeight: 500 }}>{t('tools.dialogs.connectedSuccessfully')}</Typography>
             </Box>
           )}
           {deviceCodeStatus === 'error' && (
             <Typography sx={{ color: c.status.error, fontSize: '0.85rem', py: 2, textAlign: 'center' }}>
-              Login failed. Please try again.
+              {t('tools.dialogs.loginFailed')}
             </Typography>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setDeviceCodeDialogOpen(false)} sx={{ color: c.text.muted, textTransform: 'none' }}>
-            {deviceCodeStatus === 'connected' ? 'Done' : 'Cancel'}
+            {deviceCodeStatus === 'connected' ? t('tools.dialogs.done') : t('common.cancel')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -167,12 +169,12 @@ const ToolDialogs: React.FC<ToolDialogsProps> = ({
               {credDialogIntegration.icon}
             </Box>
           )}
-          {credDialogIntegration?.connectLabel || 'Connect'}
+          {credDialogIntegration?.connectLabel || t('tools.dialogs.connect')}
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
           {credDialogIntegration?.id === 'slack' ? (
             <Typography sx={{ color: c.text.muted, fontSize: '0.85rem', lineHeight: 1.5, bgcolor: c.bg.secondary, px: 2, py: 1.5, borderRadius: 2, border: `1px solid ${c.border.subtle}` }}>
-              Click <strong>Sign in with Slack</strong> below; a Slack window will open. Sign in normally and the window will close automatically once you reach your workspace.
+              {t('tools.dialogs.slackInstructionsPrefix')} <strong>{t('tools.dialogs.slackSignIn')}</strong> {t('tools.dialogs.slackInstructionsSuffix')}
             </Typography>
           ) : (
             <>
@@ -198,7 +200,7 @@ const ToolDialogs: React.FC<ToolDialogsProps> = ({
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setCredDialogOpen(false)} sx={{ color: c.text.tertiary, textTransform: 'none' }}>Cancel</Button>
+          <Button onClick={() => setCredDialogOpen(false)} sx={{ color: c.text.tertiary, textTransform: 'none' }}>{t('common.cancel')}</Button>
           <Button
             variant="contained"
             onClick={credDialogIntegration?.id === 'slack' ? handleSlackAutoConnect : handleCredentialsSave}
@@ -206,7 +208,7 @@ const ToolDialogs: React.FC<ToolDialogsProps> = ({
             startIcon={credDialogSaving ? <CircularProgress size={14} /> : <LinkIcon sx={{ fontSize: 14 }} />}
             sx={{ bgcolor: credDialogIntegration?.color || c.accent.primary, '&:hover': { bgcolor: credDialogIntegration?.color || c.accent.pressed, filter: 'brightness(0.9)' }, textTransform: 'none', borderRadius: 2 }}
           >
-            {credDialogIntegration?.id === 'slack' ? (credDialogSaving ? 'Waiting for sign-in…' : 'Sign in with Slack') : 'Connect'}
+            {credDialogIntegration?.id === 'slack' ? (credDialogSaving ? t('tools.dialogs.slackWaiting') : t('tools.dialogs.slackSignIn')) : t('tools.dialogs.connect')}
           </Button>
         </DialogActions>
       </Dialog>

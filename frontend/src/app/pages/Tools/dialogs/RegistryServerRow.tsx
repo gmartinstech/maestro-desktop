@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -36,6 +37,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
   onExpand, onInstall: handleInstall, onEditInstall: handleEditInstall,
 }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   return (
                   <Box key={srv.name}>
                     <Box
@@ -70,7 +72,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                           {srv.source === 'google' ? (
                             <Chip icon={<CloudIcon sx={{ fontSize: 12 }} />} label="Google" size="small" sx={{ bgcolor: `${c.status.info}15`, color: c.status.info, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.4 }, '& .MuiChip-icon': { ml: 0.4, color: c.status.info } }} />
                           ) : (
-                            <Chip icon={<PublicIcon sx={{ fontSize: 12 }} />} label="Community" size="small" sx={{ bgcolor: 'rgba(174,86,48,0.08)', color: c.accent.primary, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.4 }, '& .MuiChip-icon': { ml: 0.4, color: c.accent.primary } }} />
+                            <Chip icon={<PublicIcon sx={{ fontSize: 12 }} />} label={t('tools.registryServer.community')} size="small" sx={{ bgcolor: 'rgba(174,86,48,0.08)', color: c.accent.primary, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.4 }, '& .MuiChip-icon': { ml: 0.4, color: c.accent.primary } }} />
                           )}
                           {srv.stars != null && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, ml: 0.5 }}>
@@ -84,7 +86,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                             <Chip label="stdio" size="small" sx={{ bgcolor: '#8b5cf615', color: '#8b5cf6', fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.6 } }} />
                           )}
                           {isInstalled && (
-                            <Chip icon={<CheckCircleIcon sx={{ fontSize: 12 }} />} label="Installed" size="small" sx={{ bgcolor: `${c.status.success}15`, color: c.status.success, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.4 }, '& .MuiChip-icon': { ml: 0.4, color: c.status.success } }} />
+                            <Chip icon={<CheckCircleIcon sx={{ fontSize: 12 }} />} label={t('tools.registryServer.installed')} size="small" sx={{ bgcolor: `${c.status.success}15`, color: c.status.success, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.4 }, '& .MuiChip-icon': { ml: 0.4, color: c.status.success } }} />
                           )}
                         </Box>
                         <Typography sx={{ color: c.text.tertiary, fontSize: '0.78rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -106,7 +108,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                           </Typography>
                           {srv.remoteUrl && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <Typography sx={{ color: c.text.ghost, fontSize: '0.72rem', textTransform: 'uppercase' }}>Endpoint</Typography>
+                              <Typography sx={{ color: c.text.ghost, fontSize: '0.72rem', textTransform: 'uppercase' }}>{t('tools.registryServer.endpoint')}</Typography>
                               <Typography sx={{ color: c.text.muted, fontSize: '0.78rem', fontFamily: c.font.mono }}>{srv.remoteUrl}</Typography>
                             </Box>
                           )}
@@ -117,7 +119,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                                 href={srv.websiteUrl}
                                 clickable
                                 icon={<OpenInNewIcon sx={{ fontSize: 12 }} />}
-                                label="Website"
+                                label={t('tools.registryServer.website')}
                                 size="small"
                                 sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 22 }}
                               />
@@ -128,7 +130,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                                 href={srv.repositoryUrl}
                                 clickable
                                 icon={<OpenInNewIcon sx={{ fontSize: 12 }} />}
-                                label="Repository"
+                                label={t('tools.registryServer.repository')}
                                 size="small"
                                 sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 22 }}
                               />
@@ -155,7 +157,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                                 {regDetail.environmentVariables?.length > 0 && (
                                   <Box sx={{ bgcolor: c.bg.page, borderRadius: 1.5, border: `1px solid ${c.border.subtle}`, px: 1.5, py: 1 }}>
                                     <Typography sx={{ color: c.text.muted, fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', mb: 0.75 }}>
-                                      Required Environment Variables
+                                      {t('tools.registryServer.requiredEnvVars')}
                                     </Typography>
                                     {regDetail.environmentVariables.map((ev) => (
                                       <Box key={ev.name} sx={{ display: 'flex', alignItems: 'baseline', gap: 1, py: 0.25 }}>
@@ -184,7 +186,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                             onClick={(e) => { e.stopPropagation(); handleInstall(srv); }}
                             sx={{ bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.pressed }, textTransform: 'none', fontSize: '0.78rem', borderRadius: 1.5, py: 0.5 }}
                           >
-                            Install
+                            {t('tools.registryServer.install')}
                           </Button>
                           <Button
                             size="small"
@@ -193,7 +195,7 @@ const RegistryServerRow: React.FC<RegistryServerRowProps> = ({
                             onClick={(e) => { e.stopPropagation(); handleEditInstall(srv); }}
                             sx={{ borderColor: c.border.strong, color: c.text.secondary, '&:hover': { borderColor: c.accent.primary, color: c.text.primary }, textTransform: 'none', fontSize: '0.78rem', borderRadius: 1.5, py: 0.5 }}
                           >
-                            Edit & Install
+                            {t('tools.registryServer.editAndInstall')}
                           </Button>
                         </Box>
                       </Box>

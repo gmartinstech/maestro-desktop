@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -42,6 +43,7 @@ import { useBuiltinSections } from './hooks/useBuiltinSections';
 
 const Tools: React.FC = () => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const { items, builtinTools, builtinPermissions, loading } = useAppSelector((s) => s.tools);
   const { servers: regServersRaw, total: regTotal, loading: regLoading, stats: regStats, detail: regDetail, detailLoading: regDetailLoading } = useAppSelector((s) => s.mcpRegistry);
@@ -49,10 +51,10 @@ const Tools: React.FC = () => {
   const allTools = Object.values(items);
   // Stable order so cards don't jump on refetch: connected+on, then on, then off; A-Z within each tier.
   const tools = useMemo(() => {
-    const tier = (t: ToolDefinition) => (t.enabled === false ? 2 : t.auth_status === 'connected' ? 0 : 1);
+    const tier = (tl: ToolDefinition) => (tl.enabled === false ? 2 : tl.auth_status === 'connected' ? 0 : 1);
     return Object.values(items).sort((a, b) => tier(a) - tier(b) || (a.name || '').localeCompare(b.name || ''));
   }, [items]);
-  const uninstalledIntegrations = useMemo(() => INTEGRATIONS.filter((ig) => !allTools.find((t) => t.name === ig.name)), [allTools]);
+  const uninstalledIntegrations = useMemo(() => INTEGRATIONS.filter((ig) => !allTools.find((tl) => tl.name === ig.name)), [allTools]);
   const getIntegrationForTool = useCallback((tool: ToolDefinition) => INTEGRATIONS.find((ig) => ig.name === tool.name), []);
 
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(
@@ -106,8 +108,8 @@ const Tools: React.FC = () => {
     <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography variant="h5" sx={{ color: c.text.primary, fontWeight: 700, mb: 0.5 }}>Tool Library</Typography>
-          <Typography sx={{ color: c.text.tertiary, fontSize: '0.9rem' }}>Define and manage custom tools for your Claude Code agents.</Typography>
+          <Typography variant="h5" sx={{ color: c.text.primary, fontWeight: 700, mb: 0.5 }}>{t('tools.page.title')}</Typography>
+          <Typography sx={{ color: c.text.tertiary, fontSize: '0.9rem' }}>{t('tools.page.subtitle')}</Typography>
         </Box>
         <Box>
           <Button
@@ -117,7 +119,7 @@ const Tools: React.FC = () => {
             onClick={handleMenuOpen}
             sx={{ bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.pressed }, textTransform: 'none', borderRadius: 2 }}
           >
-            New Tool
+            {t('tools.page.newTool')}
           </Button>
           <Menu
             anchorEl={menuAnchor}
@@ -127,11 +129,11 @@ const Tools: React.FC = () => {
           >
             <MenuItem onClick={a.openCreate} sx={{ color: c.text.primary, fontSize: '0.88rem', gap: 1.5, '&:hover': { bgcolor: c.bg.secondary } }}>
               <BuildIcon sx={{ fontSize: 16, color: c.text.tertiary }} />
-              Create Custom
+              {t('tools.page.createCustom')}
             </MenuItem>
             <MenuItem onClick={a.openRegistryBrowser} sx={{ color: c.text.primary, fontSize: '0.88rem', gap: 1.5, '&:hover': { bgcolor: c.bg.secondary } }}>
               <StorefrontIcon sx={{ fontSize: 16, color: c.text.tertiary }} />
-              Browse MCP Registry
+              {t('tools.page.browseRegistry')}
             </MenuItem>
           </Menu>
         </Box>
@@ -144,18 +146,18 @@ const Tools: React.FC = () => {
         >
           {builtinSectionOpen ? <KeyboardArrowDownIcon className="section-arrow" sx={{ fontSize: 18, color: c.text.tertiary, transition: 'color 0.15s' }} /> : <KeyboardArrowRightIcon className="section-arrow" sx={{ fontSize: 18, color: c.text.tertiary, transition: 'color 0.15s' }} />}
           <LockIcon sx={{ fontSize: 14, color: c.text.tertiary }} />
-          <Typography sx={{ color: c.text.muted, fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Built-in</Typography>
+          <Typography sx={{ color: c.text.muted, fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tools.page.builtIn')}</Typography>
           <Chip label={coreTools.length + deferredTools.length + browserTools.length} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 18, minWidth: 24, '& .MuiChip-label': { px: 0.8 } }} />
         </Box>
         <Collapse in={builtinSectionOpen} timeout={0} unmountOnExit>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1 }}>
 
       {coreTools.length > 0 && (
-        <ToolSection label="Core Tools" icon={<LockIcon sx={{ fontSize: 14, color: c.text.tertiary }} />} count={coreTools.length} open={coreSectionOpen} onToggle={() => setCoreSectionOpen((v) => !v)} grouped={groupedCore} collapsedCategories={collapsedCategories} toggleCategory={toggleCategory} expandedBuiltin={expandedBuiltin} toggleBuiltinExpand={toggleBuiltinExpand} builtinPermissions={builtinPermissions} onPermissionChange={a.handleBuiltinPermissionChange} onCategoryPermissionChange={a.handleBuiltinCategoryPermissionChange} enabled={coreSectionEnabled} onEnabledChange={(v) => a.handleSectionEnabledChange(coreTools, v)} />
+        <ToolSection label={t('tools.page.coreTools')} icon={<LockIcon sx={{ fontSize: 14, color: c.text.tertiary }} />} count={coreTools.length} open={coreSectionOpen} onToggle={() => setCoreSectionOpen((v) => !v)} grouped={groupedCore} collapsedCategories={collapsedCategories} toggleCategory={toggleCategory} expandedBuiltin={expandedBuiltin} toggleBuiltinExpand={toggleBuiltinExpand} builtinPermissions={builtinPermissions} onPermissionChange={a.handleBuiltinPermissionChange} onCategoryPermissionChange={a.handleBuiltinCategoryPermissionChange} enabled={coreSectionEnabled} onEnabledChange={(v) => a.handleSectionEnabledChange(coreTools, v)} />
       )}
 
       {deferredTools.length > 0 && (
-        <ToolSection label="Extended Tools" icon={<HourglassEmptyIcon sx={{ fontSize: 14, color: c.text.tertiary }} />} count={deferredTools.length} open={deferredSectionOpen} onToggle={() => setDeferredSectionOpen((v) => !v)} grouped={groupedDeferred} collapsedCategories={collapsedCategories} toggleCategory={toggleCategory} expandedBuiltin={expandedBuiltin} toggleBuiltinExpand={toggleBuiltinExpand} deferred builtinPermissions={builtinPermissions} onPermissionChange={a.handleBuiltinPermissionChange} onCategoryPermissionChange={a.handleBuiltinCategoryPermissionChange} enabled={deferredSectionEnabled} onEnabledChange={(v) => a.handleSectionEnabledChange(deferredTools, v)} />
+        <ToolSection label={t('tools.page.extendedTools')} icon={<HourglassEmptyIcon sx={{ fontSize: 14, color: c.text.tertiary }} />} count={deferredTools.length} open={deferredSectionOpen} onToggle={() => setDeferredSectionOpen((v) => !v)} grouped={groupedDeferred} collapsedCategories={collapsedCategories} toggleCategory={toggleCategory} expandedBuiltin={expandedBuiltin} toggleBuiltinExpand={toggleBuiltinExpand} deferred builtinPermissions={builtinPermissions} onPermissionChange={a.handleBuiltinPermissionChange} onCategoryPermissionChange={a.handleBuiltinCategoryPermissionChange} enabled={deferredSectionEnabled} onEnabledChange={(v) => a.handleSectionEnabledChange(deferredTools, v)} />
       )}
 
       {browserTools.length > 0 && (
@@ -183,7 +185,7 @@ const Tools: React.FC = () => {
         <Box onClick={() => setCustomSectionOpen((v) => !v)} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1, cursor: 'pointer', userSelect: 'none', '&:hover .section-arrow': { color: c.text.secondary } }}>
           {customSectionOpen ? <KeyboardArrowDownIcon className="section-arrow" sx={{ fontSize: 18, color: c.text.tertiary, transition: 'color 0.15s' }} /> : <KeyboardArrowRightIcon className="section-arrow" sx={{ fontSize: 18, color: c.text.tertiary, transition: 'color 0.15s' }} />}
           <BuildIcon sx={{ fontSize: 14, color: c.text.tertiary }} />
-          <Typography sx={{ color: c.text.muted, fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Connections</Typography>
+          <Typography sx={{ color: c.text.muted, fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tools.page.connections')}</Typography>
           <Chip label={tools.length + uninstalledIntegrations.length} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 18, minWidth: 24, '& .MuiChip-label': { px: 0.8 } }} />
         </Box>
         <Collapse in={customSectionOpen} timeout={0} unmountOnExit>
@@ -196,7 +198,7 @@ const Tools: React.FC = () => {
           ) : (tools.length === 0 && uninstalledIntegrations.length === 0) ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6, color: c.text.ghost, gap: 1.5 }}>
               <BuildIcon sx={{ fontSize: 40, opacity: 0.3 }} />
-              <Typography sx={{ fontSize: '0.9rem' }}>No custom tools defined yet. Create one to get started.</Typography>
+              <Typography sx={{ fontSize: '0.9rem' }}>{t('tools.page.emptyState')}</Typography>
             </Box>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1 }}>

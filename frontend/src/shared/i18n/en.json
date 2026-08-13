@@ -11,7 +11,8 @@
     "submit": "Submit",
     "copy": "Copy",
     "edit": "Edit",
-    "remove": "Remove"
+    "remove": "Remove",
+    "delete": "Delete"
   },
   "appShell": {
     "appTitle": "Maestro Studio",
@@ -550,6 +551,127 @@
       "approvals": "Approvals",
       "completedCount": "Completed ({{total}})",
       "clearAll": "Clear all"
+    }
+  },
+  "tools": {
+    "shared": {
+      "toolCount_one": "{{count}} tool",
+      "toolCount_other": "{{count}} tools",
+      "permissionsHeading": "Tool Permissions",
+      "alwaysAllow": "Always allow",
+      "askPermission": "Ask permission",
+      "alwaysDeny": "Always deny"
+    },
+    "page": {
+      "title": "Tool Library",
+      "subtitle": "Define and manage custom tools for your agents.",
+      "newTool": "New Tool",
+      "createCustom": "Create Custom",
+      "browseRegistry": "Browse MCP Registry",
+      "builtIn": "Built-in",
+      "coreTools": "Core Tools",
+      "extendedTools": "Extended Tools",
+      "connections": "Connections",
+      "emptyState": "No custom tools defined yet. Create one to get started."
+    },
+    "browserPermission": {
+      "title": "Browser",
+      "description": "Browser automation delegation and individual browser tools",
+      "delegation": "Delegation",
+      "browserTools": "Browser Tools"
+    },
+    "customTool": {
+      "connected": "Connected",
+      "connectedWithAccount": "Connected · {{email}}",
+      "configured": "Configured",
+      "docs": "docs",
+      "allowReads": "Allow reads",
+      "allowReadsTooltip": "Allow all read-only tools",
+      "reset": "Reset",
+      "resetTooltip": "Reset all to Ask",
+      "discoverTooltip": "Discover / refresh tools from the MCP server",
+      "noToolsDiscovered": "No tools discovered yet",
+      "discoverTools": "Discover Tools",
+      "addMcpConfigHint": "Add an MCP configuration to enable tool discovery"
+    },
+    "customToolDevInfo": {
+      "heading": "Developer Info",
+      "mcpConfig": "MCP Config",
+      "authType": "Auth type:",
+      "status": "Status:",
+      "account": "Account:",
+      "credentials": "Credentials:",
+      "credentialConfigured": "{{key}}: configured"
+    },
+    "browserLogin": {
+      "signedIn": "Signed in",
+      "signIn": "Sign in",
+      "recheck": "Re-check sign-in"
+    },
+    "serviceGroup": {
+      "readOnly": "Read-only",
+      "writeDelete": "Write / delete",
+      "inputParameters": "Input Parameters",
+      "required": "required"
+    },
+    "section": {
+      "onDemand": "on-demand",
+      "deferredDescription": "On-demand tools loaded via ToolSearch for planning, scheduling, and extended operations",
+      "builtinDescription": "Built-in agent SDK tools for file operations, shell commands, and search",
+      "categories": {
+        "filesystem": "Filesystem",
+        "system": "System",
+        "search": "Search",
+        "interaction": "Interaction",
+        "planning": "Planning",
+        "scheduling": "Scheduling",
+        "agents": "Agents",
+        "skills": "Skills"
+      }
+    },
+    "dialogs": {
+      "editTool": "Edit Tool",
+      "newTool": "New Tool",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description",
+      "commandLabel": "Command (slash command name)",
+      "commandPlaceholder": "e.g. my-tool",
+      "saveChanges": "Save Changes",
+      "createTool": "Create Tool",
+      "connectM365": "Connect Microsoft 365",
+      "generatingLoginCode": "Generating login code...",
+      "openLinkAndEnterCode": "Open the link below and enter the code to sign in:",
+      "waitingForSignIn": "Waiting for you to sign in...",
+      "connectedSuccessfully": "Connected successfully!",
+      "loginFailed": "Login failed. Please try again.",
+      "done": "Done",
+      "connect": "Connect",
+      "slackInstructionsPrefix": "Click",
+      "slackInstructionsSuffix": "below; a Slack window will open. Sign in normally and the window will close automatically once you reach your workspace.",
+      "slackSignIn": "Sign in with Slack",
+      "slackWaiting": "Waiting for sign-in…"
+    },
+    "registryServer": {
+      "community": "Community",
+      "installed": "Installed",
+      "endpoint": "Endpoint",
+      "website": "Website",
+      "repository": "Repository",
+      "requiredEnvVars": "Required Environment Variables",
+      "install": "Install",
+      "editAndInstall": "Edit & Install"
+    },
+    "mcpConfig": {
+      "title": "Configure MCP Tool",
+      "configLabel": "MCP Config (JSON)",
+      "invalidJson": "Invalid JSON",
+      "configHelper": "Transport config passed to the agent SDK (type, url, command, args, etc.)",
+      "authTypeLabel": "Authentication Type",
+      "authNone": "None",
+      "authEnvVars": "API Keys / Env Vars",
+      "envVarsHeading": "Environment Variables",
+      "addVariable": "+ Add Variable",
+      "installTool": "Install Tool"
     }
   }
 }

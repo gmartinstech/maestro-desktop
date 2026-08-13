@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Card from '@mui/material/Card';
@@ -52,28 +53,28 @@ const ToolSection: React.FC<ToolSectionProps> = ({
   enabled, onEnabledChange,
 }) => {
   const c = useClaudeTokens();
-
+  const { t } = useTranslation();
   const CATEGORY_META: Record<string, { label: string; color: string; icon: React.ReactElement }> = {
-    filesystem: { label: 'Filesystem', color: c.status.success, icon: <DescriptionIcon sx={{ fontSize: 16 }} /> },
-    system: { label: 'System', color: c.status.warning, icon: <TerminalIcon sx={{ fontSize: 16 }} /> },
-    search: { label: 'Search', color: '#3b82f6', icon: <SearchIcon sx={{ fontSize: 16 }} /> },
-    interaction: { label: 'Interaction', color: '#a855f7', icon: <QuestionAnswerIcon sx={{ fontSize: 16 }} /> },
-    planning: { label: 'Planning', color: '#ec4899', icon: <MapIcon sx={{ fontSize: 16 }} /> },
-    scheduling: { label: 'Scheduling', color: '#14b8a6', icon: <ScheduleIcon sx={{ fontSize: 16 }} /> },
-    agents: { label: 'Agents', color: '#f97316', icon: <CallSplitIcon sx={{ fontSize: 16 }} /> },
-    skills: { label: 'Skills', color: '#7B61BD', icon: <AutoAwesomeIcon sx={{ fontSize: 16 }} /> },
+    filesystem: { label: t('tools.section.categories.filesystem'), color: c.status.success, icon: <DescriptionIcon sx={{ fontSize: 16 }} /> },
+    system: { label: t('tools.section.categories.system'), color: c.status.warning, icon: <TerminalIcon sx={{ fontSize: 16 }} /> },
+    search: { label: t('tools.section.categories.search'), color: '#3b82f6', icon: <SearchIcon sx={{ fontSize: 16 }} /> },
+    interaction: { label: t('tools.section.categories.interaction'), color: '#a855f7', icon: <QuestionAnswerIcon sx={{ fontSize: 16 }} /> },
+    planning: { label: t('tools.section.categories.planning'), color: '#ec4899', icon: <MapIcon sx={{ fontSize: 16 }} /> },
+    scheduling: { label: t('tools.section.categories.scheduling'), color: '#14b8a6', icon: <ScheduleIcon sx={{ fontSize: 16 }} /> },
+    agents: { label: t('tools.section.categories.agents'), color: '#f97316', icon: <CallSplitIcon sx={{ fontSize: 16 }} /> },
+    skills: { label: t('tools.section.categories.skills'), color: '#7B61BD', icon: <AutoAwesomeIcon sx={{ fontSize: 16 }} /> },
   };
 
   const PermToggle = ({ value, onChange, size = 16 }: { value: string; onChange: (v: string) => void; size?: number }) => (
     <Box sx={{ display: 'flex', gap: 0.25 }} onClick={(e) => e.stopPropagation()}>
-      <Tooltip title="Always allow"><IconButton size="small" onClick={() => onChange('always_allow')} sx={{ p: 0.4, borderRadius: 1, bgcolor: value === 'always_allow' ? `${c.status.success}20` : 'transparent', color: value === 'always_allow' ? c.status.success : c.text.ghost, '&:hover': { bgcolor: `${c.status.success}15`, color: c.status.success } }}><CheckCircleIcon sx={{ fontSize: size }} /></IconButton></Tooltip>
-      <Tooltip title="Ask permission"><IconButton size="small" onClick={() => onChange('ask')} sx={{ p: 0.4, borderRadius: 1, bgcolor: value === 'ask' ? `${c.status.warning}20` : 'transparent', color: value === 'ask' ? c.status.warning : c.text.ghost, '&:hover': { bgcolor: `${c.status.warning}15`, color: c.status.warning } }}><PanToolIcon sx={{ fontSize: size }} /></IconButton></Tooltip>
-      <Tooltip title="Always deny"><IconButton size="small" onClick={() => onChange('deny')} sx={{ p: 0.4, borderRadius: 1, bgcolor: value === 'deny' ? `${c.status.error}20` : 'transparent', color: value === 'deny' ? c.status.error : c.text.ghost, '&:hover': { bgcolor: `${c.status.error}15`, color: c.status.error } }}><BlockIcon sx={{ fontSize: size }} /></IconButton></Tooltip>
+      <Tooltip title={t('tools.shared.alwaysAllow')}><IconButton size="small" onClick={() => onChange('always_allow')} sx={{ p: 0.4, borderRadius: 1, bgcolor: value === 'always_allow' ? `${c.status.success}20` : 'transparent', color: value === 'always_allow' ? c.status.success : c.text.ghost, '&:hover': { bgcolor: `${c.status.success}15`, color: c.status.success } }}><CheckCircleIcon sx={{ fontSize: size }} /></IconButton></Tooltip>
+      <Tooltip title={t('tools.shared.askPermission')}><IconButton size="small" onClick={() => onChange('ask')} sx={{ p: 0.4, borderRadius: 1, bgcolor: value === 'ask' ? `${c.status.warning}20` : 'transparent', color: value === 'ask' ? c.status.warning : c.text.ghost, '&:hover': { bgcolor: `${c.status.warning}15`, color: c.status.warning } }}><PanToolIcon sx={{ fontSize: size }} /></IconButton></Tooltip>
+      <Tooltip title={t('tools.shared.alwaysDeny')}><IconButton size="small" onClick={() => onChange('deny')} sx={{ p: 0.4, borderRadius: 1, bgcolor: value === 'deny' ? `${c.status.error}20` : 'transparent', color: value === 'deny' ? c.status.error : c.text.ghost, '&:hover': { bgcolor: `${c.status.error}15`, color: c.status.error } }}><BlockIcon sx={{ fontSize: size }} /></IconButton></Tooltip>
     </Box>
   );
 
   const getCatGroupPolicy = (tools: BuiltinTool[]) => {
-    const policies = tools.map((t) => builtinPermissions[t.name] || 'always_allow');
+    const policies = tools.map((bt) => builtinPermissions[bt.name] || 'always_allow');
     if (policies.every((p) => p === 'always_allow')) return 'always_allow';
     if (policies.every((p) => p === 'deny')) return 'deny';
     if (policies.every((p) => p === 'ask')) return 'ask';
@@ -84,8 +85,8 @@ const ToolSection: React.FC<ToolSectionProps> = ({
   const overallPolicy = getCatGroupPolicy(allSectionTools);
   const categoryCount = CATEGORY_ORDER.filter((cat) => grouped[cat]).length;
   const sectionDescription = deferred
-    ? 'On-demand tools loaded via ToolSearch for planning, scheduling, and extended operations'
-    : 'Built-in Claude Agent SDK tools for file operations, shell commands, and search';
+    ? t('tools.section.deferredDescription')
+    : t('tools.section.builtinDescription');
 
   const firstSentence = (desc: string) => {
     if (!desc) return '';
@@ -110,9 +111,9 @@ const ToolSection: React.FC<ToolSectionProps> = ({
         <Box sx={{ flex: 1, minWidth: 0, opacity: enabled ? 1 : 0.4, transition: 'opacity 0.2s' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
             <Typography sx={{ color: c.text.primary, fontWeight: 600, fontSize: '0.95rem' }}>{label}</Typography>
-            <Chip label={`${count} tools`} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 20, '& .MuiChip-label': { px: 0.6 } }} />
+            <Chip label={t('tools.shared.toolCount', { count })} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 20, '& .MuiChip-label': { px: 0.6 } }} />
             {deferred && (
-              <Chip label="on-demand" size="small" sx={{ bgcolor: c.status.warningBg, color: c.status.warning, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.6 } }} />
+              <Chip label={t('tools.section.onDemand')} size="small" sx={{ bgcolor: c.status.warningBg, color: c.status.warning, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.6 } }} />
             )}
           </Box>
           <Typography sx={{ color: c.text.muted, fontSize: '0.84rem' }}>{sectionDescription}</Typography>
@@ -139,8 +140,8 @@ const ToolSection: React.FC<ToolSectionProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1.5, mb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <SecurityIcon sx={{ fontSize: 14, color: c.text.muted }} />
-            <Typography sx={{ color: c.text.muted, fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tool Permissions</Typography>
-            <Chip label={`${count} tools`} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.ghost, fontSize: '0.65rem', height: 18, ml: 0.5, '& .MuiChip-label': { px: 0.6 } }} />
+            <Typography sx={{ color: c.text.muted, fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('tools.shared.permissionsHeading')}</Typography>
+            <Chip label={t('tools.shared.toolCount', { count })} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.ghost, fontSize: '0.65rem', height: 18, ml: 0.5, '& .MuiChip-label': { px: 0.6 } }} />
           </Box>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
@@ -161,7 +162,7 @@ const ToolSection: React.FC<ToolSectionProps> = ({
                     <Typography sx={{ color: c.text.primary, fontSize: '0.85rem', fontWeight: 600 }}>{meta.label}</Typography>
                     <Chip label={catTools.length} size="small" sx={{ bgcolor: c.bg.page, color: c.text.muted, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.6 } }} />
                   </Box>
-                  <PermToggle value={catPolicy === 'mixed' ? 'ask' : catPolicy} onChange={(v) => onCategoryPermissionChange(catTools.map((t) => t.name), v)} />
+                  <PermToggle value={catPolicy === 'mixed' ? 'ask' : catPolicy} onChange={(v) => onCategoryPermissionChange(catTools.map((ct) => ct.name), v)} />
                 </Box>
                 <Collapse in={isOpen} timeout={0} unmountOnExit>
                   <Box sx={{ px: 1, pb: 1 }}>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -36,6 +37,7 @@ interface Props {
 // dashboard and opens the card, no duplicated open logic here.
 const BrowserLoginConnect: React.FC<Props> = ({ ig, isDisabled }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const [status, setStatus] = useState<Status>('unknown');
   const domain = sessionDomain(ig.loginUrl);
   const alive = useRef(true);
@@ -73,10 +75,10 @@ const BrowserLoginConnect: React.FC<Props> = ({ ig, isDisabled }) => {
 
   if (status === 'connected') {
     return (
-      <Tooltip title="Re-check sign-in">
+      <Tooltip title={t('tools.browserLogin.recheck')}>
         <Chip
           icon={<CheckCircleIcon sx={{ fontSize: 12 }} />}
-          label="Signed in"
+          label={t('tools.browserLogin.signedIn')}
           size="small"
           onClick={(e) => { e.stopPropagation(); check(); }}
           sx={{ bgcolor: c.status.successBg, color: c.status.success, fontSize: '0.7rem', height: 22, '& .MuiChip-icon': { color: c.status.success }, flexShrink: 0 }}
@@ -96,10 +98,10 @@ const BrowserLoginConnect: React.FC<Props> = ({ ig, isDisabled }) => {
           startIcon={<LinkIcon sx={{ fontSize: 14 }} />}
           sx={{ borderColor: `${ig.color}40`, color: ig.color, '&:hover': { borderColor: ig.color, bgcolor: `${ig.color}10` }, textTransform: 'none', fontSize: '0.78rem', borderRadius: 1.5, py: 0.5, flexShrink: 0 }}
         >
-          {ig.connectLabel || 'Sign in'}
+          {ig.connectLabel || t('tools.browserLogin.signIn')}
         </Button>
       </Tooltip>
-      <Tooltip title="Re-check sign-in">
+      <Tooltip title={t('tools.browserLogin.recheck')}>
         <IconButton size="small" onClick={(e) => { e.stopPropagation(); check(); }} sx={{ color: c.text.ghost }}>
           <RefreshIcon sx={{ fontSize: 14 }} />
         </IconButton>
