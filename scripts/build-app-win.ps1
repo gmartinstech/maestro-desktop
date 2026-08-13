@@ -44,6 +44,31 @@ $TargetOverride = if ($Squirrel) { @('--config.win.target=squirrel', '--config.s
 $ScriptDir   = Split-Path -Parent $PSCommandPath
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
+# --- Build history log ---
+# Append-only, gitignored, one line per invocation (success or failure) so
+# build-time regressions/improvements are visible across runs instead of
+# living only in a terminal scrollback nobody kept.
+$BuildStartedAt = Get-Date
+$BuildStopwatch = [Diagnostics.Stopwatch]::StartNew()
+$BuildLogPath = Join-Path $ProjectRoot 'electron\build-times.log'
+function Write-BuildLogEntry([string]$Outcome) {
+    $Elapsed = $BuildStopwatch.Elapsed
+    $ModeLabel = if ($Publish) { 'PUBLISH' } elseif ($Sign) { 'SIGN' } elseif ($DevSign) { 'DEVSIGN' } elseif ($DirOnly) { 'DIRONLY' } else { 'LOCAL' }
+    $Sha = git -C $ProjectRoot rev-parse --short=12 HEAD 2>$null
+    if (-not $Sha) { $Sha = 'unknown' }
+    $Line = "{0:yyyy-MM-dd HH:mm:ss}  outcome={1,-7}  mode={2,-8}  elapsed={3:hh\:mm\:ss}  sha={4}" -f $BuildStartedAt, $Outcome, $ModeLabel, $Elapsed, $Sha
+    Add-Content -Path $BuildLogPath -Value $Line
+}
+# Catches terminating errors (the whole script runs under ErrorActionPreference
+# Stop, so every `throw` and every failed native call routed through the
+# LASTEXITCODE checks lands here) without wrapping ~600 lines in try/finally.
+# `break` re-raises after logging, so the original failure/exit-code behavior
+# for callers (CI, other scripts) is unchanged.
+trap {
+    Write-BuildLogEntry 'FAILED'
+    break
+}
+
 # --- Load .env.windows if present ---
 $EnvFile = Join-Path $ProjectRoot '.env.windows'
 if (Test-Path $EnvFile) {
@@ -285,15 +310,35 @@ if (Test-Path $LegacyNpmServers) {
 }
 Write-Host ""
 
+# npm ci (not install): installs exactly what package-lock.json pins, never
+# silently mutates the lock, fails loudly on drift. Reproducible builds
+# (pillar 3) depend on the lock being boss. But re-running it unconditionally
+# on every local rebuild reinstalls an unchanged node_modules\ from scratch
+# every time; skip it when package-lock.json's hash matches the last install
+# recorded in node_modules\.package-lock-hash (deleted whenever npm ci does
+# run, so a failed/partial install can never look like a hit).
+function Invoke-NpmCiIfNeeded($Dir, $Label) {
+    $Lock = Join-Path $Dir 'package-lock.json'
+    $Marker = Join-Path $Dir 'node_modules\.package-lock-hash'
+    $Hash = (Get-FileHash -Algorithm SHA256 $Lock).Hash
+    if ((Test-Path $Marker) -and ((Get-Content -Raw $Marker).Trim() -eq $Hash) -and -not $env:MAESTRO_REBUILD_NODE_MODULES) {
+        Write-Host "npm ci ($Label) skipped - package-lock.json unchanged (set `$env:MAESTRO_REBUILD_NODE_MODULES='1' to force)."
+        return
+    }
+    Push-Location $Dir
+    try {
+        Remove-Item -Force $Marker -ErrorAction SilentlyContinue
+        & npm ci
+        if ($LASTEXITCODE -ne 0) { throw "npm ci ($Label) failed" }
+        Set-Content -Path $Marker -Value $Hash -NoNewline
+    } finally { Pop-Location }
+}
+
 # --- Step 1: Frontend build ---
 Write-Host "[1/5] Building frontend..."
+Invoke-NpmCiIfNeeded (Join-Path $ProjectRoot 'frontend') 'frontend'
 Push-Location (Join-Path $ProjectRoot 'frontend')
 try {
-    # npm ci (not install): installs exactly what package-lock.json pins, never
-    # silently mutates the lock, fails loudly on drift. Reproducible builds
-    # (pillar 3) depend on the lock being boss.
-    & npm ci
-    if ($LASTEXITCODE -ne 0) { throw "npm ci (frontend) failed" }
     & npm run build
     if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
 } finally { Pop-Location }
@@ -356,26 +401,41 @@ Write-Host "[3b/5] Bundling Node.js runtime..."
 $NodeVersion = 'v20.18.1'
 $NodeStageDir = Join-Path $Staging 'node\x64'
 New-Item -ItemType Directory -Force -Path $NodeStageDir | Out-Null
-$NodeZip = Join-Path $env:TEMP "node-win-$([guid]::NewGuid()).zip"
-$NodeExtract = Join-Path $env:TEMP "node-win-extract-$([guid]::NewGuid())"
-try {
-    $NodeUrl = "https://nodejs.org/dist/$NodeVersion/node-$NodeVersion-win-x64.zip"
-    Write-Host "[3b] Downloading $NodeUrl..."
-    Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeZip -UseBasicParsing
-    Expand-Archive -Path $NodeZip -DestinationPath $NodeExtract -Force
-    $SrcRoot = Join-Path $NodeExtract "node-$NodeVersion-win-x64"
-    $SrcNode = Join-Path $SrcRoot 'node.exe'
-    if (-not (Test-Path $SrcNode)) { throw "node.exe not found at $SrcNode after extract" }
-    Copy-Item -Force $SrcNode (Join-Path $NodeStageDir 'node.exe')
-    # Bundle npm too so packaged apps with custom deps can `npm install` them. npm.cmd + node_modules\npm sit next to node.exe in the win dist; p_resolve_npm finds node_dir\npm.cmd.
-    Copy-Item -Force (Join-Path $SrcRoot 'npm.cmd') (Join-Path $NodeStageDir 'npm.cmd')
-    Copy-Item -Recurse -Force (Join-Path $SrcRoot 'node_modules') (Join-Path $NodeStageDir 'node_modules')
-    $Size = (Get-Item (Join-Path $NodeStageDir 'node.exe')).Length / 1MB
-    Write-Host ("[3b] Node {0} (x64) staged ({1:N1} MB)" -f $NodeVersion, $Size)
-} finally {
-    if (Test-Path $NodeZip) { Remove-Item -Force $NodeZip }
-    if (Test-Path $NodeExtract) { Remove-Item -Recurse -Force $NodeExtract }
+# Persistent cache keyed by version, outside build-staging\ (wiped every build)
+# so a pinned version only downloads once across all builds, same pattern as
+# backend\uv-bin\ above. Bump NodeVersion -> new cache dir -> one more download.
+$NodeCacheDir = Join-Path $ProjectRoot "electron\node-bin\$NodeVersion\x64"
+$NodeCacheReady = (Test-Path (Join-Path $NodeCacheDir 'node.exe')) -and `
+                  (Test-Path (Join-Path $NodeCacheDir 'npm.cmd')) -and `
+                  (Test-Path (Join-Path $NodeCacheDir 'node_modules'))
+if ($NodeCacheReady -and -not $env:MAESTRO_REBUILD_NODE) {
+    Write-Host "[3b] Node $NodeVersion (x64) already cached (set `$env:MAESTRO_REBUILD_NODE='1' to force re-download)."
+    Copy-Item -Recurse -Force (Join-Path $NodeCacheDir '*') $NodeStageDir
+} else {
+    $NodeZip = Join-Path $env:TEMP "node-win-$([guid]::NewGuid()).zip"
+    $NodeExtract = Join-Path $env:TEMP "node-win-extract-$([guid]::NewGuid())"
+    try {
+        $NodeUrl = "https://nodejs.org/dist/$NodeVersion/node-$NodeVersion-win-x64.zip"
+        Write-Host "[3b] Downloading $NodeUrl..."
+        Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeZip -UseBasicParsing
+        Expand-Archive -Path $NodeZip -DestinationPath $NodeExtract -Force
+        $SrcRoot = Join-Path $NodeExtract "node-$NodeVersion-win-x64"
+        $SrcNode = Join-Path $SrcRoot 'node.exe'
+        if (-not (Test-Path $SrcNode)) { throw "node.exe not found at $SrcNode after extract" }
+        if (Test-Path $NodeCacheDir) { Remove-Item -Recurse -Force $NodeCacheDir }
+        New-Item -ItemType Directory -Force -Path $NodeCacheDir | Out-Null
+        Copy-Item -Force $SrcNode (Join-Path $NodeCacheDir 'node.exe')
+        # Bundle npm too so packaged apps with custom deps can `npm install` them. npm.cmd + node_modules\npm sit next to node.exe in the win dist; p_resolve_npm finds node_dir\npm.cmd.
+        Copy-Item -Force (Join-Path $SrcRoot 'npm.cmd') (Join-Path $NodeCacheDir 'npm.cmd')
+        Copy-Item -Recurse -Force (Join-Path $SrcRoot 'node_modules') (Join-Path $NodeCacheDir 'node_modules')
+        Copy-Item -Recurse -Force (Join-Path $NodeCacheDir '*') $NodeStageDir
+    } finally {
+        if (Test-Path $NodeZip) { Remove-Item -Force $NodeZip }
+        if (Test-Path $NodeExtract) { Remove-Item -Recurse -Force $NodeExtract }
+    }
 }
+$Size = (Get-Item (Join-Path $NodeStageDir 'node.exe')).Length / 1MB
+Write-Host ("[3b] Node {0} (x64) staged ({1:N1} MB)" -f $NodeVersion, $Size)
 Write-Host ""
 
 # --- Step 4: Snapshot source dirs into electron\build-staging\ ---
@@ -433,29 +493,43 @@ try {
     $CacheDir = Join-Path $Staging 'backend\apps\outputs\webapp_template_cache'
     New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
     $OutArchive = Join-Path $CacheDir "node_modules.$Digest.tar.gz"
-    $WorkDir = Join-Path $env:TEMP "os-tmpl-nm-$([guid]::NewGuid())"
-    New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
-    try {
-        Copy-Item -Force $PkgJson (Join-Path $WorkDir 'package.json')
-        $Lock = Join-Path $TmplFrontend 'package-lock.json'
-        Push-Location $WorkDir
-        if (Test-Path $Lock) {
-            Copy-Item -Force $Lock (Join-Path $WorkDir 'package-lock.json')
-            & npm ci --prefer-offline --no-audit --no-fund --loglevel=error
-        } else {
-            & npm install --prefer-offline --no-audit --no-fund --loglevel=error
-        }
-        if ($LASTEXITCODE -ne 0) { throw "npm install/ci failed ($LASTEXITCODE)" }
-        if (-not (Test-Path (Join-Path $WorkDir 'node_modules'))) { throw "no node_modules produced" }
-        # tar.exe (bsdtar) ships with Windows 10+; archive root is node_modules/.
-        & tar -czf $OutArchive -C $WorkDir node_modules
-        if ($LASTEXITCODE -ne 0) { throw "tar failed ($LASTEXITCODE)" }
-        Pop-Location
+    # Persistent cache keyed by the same digest, outside build-staging\ (wiped
+    # every build), so an unchanged template package.json skips npm install +
+    # tar entirely on repeat builds instead of just renaming the same work.
+    $PersistCacheDir = Join-Path $ProjectRoot 'electron\webapp-template-archive-cache'
+    $PersistArchive = Join-Path $PersistCacheDir "node_modules.$Digest.tar.gz"
+    if ((Test-Path $PersistArchive) -and -not $env:MAESTRO_REBUILD_BUNDLES) {
+        Copy-Item -Force $PersistArchive $OutArchive
         $ArchMB = (Get-Item $OutArchive).Length / 1MB
-        Write-Host ("[4b] webapp-template archive staged: node_modules.$Digest.tar.gz ({0:N1} MB)" -f $ArchMB)
-    } finally {
-        if ((Get-Location).Path -eq $WorkDir) { Pop-Location }
-        if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
+        Write-Host ("[4b] webapp-template archive already cached: node_modules.$Digest.tar.gz ({0:N1} MB)" -f $ArchMB)
+    } else {
+        $WorkDir = Join-Path $env:TEMP "os-tmpl-nm-$([guid]::NewGuid())"
+        New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
+        try {
+            Copy-Item -Force $PkgJson (Join-Path $WorkDir 'package.json')
+            $Lock = Join-Path $TmplFrontend 'package-lock.json'
+            Push-Location $WorkDir
+            if (Test-Path $Lock) {
+                Copy-Item -Force $Lock (Join-Path $WorkDir 'package-lock.json')
+                & npm ci --prefer-offline --no-audit --no-fund --loglevel=error
+            } else {
+                & npm install --prefer-offline --no-audit --no-fund --loglevel=error
+            }
+            if ($LASTEXITCODE -ne 0) { throw "npm install/ci failed ($LASTEXITCODE)" }
+            if (-not (Test-Path (Join-Path $WorkDir 'node_modules'))) { throw "no node_modules produced" }
+            # tar.exe (bsdtar) ships with Windows 10+; archive root is node_modules/.
+            & tar -czf $OutArchive -C $WorkDir node_modules
+            if ($LASTEXITCODE -ne 0) { throw "tar failed ($LASTEXITCODE)" }
+            Pop-Location
+            New-Item -ItemType Directory -Force -Path $PersistCacheDir | Out-Null
+            Get-ChildItem -Path $PersistCacheDir -Filter 'node_modules.*.tar.gz' -ErrorAction SilentlyContinue | Remove-Item -Force
+            Copy-Item -Force $OutArchive $PersistArchive
+            $ArchMB = (Get-Item $OutArchive).Length / 1MB
+            Write-Host ("[4b] webapp-template archive staged: node_modules.$Digest.tar.gz ({0:N1} MB)" -f $ArchMB)
+        } finally {
+            if ((Get-Location).Path -eq $WorkDir) { Pop-Location }
+            if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
+        }
     }
 } catch {
     Write-Warning "[4b] webapp-template archive build FAILED: $_  (App Builder first-app falls back to live npm; non-fatal)"
@@ -527,9 +601,8 @@ Write-Host "Stamped build-info.json: sha=$BuildShortSha channel=$BuildChannel"
 Write-Host "[5/5] Packaging with electron-builder..."
 Push-Location (Join-Path $ProjectRoot 'electron')
 try {
-    # npm ci: lockfile-exact, no drift. See frontend note above.
-    & npm ci
-    if ($LASTEXITCODE -ne 0) { throw "npm ci (electron) failed" }
+    # npm ci: lockfile-exact, no drift. See Invoke-NpmCiIfNeeded above.
+    Invoke-NpmCiIfNeeded (Join-Path $ProjectRoot 'electron') 'electron'
 
     if (-not $Sign) {
         $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
@@ -591,3 +664,6 @@ Write-Host ""
 Write-Host "Output files:"
 Get-ChildItem -Path (Join-Path $ProjectRoot 'electron\dist') -Filter '*.exe' -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime
 Get-ChildItem -Path (Join-Path $ProjectRoot 'electron\dist') -Filter '*.zip' -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime
+
+Write-BuildLogEntry 'SUCCESS'
+Write-Host "Elapsed: $($BuildStopwatch.Elapsed.ToString('hh\:mm\:ss'))  (logged to $BuildLogPath)"
