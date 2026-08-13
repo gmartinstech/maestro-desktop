@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import InputBase from '@mui/material/InputBase';
 import Typography from '@mui/material/Typography';
@@ -29,6 +30,7 @@ const CardSearchPalette: React.FC<Props> = ({
   cards, viewCards, browserCards, sessions,
 }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +41,7 @@ const CardSearchPalette: React.FC<Props> = ({
       const session = sessions[card.session_id];
       result.push({
         id: card.session_id,
-        label: session?.name || `Agent ${card.session_id.slice(0, 8)}`,
+        label: session?.name || t('dashboard.cardSearch.agentFallback', { id: card.session_id.slice(0, 8) }),
         type: 'agent',
         rect: { x: card.x, y: card.y, width: card.width, height: card.height },
       });
@@ -47,7 +49,7 @@ const CardSearchPalette: React.FC<Props> = ({
     for (const [key, vc] of Object.entries(viewCards)) {
       result.push({
         id: key,
-        label: `View: ${vc.output_id.slice(0, 12)}${(vc.instance ?? 1) > 1 ? ` (#${vc.instance})` : ''}`,
+        label: t('dashboard.cardSearch.viewFallback', { id: vc.output_id.slice(0, 12) }) + ((vc.instance ?? 1) > 1 ? ` (#${vc.instance})` : ''),
         type: 'view',
         rect: { x: vc.x, y: vc.y, width: vc.width, height: vc.height },
       });
@@ -56,13 +58,13 @@ const CardSearchPalette: React.FC<Props> = ({
       const activeTab = bc.tabs.find((t) => t.id === bc.activeTabId);
       result.push({
         id: bc.browser_id,
-        label: activeTab?.title || activeTab?.url || `Browser ${bc.browser_id.slice(0, 8)}`,
+        label: activeTab?.title || activeTab?.url || t('dashboard.cardSearch.browserFallback', { id: bc.browser_id.slice(0, 8) }),
         type: 'browser',
         rect: { x: bc.x, y: bc.y, width: bc.width, height: bc.height },
       });
     }
     return result;
-  }, [cards, viewCards, browserCards, sessions]);
+  }, [cards, viewCards, browserCards, sessions, t]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
@@ -164,7 +166,7 @@ const CardSearchPalette: React.FC<Props> = ({
             inputRef={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search cards..."
+            placeholder={t('dashboard.cardSearch.placeholder')}
             fullWidth
             sx={{
               fontSize: '0.9375rem',
@@ -179,7 +181,7 @@ const CardSearchPalette: React.FC<Props> = ({
         <Box sx={{ overflowY: 'auto', maxHeight: 320 }}>
           {filtered.length === 0 ? (
             <Typography sx={{ px: 2, py: 2, fontSize: '0.875rem', color: c.text.muted, textAlign: 'center' }}>
-              No cards found
+              {t('dashboard.cardSearch.noCards')}
             </Typography>
           ) : (
             filtered.map((item, i) => (

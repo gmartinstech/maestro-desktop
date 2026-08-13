@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
@@ -79,6 +80,7 @@ const NoteCard: React.FC<Props> = ({
   cardZOrder = 0, autoFocus, onCardSelect, onDragStart, onDragMove, onDragEnd, onBringToFront,
 }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const palette = NOTE_PALETTE[color] || NOTE_PALETTE.yellow;
 
@@ -386,7 +388,7 @@ const NoteCard: React.FC<Props> = ({
           onChange={(e) => dispatch(updateNoteContent({ noteId, content: e.target.value }))}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
-          placeholder="Type a note…"
+          placeholder={t('dashboard.noteCard.placeholder')}
           spellCheck
           style={{
             flex: 1,

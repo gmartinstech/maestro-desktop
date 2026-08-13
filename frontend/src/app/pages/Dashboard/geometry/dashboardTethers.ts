@@ -1,4 +1,5 @@
 import { useMemo, type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { CardPosition, BrowserCardPosition, ViewCardPosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
 import type { Workflow, OpenCard } from '@/shared/state/workflowsSlice';
 import { EXPANDED_CARD_MIN_H, GRID_GAP } from '@/shared/state/dashboardLayoutSlice';
@@ -115,6 +116,7 @@ export function useTethers({
   workflowsMonitorLabel,
   monitorRunSessionId,
 }: UseTethersArgs): Tether[] {
+  const { t } = useTranslation();
   return useMemo(() => {
     const sessionById = new Map(sessionList.map((s) => [s.id, s]));
     const wfHeight = (wc: WorkflowCardPosition): number =>
@@ -259,7 +261,7 @@ export function useTethers({
 
     const glowTethers = new Map<string, ReturnType<typeof cardTether>>();
     for (const [browserId, { sourceId, fading, label }] of Object.entries(glowingBrowserCards)) {
-      const t = cardTether(
+      const tether = cardTether(
         browserCards[browserId],
         browserId,
         sourceId,
@@ -267,7 +269,7 @@ export function useTethers({
         label || '',
         fading,
       );
-      if (t) glowTethers.set(browserId, t);
+      if (tether) glowTethers.set(browserId, tether);
     }
 
     for (const s of sessionList) {
@@ -277,15 +279,15 @@ export function useTethers({
       if (glowTethers.has(s.browser_id)) continue;
       // A browser docked below the hub keeps a "Browser" pointer so the link reads at a glance; the right-docked agent/run cases stay label-free (their glow already said it on spawn).
       const parent = sessionById.get(s.parent_session_id);
-      const t = cardTether(
+      const tether = cardTether(
         browserCards[s.browser_id],
         s.browser_id,
         s.parent_session_id,
         `browser-${s.browser_id}`,
-        parent?.workflow_edit_id ? 'Browser' : '',
+        parent?.workflow_edit_id ? t('dashboard.tether.browser') : '',
         false,
       );
-      if (t) glowTethers.set(s.browser_id, t);
+      if (tether) glowTethers.set(s.browser_id, tether);
     }
 
     const browserTethers = Array.from(glowTethers.values()).filter(Boolean) as Tether[];
@@ -374,7 +376,7 @@ export function useTethers({
         path: pathD,
         labelX,
         labelY,
-        label: 'Make workflow',
+        label: t('dashboard.tether.makeWorkflow'),
         fading: false,
       });
     }
@@ -408,7 +410,7 @@ export function useTethers({
       const pathD = elbowPath(x1, y1, x2, y2);
       const midX = x1 + (x2 - x1) / 2;
       const midY = y1 + (y2 - y1) / 2;
-      const sidecarLabel = openCard.sidecarKind === 'testing' ? 'Testing' : 'Watching';
+      const sidecarLabel = openCard.sidecarKind === 'testing' ? t('dashboard.tether.testing') : t('dashboard.tether.watching');
       workflowTethers.push({
         key: `sidecar-${wc.workflow_id}`,
         path: pathD,
@@ -475,5 +477,5 @@ export function useTethers({
 
     return [...agentTethers, ...browserTethers, ...workflowTethers, ...viewTethers, ...monitorTethers];
   // measuredHeightsTick re-runs the memo once ResizeObserver reports a new height after a collapse (the ref read is invisible to the dep checker). eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, workflowCards, workflowItems, workflowOpenCards, viewCards, outputs, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList, workflowsHub, workflowsMonitorCard, workflowsMonitorLabel, monitorRunSessionId]);
+  }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, workflowCards, workflowItems, workflowOpenCards, viewCards, outputs, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList, workflowsHub, workflowsMonitorCard, workflowsMonitorLabel, monitorRunSessionId, t]);
 }

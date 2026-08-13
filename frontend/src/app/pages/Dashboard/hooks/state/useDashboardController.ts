@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
@@ -26,6 +27,7 @@ import { useDashboardInteractions } from '../interaction/useDashboardInteraction
 // Composition root for the dashboard. Wires every dashboard hook together and returns exactly the prop bag DashboardCanvas renders. Kept out of Dashboard.tsx so the component file stays a thin shell.
 export function useDashboardController(dashboardId: string, isActive: boolean) {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const elementSelectionCtx = useElementSelection();
   const isElementSelectMode = elementSelectionCtx?.selectMode ?? false;
   const {
@@ -47,7 +49,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     (monitorActive ? s.dashboardLayout.workflowsMonitorCard : null));
   const monitorIsLive = useAppSelector((s) =>
     !!workflowsMonitorId && s.workflows.active.some((a) => a.workflow_id === workflowsMonitorId));
-  const workflowsMonitorLabel = monitorIsLive ? 'Watching' : 'Viewing';
+  const workflowsMonitorLabel = monitorIsLive ? t('dashboard.tether.watching') : t('dashboard.tether.viewing');
 
   // The session id of the run the monitor is showing, mirroring RunMonitor's pinned-or-latest pick, so its browser tether can anchor to the monitor card.
   const workflowsMonitorRunId = useAppSelector((s) => s.dashboardLayout.workflowsMonitorRunId);

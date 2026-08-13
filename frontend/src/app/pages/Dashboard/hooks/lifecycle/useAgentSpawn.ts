@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import { report } from '@/shared/serviceClient';
 import { store } from '@/shared/state/store';
 import { useAppDispatch } from '@/shared/hooks';
@@ -70,6 +71,7 @@ export function useAgentSpawn({
   onWelcomeNewAgent,
 }: UseAgentSpawnArgs) {
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
   const getSpawnPlacement = useSpawnPlacement({ selection, viewportRef, canvasStateRef, expandedSessionIds });
 
   const handleBranchFromCard = useCallback(
@@ -185,7 +187,7 @@ export function useAgentSpawn({
       }
       // Tether the chat to the browser(s) it'll drive NOW so the arrow doesn't pop in after the launch round-trips. Keyed on the draft id; the fulfilled rekey carries it to the real session id in place.
       if (selectedBrowserIds?.length) {
-        dispatch(setGlowingBrowserCards({ browserIds: selectedBrowserIds, sessionId: draftId, label: 'Use Browser' }));
+        dispatch(setGlowingBrowserCards({ browserIds: selectedBrowserIds, sessionId: draftId, label: t('dashboard.tether.useBrowser') }));
       }
       const placed = store.getState().dashboardLayout.cards[draftId];
       if (placed) {
@@ -249,7 +251,7 @@ export function useAgentSpawn({
         }
       });
     },
-    [viewportRef, canvasActions, dispatch, dashboardId, expandNewChats, expandedSessionIds, getSpawnPlacement, handleHighlightCard, setToolbarOpen, setAutoFocusSessionId, setPendingSelectSessionId, toolbarRef, canvasStateRef, spawnOriginsRef],
+    [viewportRef, canvasActions, dispatch, dashboardId, expandNewChats, expandedSessionIds, getSpawnPlacement, handleHighlightCard, setToolbarOpen, setAutoFocusSessionId, setPendingSelectSessionId, toolbarRef, canvasStateRef, spawnOriginsRef, t],
   );
 
   return {
