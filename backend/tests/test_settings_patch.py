@@ -59,6 +59,14 @@ def test_patch_ignores_unknown_fields(client, reset_settings):
     assert "not_a_field" not in load_settings().model_dump()
 
 
+def test_patch_persists_language_choice(client, reset_settings):
+    # Mirrors the renderer's migration flow: a localStorage-only language choice arrives as a PATCH and must persist server-side, surviving a cache clear or profile move.
+    r = client.patch("/api/settings", json={"language": "en"})
+    assert r.status_code == 200, r.text
+    from backend.apps.settings.settings import load_settings
+    assert load_settings().language == "en"
+
+
 @pytest.mark.asyncio
 async def test_concurrent_renderer_patch_and_agent_write_both_survive(reset_settings):
     """The renderer PATCHes one field while an autonomous agent writes another,

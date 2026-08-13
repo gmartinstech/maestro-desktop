@@ -26,14 +26,74 @@
 3. **Call-home hosts** — `api.openswarm.com` and any `*.openswarm.{com,ai,io,net}`.
    Models go through provedor-ia (`https://llm.martinstech.net/v1`).
    `scripts/check-callhome.mjs` guards the built output; this one guards source.
+4. **i18n regressions** — a hardcoded English literal reintroduced into a JSX text node or a
+   `label=`/`placeholder=`/`aria-label=` attribute, in a file that imports `useTranslation`.
+   See "Upstream has no i18n" below.
 
 Both guards deliberately contain the forbidden literals. **Do not "clean them up".**
 
-If a finding is legitimate — a new migration table needing the old key names — add its path to
-`ALLOW` in the drift checker *with a reason*, rather than deleting the check.
+If a finding is legitimate — a new migration table needing the old key names, or a deliberately
+untranslated brand/feature name like "Skill Builder" — add its path (or the exact string, via
+`ALLOW_STRINGS`) to the drift checker *with a reason*, rather than deleting the check.
 
 This is not hypothetical: cherry-picking `10b019bd` reintroduced "a previous OpenSwarm" in a
 docstring, and the guard caught it on its first run.
+
+## Upstream has no i18n
+
+Upstream (`openswarm-ai/openswarm`) ships **zero localization**. Every user-facing string there is
+a hardcoded English literal — there is no `t()`, no `en.json`, no `pt-BR.json`. We localized on top
+of that after the fork point, so **any upstream commit that touches a component we localized will
+conflict on every `t('...')` call we added.**
+
+That makes the failure mode specific and dangerous: resolving the conflict by "taking theirs" on a
+file we localized is not a merge win, it is a silent regression. It compiles, it typechecks, it
+passes every non-i18n test — and it ships plain English to every user, because **pt-BR is the
+default language for every install**, not an opt-in locale. A reviewer skimming a diff for logic
+correctness will not notice that a `<Typography>{t('foo.bar')}</Typography>` became
+`<Typography>Foo Bar</Typography>`; the JSX shape is identical, only the payload regressed.
+
+### Detection recipe — run after every cherry-pick that touches a localized file
+
+1. **Locale parity, both directions.** Every key in `en.json` must exist in `pt-BR.json` and vice
+   versa; a merge that adds a new upstream string without threading it through `t()` shows up here
+   as a key present in code but absent from both locale files (see step 2), and a conflict
+   resolution that drops a locale entry shows up as a key present in one file but not the other:
+
+   ```bash
+   node -e "
+   const en=require('./frontend/src/shared/i18n/en.json');
+   const pt=require('./frontend/src/shared/i18n/pt-BR.json');
+   const flat=(o,p='')=>Object.entries(o).flatMap(([k,v])=>typeof v==='object'&&v!==null?flat(v,p+k+'.'):[p+k]);
+   const enKeys=new Set(flat(en)), ptKeys=new Set(flat(pt));
+   const missingInPt=[...enKeys].filter(k=>!ptKeys.has(k));
+   const missingInEn=[...ptKeys].filter(k=>!enKeys.has(k));
+   console.log('missing in pt-BR:', JSON.stringify(missingInPt));
+   console.log('missing in en:', JSON.stringify(missingInEn));
+   "
+   ```
+
+   Both arrays must print `[]`. Anything else means a key was added to one locale file but not the
+   other — fix it before merging, don't just note it.
+
+2. **Scan for reintroduced English literals in files that use `useTranslation`.** This is exactly
+   `scripts/check-fork-drift.mjs`'s class 4 (item 4 above); it already runs inside `npm run verify`,
+   but after a cherry-pick that touches a localized component, run it standalone first so the
+   finding is easy to spot against a small diff instead of buried in the full verify log:
+
+   ```bash
+   node scripts/check-fork-drift.mjs
+   ```
+
+   It flags a literal JSX text node or a `label=`/`placeholder=`/`aria-label=` attribute value of
+   two-or-more capitalized words, in any `.tsx` file under `frontend/src/` that imports
+   `useTranslation` — scoped that narrowly on purpose so it does not fire on every English
+   identifier, URL, or number in the codebase (a check that cries wolf gets deleted, not fixed).
+   A real hit means the conflict resolution took upstream's hardcoded string over our `t()` call;
+   restore the `t()` call and add the matching key to both locale files if it's genuinely new copy.
+   A deliberately untranslated proper noun (a brand or feature name kept literal in both locales,
+   like "Skill Builder") is not a regression — allowlist the exact string in `ALLOW_STRINGS` with a
+   reason, as `check-fork-drift.mjs` already does.
 
 ## Cherry-picking recipe
 

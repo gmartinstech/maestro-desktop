@@ -27,6 +27,8 @@ import ErrorBoundary from './components/feedback/ErrorBoundary';
 import ProvedorIaSessionGate from './components/ProvedorIaLogin/ProvedorIaSessionGate';
 import { setPanelMode, disableOnboardingAfterCrash } from '@/shared/state/onboardingProgressSlice';
 import { PROVEDOR_IA_DEFAULT_MODEL, PROVEDOR_IA_PROVIDER_NAME } from '@/shared/config';
+import i18n from '@/shared/i18n/i18n';
+import { resolveLanguageSync } from '@/shared/i18n/languageSync';
 
 const Analytics = React.lazy(() => import('./pages/Analytics/Analytics'));
 const OnboardingRoot = React.lazy(() =>
@@ -206,6 +208,8 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const theme = useAppSelector((s) => s.settings.data.theme);
   const loaded = useAppSelector((s) => s.settings.loaded);
   const allowExperimentalUpdates = useAppSelector((s) => s.settings.data.allow_experimental_updates);
+  const backendLanguage = useAppSelector((s) => s.settings.data.language ?? null);
+  const [languageSynced, setLanguageSynced] = useState(false);
   useEffect(() => {
     dispatch(fetchSettings());
     dispatch(fetchModels());
@@ -248,8 +252,26 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
     if (!loaded) return;
     (window as any).maestro?.setAllowPrerelease?.(allowExperimentalUpdates);
   }, [loaded, allowExperimentalUpdates]);
-  // Hold paint until settings land so the user's theme renders first; Electron's ready-to-show relies on this.
-  if (!loaded) return null;
+
+  // Backend `language` is the source of truth once loaded; localStorage only seeded i18n's
+  // synchronous init for the pre-hydration hint. Reconcile before children mount (rather than
+  // in an effect that fires after first paint) so there is no visible flash between the
+  // localStorage-hinted language and the backend one. A null backend value means unset (fresh
+  // install or pre-migration upgrade); resolveLanguageSync then treats the current i18n language
+  // as the value to carry forward and persists it explicitly.
+  useEffect(() => {
+    if (!loaded) return;
+    const { target, shouldPersistToBackend } = resolveLanguageSync(i18n.language, backendLanguage);
+    if (shouldPersistToBackend) dispatch(updateSettingsPatch({ language: target }));
+    if (i18n.language === target) {
+      setLanguageSynced(true);
+      return;
+    }
+    i18n.changeLanguage(target).finally(() => setLanguageSynced(true));
+  }, [loaded, backendLanguage, dispatch]);
+
+  // Hold paint until settings AND language land, so the user's theme and language render first; Electron's ready-to-show relies on this.
+  if (!loaded || !languageSynced) return null;
   return <>{children}</>;
 };
 

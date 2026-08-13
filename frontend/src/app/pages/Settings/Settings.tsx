@@ -11,6 +11,7 @@ import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { fetchModes } from '@/shared/state/modesSlice';
 import { useThemeMode, useClaudeTokens } from '@/shared/styles/ThemeContext';
+import i18n from '@/shared/i18n/i18n';
 import DirectoryBrowser from '@/app/components/editor/DirectoryBrowser';
 import { CommandsContent } from '@/app/pages/Commands/Commands';
 import GeneralTab from './sections/general/GeneralTab';
@@ -164,6 +165,12 @@ const Settings: React.FC = () => {
     if (open && loaded) setThemeMode(form.theme);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.theme]);
+
+  // Same pattern as theme above: apply the language toggle live, the debounced save (buildSubmit picks up `language` like any other field) persists it to the backend, which stays the source of truth on next boot.
+  useEffect(() => {
+    if (open && loaded && form.language) i18n.changeLanguage(form.language);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.language]);
 
   useEffect(() => {
     if (!open || !loaded) return;
