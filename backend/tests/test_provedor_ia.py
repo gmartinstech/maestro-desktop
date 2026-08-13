@@ -44,9 +44,11 @@ def no_env_token(monkeypatch):
 # --------------------------------------------------------------------------- The contract (values come from the vendor installers, not from us). ---------------------------------------------------------------------------
 
 def test_contract_matches_the_vendor_installers():
-    assert [m.value for m in PROVEDOR_IA_MODELS] == ["maestro", "maestro-ultra", "maestro-code"]
+    assert [m.value for m in PROVEDOR_IA_MODELS] == [
+        "maestro", "maestro-fast", "maestro-ultra", "maestro-code",
+    ]
     assert [m.label for m in PROVEDOR_IA_MODELS] == [
-        "Maestro (default, fast)", "Maestro Ultra", "Maestro Code",
+        "Maestro (default, fast)", "Maestro Fast", "Maestro Ultra", "Maestro Code",
     ]
     for m in PROVEDOR_IA_MODELS:
         assert m.context_window == 128_000
@@ -77,7 +79,9 @@ def test_env_token_seeds_the_provider_and_keeps_maestro_default(no_env_token, mo
     assert cp.name == PROVEDOR_IA_NAME
     assert cp.base_url == MAESTRO_DEFAULT_PROXY_URL
     assert cp.api_key == P_FAKE_TOKEN
-    assert [m["value"] for m in cp.models] == ["maestro", "maestro-ultra", "maestro-code"]
+    assert [m["value"] for m in cp.models] == [
+        "maestro", "maestro-fast", "maestro-ultra", "maestro-code",
+    ]
 
 
 def test_settings_field_token_wins_over_env(no_env_token, monkeypatch):

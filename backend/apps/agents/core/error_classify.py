@@ -3,6 +3,8 @@ from typing import Optional
 
 from typeguard import typechecked
 
+from backend.apps.agents.core.ProvedorIaSessionExpiredError import ProvedorIaSessionExpiredError
+
 # Secret shapes that must never ride along when we ship a stderr tail or an error string to telemetry. own_key mode means the subprocess stderr can echo the user's OWN provider key, so this scrub is the wall between a diagnostic and a key leak; over-redacting is fine, leaking is not.
 P_TELEMETRY_SECRET_PATTERNS = (
     re.compile(r"sk-ant-[A-Za-z0-9_\-]{12,}"),
@@ -108,6 +110,9 @@ def is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     common cause: the Maestro Pro bearer or 9Router OAuth token has expired
     while the UI still shows the connection as 'connected'.
     """
+    # Our own pre-spawn refusal for a dead provedor-ia session: classified by TYPE so it can never be re-read as anything but auth.
+    if isinstance(exc, ProvedorIaSessionExpiredError):
+        return True
     combined = f"{exc!s}\n{extra_text}".strip()
     if not combined:
         return False

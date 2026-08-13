@@ -8,6 +8,7 @@ from typing import List
 from typeguard import typechecked
 
 from backend.apps.agents.core.models import AgentSession, Message
+from backend.apps.agents.core.ProvedorIaSessionExpiredError import ProvedorIaSessionExpiredError
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.provedor_ia import PROVEDOR_IA_NAME
 from backend.apps.settings.settings import load_settings
@@ -146,7 +147,7 @@ async def handle_run_error(e: Exception, session: AgentSession, session_id: str,
                 "through. (No need to reconnect anything.)"
             )
             reason = "codex_token_rotating"
-        elif PROVEDOR_IA_NAME in p_model or "jwt expired" in p_combined:
+        elif isinstance(e, ProvedorIaSessionExpiredError) or PROVEDOR_IA_NAME in p_model or "jwt expired" in p_combined:
             # A provedor-ia token is a 10h Keycloak access token with no refresh, so this is the expected end of every session, not a misconfiguration. The renderer replaces this text with the sign-in card.
             friendly_msg = (
                 "Maestro Studio sign-in expired. Sign in again to get a "

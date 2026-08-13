@@ -33,9 +33,11 @@ class ProvedorIaModel(BaseModel):
     max_completion_tokens: int
 
 
-# Straight from the vendor installers (launch.ps1?pi and ?chatgpt): three models, 128k context and 4096 max output each.
+# Straight from the vendor installers (launch.ps1?pi and ?chatgpt): 128k context and 4096 max output each. The set mirrors the gateway's own `allow` list; a mask missing here is simply unreachable from the picker.
 PROVEDOR_IA_MODELS: List[ProvedorIaModel] = [
     ProvedorIaModel(value="maestro", label="Maestro (default, fast)",
+                    context_window=128_000, max_completion_tokens=4_096),
+    ProvedorIaModel(value="maestro-fast", label="Maestro Fast",
                     context_window=128_000, max_completion_tokens=4_096),
     ProvedorIaModel(value="maestro-ultra", label="Maestro Ultra",
                     context_window=128_000, max_completion_tokens=4_096),

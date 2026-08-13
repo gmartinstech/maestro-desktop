@@ -36,6 +36,14 @@ Mitigation, not a fix. The 10-hour expiry is still there; it is merely visible a
 - A turn that dies on the gateway's 401 is classified `provedor_ia_token_expired` by
   `handle_run_error.py` / `handle_assistant_message.py`, and the existing auth cards route their CTA
   to the same sign-in prompt instead of a Settings detour.
+- `guard_provedor_ia_session` refuses the turn **before the CLI spawns**, from
+  `configure_provider_env`'s custom branch, when the selected model routes through provedor-ia on a
+  `missing`/`expired` token. Without it the skipped 9Router node (below) leaves `cp-<slug>/<model>`
+  unresolvable and the CLI blames the model: "it may not exist or you may not have access to it. Run
+  `--model` to pick a different model" — a credential problem reported as a configuration one, with
+  advice that cannot work. The refusal is a typed exception classified as auth by type, so it lands
+  on the existing `provedor_ia_token_expired` card. It is also the only check that covers a
+  **workflow or scheduled run**, which never passes the renderer's session gate at all.
 - `sync_custom_providers` skips pushing a definitively-expired provedor-ia token into 9Router, so
   the app stops handing a dead bearer to the thing that keeps replaying it at the gateway. Note that
   the recurring `/v1/models` polling originates inside the **bundled 9Router process** (not in this
