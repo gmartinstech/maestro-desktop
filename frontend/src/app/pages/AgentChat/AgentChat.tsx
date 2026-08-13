@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -20,6 +21,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
 import { openSettingsModal, dismissMcpSuggestion } from '@/shared/state/settingsSlice';
+import { openProvedorIaPrompt } from '@/shared/state/provedorIaSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import {
   sendMessage as sendMessageThunk,
@@ -242,6 +244,7 @@ interface AgentChatProps {
 }
 
 const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose, embedded, autoFocus, isGlowing, onDismissGlow, initialContextPaths, onBranch, workflowEditId, readOnly, prefillPrompt, runContext, onClearRunContext, onSendRunQuestion }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const STATUS_STYLES: Record<string, { color: string; bg: string }> = {
     running: { color: c.status.success, bg: c.status.successBg },
@@ -1485,17 +1488,26 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             <Box>
             {session.context_overflow && (() => {
               const reason = session.context_overflow.reason;
-              const isAuth = reason === 'anthropic_auth_invalid' || reason === 'auth_error';
+              // A provedor-ia 401 is the expected end of a 10h token, so it gets the sign-in flow instead of a Settings detour.
+              const isProvedorIa = reason === 'provedor_ia_token_expired';
+              const isAuth = isProvedorIa || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
               const isOutOfTokens = reason === 'out_of_tokens';
-              const title = isOutOfTokens ? 'Out of tokens' : isAuth ? 'Sign-in required' : 'Context full';
-              const primaryLabel = isOutOfTokens ? 'Got it' : isAuth ? 'Open Settings' : 'Start a fresh chat';
+              const title = isOutOfTokens ? 'Out of tokens'
+                : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.title')
+                : isAuth ? 'Sign-in required' : 'Context full';
+              const primaryLabel = isOutOfTokens ? 'Got it'
+                : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.cta')
+                : isAuth ? 'Open Settings' : 'Start a fresh chat';
               // In the workflow build chat, switching models here also sets the workflow's scheduled run model, so spell that consequence out.
               const message = isOutOfTokens && workflowEditId
                 ? `${session.context_overflow.message} Whichever model you switch to here becomes the model this workflow runs on.`
+                : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.detail')
                 : session.context_overflow.message;
               const onPrimary = () => {
                 if (isOutOfTokens) {
                   if (id) dispatch(clearContextOverflow({ sessionId: id }));
+                } else if (isProvedorIa) {
+                  dispatch(openProvedorIaPrompt());
                 } else if (isAuth) {
                   dispatch(openSettingsModal('models'));
                 } else {

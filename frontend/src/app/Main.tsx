@@ -24,6 +24,7 @@ import AppShell from './components/Layout/AppShell';
 import ImportEntryPoint from './components/share/ImportEntryPoint';
 import DashboardSelection from './pages/DashboardSelection/DashboardSelection';
 import ErrorBoundary from './components/feedback/ErrorBoundary';
+import ProvedorIaSessionGate from './components/ProvedorIaLogin/ProvedorIaSessionGate';
 import { setPanelMode, disableOnboardingAfterCrash } from '@/shared/state/onboardingProgressSlice';
 import { PROVEDOR_IA_DEFAULT_MODEL, PROVEDOR_IA_PROVIDER_NAME } from '@/shared/config';
 
@@ -486,6 +487,7 @@ const ThemedApp: React.FC = () => {
             <DefaultModelGuard>
             <UpdateListener>
               <CrashRecoveryChip />
+              <ProvedorIaSessionGate />
               <ImportEntryPoint />
               <DeepLinkListener>
                 <ErrorBoundary scope="routes">

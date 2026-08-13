@@ -28,6 +28,7 @@ import { THINKING_LABELS } from '../thinkingLabels';
 import { extractPlatformNote } from '../parsing/toolResultParsing';
 import { AgentMessage, retryLastUserMessage } from '@/shared/state/agentsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
+import { openProvedorIaPrompt } from '@/shared/state/provedorIaSlice';
 import { fetchSubscriptionStatus } from '@/shared/state/subscriptionsSlice';
 import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -79,7 +80,7 @@ interface MaestroErrorInfo {
   title: string;
   detail: string;
   ctaLabel?: string;
-  ctaAction?: 'retry' | 'settings' | 'waitlist' | 'retry_last';
+  ctaAction?: 'retry' | 'settings' | 'waitlist' | 'retry_last' | 'provedor_ia_login';
 }
 
 interface OverflowContext {
@@ -178,6 +179,16 @@ function parseMaestroError(text: string, t: TFunction, ctx?: OverflowContext): M
       detail: lead + breakdown + t('agentChat.errors.contextWindow.tail'),
       ctaLabel: t('agentChat.errors.contextWindow.cta'),
       ctaAction: 'settings',
+    };
+  }
+  // The provedor-ia gateway's own 401 reason, plus the backend's friendly text for it; a 10h token dying is a sign-in, not a Settings trip.
+  if (/jwt expired|Maestro Studio sign-in expired/i.test(text)) {
+    return {
+      kind: 'auth',
+      title: t('agentChat.errors.provedorIaSessionExpired.title'),
+      detail: t('agentChat.errors.provedorIaSessionExpired.detail'),
+      ctaLabel: t('agentChat.errors.provedorIaSessionExpired.cta'),
+      ctaAction: 'provedor_ia_login',
     };
   }
   if (/No active subscription|Subscription canceled|Subscription past_due|Invalid.*token|Missing bearer token/i.test(text)) {
@@ -911,6 +922,9 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     } as OverflowContext;
   }, shallowEqual);
   const activeSessionId = useAppSelector((state) => state.agents.activeSessionId);
+  const provedorIaNeedsLogin = useAppSelector(
+    (state) => state.provedorIa.status?.state === 'missing' || state.provedorIa.status?.state === 'expired',
+  );
   const maestroError = !isUser ? parseMaestroError(rawText, t, overflowCtx) : null;
 
   // Reports asynchronously, bc without this an oversized message that mounts in view (e.g. scrolling up into the agent's reply) would paint the blank placeholder box for a frame and then pop in the real markdown.
@@ -1233,8 +1247,12 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                       variant="outlined"
                       onClick={() => {
                         const api = (window as any).maestro;
-                        if (maestroError.ctaAction === 'settings') {
-                          dispatch(openSettingsModal('models'));
+                        if (maestroError.ctaAction === 'provedor_ia_login') {
+                          dispatch(openProvedorIaPrompt());
+                        } else if (maestroError.ctaAction === 'settings') {
+                          // An auth card while the provedor-ia token is dead means the fix is a sign-in, not a Settings tour.
+                          if (maestroError.kind === 'auth' && provedorIaNeedsLogin) dispatch(openProvedorIaPrompt());
+                          else dispatch(openSettingsModal('models'));
                         } else if (maestroError.ctaAction === 'retry_last') {
                           if (activeSessionId) dispatch(retryLastUserMessage({ sessionId: activeSessionId }));
                         } else if (maestroError.ctaAction === 'waitlist') {
