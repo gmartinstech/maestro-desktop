@@ -368,6 +368,7 @@ async def p_forward(
                 raw = await upstream.aread()
                 yield raw
                 return
+            # Echo the REQUESTED model, never upstream's: the gateway substitutes freely (vision auto-upgrade, 429/5xx fallback cascade, concurrency redirect) and reports the raw upstream tag, so a request/response comparison here would flag healthy traffic as an error.
             async for chunk in p_translate_response_stream(upstream, body_json["model"]):
                 yield chunk
         finally:
