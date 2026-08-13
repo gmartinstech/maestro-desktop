@@ -18,6 +18,7 @@ from uuid import uuid4
 import anthropic
 
 from backend.apps.agents.browser import browser_history
+from backend.apps.agents.browser import browser_human_text
 from backend.apps.agents.browser.browser_history import (
     MAX_HISTORY_MESSAGES,
     trim_history_by_turns,
@@ -188,17 +189,18 @@ P_SINGLE_ACTION_TYPE = {
 }
 
 
-def p_summ_step(stype: str, params: dict) -> str:
+def summ_step(stype: str, params: dict, labels: dict | None = None) -> str:
     """Compact human label for one action step: the actual key/selector/text, not
     just the verb. This is what lets the [backend] pane show 'key:ArrowRight x5'
-    instead of an opaque 'BrowserBatch'."""
+    instead of an opaque 'BrowserBatch'. A click by index resolves to the element's
+    label, never the bare handle, since this line is read by a person."""
     p = params or {}
     if stype == "press_key":
         return f"key:{p.get('key', '?')}"
     if stype == "click":
         return f"click({p.get('selector', '?')})"
     if stype == "click_index":
-        return f"click#{p.get('index', '?')}"
+        return f"click({browser_human_text.describe_action_entry({'input': p}, labels)})"
     if stype == "click_point":
         return f"tap({p.get('xPercent', '?')}%,{p.get('yPercent', '?')}%)"
     if stype == "click_name":
@@ -228,29 +230,32 @@ def p_collapse_steps(items: list[str]) -> str:
     return ", ".join(s if n == 1 else f"{s} x{n}" for s, n in runs)
 
 
-def p_summarize_action(tool_name: str, tool_input: dict) -> str:
+def p_summarize_action(tool_name: str, tool_input: dict, labels: dict | None = None) -> str:
     """One-line summary of what an action tool is about to do, or "" for pure
     reads (screenshot/list/describe/getstate) that need no action log."""
     ti = tool_input or {}
     if tool_name == "BrowserBatch":
-        steps = [p_summ_step((a or {}).get("type", ""), (a or {}).get("params"))
+        steps = [summ_step((a or {}).get("type", ""), (a or {}).get("params"), labels)
                  for a in (ti.get("actions") or [])]
         return p_collapse_steps(steps) or "(empty batch)"
     if tool_name == "AppInvoke":
         args = ti.get("args")
         return f"{ti.get('name', '?')}" + (f"({json.dumps(args)[:60]})" if args else "")
     stype = P_SINGLE_ACTION_TYPE.get(tool_name)
-    return p_summ_step(stype, ti) if stype else ""
+    return summ_step(stype, ti, labels) if stype else ""
 
 
 async def execute_browser_tool(
     tool_name: str, tool_input: dict, browser_id: str, tab_id: str = "",
+    labels: dict | None = None,
 ) -> dict:
-    """Execute a browser tool via ws_manager directly (no MCP/HTTP round-trip)."""
+    """Execute a browser tool via ws_manager directly (no MCP/HTTP round-trip).
+    `labels` is the caller's index -> element-label map, used only to keep the
+    action log line below free of raw handles."""
     # One greppable line naming the actual buttons/keys/selectors this call drives,
     # so a run reads as "key:ArrowRight x5" rather than an opaque tool name. Fires
     # for action tools only (reads stay quiet) and ungated so web runs get it too.
-    p_action = p_summarize_action(tool_name, tool_input)
+    p_action = p_summarize_action(tool_name, tool_input, labels)
     if p_action:
         logger.info(f"[browser-action] {tool_name}: {p_action}  -> {browser_id}")
 
@@ -1131,6 +1136,8 @@ async def run_browser_agent(
     seen_read_sigs: set[str] = set()
     # rows already shown to the model; attached state shrinks to the delta
     attached_state_seen: set[str] = set()
+    # index -> element label harvested from every list we see, so a human-facing string can name the element an internal handle points at; the handles themselves stay untouched on the model's side
+    p_element_labels: dict[int, str] = {}
     # under-batching telemetry + nudge state
     single_action_streak = 0
     batching_nudges = 0
@@ -1209,7 +1216,8 @@ async def run_browser_agent(
             if text_parts:
                 asst_msg = Message(
                     role="assistant",
-                    content="\n".join(text_parts),
+                    # narration the user reads: the model tends to repeat the handle it is about to click ("clicking element 7"), which means nothing to a person
+                    content=browser_human_text.humanize("\n".join(text_parts), p_element_labels),
                 )
                 session.messages.append(asst_msg)
                 await ws_manager.send_to_session(session_id, "agent:message", {
@@ -1350,11 +1358,12 @@ async def run_browser_agent(
                     single_domain = len(set(session.browser_domains)) <= 1
                     if note_domain and working_mem and single_domain:
                         browser_history.set_domain_note(note_domain, working_mem)
+                    # The plan card is pure narration, so each field is de-indexed; the model's own copy of its plan (working memory / next goal) is untouched.
                     brain_text = (
                         f"📋 **Plan**\n"
-                        + (f"_Previous_: {eval_prev}\n" if eval_prev else "")
-                        + f"_Memory_: {working_mem}\n"
-                        f"_Next_: {next_goal}"
+                        + (f"_Previous_: {browser_human_text.humanize(str(eval_prev), p_element_labels)}\n" if eval_prev else "")
+                        + f"_Memory_: {browser_human_text.humanize(str(working_mem), p_element_labels)}\n"
+                        f"_Next_: {browser_human_text.humanize(str(next_goal), p_element_labels)}"
                     )
                     brain_msg = Message(role="assistant", content=brain_text)
                     session.messages.append(brain_msg)
@@ -1657,7 +1666,7 @@ async def run_browser_agent(
                     )
                 else:
                     result = await p_cancellable(execute_browser_tool(
-                        tu.name, tool_input, browser_id, tab_id,
+                        tu.name, tool_input, browser_id, tab_id, p_element_labels,
                     ))
                 if result is None:
                     cancelled = True
@@ -1705,6 +1714,10 @@ async def run_browser_agent(
                     "tool": tu.name,
                     "input": tu.input,
                     "result_summary": result.get("text", result.get("error", ""))[:200],
+                    # human label for the handle this action used, resolved from the list the model was looking at; `input` keeps the raw index for replay and skill distillation
+                    "element": browser_human_text.describe_action_entry(
+                        {"tool": tu.name, "input": tu.input}, p_element_labels,
+                    ) if isinstance(tu.input, dict) and isinstance(tu.input.get("index"), int) else None,
                     "elapsed_ms": elapsed_ms,
                     # carried so a successful run distills into a replayable skill
                     "ok": "error" not in result,
@@ -1966,9 +1979,12 @@ async def run_browser_agent(
                 })
 
                 result_text = result.get("text", result.get("error", ""))
+                # Presentation boundary: the model already has the indexed rows in `content_blocks` above; session.messages is the dashboard's copy, so the person reading it gets element descriptions instead of handles.
+                p_element_labels.update(browser_human_text.element_labels(str(result_text)))
                 result_msg = Message(
                     role="tool_result",
-                    content={"text": result_text, "tool_name": tu.name, "elapsed_ms": elapsed_ms},
+                    content={"text": browser_human_text.humanize(str(result_text), p_element_labels),
+                             "tool_name": tu.name, "elapsed_ms": elapsed_ms},
                 )
                 session.messages.append(result_msg)
                 await ws_manager.send_to_session(session_id, "agent:message", {
@@ -2065,6 +2081,8 @@ async def run_browser_agent(
                 f"model declared done but {dishonest_reason}; reporting as error"
             )
 
+        # Last presentation boundary: the summary is what the parent relays to the user, so no internal handle may survive into it.
+        summary = browser_human_text.humanize(summary, p_element_labels)
         session.status = final_status
         logger.info(
             f"[browser-batching {session_id}] run summary: turns={turn + 1} "

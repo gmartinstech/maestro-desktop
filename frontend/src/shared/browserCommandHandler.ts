@@ -7,6 +7,7 @@ import { dashboardWs } from './ws/WebSocketManager';
 import { resolveInput } from './resolveUrl';
 import { rankAndCapInteractives, type RankItem } from './interactiveRanking';
 import { shouldStopWaiting, SETTLE_POLL_MS, settleProbeJs } from './browserSettle';
+import { captureWithTimeout, CAPTURE_ATTEMPT_TIMEOUT_MS, CAPTURE_TOTAL_BUDGET_MS } from './captureWithTimeout';
 
 let initialized = false;
 
@@ -161,9 +162,11 @@ async function handleScreenshot(wv: BrowserWebview, params?: Record<string, any>
 async function captureRetry(wv: BrowserWebview): Promise<Record<string, any>> {
   // capturePage throws UnknownVizError if the webview hasn't composited a frame yet (the Viz compositor races the first paint, reliably bit turn-0 captures). Retry a few times with a short backoff so a cold first screenshot succeeds instead of burning a whole agent turn on a transient error.
   let lastErr: any;
+  const deadline = Date.now() + CAPTURE_TOTAL_BUDGET_MS;
   for (let attempt = 0; attempt < 4; attempt++) {
+    if (Date.now() >= deadline) break;
     try {
-      const nativeImage = await wv.capturePage();
+      const nativeImage = await captureWithTimeout(wv.capturePage(), Math.min(CAPTURE_ATTEMPT_TIMEOUT_MS, deadline - Date.now()));
       if (!nativeImage.isEmpty()) {
         // Stable PNG capture. The resize()+toJPEG() variant was reverted: it's the prime suspect for the renderer "V8 Empty MaybeLocal" crash, NativeImage's JPEG codec returns an empty image on some retina captures, which is the shape of that native fault. A stable app beats a faster screenshot.
         const dataUrl = nativeImage.toDataURL();
@@ -174,9 +177,10 @@ async function captureRetry(wv: BrowserWebview): Promise<Record<string, any>> {
     } catch (err: any) {
       lastErr = err;
     }
-    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    await new Promise((r) => setTimeout(r, Math.max(0, Math.min(250 * (attempt + 1), deadline - Date.now()))));
   }
-  return { error: `Screenshot failed after retries: ${lastErr?.message || String(lastErr)}` };
+  // Always an honest error, never a hang: the caller reports this and the agent moves on.
+  return { error: `Screenshot failed after retries: ${lastErr?.message || 'capture budget exhausted'}` };
 }
 
 // Count the safe (GET) API endpoints captured for this site so the backend can nudge the agent toward the fast network path. Best-effort, never throws.

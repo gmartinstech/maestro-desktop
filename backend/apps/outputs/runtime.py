@@ -26,6 +26,11 @@ def p_resolve_bash() -> str:
     return "bash"
 
 from backend.config.state_paths import state_dir
+from backend.apps.outputs.runtime_ledger import (
+    forget as ledger_forget,
+    reclaim_port,
+    record_spawn,
+)
 from backend.apps.outputs.runtime_proc import (
     ERROR_PATTERNS,
     FRONTEND_BIND_POLL_INTERVAL,
@@ -234,6 +239,8 @@ class AppRuntime:
                 self.frontend_port = find_free_port()
             # Port-collision safety net: if a ghost subprocess from a prior Maestro run is still bound to the persisted port (force-quit, crash, OS killed the parent before stop_all could reap), Vite would EADDRINUSE silently. Re-probe and reallocate, then rewrite .env so the bash run.sh subprocess reads the new port.
             if self.frontend_port and not is_port_free(self.frontend_port):
+                self.p_reclaim_squatted_port(self.frontend_port)
+            if self.frontend_port and not is_port_free(self.frontend_port):
                 new_port = find_free_port()
                 self.p_broadcast(LogLine(
                     "runtime",
@@ -248,6 +255,8 @@ class AppRuntime:
                 except ValueError:
                     self.port = None
                 # Same collision check for the backend port; a leaked uvicorn from a prior session would otherwise block the new spawn.
+                if self.port and not is_port_free(self.port):
+                    self.p_reclaim_squatted_port(self.port)
                 if self.port and not is_port_free(self.port):
                     new_port = find_free_port()
                     self.p_broadcast(LogLine(
@@ -290,6 +299,8 @@ class AppRuntime:
             self.port = None
             self.process = None
             return False
+        # Claim the pid in the cross-boot ledger BEFORE anything can fail below, so a crash one line later still leaves a reapable record.
+        record_spawn(self.process.pid, self.workspace_id, self.instance, self.frontend_port)
         backend_note = f" + backend on {self.port}" if self.port else ""
         self.p_broadcast(LogLine("runtime", f"[runtime] {launch_desc} started; frontend on {self.frontend_port}{backend_note} (pid {self.process.pid})"))
         self.p_stdout_task = asyncio.create_task(self.p_pipe_stream(self.process.stdout, "stdout"))
@@ -299,6 +310,15 @@ class AppRuntime:
         self.p_frontend_ready = False
         self.p_frontend_ready_task = asyncio.create_task(self.p_await_frontend_bind())
         return True
+
+    def p_reclaim_squatted_port(self, port: int) -> None:
+        """If the ledger says a dead session of ours holds `port`, kill it instead of routing around it.
+        Reallocating leaves the orphan alive forever, which is how runtimes were seen up days later."""
+        if reclaim_port(port):
+            self.p_broadcast(LogLine(
+                "runtime",
+                f"[runtime] port {port} was held by an orphaned runtime from a previous session; reclaimed it",
+            ))
 
     def p_resolve_launch(self, env: dict) -> tuple[list[str], str, str]:
         """Pick the new-mode launch command.
@@ -417,6 +437,7 @@ class AppRuntime:
             self.port = None
             self.process = None
             return False
+        record_spawn(self.process.pid, self.workspace_id, self.instance, None)
         self.p_broadcast(LogLine("runtime", f"[runtime] backend started on port {self.port} (pid {self.process.pid})"))
         self.p_stdout_task = asyncio.create_task(self.p_pipe_stream(self.process.stdout, "stdout"))
         self.p_stderr_task = asyncio.create_task(self.p_pipe_stream(self.process.stderr, "stderr"))
@@ -440,7 +461,10 @@ class AppRuntime:
                 # Still cancel the bind poller in case stop() races a never-launched runtime; defensive no-op otherwise.
                 if self.p_frontend_ready_task and not self.p_frontend_ready_task.done():
                     self.p_frontend_ready_task.cancel()
+                if self.process:
+                    ledger_forget(self.process.pid)
                 return
+            pid = self.process.pid
             try:
                 # Walk the descendant tree first so vite/uvicorn grandchildren die before bash exits and orphans them to PID 1. The webapp template's run.sh only traps EXIT, not TERM, so a flat SIGTERM to bash kills bash silently and leaves vite alive.
                 kill_descendant_tree(self.process.pid, "TERM")
@@ -457,6 +481,8 @@ class AppRuntime:
             if self.p_frontend_ready_task and not self.p_frontend_ready_task.done():
                 self.p_frontend_ready_task.cancel()
             self.p_frontend_ready = False
+            # We reaped it ourselves, so drop the ledger claim; leaving it would make the next boot chase a pid that may since have been recycled.
+            ledger_forget(pid)
 
     async def restart(self) -> bool:
         await self.stop()

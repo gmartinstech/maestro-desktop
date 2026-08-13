@@ -1245,6 +1245,12 @@
       "completedCount": "Concluídos ({{total}})",
       "clearAll": "Limpar tudo"
     },
+    "backendDown": {
+      "title": "O backend do Maestro Studio parou de responder",
+      "body": "Tentamos reiniciá-lo {{count}} vezes e ele continuou falhando, então nada no app consegue carregar dados agora. Reiniciar o Maestro Studio normalmente resolve; o log aponta a causa.",
+      "restart": "Reiniciar",
+      "viewLogs": "Ver logs"
+    },
     "directoryBrowser": {
       "attachFile": "Anexar arquivo",
       "attachFolder": "Anexar pasta",

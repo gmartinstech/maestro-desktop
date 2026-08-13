@@ -261,6 +261,24 @@ def compress_screenshot(b64_png: str) -> tuple[str, str] | None:
         return None
 
 
+def action_brief(entry: dict, width: int = 120) -> str:
+    """Human-readable rendering of one logged action for the report the parent agent relays.
+
+    The backend resolves an index-driven action's element into `element` (its visible label and
+    role), because the raw handle it acted on is internal bookkeeping and means nothing to a reader.
+    Anything else prints its own arguments, minus the index if one is still riding along. This module
+    runs as a bare stdio subprocess, so it deliberately imports nothing from the backend package.
+    """
+    element = entry.get("element")
+    if element:
+        return str(element)[:width]
+    inp = entry.get("input")
+    inp = inp if isinstance(inp, dict) else {}
+    if isinstance(inp.get("index"), int):
+        inp = {k: v for k, v in inp.items() if k != "index"}
+    return json.dumps(inp)[:width]
+
+
 def format_result(result: dict) -> dict:
     """Format a single browser agent result into MCP content blocks."""
     if "error" in result:
@@ -287,17 +305,15 @@ def format_result(result: dict) -> dict:
             lines.append(f"  (... {actions_omitted} earlier actions omitted ...)")
         for i, entry in enumerate(entries, actions_omitted + 1):
             tool = entry.get("tool", "?")
-            inp = entry.get("input", {})
             ms = entry.get("elapsed_ms", 0)
-            brief = json.dumps(inp)[:120]
-            lines.append(f"  {i}. {tool}({brief}) [{ms}ms]")
+            lines.append(f"  {i}. {tool}({action_brief(entry)}) [{ms}ms]")
 
     if summary_truncated or actions_omitted > 0:
         full_lines = [f"# Browser Agent Full Report (browser: {browser_id}, session: {session_id})", "", summary, ""]
         if action_log:
             full_lines.append("## Actions")
             for i, entry in enumerate(action_log, 1):
-                full_lines.append(f"{i}. {entry.get('tool', '?')}({json.dumps(entry.get('input', {}))}) [{entry.get('elapsed_ms', 0)}ms]")
+                full_lines.append(f"{i}. {entry.get('tool', '?')}({action_brief(entry, 400)}) [{entry.get('elapsed_ms', 0)}ms]")
         report_path = spill_full_report("\n".join(full_lines), "browser-report")
         if report_path:
             lines.append("")

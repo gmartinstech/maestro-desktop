@@ -13,7 +13,10 @@ from typing import Literal, Optional
 from backend.config.Apps import SubApp
 from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
+from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
 from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_FIELD
+from backend.apps.settings.provedor_ia_catalog import refresh_catalog
+from backend.apps.settings.refresh_provedor_ia_catalog import refresh_provedor_ia_catalog
 from backend.apps.settings.provedor_ia_token_status import (
     ProvedorIaTokenStatus,
     provedor_ia_token_status,
@@ -64,6 +67,8 @@ async def settings_lifespan():
                 await sync_gemini_api_key(getattr(s, "google_api_key", None) or None)
                 await sync_openai_api_key(getattr(s, "openai_api_key", None) or None)
                 await sync_openrouter_api_key(getattr(s, "openrouter_api_key", None) or None)
+            # Ask the gateway what it serves before pushing the node, so a model added server-side is routable this launch instead of next release.
+            await refresh_provedor_ia_catalog(s)
             await sync_custom_providers(getattr(s, "custom_providers", None) or [])
 
         p_asyncio.create_task(p_boot_router_then_sync())
@@ -308,6 +313,8 @@ async def post_provedor_ia_token(body: ProvedorIaTokenPayload):
     if status.state in ("missing", "expired"):
         # The reject body carries a state name only: the pasted credential must never reach a log or an HTTP response.
         return JSONResponse(status_code=400, content={"ok": False, "reason": status.state})
+    # Warm the catalog with the pasted token first: the write below re-derives the provider, so one pass seeds AND syncs the live model list.
+    await refresh_catalog(body.token.strip(), MAESTRO_DEFAULT_PROXY_URL)
     async with settings_write_lock():
         await apply_settings_patch({PROVEDOR_IA_TOKEN_FIELD: body.token.strip()})
     return {"ok": True, "status": status.model_dump()}

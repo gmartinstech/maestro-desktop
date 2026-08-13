@@ -49,6 +49,23 @@ logger = logging.getLogger(__name__)
 async def outputs_lifespan():
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(WORKSPACE_DIR, exist_ok=True)
+    # Boot is the only safe moment to reap: nothing we spawned is running yet, so a record with a dead owner cannot be ours. Publish our own liveness marker FIRST so a second instance booting alongside us never mistakes our runtimes for orphans.
+    from backend.apps.outputs import runtime_ledger
+    try:
+        runtime_ledger.register_owner()
+        reaped = runtime_ledger.reap_orphans()
+        if reaped:
+            logger.info("outputs lifespan: reaped %d orphaned app runtimes left by a previous session", len(reaped))
+    except Exception:
+        logger.exception("outputs lifespan: orphan reap failed")
+    # A workspace whose record was lost is invisible in the UI even though the user's work is intact; bring those back before the first list_outputs call.
+    try:
+        from backend.apps.outputs.recover_workspaces import recover_orphan_workspaces
+        restored = recover_orphan_workspaces()
+        if restored:
+            logger.info("outputs lifespan: recovered %d app workspaces with no record", len(restored))
+    except Exception:
+        logger.exception("outputs lifespan: workspace recovery failed")
     try:
         yield
     finally:
@@ -60,6 +77,11 @@ async def outputs_lifespan():
                 logger.info("outputs lifespan: reaped %d workspace runtimes on shutdown", killed)
         except Exception:
             logger.exception("outputs lifespan: stop_all failed")
+        # Retract our liveness marker last: while it exists, another instance's reaper treats our records as owned.
+        try:
+            runtime_ledger.unregister_owner()
+        except Exception:
+            logger.exception("outputs lifespan: owner marker cleanup failed")
 
 
 outputs = SubApp("outputs", outputs_lifespan)
@@ -594,7 +616,11 @@ async def update_output(output_id: str, body: OutputUpdate):
 
 @outputs.router.delete("/{output_id}")
 async def delete_output(output_id: str):
-    load(output_id)
+    output = load(output_id)
+    # Tombstone BEFORE dropping the record: the workspace dir stays on disk by design, and without this marker the boot-time recovery would offer the app back on the next launch.
+    if output.workspace_id:
+        from backend.apps.outputs.recover_workspaces import tombstone
+        tombstone(output.workspace_id)
     path = os.path.join(DATA_DIR, f"{output_id}.json")
     if os.path.exists(path):
         os.remove(path)

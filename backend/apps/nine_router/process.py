@@ -11,12 +11,14 @@ API at localhost:20128/v1.
 """
 
 import asyncio
+import getpass
 import hashlib
 import logging
 import os
 import secrets
 import shutil
 import socket
+import stat
 import subprocess
 import tempfile
 import time
@@ -115,6 +117,105 @@ def p_nine_router_data_dir() -> str:
     return os.path.join(os.path.expanduser("~"), ".9router")
 
 
+# db.json holds LIVE provider credentials (API keys, OAuth bearer tokens) and auth/cli-secret seeds the /api/* token; both were created world-readable, so any other local account could read a user's keys off disk.
+CREDENTIAL_RELPATHS = ("db.json", os.path.join("auth", "cli-secret"))
+DATA_DIR_MODE = 0o700
+CREDENTIAL_FILE_MODE = 0o600
+
+p_windows_acl_hardened = False
+
+
+def windows_acl_command(path: str) -> list[str]:
+    """argv restricting `path` and its existing children to the current user, SYSTEM and the local
+    Administrators group, dropping the inherited ACEs that let other standard accounts in.
+
+    Well-known SIDs are used because "SYSTEM"/"Administrators" are localized on non-English Windows.
+    Administrators keep access deliberately: a local admin can take ownership of any file, so
+    excluding them buys no real protection and only risks locking the app out of its own state.
+    """
+    return [
+        "icacls", path, "/inheritance:r",
+        "/grant:r", f"{getpass.getuser()}:(OI)(CI)F",
+        "/grant:r", "*S-1-5-18:(OI)(CI)F",
+        "/grant:r", "*S-1-5-32-544:(OI)(CI)F",
+        "/T", "/C", "/Q",
+    ]
+
+
+def p_harden_windows_acl(path: str) -> None:
+    """Best-effort, once per process: os.chmod is a no-op for access control on Windows (it only
+    flips the read-only bit, which would actively break 9Router's writes), so the only real
+    mechanism is an ACL edit via icacls. Failure is non-fatal and never logged with any file
+    content, since a missing/refused icacls just leaves the inherited permissions in place."""
+    global p_windows_acl_hardened
+    if p_windows_acl_hardened:
+        return
+    p_windows_acl_hardened = True
+    try:
+        r = subprocess.run(windows_acl_command(path), capture_output=True, timeout=20, check=False)
+        if r.returncode != 0:
+            logger.debug("9Router data-dir ACL hardening returned %d", r.returncode)
+        # icacls applies its arguments left to right and PARTIALLY: if /inheritance:r succeeds and a
+        # later /grant:r fails to resolve its principal (getpass.getuser() returns a bare name, which
+        # does not always resolve on a domain-joined host), the result is a dir with an EMPTY DACL
+        # that nobody — including the owner — can open, propagated to db.json by /T. That is strictly
+        # worse than the loose permissions we came to fix, so verify and roll back rather than trust
+        # the return code, which is 0 on a partial apply.
+        if not p_windows_acl_is_usable(path):
+            subprocess.run(["icacls", path, "/inheritance:e", "/T", "/C", "/Q"], capture_output=True, timeout=20, check=False)
+            logger.warning("9Router data-dir ACL left no usable entries; restored inheritance instead of locking the app out of its own state")
+    except Exception as e:
+        logger.debug("9Router data-dir ACL hardening skipped: %s", e)
+
+
+def p_windows_acl_is_usable(path: str) -> bool:
+    """True when `path` still has at least one ACE. An empty DACL denies everyone, so this is the
+    post-condition that separates 'hardened' from 'bricked'."""
+    try:
+        r = subprocess.run(["icacls", path], capture_output=True, timeout=20, check=False, text=True)
+    except Exception:
+        return True
+    # icacls echoes the path then one indented "principal:(rights)" line per ACE; no ACE lines means
+    # an empty DACL. Treat an unreadable result as usable so a parsing surprise never triggers a
+    # rollback we did not need.
+    return any(":" in ln and not ln.startswith(path) for ln in (r.stdout or "").splitlines() if ln.strip())
+
+
+def secure_data_dir(data_dir: str | None = None) -> str:
+    """Make 9Router's state dir owner-only and tighten any credential file already inside it.
+
+    POSIX: the dir is created with mode 0700 passed to mkdir(2), so it is never briefly traversable
+    (a create-then-chmod would leave that window); an existing dir from an earlier run is chmod'ed
+    down, which is the common case. Credential files we know by name go to 0600. Files 9Router
+    itself creates later (db.json on a fresh connect) are still born 0644 because we do not control
+    that writer, so the 0700 dir is the actual guarantee: another user cannot traverse into it to
+    reach them at all. The next start also tightens db.json's own bits.
+
+    Windows: NO POSIX mode bits exist, so the file modes above are not attempted at all. Protection
+    rests on (1) the data dir living under the user's profile, whose default ACL already excludes
+    other standard users, and (2) the best-effort icacls tightening below. Neither is a guarantee
+    against a local administrator or a machine with a loosened profile ACL.
+
+    Never raises; hardening failure must not stop the router from starting.
+    """
+    path = data_dir or p_nine_router_data_dir()
+    try:
+        if not os.path.isdir(path):
+            os.makedirs(path, mode=DATA_DIR_MODE, exist_ok=True)
+        elif os.name != "nt" and stat.S_IMODE(os.stat(path).st_mode) != DATA_DIR_MODE:
+            os.chmod(path, DATA_DIR_MODE)
+        if os.name == "nt":
+            p_harden_windows_acl(path)
+            return path
+        for rel in CREDENTIAL_RELPATHS:
+            p_file = os.path.join(path, rel)
+            if os.path.isfile(p_file) and stat.S_IMODE(os.stat(p_file).st_mode) != CREDENTIAL_FILE_MODE:
+                os.chmod(p_file, CREDENTIAL_FILE_MODE)
+    except OSError as e:
+        logger.warning("9Router data-dir hardening failed for %s: %s", path, e)
+    return path
+
+
 p_cli_token_cache: str | None = None
 
 
@@ -149,7 +250,7 @@ def cli_auth_token() -> str | None:
         if not cli_secret:
             cli_secret = secrets.token_hex(32)
             try:
-                os.makedirs(os.path.dirname(secret_path), exist_ok=True)
+                os.makedirs(os.path.dirname(secret_path), mode=DATA_DIR_MODE, exist_ok=True)
                 # O_EXCL: if 9Router won the race and wrote first, read its value.
                 fd = os.open(secret_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
                 with os.fdopen(fd, "w") as f:
@@ -471,6 +572,8 @@ async def p_ensure_running_impl():
     """Start 9Router if not already running."""
     global p_process, p_is_running_last_ok
     p_is_packaged = os.environ.get("MAESTRO_PACKAGED") == "1"
+    # Before the is_running() early-return, so an adopted router's dir gets tightened too, and before any spawn so 9Router writes its credentials into an already-locked dir.
+    secure_data_dir()
 
     if is_running():
         # In dev mode, kill stale standalone servers (from previous builds) so we can start `next dev` which always uses latest source code
