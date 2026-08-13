@@ -2,12 +2,13 @@
 // Fails when an upstream merge/cherry-pick drags back something the fork deliberately removed.
 // This is a GUARD: it holds the old names on purpose. Never "clean up" the literals below.
 //
-// Four classes of drift, each of which has actually happened or nearly happened:
+// Five classes of drift, each of which has actually happened or nearly happened:
 //   1. Legacy identifiers (openswarm / self-swarm / Open Swarm) reappearing in source.
 //   2. Deleted subsystems (cloud auth, paid subscription, publish-to-web, edge) coming back.
 //   3. A call-home host or the old proxy default sneaking into a default value.
 //   4. Upstream is English-only; a careless cherry-pick conflict resolution can revert a t() call
 //      back to a hardcoded English literal in a file we localized. See docs/UPSTREAM.md.
+//   5. A cherry-pick from upstream authored after their MIT -> AGPL-3.0 relicense (2026-07-23).
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
@@ -104,6 +105,23 @@ for (const f of i18nCandidateFiles) {
     ATTR_RE.lastIndex = 0;
     while ((m = ATTR_RE.exec(line))) bad.push(`i18n regression: hardcoded literal in ${m[1]}= — ${f}:${idx + 1}: "${m[2]}"`);
   });
+}
+
+// 5. AGPL contamination: upstream relicensed MIT -> AGPL-3.0 on 2026-07-23, so a cherry-pick from a
+// commit authored on or after that date cannot ship under our MIT license. See docs/UPSTREAM.md.
+// These eight ARE the contamination, already reverted in 27a9e623 with their modules deleted; the
+// trailers live in history forever, so they are exempt by sha rather than failing the build always.
+// Never extend this list to silence a NEW pick — re-implement the fix instead.
+const REVERTED_PICKS = new Set(['567b0e12', 'd5ee9661', '10b019bd', 'de8faa36', 'fc1b4332', '5a017354', 'fe0116f6', '7231cf7e']);
+for (const line of sh('git log --format=%H%x09%s -n 400 HEAD').trim().split('\n').filter(Boolean)) {
+  const [sha, subj] = line.split('\t');
+  if (!sha || REVERTED_PICKS.has(sha.slice(0, 8))) continue;
+  const m = /cherry picked from commit ([0-9a-f]{7,40})/i.exec(sh(`git log -1 --format=%b ${sha}`));
+  if (!m) continue;
+  // An unresolvable source is expected now that the remote is gone, so surface it for a human
+  // rather than assuming it predates the relicense.
+  const when = sh(`git log -1 --format=%ad --date=short ${m[1]}`).trim();
+  if (!when || when >= '2026-07-23') bad.push(`AGPL cherry-pick: ${sha.slice(0, 8)} <- ${m[1].slice(0, 8)} (${when || 'source unknown'}) ${String(subj).slice(0, 60)}`);
 }
 
 if (bad.length) {
