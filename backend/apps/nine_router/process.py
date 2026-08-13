@@ -155,8 +155,30 @@ def p_harden_windows_acl(path: str) -> None:
         r = subprocess.run(windows_acl_command(path), capture_output=True, timeout=20, check=False)
         if r.returncode != 0:
             logger.debug("9Router data-dir ACL hardening returned %d", r.returncode)
+        # icacls applies its arguments left to right and PARTIALLY: if /inheritance:r succeeds and a
+        # later /grant:r fails to resolve its principal (getpass.getuser() returns a bare name, which
+        # does not always resolve on a domain-joined host), the result is a dir with an EMPTY DACL
+        # that nobody — including the owner — can open, propagated to db.json by /T. That is strictly
+        # worse than the loose permissions we came to fix, so verify and roll back rather than trust
+        # the return code, which is 0 on a partial apply.
+        if not p_windows_acl_is_usable(path):
+            subprocess.run(["icacls", path, "/inheritance:e", "/T", "/C", "/Q"], capture_output=True, timeout=20, check=False)
+            logger.warning("9Router data-dir ACL left no usable entries; restored inheritance instead of locking the app out of its own state")
     except Exception as e:
         logger.debug("9Router data-dir ACL hardening skipped: %s", e)
+
+
+def p_windows_acl_is_usable(path: str) -> bool:
+    """True when `path` still has at least one ACE. An empty DACL denies everyone, so this is the
+    post-condition that separates 'hardened' from 'bricked'."""
+    try:
+        r = subprocess.run(["icacls", path], capture_output=True, timeout=20, check=False, text=True)
+    except Exception:
+        return True
+    # icacls echoes the path then one indented "principal:(rights)" line per ACE; no ACE lines means
+    # an empty DACL. Treat an unreadable result as usable so a parsing surprise never triggers a
+    # rollback we did not need.
+    return any(":" in ln and not ln.startswith(path) for ln in (r.stdout or "").splitlines() if ln.strip())
 
 
 def secure_data_dir(data_dir: str | None = None) -> str:

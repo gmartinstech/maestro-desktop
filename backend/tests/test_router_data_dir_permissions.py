@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 import backend.apps.nine_router.process as proc
+from types import SimpleNamespace
 
 p_posix_only = pytest.mark.skipif(os.name == "nt", reason="POSIX mode bits do not apply on Windows")
 
@@ -114,5 +115,27 @@ def test_windows_path_skips_chmod_and_runs_icacls(tmp_path):
          patch.object(proc, "p_nine_router_data_dir", return_value=str(target)):
         proc.secure_data_dir()
         proc.secure_data_dir()
-    assert len(calls) == 1, "ACL hardening is best-effort and runs once per process"
-    assert calls[0][0] == "icacls"
+    # Count the hardening edit specifically, not raw subprocess calls: the edit is now followed by a
+    # verification probe (and a rollback if the DACL came back empty), which are legitimate extras.
+    hardens = [c for c in calls if "/inheritance:r" in c]
+    assert len(hardens) == 1, f"ACL hardening must run once per process; calls={calls}"
+    assert all(c[0] == "icacls" for c in calls)
+
+
+def test_a_partial_icacls_apply_is_rolled_back_not_left_bricked(tmp_path, monkeypatch):
+    """icacls can strip inheritance and then fail its grants, leaving a DACL nobody can open — worse
+    than the loose permissions we came to fix. The hardening must detect that and restore inheritance."""
+    target = str(tmp_path / "9router")
+    os.makedirs(target, exist_ok=True)
+    calls: list[list[str]] = []
+
+    def p_fake_run(argv, **kwargs):
+        calls.append(list(argv))
+        # First call is the hardening; the probe then reports an empty DACL (path line only).
+        out = "" if "/inheritance:r" in argv else (f"{target} \n" if argv[:1] == ["icacls"] and len(argv) == 2 else "")
+        return SimpleNamespace(returncode=0, stdout=out, stderr="")
+
+    monkeypatch.setattr(proc, "p_windows_acl_hardened", False, raising=False)
+    monkeypatch.setattr(proc.subprocess, "run", p_fake_run)
+    proc.p_harden_windows_acl(target)
+    assert any("/inheritance:e" in c for c in calls), f"no rollback attempted; calls={calls}"
