@@ -1,5 +1,6 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
+import { tr } from './translatedOps';
 
 // First-run, invisible to the roadmap: the cursor pops into existence (handled by fadeIn, with the orange spark), pauses a beat, then moves to and clicks the New Agent button, which spawns the welcome chat. Static, no LLM. The delays give the pop and the move room to breathe.
 export const welcomeOpenStep: OnboardingStep = {
@@ -9,10 +10,10 @@ export const welcomeOpenStep: OnboardingStep = {
   title: 'Welcome',
   description: '',
   ops: [
-    { kind: 'delay', ms: 700 },                                                  // let the big POP land
-    { kind: 'popup', text: 'Let me open up a chat for you.', dwellMs: 3000 },     // say it, hold ~3s (not the tour's 6s floor)
-    { kind: 'move_to', target: S.newAgentButton },                               // dwell elapses, then travel to the chat bubble
-    { kind: 'click', target: S.newAgentButton, simulate: true },                 // click -> spawns the welcome chat
+    { kind: 'delay', ms: 700 },
+    { kind: 'popup', text: tr('onboarding.steps.welcome_open.popup'), dwellMs: 3000 },
+    { kind: 'move_to', target: S.newAgentButton },
+    { kind: 'click', target: S.newAgentButton, simulate: true },
     { kind: 'outro' },
   ],
 };

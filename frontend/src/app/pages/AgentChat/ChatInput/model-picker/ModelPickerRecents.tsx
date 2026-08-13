@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemText from '@mui/material/ListItemText';
@@ -26,6 +27,7 @@ export const ModelPickerRecents: React.FC<Props> = ({
   c, model, onModelChange, pushRecentModel, collapsedGroups, toggleGroupCollapse,
   recentMaterialised, setModelAnchor, buildModelTooltip, tooltipSlotProps,
 }) => {
+  const { t } = useTranslation();
   const recentKey = 'Recent';
   const recentCollapsed = !!collapsedGroups[recentKey];
   return (
@@ -52,7 +54,7 @@ export const ModelPickerRecents: React.FC<Props> = ({
           />
           <AccessTimeIcon sx={{ fontSize: 12, color: c.text.tertiary }} />
           <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: c.text.tertiary, flex: 1 }}>
-            Recent
+            {t('agentChat.modelPicker.recentHeading')}
           </Typography>
           <Typography sx={{ fontSize: '0.65rem', color: c.text.ghost, fontWeight: 500 }}>
             {recentMaterialised.length}

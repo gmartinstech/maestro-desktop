@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import EmailIcon from '@mui/icons-material/Email';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
@@ -10,6 +11,7 @@ import { useCardColors } from './cardColors';
 import { extractEmailFields } from './mcpCardHelpers';
 
 export const GmailCard: React.FC<{ data: Record<string, any>; action: string; hideSubjectHeader?: boolean }> = ({ data, action, hideSubjectHeader }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const { TC_BG, TC_BORDER, TC_HOVER, TC_HEADING, TC_BODY, TC_MUTED, TC_DIM, TC_ACCENT, TC_SUCCESS, TC_WARNING } = useCardColors();
   const email = extractEmailFields(data);
@@ -58,7 +60,7 @@ export const GmailCard: React.FC<{ data: Record<string, any>; action: string; hi
         })}
         {messages.length > 5 && (
           <span style={{ color: TC_DIM, fontSize: '0.66rem', fontStyle: 'italic', textAlign: 'center', display: 'block' }}>
-            +{messages.length - 5} more
+            {t('agentChat.mcpCards.gmail.moreMessages', { count: messages.length - 5 })}
           </span>
         )}
       </Box>
@@ -93,19 +95,19 @@ export const GmailCard: React.FC<{ data: Record<string, any>; action: string; hi
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
             {email.from && (
               <Box sx={{ display: 'flex', gap: 0.75, fontSize: '0.7rem', alignItems: 'baseline' }}>
-                <span style={{ color: TC_DIM, minWidth: 32, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>From</span>
+                <span style={{ color: TC_DIM, minWidth: 32, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('agentChat.mcpCards.gmail.from')}</span>
                 <span style={{ color: TC_BODY, fontFamily: c.font.sans }}>{email.from}</span>
               </Box>
             )}
             {email.to && (
               <Box sx={{ display: 'flex', gap: 0.75, fontSize: '0.7rem', alignItems: 'baseline' }}>
-                <span style={{ color: TC_DIM, minWidth: 32, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>To</span>
+                <span style={{ color: TC_DIM, minWidth: 32, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('agentChat.mcpCards.gmail.to')}</span>
                 <span style={{ color: TC_BODY, fontFamily: c.font.sans }}>{email.to}</span>
               </Box>
             )}
             {email.date && (
               <Box sx={{ display: 'flex', gap: 0.75, fontSize: '0.7rem', alignItems: 'baseline' }}>
-                <span style={{ color: TC_DIM, minWidth: 32, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</span>
+                <span style={{ color: TC_DIM, minWidth: 32, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('agentChat.mcpCards.gmail.date')}</span>
                 <span style={{ color: TC_BODY, fontFamily: c.font.sans }}>{email.date}</span>
               </Box>
             )}
@@ -184,7 +186,7 @@ export const GmailCard: React.FC<{ data: Record<string, any>; action: string; hi
               }}>
                 <AttachFileIcon sx={{ fontSize: 9, color: TC_WARNING, opacity: 0.7 }} />
                 <span style={{ fontSize: '0.58rem', color: TC_WARNING, fontFamily: c.font.mono }}>
-                  {a.filename || a.name || 'attachment'}
+                  {a.filename || a.name || t('agentChat.mcpCards.gmail.attachmentFallback')}
                 </span>
               </Box>
             ))}

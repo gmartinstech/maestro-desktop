@@ -59,8 +59,8 @@ const GeneralInterface: React.FC<{
             },
           }}
         >
-          <ToggleButton value="pt-BR">Português (Brasil)</ToggleButton>
-          <ToggleButton value="en">English</ToggleButton>
+          <ToggleButton value="pt-BR">{t('settings.interface.languagePtBr')}</ToggleButton>
+          <ToggleButton value="en">{t('settings.interface.languageEn')}</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 

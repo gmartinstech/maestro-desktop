@@ -118,7 +118,7 @@ function BrowserReplayOverlay({
         )}
 
         <Box sx={{ mt: 'auto', fontSize: 11, color: c.text.tertiary }}>
-          via the page&apos;s own data feed
+          {t('dashboard.replayOverlay.viaDataFeed')}
         </Box>
       </Box>
     </Fade>

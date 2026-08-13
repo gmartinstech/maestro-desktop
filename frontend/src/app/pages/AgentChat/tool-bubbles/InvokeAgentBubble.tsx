@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -36,6 +37,7 @@ export const InvokeAgentBubble: React.FC<InvokeAgentBubbleProps> = ({
   call, input, isPending, isDenied, isError, resultElapsedMs, expanded, showTimer,
   toggle, accentRgb, invokeAgentParsed, invokedSessionId, handleRevealAgent, bubbleRef, selectAttrs,
 }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const agentName = invokeAgentParsed?.agentName || input?.session_id || 'Agent';
   const responsePreview = invokeAgentParsed?.response || '';
@@ -126,7 +128,7 @@ export const InvokeAgentBubble: React.FC<InvokeAgentBubbleProps> = ({
           {isDenied && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
               <BlockIcon sx={{ fontSize: 13, color: c.status.error }} />
-              <Typography sx={{ color: c.status.error, fontSize: '0.7rem', fontWeight: 500 }}>denied</Typography>
+              <Typography sx={{ color: c.status.error, fontSize: '0.7rem', fontWeight: 500 }}>{t('agentChat.tool.denied')}</Typography>
             </Box>
           )}
 
@@ -151,7 +153,7 @@ export const InvokeAgentBubble: React.FC<InvokeAgentBubbleProps> = ({
           {showTimer && <ElapsedTimer startTime={call.timestamp} />}
 
           {invokedSessionId && (
-            <Tooltip title="Reveal on dashboard" arrow>
+            <Tooltip title={t('agentChat.agent.revealOnDashboard')} arrow>
               <IconButton
                 size="small"
                 onClick={handleRevealAgent}

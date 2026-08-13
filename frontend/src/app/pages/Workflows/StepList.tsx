@@ -1,6 +1,7 @@
 // Vertical step list, the one shared building block across every workflow card subview. Supports three orthogonal modes that compose: editable    onChangeStep is set -> each row is a TextareaAutosize (PreviewView only). expandable  expandable=true     -> chevron next to each title; click reveals the raw prompt body. live        stepStatuses is set -> per-step circle becomes done/active/ failed; Running view also surfaces activeStepSubtitle + duration.
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import TextareaAutosize from '@mui/material/TextareaAutosize';
@@ -47,6 +48,7 @@ export default function StepList(props: Props) {
     maxVisible = 4,
   } = props;
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   if (!steps || steps.length === 0) return null;
 
   const visible = steps.slice(0, maxVisible);
@@ -82,7 +84,7 @@ export default function StepList(props: Props) {
           const hasExpandableBody = Boolean(expandable && rawBody);
           const canDelete = Boolean(onDeleteStep && steps.length > 1);
           const deleteButton = onDeleteStep ? (
-            <Tooltip title={canDelete ? 'Remove step' : 'Workflow needs at least one step'}>
+            <Tooltip title={canDelete ? t('workflows.stepList.removeStep') : t('workflows.stepList.removeStepDisabled')}>
               <span
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -90,7 +92,7 @@ export default function StepList(props: Props) {
               >
                 <IconButton
                   size="small"
-                  aria-label={`Remove step ${idx + 1}`}
+                  aria-label={t('workflows.stepList.removeStepLabel', { step: idx + 1 })}
                   disabled={!canDelete}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -237,7 +239,7 @@ export default function StepList(props: Props) {
           mt: 0.6,
           ml: 0,
         }}>
-          ... {hiddenCount} more
+          {t('workflows.stepList.hiddenMore', { count: hiddenCount })}
         </Typography>
       )}
     </Box>

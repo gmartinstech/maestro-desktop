@@ -1,4 +1,5 @@
 import React from 'react';
+import i18n from '@/shared/i18n/i18n';
 import { report, getRecentActions } from '@/shared/serviceClient';
 
 interface Props {
@@ -73,7 +74,7 @@ class ErrorBoundary extends React.Component<Props, State> {
     // Caller opted into a quiet fallback (e.g. null): unmount the broken subtree, leave the rest of the app standing.
     if (this.props.fallback !== undefined) return <>{this.props.fallback}</>;
 
-    const title = this.props.title || 'Something broke.';
+    const title = this.props.title || i18n.t('feedback.errorBoundary.title');
     const wrap: React.CSSProperties = {
       minHeight: '100vh',
       display: 'flex',
@@ -129,12 +130,11 @@ class ErrorBoundary extends React.Component<Props, State> {
         <div style={card}>
           <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600 }}>{title}</h2>
           <p style={{ margin: '0 0 16px', color: '#9c9a92', fontSize: 14, lineHeight: 1.5 }}>
-            We caught it before it crashed everything. The error is below; copy it
-            if you want to share. Reload usually fixes it.
+            {i18n.t('feedback.errorBoundary.description')}
           </p>
           <div>
-            <button type="button" style={btn} onClick={this.handleReload}>Reload</button>
-            <button type="button" style={btnSecondary} onClick={this.handleResetState}>Reset & reload</button>
+            <button type="button" style={btn} onClick={this.handleReload}>{i18n.t('feedback.errorBoundary.reload')}</button>
+            <button type="button" style={btnSecondary} onClick={this.handleResetState}>{i18n.t('feedback.errorBoundary.resetAndReload')}</button>
           </div>
           <pre style={stack}>{String(error?.stack || error?.message || error)}</pre>
         </div>

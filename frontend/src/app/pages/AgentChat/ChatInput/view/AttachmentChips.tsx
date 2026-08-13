@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -43,6 +44,7 @@ export const AttachmentChips: React.FC<Props> = ({
   forcedTools, setForcedTools,
   selectedElements, elementSelection, ownerId,
 }) => {
+  const { t } = useTranslation();
   return (
     <>
       {images.length > 0 && (
@@ -107,12 +109,12 @@ export const AttachmentChips: React.FC<Props> = ({
           {contextPaths.map((cp, idx) => {
             const isAppWorkspace = /\/outputs_workspace\/ws-[^/]+\/?$/.test(cp.path);
             const label = isAppWorkspace
-              ? 'App files'
+              ? t('agentChat.chatInput.chip.appFiles')
               : pathTail(cp.path, 2);
             return (
               <Tooltip
                 key={`${cp.path}-${idx}`}
-                title={copiedPathIdx === idx ? 'Copied!' : (cp.path.split('/').pop() || cp.path)}
+                title={copiedPathIdx === idx ? t('agentChat.chatInput.chip.copied') : (cp.path.split('/').pop() || cp.path)}
                 arrow
                 placement="top"
                 slotProps={{
@@ -141,7 +143,7 @@ export const AttachmentChips: React.FC<Props> = ({
                   label={(() => {
                     const kindTag = cp.kind && cp.kind !== 'text' ? ` · ${cp.kind}` : '';
                     const tokTag = typeof cp.tokens === 'number' && cp.tokens > 0 ? ` · ${formatTokenCount(cp.tokens)}` : '';
-                    const warn = unsupported ? ' · not on this model' : '';
+                    const warn = unsupported ? t('agentChat.chatInput.chip.notOnThisModel') : '';
                     return `${label}${kindTag}${tokTag}${warn}`;
                   })()}
                   size="small"

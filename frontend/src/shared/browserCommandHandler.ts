@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import i18n from '@/shared/i18n/i18n';
 import { getWebview, findWebviewByDomain, type BrowserWebview } from './browserRegistry';
 import { store } from './state/store';
 import { resumeBrowserCard } from './state/dashboardLayoutSlice';
@@ -405,7 +406,7 @@ async function sendCdp(wv: BrowserWebview, method: string, params?: Record<strin
   const bridge = (window as any).maestro?.sendCdpCommand as
     | ((id: number, m: string, p?: any, s?: string) => Promise<CdpResult>)
     | undefined;
-  if (!bridge) throw new Error('CDP bridge not available, restart the app');
+  if (!bridge) throw new Error(i18n.t('common.cdpBridgeNotAvailable'));
   const resp = await bridge(wcId, method, params, sessionId);
   if (!resp || !resp.ok) {
     throw new Error(resp?.error || `CDP ${method} failed`);
@@ -1283,7 +1284,7 @@ async function handleDetectWebMCP(wv: BrowserWebview): Promise<Record<string, an
 async function handleListRoutes(wv: BrowserWebview): Promise<Record<string, any>> {
   const bridge = (window as any).maestro?.cdpRoutesGet as
     | ((id: number, origin?: string) => Promise<any[]>) | undefined;
-  if (!bridge) return { error: 'Route capture not available, restart the app.' };
+  if (!bridge) return { error: i18n.t('common.routeCaptureNotAvailable') };
   let origin = '';
   try { origin = new URL(wv.getURL()).origin; } catch {}
   let routes: any[] = [];
@@ -1403,7 +1404,7 @@ async function handleSessionCookies(params: Record<string, any>): Promise<Record
   const bridge = (window as any).maestro?.getPartitionCookies as
     | ((domain: string) => Promise<{ cookies: { name: string; value: string }[]; userAgent: string; error?: string }>)
     | undefined;
-  if (!bridge) return { error: 'Cookie bridge unavailable (desktop app only)', cookies: [] };
+  if (!bridge) return { error: i18n.t('common.cookieBridgeUnavailable'), cookies: [] };
   try {
     return await bridge(String(params.domain || ''));
   } catch (err: any) {

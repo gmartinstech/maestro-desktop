@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -35,6 +36,7 @@ export const CreateAgentBubble: React.FC<CreateAgentBubbleProps> = ({
   call, input, isPending, isDenied, isError, resultElapsedMs, expanded, showTimer,
   toggle, accentRgb, createAgentResponse, createAgentSessionId, handleRevealAgent, bubbleRef, selectAttrs,
 }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const taskPrompt = input?.prompt || input?.task || input?.message || '';
   const taskLabel = taskPrompt
@@ -126,7 +128,7 @@ export const CreateAgentBubble: React.FC<CreateAgentBubbleProps> = ({
           {isDenied && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
               <BlockIcon sx={{ fontSize: 13, color: c.status.error }} />
-              <Typography sx={{ color: c.status.error, fontSize: '0.7rem', fontWeight: 500 }}>denied</Typography>
+              <Typography sx={{ color: c.status.error, fontSize: '0.7rem', fontWeight: 500 }}>{t('agentChat.tool.denied')}</Typography>
             </Box>
           )}
 
@@ -146,7 +148,7 @@ export const CreateAgentBubble: React.FC<CreateAgentBubbleProps> = ({
           {showTimer && <ElapsedTimer startTime={call.timestamp} />}
 
           {createAgentSessionId && (
-            <Tooltip title="Reveal on dashboard" arrow>
+            <Tooltip title={t('agentChat.agent.revealOnDashboard')} arrow>
               <IconButton
                 size="small"
                 onClick={handleRevealAgent}

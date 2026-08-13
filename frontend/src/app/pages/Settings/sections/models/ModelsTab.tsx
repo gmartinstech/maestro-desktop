@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -16,17 +17,18 @@ const ModelsTab: React.FC<{
   styles: SettingsStyles;
 }> = ({ form, setForm, showApiKey, setShowApiKey, styles }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const { descSx } = styles;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', pt: 2.5, pb: 1, gap: 2.5, animation: 'fadeIn 0.2s ease', '@keyframes fadeIn': { from: { opacity: 0 }, to: { opacity: 1 } } }}>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-          Connect a Subscription
+          {t('settings.models.connectSubscription')}
         </Typography>
 
         <Typography sx={{ ...descSx, mb: 0 }}>
-          Already paying for Claude, ChatGPT, or Gemini? Connect it here at no extra cost.
+          {t('settings.models.subscriptionDesc')}
         </Typography>
 
         <Box data-onboarding="settings-external-subs">
@@ -36,11 +38,11 @@ const ModelsTab: React.FC<{
 
       <Box data-onboarding="settings-api-keys" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, mt: 1 }}>
-          Or Connect With API Keys
+          {t('settings.models.connectWithApiKeys')}
         </Typography>
 
         <Typography sx={{ ...descSx, mb: -1 }}>
-          Pay per use. Each key is stored locally on your device.
+          {t('settings.models.apiKeysDesc')}
         </Typography>
 
         {API_KEY_CARDS.map((config) => (

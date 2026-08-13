@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
@@ -17,7 +18,7 @@ import { useModelPicker } from './ChatInput/hooks/useModelPicker';
 import { useEditorHandlers } from './ChatInput/hooks/useEditorHandlers';
 import { ChatInputView } from './ChatInput/view/ChatInputView';
 import { PastePreviewDialog } from './ChatInput/view/PastePreviewDialog';
-import { ICON_MAP, FALLBACK_MODE_BASE } from './ChatInput/modeConfig';
+import { ICON_MAP, getFallbackModeBase } from './ChatInput/modeConfig';
 import { AttachedImage, ForcedToolGroup, ChatInputHandle } from './ChatInput/types';
 import type { WorkflowsRunContext } from '@/shared/state/dashboardLayoutSlice';
 
@@ -55,6 +56,7 @@ interface Props {
 
 const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, onModeChange, model, onModelChange, provider, onProviderChange, isRunning, onStop, autoRunMode, contextEstimate, embedded, autoFocus, sessionId, queueLength = 0, thinkingLevel = 'auto', onThinkingLevelChange, onActivityLabelChange, prefillPrompt, placeholderOverride, runContext, onClearRunContext }, ref) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const editorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const generalFileInputRef = useRef<HTMLInputElement>(null);
@@ -303,7 +305,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   useDraftLoad(editorRef, ownerId, setPreviewPasteId, removePasteCard, c.font.mono, c.status.error);
 
   const currentMode = modesMap[mode];
-  const FALLBACK_MODE = { ...FALLBACK_MODE_BASE, color: c.accent.primary };
+  const FALLBACK_MODE = { ...getFallbackModeBase(t), color: c.accent.primary };
   const modeConf = currentMode
     ? { label: currentMode.name, icon: ICON_MAP[currentMode.icon] || ICON_MAP.smart_toy, color: currentMode.color }
     : FALLBACK_MODE;

@@ -1,3 +1,5 @@
+import i18n from '@/shared/i18n/i18n';
+
 export interface ToolLabel {
   present: string;
   past: string;
@@ -18,7 +20,7 @@ function _pick<T>(variants: T[], seed?: string): T {
 }
 
 // Index 0 is the safe default; single-entry pools mean no seeded variation.
-const VARIANTS: Record<string, ToolLabel[]> = {
+const EN_VARIANTS: Record<string, ToolLabel[]> = {
   read: [
     { present: 'Reading', past: 'Read' },
     { present: 'Skimming', past: 'Skimmed' },
@@ -277,6 +279,268 @@ const VARIANTS: Record<string, ToolLabel[]> = {
   ],
 };
 
+const PT_BR_VARIANTS: Record<string, ToolLabel[]> = {
+  read: [
+    { present: 'Lendo', past: 'Leu' },
+    { present: 'Folheando', past: 'Folheou' },
+    { present: 'Espiando', past: 'Espiou' },
+    { present: 'Dando uma olhada', past: 'Deu uma olhada' },
+    { present: 'Mergulhando', past: 'Mergulhou' },
+    { present: 'Analisando', past: 'Analisou' },
+    { present: 'Abrindo', past: 'Abriu' },
+  ],
+  write: [
+    { present: 'Escrevendo', past: 'Escreveu' },
+    { present: 'Salvando', past: 'Salvou' },
+    { present: 'Anotando', past: 'Anotou' },
+    { present: 'Rascunhando', past: 'Rascunhou' },
+    { present: 'Montando', past: 'Montou' },
+    { present: 'Redigindo', past: 'Redigiu' },
+  ],
+  edit: [
+    { present: 'Editando', past: 'Editou' },
+    { present: 'Ajustando', past: 'Ajustou' },
+    { present: 'Polindo', past: 'Poliu' },
+    { present: 'Retocando', past: 'Retocou' },
+    { present: 'Refinando', past: 'Refinou' },
+    { present: 'Afinando', past: 'Afinou' },
+  ],
+  multiedit: [
+    { present: 'Editando', past: 'Editou' },
+    { present: 'Ajustando', past: 'Ajustou' },
+    { present: 'Refazendo', past: 'Refez' },
+    { present: 'Consertando', past: 'Consertou' },
+    { present: 'Retocando', past: 'Retocou' },
+  ],
+  strreplace: [
+    { present: 'Editando', past: 'Editou' },
+    { present: 'Ajustando', past: 'Ajustou' },
+    { present: 'Trocando', past: 'Trocou' },
+  ],
+  bash: [
+    { present: 'Executando comando', past: 'Executou comando' },
+    { present: 'Preparando', past: 'Preparou' },
+    { present: 'Trabalhando', past: 'Trabalhou' },
+    { present: 'Mexendo', past: 'Mexeu' },
+    { present: 'Triturando', past: 'Triturou' },
+  ],
+  glob: [
+    { present: 'Procurando arquivos', past: 'Encontrou arquivos' },
+    { present: 'Vasculhando arquivos', past: 'Vasculhou arquivos' },
+    { present: 'Navegando arquivos', past: 'Navegou arquivos' },
+    { present: 'Farejando arquivos', past: 'Farejou arquivos' },
+    { present: 'Arredondando arquivos', past: 'Arredondou arquivos' },
+  ],
+  grep: [
+    { present: 'Pesquisando', past: 'Pesquisou' },
+    { present: 'Peneirando', past: 'Peneirou' },
+    { present: 'Vasculhando', past: 'Vasculhou' },
+    { present: 'Cavucando', past: 'Cavucou' },
+    { present: 'Peneirando', past: 'Peneirou' },
+  ],
+  ripgrep: [
+    { present: 'Pesquisando', past: 'Pesquisou' },
+    { present: 'Peneirando', past: 'Peneirou' },
+    { present: 'Cavucando', past: 'Cavucou' },
+  ],
+  ls: [
+    { present: 'Listando pasta', past: 'Listou pasta' },
+    { present: 'Espiando', past: 'Espiou' },
+    { present: 'Mexendo', past: 'Mexeu' },
+  ],
+  websearch: [
+    { present: 'Pesquisando na web', past: 'Pesquisou na web' },
+    { present: 'Googleando', past: 'Googleou' },
+    { present: 'Rastreando a web', past: 'Rastreou a web' },
+    { present: 'Cavando a web', past: 'Cavou a web' },
+    { present: 'Caçando online', past: 'Caçou online' },
+  ],
+  webfetch: [
+    { present: 'Lendo página', past: 'Leu página' },
+    { present: 'Espiando', past: 'Espiou' },
+    { present: 'Trazendo', past: 'Trouxe' },
+    { present: 'Carregando', past: 'Carregou' },
+    { present: 'Folheando', past: 'Folheou' },
+  ],
+  notebookedit: [
+    { present: 'Editando notebook', past: 'Editou notebook' },
+    { present: 'Ajustando notebook', past: 'Ajustou notebook' },
+  ],
+  todowrite: [
+    { present: 'Atualizando plano', past: 'Atualizou plano' },
+    { present: 'Anotando plano', past: 'Anotou plano' },
+    { present: 'Esboçando plano', past: 'Esboçou plano' },
+    { present: 'Mapeando', past: 'Mapeou' },
+    { present: 'Planejando passos', past: 'Planejou passos' },
+  ],
+  todoread: [
+    { present: 'Verificando plano', past: 'Verificou plano' },
+    { present: 'Dando uma olhada no plano', past: 'Deu uma olhada no plano' },
+  ],
+  taskcreate: [
+    { present: 'Iniciando tarefa', past: 'Iniciou tarefa' },
+    { present: 'Disparando tarefa', past: 'Disparou tarefa' },
+    { present: 'Criando tarefa', past: 'Criou tarefa' },
+  ],
+  taskupdate: [
+    { present: 'Atualizando tarefa', past: 'Atualizou tarefa' },
+    { present: 'Ajudando tarefa', past: 'Ajudou tarefa' },
+  ],
+  taskoutput: [
+    { present: 'Espiando tarefa', past: 'Espiou tarefa' },
+    { present: 'Verificando tarefa', past: 'Verificou tarefa' },
+  ],
+  taskstop: [
+    { present: 'Parando tarefa', past: 'Parou tarefa' },
+    { present: 'Finalizando tarefa', past: 'Finalizou tarefa' },
+  ],
+  tasklist: [
+    { present: 'Listando tarefas', past: 'Listou tarefas' },
+    { present: 'Arredondando tarefas', past: 'Arredondou tarefas' },
+  ],
+  taskget: [
+    { present: 'Carregando tarefa', past: 'Carregou tarefa' },
+    { present: 'Trazendo tarefa', past: 'Trouxe tarefa' },
+  ],
+  toolsearch: [
+    { present: 'Procurando ferramenta', past: 'Encontrou ferramenta' },
+    { present: 'Caçando ferramenta', past: 'Caçou ferramenta' },
+    { present: 'Navegando caixa', past: 'Navegou caixa' },
+    { present: 'Reviravoltando caixa', past: 'Reviravoltou caixa' },
+    { present: 'Cavucando caixa', past: 'Cavucou caixa' },
+  ],
+  mcpsearch: [
+    { present: 'Procurando ferramenta', past: 'Encontrou ferramenta' },
+    { present: 'Caçando ferramenta', past: 'Caçou ferramenta' },
+    { present: 'Navegando caixa', past: 'Navegou caixa' },
+    { present: 'Reviravoltando caixa', past: 'Reviravoltou caixa' },
+  ],
+  mcpactivate: [
+    { present: 'Conectando', past: 'Conectou' },
+    { present: 'Plugando', past: 'Plugou' },
+    { present: 'Ligando', past: 'Ligou' },
+    { present: 'Montando', past: 'Montou' },
+    { present: 'Vinculando', past: 'Vinculou' },
+  ],
+  mcplist: [
+    { present: 'Listando ferramentas', past: 'Listou ferramentas' },
+    { present: 'Navegando caixa', past: 'Navegou caixa' },
+  ],
+  settingsread: [
+    { present: 'Verificando preferências', past: 'Verificou preferências' },
+    { present: 'Lendo preferências', past: 'Leu preferências' },
+    { present: 'Vendo preferências', past: 'Viu preferências' },
+  ],
+  settingswrite: [
+    { present: 'Atualizando preferências', past: 'Atualizou preferências' },
+    { present: 'Salvando preferências', past: 'Salvou preferências' },
+    { present: 'Ajustando preferências', past: 'Ajustou preferências' },
+  ],
+  outputactivate: [
+    { present: 'Carregando app', past: 'Carregou app' },
+    { present: 'Ligando app', past: 'Ligou app' },
+    { present: 'Montando app', past: 'Montou app' },
+  ],
+  outputlist: [
+    { present: 'Navegando apps', past: 'Navegou apps' },
+    { present: 'Listando apps', past: 'Listou apps' },
+  ],
+  outputsearch: [
+    { present: 'Caçando app', past: 'Caçou app' },
+    { present: 'Navegando apps', past: 'Navegou apps' },
+    { present: 'Peneirando apps', past: 'Peneirou apps' },
+  ],
+  renderoutput: [
+    { present: 'Mostrando app', past: 'Mostrou app' },
+    { present: 'Pintando app', past: 'Pintou app' },
+    { present: 'Montando app', past: 'Montou app' },
+    { present: 'Trazendo app', past: 'Trouxe app' },
+  ],
+  askuserquestion: [
+    { present: 'Perguntando', past: 'Perguntou' },
+    { present: 'Verificando com você', past: 'Verificou com você' },
+    { present: 'Notificando', past: 'Notificou' },
+  ],
+  invokeagent: [
+    { present: 'Enviando assistente', past: 'Enviou assistente' },
+    { present: 'Pedindo ajuda', past: 'Pediu ajuda' },
+    { present: 'Chamando reforço', past: 'Chamou reforço' },
+    { present: 'Marcando assistente', past: 'Marcou assistente' },
+  ],
+  agent: [
+    { present: 'Ativando assistente', past: 'Ativou assistente' },
+    { present: 'Enviando assistente', past: 'Enviou assistente' },
+    { present: 'Chamando reforço', past: 'Chamou reforço' },
+    { present: 'Criando assistente', past: 'Criou assistente' },
+  ],
+  createbrowseragent: [
+    { present: 'Abrindo navegador', past: 'Abriu navegador' },
+    { present: 'Ligando navegador', past: 'Ligou navegador' },
+    { present: 'Bootando navegador', past: 'Bootou navegador' },
+  ],
+  browseragent: [
+    { present: 'Dirigindo navegador', past: 'Dirigiu navegador' },
+    { present: 'Usando navegador', past: 'Usou navegador' },
+    { present: 'Manobrand navegador', past: 'Manobrou navegador' },
+  ],
+  browseragents: [
+    { present: 'Dirigindo navegadores', past: 'Dirigiu navegadores' },
+    { present: 'Manobrand navegadores', past: 'Manobrou navegadores' },
+  ],
+  enterplanmode: [
+    { present: 'Entrando em modo plano', past: 'Entrou em modo plano' },
+    { present: 'Acessando modo plano', past: 'Acessou modo plano' },
+  ],
+  exitplanmode: [
+    { present: 'Saindo do modo plano', past: 'Saiu do modo plano' },
+    { present: 'Deixando modo plano', past: 'Deixou modo plano' },
+  ],
+  enterworktree: [
+    { present: 'Preparando workspace', past: 'Preparou workspace' },
+    { present: 'Criando workspace', past: 'Criou workspace' },
+  ],
+  exitworktree: [
+    { present: 'Limpando workspace', past: 'Limpou workspace' },
+    { present: 'Derrubando workspace', past: 'Derrubou workspace' },
+  ],
+  pushnotification: [
+    { present: 'Notificando', past: 'Notificou' },
+    { present: 'Tocando sineta', past: 'Tocou sineta' },
+    { present: 'Tocando ombro', past: 'Tocou ombro' },
+  ],
+  remotetrigger: [
+    { present: 'Disparando', past: 'Disparou' },
+    { present: 'Puxando gatilho', past: 'Puxou gatilho' },
+  ],
+  croncreate: [
+    { present: 'Agendando', past: 'Agendou' },
+    { present: 'Marcando lembrete', past: 'Marcou lembrete' },
+    { present: 'Fixando no calendário', past: 'Fixou no calendário' },
+    { present: 'Alinhando check-in', past: 'Alinharam check-in' },
+  ],
+  cronlist: [
+    { present: 'Listando agendas', past: 'Listou agendas' },
+    { present: 'Verificando calendário', past: 'Verificou calendário' },
+  ],
+  crondelete: [
+    { present: 'Cancelando agenda', past: 'Cancelou agenda' },
+    { present: 'Cancelando agenda', past: 'Cancelou agenda' },
+  ],
+  monitor: [
+    { present: 'Observando', past: 'Observou' },
+    { present: 'Vigiando', past: 'Vigiou' },
+    { present: 'Rastreando', past: 'Rastreou' },
+  ],
+  schedulewakeup: [
+    { present: 'Marcando check-in', past: 'Marcou check-in' },
+    { present: 'Agendando despertar', past: 'Agendou despertar' },
+  ],
+};
+
+function getToolVariants(): Record<string, ToolLabel[]> {
+  return i18n.language === 'pt-BR' ? PT_BR_VARIANTS : EN_VARIANTS;
+}
+
 // Keys match backend _sanitize_server_name in tools_lib.
 const MCP_SERVER_BRAND: Record<string, string> = {
   'google-workspace': 'Google Workspace',
@@ -310,7 +574,7 @@ const MCP_SERVER_BRAND: Record<string, string> = {
 
 // Order matters: most specific verb pattern wins.
 interface McpVerbVariant { present: string; past: string; }
-const MCP_VERB_PATTERNS: Array<{ match: RegExp; variants: McpVerbVariant[] }> = [
+const EN_MCP_VERB_PATTERNS: Array<{ match: RegExp; variants: McpVerbVariant[] }> = [
   { match: /^(send|new)_/, variants: [
       { present: 'Sending', past: 'Sent' },
       { present: 'Firing off', past: 'Fired off' },
@@ -382,7 +646,83 @@ const MCP_VERB_PATTERNS: Array<{ match: RegExp; variants: McpVerbVariant[] }> = 
   ]},
 ];
 
-const ACTION_OBJECTS: Array<{ match: RegExp; noun: string }> = [
+const PT_BR_MCP_VERB_PATTERNS: Array<{ match: RegExp; variants: McpVerbVariant[] }> = [
+  { match: /^(send|new)_/, variants: [
+      { present: 'Enviando', past: 'Enviou' },
+      { present: 'Disparando', past: 'Disparou' },
+      { present: 'Enviando', past: 'Enviou' },
+      { present: 'Despachando', past: 'Despachou' },
+      { present: 'Enviando', past: 'Enviou' },
+  ]},
+  { match: /^(post|publish)_/, variants: [
+      { present: 'Postando', past: 'Postou' },
+      { present: 'Fixando', past: 'Fixou' },
+      { present: 'Colocando', past: 'Colocou' },
+      { present: 'Dropando', past: 'Dropou' },
+  ]},
+  { match: /^(create|add)_/, variants: [
+      { present: 'Criando', past: 'Criou' },
+      { present: 'Ativando', past: 'Ativou' },
+      { present: 'Preparando', past: 'Preparou' },
+      { present: 'Cozinhando', past: 'Cozinhou' },
+      { present: 'Montando', past: 'Montou' },
+      { present: 'Rascunhando', past: 'Rascunhou' },
+  ]},
+  { match: /^(query|search|find|list|get|fetch|read|view|show|browse|analyze)_/, variants: [
+      { present: 'Lendo', past: 'Leu' },
+      { present: 'Folheando', past: 'Folheou' },
+      { present: 'Trazendo', past: 'Trouxe' },
+      { present: 'Espiando', past: 'Espiou' },
+      { present: 'Cavucando', past: 'Cavucou' },
+      { present: 'Caçando', past: 'Caçou' },
+      { present: 'Rastreando', past: 'Rastreou' },
+      { present: 'Buscando', past: 'Buscou' },
+  ]},
+  { match: /^(update|edit|modify|patch|set)_/, variants: [
+      { present: 'Atualizando', past: 'Atualizou' },
+      { present: 'Ajustando', past: 'Ajustou' },
+      { present: 'Polindo', past: 'Poliu' },
+      { present: 'Afinando', past: 'Afinou' },
+      { present: 'Refinando', past: 'Refinou' },
+      { present: 'Retocando', past: 'Retocou' },
+  ]},
+  { match: /^(delete|remove|cancel|archive)_/, variants: [
+      { present: 'Deletando', past: 'Deletou' },
+  ]},
+  { match: /^(reply|respond|comment)_/, variants: [
+      { present: 'Respondendo', past: 'Respondeu' },
+      { present: 'Contra-atacando', past: 'Contra-atacou' },
+      { present: 'Entrando na conversa', past: 'Entrou na conversa' },
+  ]},
+  { match: /^(download|export|backup)_/, variants: [
+      { present: 'Baixando', past: 'Baixou' },
+      { present: 'Trazendo', past: 'Trouxe' },
+      { present: 'Pegando', past: 'Pegou' },
+      { present: 'Salvando', past: 'Salvou' },
+  ]},
+  { match: /^(upload|import|attach)_/, variants: [
+      { present: 'Enviando', past: 'Enviou' },
+      { present: 'Enviando', past: 'Enviou' },
+      { present: 'Empurrando', past: 'Empurrou' },
+      { present: 'Transportando', past: 'Transportou' },
+  ]},
+  { match: /^(execute|run|invoke|trigger|complete)_/, variants: [
+      { present: 'Executando', past: 'Executou' },
+      { present: 'Disparando', past: 'Disparou' },
+      { present: 'Iniciando', past: 'Iniciou' },
+  ]},
+  { match: /^(authenticate|login|connect)_/, variants: [
+      { present: 'Conectando', past: 'Conectou' },
+      { present: 'Plugando', past: 'Plugou' },
+      { present: 'Ligando', past: 'Ligou' },
+  ]},
+];
+
+function getMcpVerbPatterns(): Array<{ match: RegExp; variants: McpVerbVariant[] }> {
+  return i18n.language === 'pt-BR' ? PT_BR_MCP_VERB_PATTERNS : EN_MCP_VERB_PATTERNS;
+}
+
+const EN_ACTION_OBJECTS: Array<{ match: RegExp; noun: string }> = [
   { match: /(?:^|_)(?:gmail|email|inbox|mail)s?(?:_|$)/, noun: 'email' },
   { match: /(?:^|_)(?:event|meeting|appointment)/, noun: 'event' },
   { match: /(?:^|_)(?:freebusy|availability)/, noun: 'availability' },
@@ -414,6 +754,42 @@ const ACTION_OBJECTS: Array<{ match: RegExp; noun: string }> = [
   { match: /(?:^|_)(?:task|todo)/, noun: 'task' },
 ];
 
+const PT_BR_ACTION_OBJECTS: Array<{ match: RegExp; noun: string }> = [
+  { match: /(?:^|_)(?:gmail|email|inbox|mail)s?(?:_|$)/, noun: 'email' },
+  { match: /(?:^|_)(?:event|meeting|appointment)/, noun: 'evento' },
+  { match: /(?:^|_)(?:freebusy|availability)/, noun: 'disponibilidade' },
+  { match: /(?:^|_)(?:calendar)/, noun: 'calendário' },
+  { match: /(?:^|_)(?:contact)/, noun: 'contato' },
+  { match: /(?:^|_)(?:doc|document)/, noun: 'documento' },
+  { match: /(?:^|_)(?:sheet|spreadsheet|row|cell)/, noun: 'planilha' },
+  { match: /(?:^|_)(?:slide|presentation)/, noun: 'slide' },
+  { match: /(?:^|_)(?:dm|direct_message)/, noun: 'DM' },
+  { match: /(?:^|_)(?:thread|reply)/, noun: 'thread' },
+  { match: /(?:^|_)(?:channel)/, noun: 'canal' },
+  { match: /(?:^|_)(?:message|msg)/, noun: 'mensagem' },
+  { match: /(?:^|_)(?:reaction|emoji)/, noun: 'reação' },
+  { match: /(?:^|_)(?:page)/, noun: 'página' },
+  { match: /(?:^|_)(?:database|db|table|base)/, noun: 'banco de dados' },
+  { match: /(?:^|_)(?:record)/, noun: 'registro' },
+  { match: /(?:^|_)(?:issue)/, noun: 'issue' },
+  { match: /(?:^|_)(?:pull_request|pr)(?:_|$)/, noun: 'PR' },
+  { match: /(?:^|_)(?:comment)/, noun: 'comentário' },
+  { match: /(?:^|_)(?:deal|opportunity)/, noun: 'negócio' },
+  { match: /(?:^|_)(?:company|account)/, noun: 'empresa' },
+  { match: /(?:^|_)(?:ticket)/, noun: 'ticket' },
+  { match: /(?:^|_)(?:user|profile|member)/, noun: 'usuário' },
+  { match: /(?:^|_)(?:video|stream)/, noun: 'vídeo' },
+  { match: /(?:^|_)(?:transcript|caption)/, noun: 'transcrição' },
+  { match: /(?:^|_)(?:subreddit|sub)/, noun: 'subreddit' },
+  { match: /(?:^|_)(?:post|submission)/, noun: 'post' },
+  { match: /(?:^|_)(?:file|drive|folder)/, noun: 'arquivo' },
+  { match: /(?:^|_)(?:task|todo)/, noun: 'tarefa' },
+];
+
+function getActionObjects(): Array<{ match: RegExp; noun: string }> {
+  return i18n.language === 'pt-BR' ? PT_BR_ACTION_OBJECTS : EN_ACTION_OBJECTS;
+}
+
 function _humanizeName(name: string): string {
   const spaced = name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')  // split camelCase: SettingsRead -> Settings Read
@@ -431,19 +807,19 @@ function _labelForMcpTool(toolName: string, seed?: string): ToolLabel | null {
   const action = actionRaw.toLowerCase();
   const brand = MCP_SERVER_BRAND[server] || _humanizeName(server);
 
-  // Internal meta-MCPs route through VARIANTS so we don't render "tools: Mcpsearch".
+  // Internal meta-MCPs route through tool variants so we don't render "tools: Mcpsearch".
   if (server.startsWith('maestro-')) {
-    const builtin = VARIANTS[action];
+    const builtin = getToolVariants()[action];
     if (builtin) return _pick(builtin, seed);
   }
 
   let verbVariants: McpVerbVariant[] | null = null;
-  for (const p of MCP_VERB_PATTERNS) {
+  for (const p of getMcpVerbPatterns()) {
     if (p.match.test(action)) { verbVariants = p.variants; break; }
   }
 
   let noun = '';
-  for (const a of ACTION_OBJECTS) {
+  for (const a of getActionObjects()) {
     if (a.match.test(action)) { noun = a.noun; break; }
   }
 
@@ -468,24 +844,33 @@ function _labelForMcpTool(toolName: string, seed?: string): ToolLabel | null {
 }
 
 export function getToolLabel(toolName: string, seed?: string): ToolLabel {
-  if (!toolName) return { present: 'Working', past: 'Done' };
+  const isPortuguese = i18n.language === 'pt-BR';
+  if (!toolName) return isPortuguese ? { present: 'Trabalhando', past: 'Trabalhou' } : { present: 'Working', past: 'Done' };
   const mcpHit = _labelForMcpTool(toolName, seed);
   if (mcpHit) return mcpHit;
   const key = toolName.toLowerCase();
-  const variants = VARIANTS[key];
+  const variants = getToolVariants()[key];
   if (variants) return _pick(variants, seed);
   const pretty = toolName.charAt(0).toUpperCase() + toolName.slice(1);
-  return { present: `Running ${pretty}`, past: `Ran ${pretty}` };
+  return isPortuguese ? { present: `Executando ${pretty}`, past: `Executou ${pretty}` } : { present: `Running ${pretty}`, past: `Ran ${pretty}` };
 }
 
 /** Per-input label override for tools whose meaning depends on input (MCPActivate, Bash). */
 export function getToolLabelWithInput(toolName: string, input: any, seed?: string): ToolLabel {
-  if (!toolName) return { present: 'Working', past: 'Done' };
+  const isPortuguese = i18n.language === 'pt-BR';
+  if (!toolName) return isPortuguese ? { present: 'Trabalhando', past: 'Trabalhou' } : { present: 'Working', past: 'Done' };
 
   if (toolName === 'MCPActivate' && input?.server_name) {
     const slug = String(input.server_name).toLowerCase();
     const brand = MCP_SERVER_BRAND[slug] || _humanizeName(slug);
-    const variants: ToolLabel[] = [
+    const variants: ToolLabel[] = isPortuguese ? [
+      { present: `Conectando a ${brand}`, past: `Conectou a ${brand}` },
+      { present: `Plugando em ${brand}`, past: `Plugou em ${brand}` },
+      { present: `Ligando a ${brand}`, past: `Ligou a ${brand}` },
+      { present: `Montando em ${brand}`, past: `Montou em ${brand}` },
+      { present: `Vinculando a ${brand}`, past: `Vinculou a ${brand}` },
+      { present: `Tocando em ${brand}`, past: `Tocou em ${brand}` },
+    ] : [
       { present: `Connecting to ${brand}`, past: `Connected to ${brand}` },
       { present: `Plugging into ${brand}`, past: `Plugged into ${brand}` },
       { present: `Hooking up ${brand}`, past: `Hooked up ${brand}` },

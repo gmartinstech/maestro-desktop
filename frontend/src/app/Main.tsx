@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useState, useRef, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Provider } from 'react-redux';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider, createTheme, CssBaseline } from '@mui/material';
@@ -309,6 +310,7 @@ function pickFallbackModel(
 
 /** Reconciles stored default_model against reachable models; falls back per DEFAULT_MODEL_PRIORITY and warns once. */
 const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const settings = useAppSelector((s) => s.settings.data);
   const settingsLoaded = useAppSelector((s) => s.settings.loaded);
@@ -381,7 +383,7 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
           sx={{ fontSize: '0.8rem' }}
         >
           {sessionSwitch && (
-            <>Your model isn't available anymore, switched to <b>{sessionSwitch.toLabel}</b>.</>
+            <>{t('appShell.modelSwitched', { modelName: sessionSwitch.toLabel })}</>
           )}
         </Alert>
       </Snackbar>
@@ -394,6 +396,7 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
  *  Fade in over 250ms, hold for 8s, fade out over 300ms. No interaction required;
  *  sessions are server-side so reattachment is automatic. */
 const CrashRecoveryChip: React.FC = () => {
+  const { t } = useTranslation();
   const [show, setShow] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
@@ -425,7 +428,7 @@ const CrashRecoveryChip: React.FC = () => {
           bgcolor: 'success.main',
         }} />
         <Box component="span">
-          We had a hiccup and brought you back. Your sessions are still here.
+          {t('appShell.crashRecovery')}
         </Box>
       </Box>
     </Fade>

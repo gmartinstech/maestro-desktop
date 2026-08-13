@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
@@ -9,6 +10,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
 // Muted, transient pill shown when the backend self-healed a context-overflow crash mid-turn (rebuilt the chat from its local copy and retried). Visible so the recovery isn't silent, calm so it doesn't read as an error; the "why" lives in the hover.
 export const ContextRecoveredPill: React.FC<{ sessionId: string }> = ({ sessionId }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const cr = useAppSelector((s) => s.agents.sessions[sessionId]?.context_recovered);
@@ -22,7 +24,7 @@ export const ContextRecoveredPill: React.FC<{ sessionId: string }> = ({ sessionI
   return (
     <Fade in={!!cr} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
       <Box
-        title="This chat's memory overflowed mid-reply. Maestro Studio recovered it and retried automatically; nothing was lost."
+        title={t('agentChat.contextRecoveredPill.tooltip')}
         sx={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -38,7 +40,7 @@ export const ContextRecoveredPill: React.FC<{ sessionId: string }> = ({ sessionI
         }}
       >
         <RestartAltIcon sx={{ fontSize: 14 }} />
-        <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>Recovered and retried</Typography>
+        <Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>{t('agentChat.contextRecoveredPill.label')}</Typography>
       </Box>
     </Fade>
   );

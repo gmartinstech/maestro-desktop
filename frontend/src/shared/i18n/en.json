@@ -19,7 +19,21 @@
       "done": "done",
       "needsAttention": "needs attention"
     },
-    "back": "back"
+    "back": "back",
+    "cdpBridgeNotAvailable": "CDP bridge not available, restart the app",
+    "clickToRename": "Click to rename",
+    "consoleIcon": "Console Icon",
+    "cookieBridgeUnavailable": "Cookie bridge unavailable (desktop app only)",
+    "featureComingSoon": "This feature is coming soon!",
+    "routeCaptureNotAvailable": "Route capture not available, restart the app",
+    "runInDesktop": {
+      "body": "{{noun}} run inside the Maestro Studio desktop window, not a regular web browser. It looks like you opened the dev URL directly in a browser; launch Maestro Studio (the Electron window from <cmd>bash run.sh</cmd>) and use it there instead.",
+      "nounApps": "Apps",
+      "nounBrowsers": "Browsers",
+      "title": "Open this in the Maestro Studio desktop app"
+    },
+    "share": "Share",
+    "underConstruction": "Under Construction"
   },
   "appShell": {
     "appTitle": "Maestro Studio",
@@ -39,7 +53,54 @@
     "updateAvailable": "Maestro Studio{{verSuffix}} is available",
     "updateDownloading": "Downloading Maestro Studio{{verSuffix}}…",
     "updateDownloaded": "Maestro Studio{{verSuffix}} is ready to install",
-    "updateDownloadedSnackbar": "Maestro Studio{{verSuffix}} downloaded; restart to update"
+    "updateDownloadedSnackbar": "Maestro Studio{{verSuffix}} downloaded; restart to update",
+    "boot": {
+      "stillStartingGeneric": "Still starting (first launch is slower than subsequent launches)…",
+      "stillStartingMac": "Still starting — macOS is verifying the bundle (first launch only)…",
+      "stillStartingWin": "Still starting — Windows Defender is scanning files (first launch only)…",
+      "takingTooLongGeneric": "Backend is taking longer than usual. You can wait, view logs, or restart.",
+      "takingTooLongMac": "Backend is taking longer than usual. macOS first-launch checks can be slow on cold cache.",
+      "takingTooLongWin": "Backend is taking longer than usual. Defender scans of 14k files can take a few minutes on slow drives."
+    },
+    "context": {
+      "addDict": "Add to Dictionary",
+      "back": "Back",
+      "copyImage": "Copy Image",
+      "copyImageAddr": "Copy Image Address",
+      "copyLink": "Copy Link",
+      "forward": "Forward",
+      "inspect": "Inspect Element",
+      "noSuggestions": "No spelling suggestions",
+      "openImageNewTab": "Open Image in New Tab",
+      "openNewTab": "Open Link in New Tab",
+      "reload": "Reload"
+    },
+    "crash": {
+      "detail": "Reload to try again, or quit if this keeps happening.",
+      "message": "Maestro Studio had repeated UI errors and stopped auto-recovering.",
+      "quit": "Quit",
+      "reload": "Reload",
+      "title": "Maestro Studio needs to reload"
+    },
+    "crashRecovery": "We had a hiccup and brought you back. Your sessions are still here.",
+    "modelSwitched": "Your model isn't available anymore, switched to {{modelName}}.",
+    "splash": {
+      "almostReady": "Almost ready…",
+      "backendFailed": "Backend failed to start",
+      "connectingBackend": "Connecting to dev backend…",
+      "loadingComponents": "Loading components…",
+      "quit": "Quit",
+      "restart": "Restart",
+      "starting": "Starting…",
+      "startingBackend": "Starting backend…",
+      "startupFailed": "Maestro Studio couldn't start: ",
+      "viewLogs": "View logs"
+    },
+    "update": {
+      "checkFailed": "Update check failed. Please try again later.",
+      "networkError": "Could not reach the update server. Check your connection and try again.",
+      "noExperimental": "No experimental builds available right now. You are on the latest version."
+    }
   },
   "settings": {
     "models": {
@@ -67,7 +128,39 @@
         "removeModel": "Remove model",
         "addModel": "+ Add model",
         "addProvider": "+ Add Custom Provider"
-      }
+      },
+      "apiKeyCard": {
+        "anthropic": "The latest Claude models.",
+        "connected": "CONNECTED",
+        "getKey": "Get key",
+        "google": "The latest Gemini models.",
+        "openai": "The latest OpenAI models.",
+        "openrouter": "Hundreds of models from every major provider."
+      },
+      "apiKeysDesc": "Pay per use. Each key is stored locally on your device.",
+      "connectSubscription": "Connect a Subscription",
+      "connectWithApiKeys": "Or Connect With API Keys",
+      "providers": {
+        "chatgptDesc": "The latest ChatGPT models",
+        "claudeDesc": "The latest Claude models",
+        "geminiDesc": "The latest Gemini models"
+      },
+      "subscription": {
+        "dismiss": "Dismiss",
+        "error": "Could not start the login. Please try again.",
+        "starting": "Starting subscription service...",
+        "startingDesc": "This connects your existing AI subscriptions. If this doesn't load, make sure Node.js is installed."
+      },
+      "subscriptionCard": {
+        "comingSoon": "Coming soon",
+        "connect": "Connect",
+        "connected": "Connected",
+        "connecting": "Connecting...",
+        "disconnect": "Disconnect",
+        "enterCode": "Enter code:",
+        "waiting": "Waiting for authorization..."
+      },
+      "subscriptionDesc": "Already paying for Claude, ChatGPT, or Gemini? Connect it here at no extra cost."
     },
     "interface": {
       "sectionTitle": "Interface",
@@ -93,7 +186,9 @@
       "autoRevealSubAgentsDesc": "Automatically show sub-agent cards (from CreateAgent / InvokeAgent) tethered to their parent on the dashboard.",
       "browserSectionTitle": "Browser",
       "defaultHomepage": "Default homepage",
-      "defaultHomepageDesc": "URL loaded when opening a new browser card on the dashboard."
+      "defaultHomepageDesc": "URL loaded when opening a new browser card on the dashboard.",
+      "languageEn": "English",
+      "languagePtBr": "Português (Brasil)"
     },
     "header": {
       "tabs": {
@@ -170,6 +265,20 @@
         "onboardingTour": "Onboarding tour",
         "onboardingTourDesc": "Re-run the Show me walkthrough at any time.",
         "restartTour": "Restart tour"
+      },
+      "softwareUpdate": {
+        "available": "Version {{version}} is available.",
+        "checkButton": "Check for Updates",
+        "checking": "Checking for updates…",
+        "downloadButton": "Download",
+        "downloaded": "Version {{version}} is ready to install.",
+        "downloading": "Downloading update… {{percent}}%",
+        "failed": "Update check failed.",
+        "idle": "Check for new versions of Maestro Studio.",
+        "installButton": "Restart & Update",
+        "installing": "Restarting…",
+        "title": "Software update",
+        "upToDate": "You're on the latest version."
       }
     },
     "usage": {
@@ -206,7 +315,8 @@
       "savingsQuip3": "Your subscriptions quietly did the work of a {{cost}} API bill. Maestro Studio just drove around the toll booth.",
       "savingsQuip4": "{{cost}} that stayed in your wallet across {{sessions}} sessions. Per-token guilt: zero.",
       "noToolCallsYet": "No tool calls yet"
-    }
+    },
+    "saveError": "Couldn't save that change. Try again in a moment."
   },
   "onboarding": {
     "stageLabels": {
@@ -239,31 +349,71 @@
     "steps": {
       "welcome_open": {
         "title": "Welcome",
-        "description": ""
+        "description": "",
+        "popup": "Let me open up a chat for you."
       },
       "connect_model": {
         "title": "Keep going: connect your model",
-        "description": "Your free runs are limited. Add your own model to keep building."
+        "description": "Your free runs are limited. Add your own model to keep building.",
+        "hint": "Finish connecting your model.",
+        "option": {
+          "apiKey": "I have an API key",
+          "subscription": "I already have an AI subscription"
+        },
+        "popup": {
+          "apiKey": "Drop your API key in.",
+          "close": "Nice! Close it up.",
+          "models": "Hop over to Models.",
+          "settings": "Pop into Settings.",
+          "subscription": "Hook up your subscription here."
+        },
+        "question": "How would you like to connect an AI model?"
       },
       "launch_agent": {
         "title": "Launch your first Agent",
-        "description": "Tell the chat what you want done and a team gets to work."
+        "description": "Tell the chat what you want done and a team gets to work.",
+        "popup": {
+          "askQuestion": "What do you want done? Type it here and I'll put a team on it.",
+          "openChat": "Let me open a chat for you."
+        }
       },
       "use_browser": {
         "title": "Use the built-in browser",
-        "description": "No more jumping between apps. You and your agents work in one place."
+        "description": "No more jumping between apps. You and your agents work in one place.",
+        "popup": "Pop open a browser."
       },
       "agent_use_browser": {
         "title": "Have an agent use the browser",
-        "description": "Let an agent take control of your browser."
+        "description": "Let an agent take control of your browser.",
+        "popup": {
+          "askTask": "Now ask it to do something on the web in your own words, then send.",
+          "dragBox": "Now you try! Drag a box around the browser to link it.",
+          "fitToView": "Heads up! This snaps everything back into view.",
+          "minimap": "Pop on a minimap whenever things get crowded.",
+          "newChat": "Time for a fresh chat that surfs the web.",
+          "selectElement": "Tap here to plug a browser into this chat.",
+          "tidyLayout": "And this auto tidies your layout."
+        }
       },
       "agent_control_agents": {
         "title": "Have an agent control other agents",
-        "description": "Let an agent orchestrate other agents."
+        "description": "Let an agent orchestrate other agents.",
+        "popup": {
+          "askTask": "Tell the boss chat what to have its helper do, your words, then send.",
+          "dragBox": "Now you try! Drag a box around the older chat to make it a helper.",
+          "intro": "Remember the chat you just made? We'll have a fresh one boss it around.",
+          "newChat": "Make a new chat. This one's the boss.",
+          "selectElement": "Tap here to hook in the older chat.",
+          "working": "On it! The helper gets to work and reports back to the boss. Go poke around in the meantime."
+        }
       },
       "make_app": {
         "title": "Make an App",
-        "description": "Prompt interactive applications into existence."
+        "description": "Prompt interactive applications into existence.",
+        "popup": {
+          "cooking": "Cooking up your app! It'll pop onto the canvas as a live card in a sec. Go explore while it brews.",
+          "intro": "Apps are just something you ask for. Try \"build me a habit tracker\" — any agent can make one."
+        }
       }
     },
     "infoByStepId": {
@@ -300,7 +450,15 @@
       "justOnce": "Just Once",
       "denyAll": "Deny All",
       "approveCount": "Approve {{count}}",
-      "denyCount": "Deny {{count}}"
+      "denyCount": "Deny {{count}}",
+      "summary": {
+        "date": "Date: {{start}}",
+        "search": "Search: \"{{query}}\"",
+        "subject": "Subject: {{subject}}",
+        "to": "To {{to}}",
+        "toWithSubject": "To {{to}}: {{subject}}"
+      },
+      "workflowsServerLabel": "Workflows"
     },
     "errors": {
       "modelRateLimit": {
@@ -424,6 +582,371 @@
       "tipCompact": "summarize old turns now",
       "tipClear": "fresh SDK session, keep chat history visible",
       "tipContext": "open this side panel"
+    },
+    "agent": {
+      "defaultName": "Agent",
+      "revealOnDashboard": "Reveal on dashboard"
+    },
+    "browserFeed": {
+      "action": {
+        "click": "Click {{selector}}",
+        "evaluateJs": "Evaluate JS",
+        "inspectElements": "Inspect elements",
+        "navigate": "Navigate → {{url}}",
+        "readPageText": "Read page text",
+        "screenshot": "Screenshot",
+        "type": "Type \"{{text}}\" into {{selector}}"
+      },
+      "browserLabel": "Browser {{n}}",
+      "doneContinue": "Done, continue",
+      "needsHelp": "Browser agent needs help",
+      "result": {
+        "screenshotCaptured": "Screenshot captured"
+      },
+      "skip": "Skip",
+      "startingAgent": "Starting browser agent..."
+    },
+    "chatInput": {
+      "activity": {
+        "compactingMemory": "Compacting memory"
+      },
+      "attachment": {
+        "unnamedFile": "file"
+      },
+      "chip": {
+        "appFiles": "App files",
+        "copied": "Copied!",
+        "notOnThisModel": " · not on this model"
+      },
+      "contextRing": {
+        "tooltip": "{{pct}}% · {{used}} / {{limit}} context used"
+      },
+      "dropzone": {
+        "attachingFiles": "Attaching files…",
+        "dropFilesHere": "Drop files here"
+      },
+      "mode": {
+        "fallbackLabel": "Agent"
+      },
+      "oversize": {
+        "shrinking": "Shrinking",
+        "shrinkingMany_one": "Shrinking <b>{{name}}</b> and {{count}} other to fit",
+        "shrinkingMany_other": "Shrinking <b>{{name}}</b> and {{count}} others to fit",
+        "shrinkingMessagePlural": "Shrinking {{firstName}} and {{count}} other to fit",
+        "shrinkingMessageSingle": "Shrinking {{firstName}} to fit",
+        "shrinkingOne": "Shrinking <b>{{name}}</b> to fit",
+        "slowHint": "This may take up to a minute. Sit tight."
+      },
+      "pasteDialog": {
+        "charCount": "{{count}} characters",
+        "title": "Pasted text",
+        "unavailable": "This pasted text is no longer available. Re-paste to restore it."
+      },
+      "pastedCard": {
+        "agent": "Agent",
+        "browser": "Browser",
+        "view": "View"
+      },
+      "placeholder": {
+        "agentWorkingDisabled": "Agent is working...",
+        "autoRun": "Describe what data to generate…",
+        "default": "Ask anything, @ for context, / for commands",
+        "queued": "{{count}} queued, type another or wait…",
+        "runningWillQueue": "Agent is working, messages will queue…"
+      },
+      "runContext": {
+        "chipLabel": "Run attached · {{title}}",
+        "removeAria": "Remove run context"
+      },
+      "sendBlock": {
+        "tooLong": "That message is too long to send. Try shortening it or splitting it into a few smaller ones."
+      },
+      "shrink": {
+        "errorAll": "Could not shrink the files. Try removing some, or pick a model with a bigger window in Settings.",
+        "errorPartial": "Could not shrink {{failed}} of {{total}} files. Remove or retry the ones still flagged.",
+        "errorSingle": "Could not shrink the file. Try removing it, or pick a model with a bigger window in Settings."
+      }
+    },
+    "compactionMarker": {
+      "olderTurnsSummarized": "Older turns summarized",
+      "turnsSummarized_one": "{{count}} earlier turn summarized",
+      "turnsSummarized_other": "{{count}} earlier turns summarized"
+    },
+    "contextRecoveredPill": {
+      "label": "Recovered and retried",
+      "tooltip": "This chat's memory overflowed mid-reply. Maestro Studio recovered it and retried automatically; nothing was lost."
+    },
+    "createAgent": {
+      "subAgentFallback": "Sub-agent",
+      "title": "CreateAgent"
+    },
+    "elapsed": {
+      "milliseconds": "{{ms}}ms",
+      "minutesSeconds": "{{mins}}m {{secs}}s",
+      "seconds": "{{secs}}s"
+    },
+    "feedbackDialog": {
+      "detailsPrompt": "Please provide details: (optional)",
+      "negativePlaceholder": "What went wrong with this response?",
+      "negativeTitle": "Give negative feedback",
+      "placeholderNegative": "What went wrong with this response?",
+      "placeholderPositive": "What was good about this response?",
+      "positivePlaceholder": "What was good about this response?",
+      "positiveTitle": "Give positive feedback",
+      "privacyNote": "Shared with Maestro to help improve your agents. We send your rating and note, not your conversation.",
+      "promptLabel": "Please provide details: (optional)",
+      "titleNegative": "Give negative feedback",
+      "titlePositive": "Give positive feedback"
+    },
+    "forceStopAgentBar": {
+      "continueEditing": "Continue editing",
+      "forceStopAgent": "Force Stop Agent",
+      "saveWorkflow": "Save workflow",
+      "testFinished": "Test finished",
+      "testStopped": "Test stopped"
+    },
+    "invokeAgent": {
+      "title": "InvokeAgent"
+    },
+    "mcpCards": {
+      "calendar": {
+        "end": "End",
+        "moreItems": "+{{count}} more",
+        "noTitle": "(no title)",
+        "start": "Start",
+        "where": "Where"
+      },
+      "generic": {
+        "emptyResponse": "(empty response)",
+        "moreFields": "+{{count}} more fields"
+      },
+      "gmail": {
+        "attachmentFallback": "attachment",
+        "date": "Date",
+        "from": "From",
+        "moreMessages": "+{{count}} more",
+        "noSubject": "(no subject)",
+        "to": "To"
+      },
+      "truncatedNotice": "… ({{count}} more chars; model received full output)"
+    },
+    "messageBubble": {
+      "context": {
+        "actionsRequested_one": "{{count}} action requested",
+        "actionsRequested_other": "{{count}} actions requested",
+        "attachedSuffix": " attached",
+        "elementsSelected_one": "{{count}} element selected",
+        "elementsSelected_other": "{{count}} elements selected",
+        "files_one": "{{count}} file",
+        "files_other": "{{count}} files",
+        "folders_one": "{{count}} folder",
+        "folders_other": "{{count}} folders",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills"
+      },
+      "reasoning": {
+        "streaming": "Reasoning…",
+        "tokens": "{{count}} reasoning tokens",
+        "took": "Took {{metric}}.",
+        "variant1": "It's still thinking, we just aren't allowed to peek behind the curtain.",
+        "variant2": "Wheels are turning, but this provider keeps its thoughts private.",
+        "variant3": "Brain's busy back there; the provider just isn't letting us listen in.",
+        "variant4": "Mulling it over quietly. Only Claude shows its work out loud.",
+        "variant5": "Thinking happened, just not in the open. (GPT and Gemini play their cards close.)",
+        "variant6": "Reasoning's underway, but this provider doesn't broadcast it. Trust the process."
+      },
+      "saveAndSubmit": "Save & Submit",
+      "thinking": {
+        "liveWithTokens": "{{label}}… ~{{tokens}} tokens",
+        "pastForDuration": "{{label}} for {{duration}}",
+        "toolsUsed_one": "{{count}} tool used",
+        "toolsUsed_other": "{{count}} tools used"
+      },
+      "tokens": {
+        "countLabel": "{{count}} tokens",
+        "input": "Input",
+        "note": "Input shown is your message, history, and tool outputs. The fixed framework preamble (system prompt, tool defs, MCP descriptions) is excluded, since it's constant overhead from the agent runtime, not anything you can shrink.",
+        "output": "Output",
+        "total": "Total",
+        "totalCombined": "{{total}} tokens (input + output + children)"
+      }
+    },
+    "modelPicker": {
+      "activeFilters_one": "{{count}} active filter",
+      "activeFilters_other": "{{count}} active filters",
+      "badge": {
+        "noImage": "No image",
+        "noPdf": "No PDF"
+      },
+      "breakdown": {
+        "apiKey": "API key",
+        "free": "Free",
+        "longContext": "1M+ context",
+        "payPerUse": "Pay-per-use",
+        "reasoning": "Reasoning",
+        "subscription": "Subscription"
+      },
+      "costLabel": {
+        "any": "Any",
+        "freeOnly": "Free only"
+      },
+      "ctxLabel": {
+        "any": "Any"
+      },
+      "empty": {
+        "noMatchFilters": "No models match the current filters.",
+        "noMatchQuery": "No models match \"{{query}}\".",
+        "tryClearingFilters": "Try clearing the filters above."
+      },
+      "filter": {
+        "apiKey": "API key",
+        "maxCost": "Max cost",
+        "minContext": "Min context",
+        "reasoning": "Reasoning",
+        "reset": "Reset",
+        "subscription": "Subscription"
+      },
+      "footer": {
+        "hint": "Type to search, Esc to close",
+        "modelsAvailable_one": "{{count}} model available",
+        "modelsAvailable_other": "{{count}} models available",
+        "modelsCount_one": "{{count}} model",
+        "modelsCount_other": "{{count}} models"
+      },
+      "hideFilters": "Hide filters",
+      "probeError": {
+        "headsUp": "Heads up",
+        "invalidKey": "This model's key looks invalid, check it in Settings.",
+        "noCredits": "This model is out of credits, check billing.",
+        "notConnected": "This model isn't connected, add its provider in Settings.",
+        "unavailable": "This model isn't available right now."
+      },
+      "recentHeading": "Recent",
+      "searchPlaceholder": "Search models…",
+      "showFilters": "Show filters"
+    },
+    "modelTooltip": {
+      "capabilities": "Capabilities",
+      "capability": {
+        "freeTier": "Free tier",
+        "longContext": "1M+ context",
+        "million1Context": "1M+ context",
+        "reasoning": "Reasoning",
+        "subscription": "Subscription",
+        "tools": "Tools"
+      },
+      "context": "Context",
+      "cost": "Cost",
+      "free": "Free",
+      "intelligence": "Intelligence",
+      "pricing": "Pricing",
+      "pricingLine": "{{inCost}}/M in · {{outCost}}/M out",
+      "row": {
+        "capabilities": "Capabilities",
+        "context": "Context",
+        "cost": "Cost",
+        "intelligence": "Intelligence",
+        "pricing": "Pricing",
+        "speed": "Speed"
+      },
+      "speed": "Speed",
+      "value": {
+        "free": "Free",
+        "pricingPerMillion": "{{in}}/M in · {{out}}/M out"
+      }
+    },
+    "rateLimitPill": {
+      "backAt": "Back ~{{time}}",
+      "rateLimited": "Rate limited",
+      "tooltip": "Your plan hit its rate limit, it'll resume on its own"
+    },
+    "revealLabel": {
+      "agent": "Agent",
+      "createAgent": "Create Agent",
+      "invokeAgent": "Invoke Agent"
+    },
+    "settingsTool": {
+      "labels": {
+        "browserHomepage": "Browser homepage",
+        "defaultFolder": "Default folder",
+        "defaultMode": "Default mode",
+        "defaultModel": "Default model",
+        "maxTurns": "Max turns",
+        "newAgentShortcut": "New-agent shortcut",
+        "systemPrompt": "System prompt",
+        "theme": "Theme",
+        "thinkingLevel": "Thinking level",
+        "zoomSensitivity": "Zoom sensitivity"
+      },
+      "noChanges": "No changes.",
+      "valueNone": "none"
+    },
+    "tokenBreakdown": {
+      "input": "Input",
+      "output": "Output",
+      "total": "Total"
+    },
+    "tool": {
+      "denied": "denied",
+      "unknownName": "Unknown"
+    },
+    "toolGroup": {
+      "deniedCount": "{{count}} denied",
+      "workflowActions": "Workflow actions"
+    },
+    "toolInput": {
+      "includeLabel": "include: {{include}}",
+      "limitLabel": "limit: {{limit}}",
+      "moreEdits": "… +{{count}} more edits",
+      "offsetLabel": "offset: {{offset}}",
+      "pathLabel": "path: {{path}}",
+      "patternLabel": "pattern: {{pattern}}"
+    },
+    "toolOutput": {
+      "empty": "(empty)",
+      "noOutput": "(no output)"
+    },
+    "toolSummary": {
+      "emails_one": "{{count}} email",
+      "emails_other": "{{count}} emails",
+      "error": "error",
+      "events_one": "{{count}} event",
+      "events_other": "{{count}} events",
+      "exitCode": "exit {{code}}",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "grepInPath": "{{query}} in {{path}}",
+      "lines_one": "{{count}} line",
+      "lines_other": "{{count}} lines",
+      "matches_one": "{{count}} match",
+      "matches_other": "{{count}} matches",
+      "results": "results",
+      "sent": "sent",
+      "stderr": "stderr"
+    },
+    "toolbar": {
+      "attachFile": "Attach file",
+      "exitSelectMode": "Exit select mode",
+      "gemini3SearchWarning": "Web search breaks on Gemini 3 preview while thinking is on. Set to Off if you need search.",
+      "queueMessage": "Queue message",
+      "selectUiElement": "Select UI element",
+      "sendMessage": "Send message",
+      "stopAgent": "Stop agent",
+      "thinkingLevelAuto": "Auto",
+      "thinkingLevelAutoDesc": "Model decides (recommended)",
+      "thinkingLevelHigh": "High",
+      "thinkingLevelHighDesc": "Extensive thinking (slowest)",
+      "thinkingLevelLabel": "Thinking Level",
+      "thinkingLevelLow": "Low",
+      "thinkingLevelLowDesc": "Minimal thinking",
+      "thinkingLevelMedium": "Medium",
+      "thinkingLevelMediumDesc": "Balanced",
+      "thinkingLevelOff": "Off",
+      "thinkingLevelOffDesc": "No thinking (fastest)",
+      "voiceInputComingSoon": "Voice input (coming soon)"
+    },
+    "welcome": {
+      "greeting": "Hi, I'm Maestro Studio, your personal AI team. I can do just about anything right on your laptop, so bring me anything: a tough problem, a half-formed idea, something you need to write. We'll figure it out together.\n\nWhere do you want to start?"
     }
   },
   "provedorIa": {
@@ -478,7 +1001,8 @@
       "passkeysBody": "Sorry, Maestro Studio doesn't support passkeys. Please sign in with a password or another method.",
       "ok": "OK",
       "iframeTitle": "Browser",
-      "tab": "Tab"
+      "tab": "Tab",
+      "aiBadge": "AI"
     },
     "canvasControls": {
       "zoomOut": "Zoom out",
@@ -575,14 +1099,21 @@
       "openAnotherWindow": "Open another window",
       "showToolbar": "Show toolbar",
       "hideToolbar": "Hide toolbar",
-      "removeFromDashboard": "Remove from dashboard"
+      "removeFromDashboard": "Remove from dashboard",
+      "filesMissing": "This app's files are missing.",
+      "removeCard": "Remove card",
+      "resetHardReload": "Reset & Hard Reload",
+      "restartBackend": "Restart backend.py + reload preview"
     },
     "cardSearch": {
       "placeholder": "Search cards...",
       "noCards": "No cards found",
       "agentFallback": "Agent {{id}}",
       "viewFallback": "View: {{id}}",
-      "browserFallback": "Browser {{id}}"
+      "browserFallback": "Browser {{id}}",
+      "typeAgent": "Agent",
+      "typeBrowser": "Browser",
+      "typeView": "View"
     },
     "noteCard": {
       "placeholder": "Type a note…"
@@ -600,7 +1131,8 @@
       "results_one": "{{count}} result",
       "results_other": "{{count}} results",
       "feedEmpty": "{{site}}'s feed came back empty, browsing instead",
-      "readingFeed": "Reading {{site}}'s data feed"
+      "readingFeed": "Reading {{site}}'s data feed",
+      "viaDataFeed": "via the page's own data feed"
     },
     "browserOverlay": {
       "title": "Browser Agent",
@@ -638,6 +1170,10 @@
       "viewing": "Viewing",
       "createAgent": "Create Agent",
       "invokeAgent": "Invoke Agent"
+    },
+    "defaultName": "Dashboard",
+    "viewPreview": {
+      "title": "App Preview"
     }
   },
   "overlays": {
@@ -708,6 +1244,82 @@
       "approvals": "Approvals",
       "completedCount": "Completed ({{total}})",
       "clearAll": "Clear all"
+    },
+    "directoryBrowser": {
+      "attachFile": "Attach File",
+      "attachFolder": "Attach Folder",
+      "attachThisFolder": "Attach This Folder",
+      "empty": "Empty directory",
+      "go": "Go",
+      "hint": "Click to select, double-click folders to open",
+      "pathPlaceholder": "Type a path...",
+      "selected": "Selected: {{name}}",
+      "title": "Browse Files & Folders"
+    },
+    "import": {
+      "added": "Added {{name}}",
+      "addedApp": "Added {{name}} to your Apps",
+      "dropZone": "Drop to add to Maestro Studio",
+      "errorFinish": "We couldn't finish the import.",
+      "errorRead": "We couldn't read this file."
+    },
+    "importModal": {
+      "addButton": "Add to Maestro Studio",
+      "conflictWarning": "Some items already exist and will be added as copies."
+    },
+    "includesList": {
+      "hide": "Hide",
+      "needsLabel": "Needs",
+      "show": "Show"
+    },
+    "providerHealthToast": {
+      "message_one": "Your {{labels}} login has expired; chats on it will fail until you reconnect.",
+      "message_other": "Your {{labels}} logins have expired; chats on them will fail until you reconnect.",
+      "reconnectButton": "Reconnect"
+    },
+    "share": {
+      "comingSoon": "Coming soon",
+      "createLinkSubtitle": "A link that opens straight in Maestro Studio.",
+      "createLinkTitle": "Create share link",
+      "downloadButton": "Download .swarm",
+      "downloadFileSubtitle": "Save a file you can send to anyone.",
+      "downloadFileTitle": "Download .swarm file",
+      "errorBuild": "We couldn't build the file.",
+      "errorRead": "We couldn't read this for sharing.",
+      "saved": "Saved {{filename}}",
+      "title": "Share {{name}}",
+      "tryAgain": "Try again"
+    },
+    "trustedPatterns": {
+      "description": "Files like SSH keys and shell startup files normally ask before each write, even when you've set Write to \"always allow\". Patterns you've chosen to always allow appear below. Remove one to start asking again.",
+      "pattern": {
+        "awsCredentials": "AWS credentials (~/.aws)",
+        "bashProfile": "Shell startup file (.bash_profile)",
+        "bashrc": "Shell startup file (.bashrc)",
+        "dockerCredentials": "Docker credentials",
+        "etcConfig": "System config (/etc)",
+        "gcloudCredentials": "Google Cloud credentials",
+        "gitconfig": "Global Git config",
+        "gpgKeys": "GPG encryption keys",
+        "kubeConfig": "Kubernetes config (~/.kube)",
+        "macKeychain": "macOS Keychain",
+        "macSystemFolder": "macOS system folder",
+        "netrc": "Stored login info (~/.netrc)",
+        "npmrc": "npm auth file (~/.npmrc)",
+        "passwd": "System user list (/etc/passwd)",
+        "profile": "Shell startup file (.profile)",
+        "pypirc": "PyPI auth file (~/.pypirc)",
+        "shadow": "System password file (/etc/shadow)",
+        "sshFolder": "SSH folder (~/.ssh)",
+        "sudoers": "Sudo permissions (/etc/sudoers)",
+        "sudoersD": "Sudo permissions (/etc/sudoers.d)",
+        "usrLocalEtcConfig": "System config (/usr/local/etc)",
+        "zprofile": "Shell startup file (.zprofile)",
+        "zshenv": "Shell environment file (.zshenv)",
+        "zshrc": "Shell startup file (.zshrc)"
+      },
+      "removePattern": "Remove {{label}}",
+      "title": "Trusted file patterns"
     }
   },
   "tools": {
@@ -829,6 +1441,16 @@
       "envVarsHeading": "Environment Variables",
       "addVariable": "+ Add Variable",
       "installTool": "Install Tool"
+    },
+    "customToolConnect": {
+      "connectM365": "Connect Microsoft 365"
+    },
+    "registryBrowser": {
+      "allFilter": "All",
+      "communityFilter": "Community",
+      "curatedFilter": "Curated",
+      "googleFilter": "Google",
+      "searchPlaceholder": "Search MCP servers..."
     }
   },
   "skills": {
@@ -1086,7 +1708,11 @@
       "firesAt": "Fires at {{time}}",
       "lastRun": "Last run: {{status}}",
       "lastRunCost": "Last run cost: ${{cost}}",
-      "estMonthly": "Est. monthly: ${{cost}}"
+      "estMonthly": "Est. monthly: ${{cost}}",
+      "month": "Month",
+      "sample": "Sample",
+      "today": "Today",
+      "week": "Week"
     },
     "repeat": {
       "forever": "Forever",
@@ -1149,7 +1775,256 @@
       "repeat": "Repeat"
     },
     "scheduleChip": {
-      "tweakHint": "Click to tweak time"
+      "tweakHint": "Click to tweak time",
+      "quickTimeEdit": "QUICK TIME EDIT",
+      "savedAsYouChange": "Saved as you change."
+    },
+    "colorSwatch": {
+      "workflowColor": "Workflow color"
+    },
+    "compose": {
+      "describeWorkflow": "Describe the workflow to automate",
+      "describeWorkflowHint": "Tell me what you want this workflow to do. I'll turn it into steps you can run on a schedule, and you can tweak anything as we go.",
+      "draft": "Draft",
+      "hideScheduleSteps": "Hide schedule & steps",
+      "settingUp": "Setting up your workflow…",
+      "showScheduleSteps": "Show schedule & steps",
+      "untitledWorkflow": "Untitled workflow"
+    },
+    "composeView": {
+      "newsDigest": "Digest of news in my field",
+      "newsDigestPrompt": "Each week, give me a digest of the latest news and research in my field.",
+      "planWeekend": "Plan my weekend for me",
+      "planWeekendPrompt": "Friday afternoon, plan my weekend from the weather and what's nearby.",
+      "recapSpendingPrompt": "Every Sunday, recap my spending, subscriptions, upcoming bills, and any weird charges.",
+      "recapWeeklySpending": "Recap my weekly spending",
+      "summarizeInboxDaily": "Summarize my inbox daily",
+      "summarizeInboxPrompt": "Each morning, summarize my inbox and draft replies to the important emails.",
+      "watchWebpage": "Watch a webpage for changes",
+      "watchWebpagePrompt": "Watch a webpage and alert me when it changes."
+    },
+    "detailView": {
+      "hideScheduleAndSteps": "Hide schedule & steps",
+      "run": "Run",
+      "running": "Running…",
+      "showScheduleAndSteps": "Show schedule & steps",
+      "statusActive": "Active",
+      "statusPaused": "Paused",
+      "untitledWorkflow": "Untitled workflow"
+    },
+    "history": {
+      "empty": "No runs yet.",
+      "openRun": "Open this run",
+      "title": "History"
+    },
+    "home": {
+      "comingUp": "Coming up",
+      "dismiss": "Dismiss",
+      "missed": "Missed",
+      "missedWhileClosed": "Missed while the app was closed",
+      "moreCount": "{{count}} more",
+      "noRunsYet": "No runs yet.",
+      "nothingScheduled": "Nothing scheduled in the next 7 days.",
+      "ongoingRuns": "Ongoing runs",
+      "reRun": "Re-run",
+      "reRunAll": "Re-run all",
+      "recents": "Recents",
+      "showAllMissed": "Show all {{count}} missed",
+      "showLess": "Show less",
+      "success": "Success",
+      "watch": "Watch"
+    },
+    "homeView": {
+      "comingUp": "Coming up",
+      "completed": "Completed",
+      "dismiss": "Dismiss",
+      "failed": "Failed",
+      "missed": "Missed",
+      "missedWhileAppClosed": "Missed while the app was closed",
+      "moreRuns": "{{count}} more",
+      "noRuns": "No runs yet.",
+      "nothingScheduled": "Nothing scheduled in the next 7 days.",
+      "ongoingRuns": "Ongoing runs",
+      "reRun": "Re-run",
+      "reRunAll": "Re-run all",
+      "recents": "Recents",
+      "runStatus_one": "1 run",
+      "runStatus_other": "{{count}} runs",
+      "running": "Running",
+      "showAll": "Show all {{count}} missed",
+      "showLess": "Show less",
+      "stepLabel": "Step {{step}}/{{total}}",
+      "steps": "steps",
+      "success": "Success",
+      "watch": "Watch",
+      "workflowDefaultTitle": "Workflow",
+      "workflowUntitledTitle": "Untitled"
+    },
+    "missedRunsToast": {
+      "dismiss": "Dismiss",
+      "missedRuns_one": "1 scheduled run was missed while you were away",
+      "missedRuns_other": "{{count}} scheduled runs were missed while you were away",
+      "review": "Review"
+    },
+    "runMonitor": {
+      "allStepsComplete": "All {{total}} steps complete",
+      "done": "Done",
+      "failed": "Failed",
+      "failedAtStep": "Failed at step {{index}}",
+      "failedBeforeAgent": "This run failed before any agent ran.",
+      "idle": "Idle",
+      "manualRun": "MANUAL RUN",
+      "noAgentChat": "No agent chat for this run.",
+      "reRun": "RE-RUN",
+      "run": "RUN",
+      "running": "Running",
+      "scheduledRun": "SCHEDULED RUN",
+      "stepCount": "{{total}} steps",
+      "stepOf": "Step {{index}} of {{total}}",
+      "stopRun": "Stop run",
+      "waitingForRunStart": "Waiting for the run to start…",
+      "waitingToStart": "Waiting for the run to start…"
+    },
+    "scheduleTestWarningDialog": {
+      "description": "Scheduled runs can't pause to ask for permission. If this workflow uses tools that need your approval, it could fail when it runs on its own. A quick test run lets you approve those tools now.",
+      "scheduleAnyway": "Schedule anyway",
+      "testFirst": "Test first",
+      "title": "Test before scheduling?"
+    },
+    "status": {
+      "failure": "Failed",
+      "neverRun": "Never run",
+      "paused": "Paused",
+      "ranLate": "Ran late",
+      "running": "Running",
+      "skipped": "Skipped",
+      "success": "Success"
+    },
+    "stepList": {
+      "hiddenMore": "... {{count}} more",
+      "removeStep": "Remove step",
+      "removeStepDisabled": "Workflow needs at least one step",
+      "removeStepLabel": "Remove step {{step}}"
+    },
+    "trash": {
+      "deleteConfirmation": "Permanently delete \"{{title}}\"? This can't be undone.",
+      "deleteForever": "Delete forever",
+      "deletedWorkflows": "Deleted workflows",
+      "empty": "Trash is empty",
+      "emptyDescription": "Deleted workflows appear here. Restore them or remove them permanently.",
+      "restore": "Restore",
+      "trash": "Trash"
+    },
+    "workflowRunningToast": {
+      "message": "{{title}} is running now",
+      "view": "View"
+    }
+  },
+  "analytics": {
+    "costTracking": "Cost Tracking",
+    "costTrackingDesc": "Spend by model, provider, and time period",
+    "metricsTitle": "Metrics",
+    "modelDistribution": "Model Distribution",
+    "modelDistributionDesc": "Which models and providers are most popular",
+    "pageTitle": "Analytics",
+    "retentionFunnels": "Retention & Funnels",
+    "retentionFunnelsDesc": "User engagement, feature adoption, onboarding flow",
+    "sessionsUsage": "Sessions & Usage",
+    "sessionsUsageDesc": "How often agents are launched, session duration, completion rates",
+    "taskCategories": "Task Categories",
+    "taskCategoriesDesc": "What users do: coding, email, research, social, browsing",
+    "toolUsage": "Tool Usage",
+    "toolUsageDesc": "Most used MCP tools, execution times, approval rates",
+    "usageDescription": "Usage data is automatically collected: sessions, costs, tool usage, model distribution, and task categories. All data is anonymous and can be disabled in Settings.",
+    "yourUsage": "Your usage"
+  },
+  "dashboardSelection": {
+    "delete": "Delete",
+    "duplicate": "Duplicate",
+    "moreActions": "More actions",
+    "newDashboard": "New dashboard",
+    "noDashboards": "No dashboards yet",
+    "noHint": "Create your first dashboard to get started",
+    "noMatchingSearch": "No dashboards match your search",
+    "noSearchHint": "Try a different search term",
+    "previewAlt": "{{name}} preview",
+    "rename": "Rename",
+    "searchPlaceholder": "Search dashboards...",
+    "subtitle": "Monitor and manage your agents from a single workspace.",
+    "title": "Dashboards",
+    "updatedLabel": "Updated"
+  },
+  "feedback": {
+    "errorBoundary": {
+      "description": "We caught it before it crashed everything. The error is below; copy it if you want to share. Reload usually fixes it.",
+      "reload": "Reload",
+      "resetAndReload": "Reset & reload",
+      "title": "Something broke."
+    }
+  },
+  "modes": {
+    "agent": {
+      "description": "Full autonomous agent with read and write access to tools.",
+      "name": "Agent"
+    },
+    "ask": {
+      "description": "Read-only conversation. Browse the codebase, search the web, and discuss ideas; but no edits, shells, or file writes.",
+      "name": "Ask"
+    },
+    "plan": {
+      "description": "Analyze requests and produce a detailed step-by-step plan without executing.",
+      "name": "Plan"
+    },
+    "skill-builder": {
+      "description": "Create and iterate on skills using AI-assisted vibe coding.",
+      "name": "Skill Builder"
+    },
+    "view-builder": {
+      "description": "Create and iterate on reusable App artifacts.",
+      "name": "App Builder"
+    }
+  },
+  "views": {
+    "codePanel": {
+      "loadingFiles": "Loading files…",
+      "selectFileToEdit": "Select a file to edit",
+      "tooLargeToEdit": "This file is {{size}} MB, too large to edit here."
+    },
+    "history": {
+      "autoBackup": "auto-backup",
+      "branchFailed": "Couldn't make a copy. Try again.",
+      "branchSuccess": "Saved as a new app.",
+      "daysAgo_one": "{{count}} day ago",
+      "daysAgo_other": "{{count}} days ago",
+      "goBackButton": "Go back to this version",
+      "goBackDescription": "This brings your app back to how it was here. Your current version is saved first, so you can always come back.",
+      "goBackQuestion": "Go back to this version?",
+      "hoursAgo_one": "{{count}} hour ago",
+      "hoursAgo_other": "{{count}} hours ago",
+      "justNow": "just now",
+      "minutesAgo_one": "{{count}} minute ago",
+      "minutesAgo_other": "{{count}} minutes ago",
+      "noHistoryYet": "No history yet. Every time you change your app, we'll save a snapshot here so you can go back.",
+      "nowCurrent": "Now (current)",
+      "restore": "Restore",
+      "restoreFailed": "Could not restore that version.",
+      "restoreSuccess": "Brought your app back to this version.",
+      "saveAsNewApp": "Save as new app",
+      "saveFailed": "Couldn't save this version. Try again.",
+      "saveThisVersion": "Save this version",
+      "savedByYou": "saved by you",
+      "savedSuccess": "Saved this version.",
+      "savedVersion": "Saved version",
+      "saving": "Saving",
+      "title": "History",
+      "updatedTheApp": "Updated the app"
+    },
+    "preview": {
+      "noPreviewAvailable": "No preview available",
+      "restoring": "Restoring preview..."
+    },
+    "terminal": {
+      "waitingForOutput": "Waiting for output... backend stdout/stderr and the running app's console.log will show here."
     }
   }
 }

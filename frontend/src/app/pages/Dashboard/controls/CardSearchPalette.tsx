@@ -110,9 +110,9 @@ const CardSearchPalette: React.FC<Props> = ({
 
   const typeLabel = (type: string) => {
     switch (type) {
-      case 'agent': return 'Agent';
-      case 'view': return 'View';
-      case 'browser': return 'Browser';
+      case 'agent': return t('dashboard.cardSearch.typeAgent');
+      case 'view': return t('dashboard.cardSearch.typeView');
+      case 'browser': return t('dashboard.cardSearch.typeBrowser');
       default: return type;
     }
   };

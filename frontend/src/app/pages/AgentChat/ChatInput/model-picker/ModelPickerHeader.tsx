@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
 import InputBase from '@mui/material/InputBase';
@@ -34,6 +35,7 @@ export const ModelPickerHeader: React.FC<Props> = ({
   capFilters, setCapFilters, ctxIdx, setCtxIdx, costIdx, setCostIdx,
   filtersExpanded, toggleFilters, anyFilterActive, tooltipSlotProps,
 }) => {
+  const { t } = useTranslation();
   return (
     /* Sticky header stops click+key so Menu doesn't typeahead while user types. */
     <Box
@@ -65,7 +67,7 @@ export const ModelPickerHeader: React.FC<Props> = ({
               pushRecentSearch(modelSearch);
             }
           }}
-          placeholder="Search models…"
+          placeholder={t('agentChat.modelPicker.searchPlaceholder')}
           fullWidth
           sx={{
             fontSize: '0.85rem',
@@ -76,8 +78,8 @@ export const ModelPickerHeader: React.FC<Props> = ({
         />
         <Tooltip
           title={anyFilterActive
-            ? `${[capFilters.reasoning, capFilters.subscription, capFilters.apiKey, ctxIdx > 0, costIdx > 0].filter(Boolean).length} active filter${[capFilters.reasoning, capFilters.subscription, capFilters.apiKey, ctxIdx > 0, costIdx > 0].filter(Boolean).length === 1 ? '' : 's'}`
-            : (filtersExpanded ? 'Hide filters' : 'Show filters')}
+            ? t('agentChat.modelPicker.activeFilters', {count: [capFilters.reasoning, capFilters.subscription, capFilters.apiKey, ctxIdx > 0, costIdx > 0].filter(Boolean).length})
+            : (filtersExpanded ? t('agentChat.modelPicker.hideFilters') : t('agentChat.modelPicker.showFilters'))}
           placement="bottom"
           enterDelay={400}
           slotProps={tooltipSlotProps}
@@ -125,9 +127,9 @@ export const ModelPickerHeader: React.FC<Props> = ({
         scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' },
       }}>
         {([
-          { key: 'reasoning', label: 'Reasoning' },
-          { key: 'subscription', label: 'Subscription' },
-          { key: 'apiKey', label: 'API key' },
+          { key: 'reasoning', label: t('agentChat.modelPicker.filter.reasoning') },
+          { key: 'subscription', label: t('agentChat.modelPicker.filter.subscription') },
+          { key: 'apiKey', label: t('agentChat.modelPicker.filter.apiKey') },
         ] as const).map(({ key, label }) => {
           const active = capFilters[key];
           return (
@@ -167,7 +169,7 @@ export const ModelPickerHeader: React.FC<Props> = ({
               '&:hover': { color: c.text.muted },
             }}
           >
-            Reset
+            {t('agentChat.modelPicker.filter.reset')}
           </Box>
         )}
       </Box>
@@ -177,8 +179,8 @@ export const ModelPickerHeader: React.FC<Props> = ({
         flexShrink: 0,
       }}>
         {([
-          { label: 'Min context', idx: ctxIdx, set: setCtxIdx, max: CTX_STEPS.length - 1, valueLabel: CTX_LABELS[ctxIdx] },
-          { label: 'Max cost',    idx: costIdx, set: setCostIdx, max: COST_STEPS.length - 1, valueLabel: COST_LABELS[costIdx] },
+          { label: t('agentChat.modelPicker.filter.minContext'), idx: ctxIdx, set: setCtxIdx, max: CTX_STEPS.length - 1, valueLabel: CTX_LABELS[ctxIdx] },
+          { label: t('agentChat.modelPicker.filter.maxCost'),    idx: costIdx, set: setCostIdx, max: COST_STEPS.length - 1, valueLabel: COST_LABELS[costIdx] },
         ] as const).map((row, i) => (
           <Box key={i} sx={{
             display: 'grid', gridTemplateColumns: '78px 1fr 60px',

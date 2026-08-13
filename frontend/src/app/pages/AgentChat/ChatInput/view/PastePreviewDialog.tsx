@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import { useTranslation } from 'react-i18next';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { getPasteContent } from '@/app/components/editor/richEditorUtils';
 
@@ -42,6 +43,7 @@ const PasteEditor: React.FC<{ pasteId: string; initial: string; onSave: Props['o
 };
 
 export const PastePreviewDialog: React.FC<Props> = ({ pasteId, onClose, onSave }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const open = !!pasteId;
   const original = pasteId ? getPasteContent(pasteId) : undefined;
@@ -57,16 +59,16 @@ export const PastePreviewDialog: React.FC<Props> = ({ pasteId, onClose, onSave }
     >
       <Box sx={{ p: 2, borderBottom: `1px solid ${c.border.subtle}` }}>
         <Typography sx={{ color: c.text.primary, fontSize: '1rem', fontWeight: 600 }}>
-          Pasted text
+          {t('agentChat.chatInput.pasteDialog.title')}
         </Typography>
         <Typography sx={{ color: c.text.tertiary, fontSize: '0.75rem', mt: 0.25 }}>
-          {(liveCount ?? original?.length ?? 0).toLocaleString()} characters
+          {t('agentChat.chatInput.pasteDialog.charCount', { count: (liveCount ?? original?.length ?? 0).toLocaleString() })}
         </Typography>
       </Box>
       <Box sx={{ p: 2, bgcolor: c.bg.surface }}>
         {original === undefined || pasteId === null ? (
           <Typography sx={{ color: c.text.tertiary, fontSize: '0.85rem', fontStyle: 'italic' }}>
-            This pasted text is no longer available. Re-paste to restore it.
+            {t('agentChat.chatInput.pasteDialog.unavailable')}
           </Typography>
         ) : (
           // key remounts the editor per paste id, so a reopened dialog always seeds from the current stored content (no stale-draft sync effect to get wrong).

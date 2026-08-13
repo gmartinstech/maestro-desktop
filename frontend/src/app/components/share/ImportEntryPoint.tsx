@@ -1,5 +1,6 @@
 // The one global import affordance. Drop a .swarm anywhere (or pick it): a GPU-safe pixel "digest" flash plays where you dropped it WHILE the preflight runs underneath, then it resolves straight into the import for safe bundles or a short confirm for ones that carry code/actions. Mount once near the app root.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
@@ -41,6 +42,7 @@ function needsConfirm(pf: ImportPreflight): boolean {
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const ImportEntryPoint: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -54,12 +56,12 @@ const ImportEntryPoint: React.FC = () => {
 
   const finish = useCallback(
     (rootType: string, rootId: string, name: string) => {
-      const msg = rootType === 'app' ? `Added ${name} to your Apps` : `Added ${name}`;
+      const msg = rootType === 'app' ? t('overlays.import.addedApp', { name }) : t('overlays.import.added', { name });
       setToast({ msg, sev: 'success' });
       const to = DEST[rootType]?.(rootId);
       if (to) navigate(to);
     },
-    [navigate],
+    [navigate, t],
   );
 
   const commitAndFinish = useCallback(
@@ -71,7 +73,7 @@ const ImportEntryPoint: React.FC = () => {
         setConfirm(null);
         confirmRef.current = false;
       } catch (e: any) {
-        setToast({ msg: e?.message || "We couldn't finish the import.", sev: 'error' });
+        setToast({ msg: e?.message || t('overlays.import.errorFinish'), sev: 'error' });
       } finally {
         setCommitting(false);
       }
@@ -88,7 +90,7 @@ const ImportEntryPoint: React.FC = () => {
       try {
         [, pf] = await Promise.all([delay(DIGEST_MS), importPreflight(file)]);
       } catch (e: any) {
-        setToast({ msg: e?.message || "We couldn't read this file.", sev: 'error' });
+        setToast({ msg: e?.message || t('overlays.import.errorRead'), sev: 'error' });
         return;
       }
       if (needsConfirm(pf)) {
@@ -179,7 +181,7 @@ const ImportEntryPoint: React.FC = () => {
           >
             <FileDownloadIcon sx={{ fontSize: 40, color: c.accent.primary }} />
             <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: c.text.primary }}>
-              Drop to add to Maestro Studio
+              {t('overlays.import.dropZone')}
             </Typography>
           </Box>
         </Box>

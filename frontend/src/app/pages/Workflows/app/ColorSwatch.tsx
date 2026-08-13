@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useWC, WORKFLOW_PALETTE } from './uiKit';
 
 // Small swatch button that opens a palette popover. Self-rendered (no portal) so it survives the canvas compositor, same reasoning as RepeatField.
 const ColorSwatch: React.FC<{ value: string; onChange: (hex: string) => void; size?: number }> = ({ value, onChange, size = 14 }) => {
   const WC = useWC();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -18,7 +20,7 @@ const ColorSwatch: React.FC<{ value: string; onChange: (hex: string) => void; si
     <div ref={ref} style={{ position: 'relative', flex: 'none' }}>
       <div
         onClick={() => setOpen((o) => !o)}
-        title="Workflow color"
+        title={t('workflows.colorSwatch.workflowColor')}
         style={{ width: size, height: size, borderRadius: 4, cursor: 'pointer', background: value, boxShadow: `0 0 0 1px rgba(${WC.inkRGB},0.14)` }}
       />
       {open && (

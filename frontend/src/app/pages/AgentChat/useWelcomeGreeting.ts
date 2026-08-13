@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '@/shared/hooks';
 import { streamStart, streamDelta } from '@/shared/state/streamingSlice';
 import { addMessage, type AgentSession } from '@/shared/state/agentsSlice';
-
-// The first thing a new user reads. Written as a normal assistant turn (prose, no headings) so it streams in exactly like a real reply. No em-dashes.
-export const WELCOME_GREETING =
-  "Hi, I'm Maestro Studio, your personal AI team. I can do just about anything right on your laptop, " +
-  "so bring me anything: a tough problem, a half-formed idea, something you need to write. " +
-  "We'll figure it out together.\n\nWhere do you want to start?";
 
 const GREETING_MSG_ID = 'welcome-greeting';
 
@@ -16,6 +11,7 @@ export function useWelcomeGreeting(
   session: AgentSession | undefined,
   isDraft: boolean,
 ): { greetingDone: boolean } {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [greetingDone, setGreetingDone] = useState(false);
   const startedRef = useRef(false);
@@ -28,10 +24,11 @@ export function useWelcomeGreeting(
     if (!eligible || !sessionId || startedRef.current) return;
     startedRef.current = true;
 
+    const greeting = t('agentChat.welcome.greeting');
     dispatch(streamStart({ sessionId, messageId: GREETING_MSG_ID, role: 'assistant' }));
 
     // Feed word-by-word at a real-reply cadence; useSmoothText trails it for the typed look.
-    const tokens = WELCOME_GREETING.split(/(\s+)/);
+    const tokens = greeting.split(/(\s+)/);
     let i = 0;
     const timer = window.setInterval(() => {
       const chunk = (tokens[i] ?? '') + (tokens[i + 1] ?? '');
@@ -45,7 +42,7 @@ export function useWelcomeGreeting(
           message: {
             id: GREETING_MSG_ID,
             role: 'assistant',
-            content: WELCOME_GREETING,
+            content: greeting,
             timestamp: new Date().toISOString(),
             branch_id: branchId,
             parent_id: null,
@@ -56,7 +53,7 @@ export function useWelcomeGreeting(
     }, 50);
 
     return () => window.clearInterval(timer);
-  }, [eligible, sessionId, branchId, dispatch]);
+  }, [eligible, sessionId, branchId, dispatch, t]);
 
   return { greetingDone };
 }

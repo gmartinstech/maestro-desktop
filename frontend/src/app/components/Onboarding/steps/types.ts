@@ -7,15 +7,19 @@ export type Selector = string;
 
 export type ACMultiChoiceOption = {
   id: string;
-  label: string;
+  /** Lazy so a translated label re-resolves per run rather than freezing the language at import. */
+  label: string | (() => string);
   /** If set, queue extra ops on selection so one step can branch without splitting. */
   thenOps?: ACOp[];
 };
 
+/** What the view actually receives: acRuntime resolves the lazy label before rendering. */
+export type ResolvedACMultiChoiceOption = Omit<ACMultiChoiceOption, 'label'> & { label: string };
+
 export type ACOp =
   | { kind: 'move_to'; target: Selector; offset?: { x: number; y: number } }
-  | { kind: 'popup'; text: string; cta?: string; dwellMs?: number }
-  | { kind: 'multi_choice'; opId: string; question: string; options: ACMultiChoiceOption[] }
+  | { kind: 'popup'; text: string | (() => string); cta?: string; dwellMs?: number }
+  | { kind: 'multi_choice'; opId: string; question: string | (() => string); options: ACMultiChoiceOption[] }
   | { kind: 'highlight_section'; target: Selector; popup?: string; durationMs?: number }
   | {
       kind: 'type_into';

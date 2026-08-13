@@ -19,7 +19,21 @@
       "done": "concluído",
       "needsAttention": "precisa de atenção"
     },
-    "back": "voltar"
+    "back": "voltar",
+    "cdpBridgeNotAvailable": "Ponte CDP não disponível; reinicie o aplicativo",
+    "clickToRename": "Clique para renomear",
+    "consoleIcon": "Ícone do Console",
+    "cookieBridgeUnavailable": "Ponte de cookies não disponível (apenas no aplicativo de desktop)",
+    "featureComingSoon": "Este recurso estará disponível em breve!",
+    "routeCaptureNotAvailable": "Captura de rotas não disponível; reinicie o aplicativo",
+    "runInDesktop": {
+      "body": "{{noun}} rodam dentro da janela do Maestro Studio, não em um navegador comum. Parece que você abriu a URL de desenvolvimento direto no navegador; inicie o Maestro Studio (a janela do Electron a partir de <cmd>bash run.sh</cmd>) e use por lá.",
+      "nounApps": "Apps",
+      "nounBrowsers": "Navegadores",
+      "title": "Abra isto no aplicativo Maestro Studio"
+    },
+    "share": "Compartilhar",
+    "underConstruction": "Em Construção"
   },
   "appShell": {
     "appTitle": "Maestro Studio",
@@ -39,7 +53,54 @@
     "updateAvailable": "O Maestro Studio{{verSuffix}} está disponível",
     "updateDownloading": "Baixando o Maestro Studio{{verSuffix}}…",
     "updateDownloaded": "O Maestro Studio{{verSuffix}} está pronto para instalar",
-    "updateDownloadedSnackbar": "Maestro Studio{{verSuffix}} baixado; reinicie para atualizar"
+    "updateDownloadedSnackbar": "Maestro Studio{{verSuffix}} baixado; reinicie para atualizar",
+    "boot": {
+      "stillStartingGeneric": "Ainda iniciando (primeiro lançamento é mais lento que os subsequentes)…",
+      "stillStartingMac": "Ainda iniciando — macOS está verificando o pacote (apenas no primeiro lançamento)…",
+      "stillStartingWin": "Ainda iniciando — Windows Defender está analisando arquivos (apenas no primeiro lançamento)…",
+      "takingTooLongGeneric": "Backend está levando mais tempo que o usual. Você pode aguardar, ver logs ou reiniciar.",
+      "takingTooLongMac": "Backend está levando mais tempo que o usual. Verificações de primeiro lançamento do macOS podem ser lentas com cache frio.",
+      "takingTooLongWin": "Backend está levando mais tempo que o usual. Verificações do Defender em 14 mil arquivos podem levar alguns minutos em unidades lentas."
+    },
+    "context": {
+      "addDict": "Adicionar ao dicionário",
+      "back": "Voltar",
+      "copyImage": "Copiar imagem",
+      "copyImageAddr": "Copiar endereço da imagem",
+      "copyLink": "Copiar link",
+      "forward": "Avançar",
+      "inspect": "Inspecionar elemento",
+      "noSuggestions": "Sem sugestões de ortografia",
+      "openImageNewTab": "Abrir imagem em nova aba",
+      "openNewTab": "Abrir link em nova aba",
+      "reload": "Recarregar"
+    },
+    "crash": {
+      "detail": "Recarregue para tentar novamente, ou saia se isso continuar acontecendo.",
+      "message": "Maestro Studio teve erros repetidos na interface e parou de recuperar automaticamente.",
+      "quit": "Sair",
+      "reload": "Recarregar",
+      "title": "Maestro Studio precisa recarregar"
+    },
+    "crashRecovery": "Tivemos um problema, mas trouxemos você de volta. Suas sessões estão aqui.",
+    "modelSwitched": "Seu modelo não está mais disponível, mudamos para {{modelName}}.",
+    "splash": {
+      "almostReady": "Quase pronto…",
+      "backendFailed": "Backend falhou ao iniciar",
+      "connectingBackend": "Conectando ao backend de desenvolvimento…",
+      "loadingComponents": "Carregando componentes…",
+      "quit": "Sair",
+      "restart": "Reiniciar",
+      "starting": "Iniciando…",
+      "startingBackend": "Iniciando backend…",
+      "startupFailed": "Maestro Studio não conseguiu iniciar: ",
+      "viewLogs": "Ver logs"
+    },
+    "update": {
+      "checkFailed": "Verificação de atualização falhou. Tente novamente mais tarde.",
+      "networkError": "Não foi possível alcançar o servidor de atualização. Verifique sua conexão e tente novamente.",
+      "noExperimental": "Nenhuma versão experimental disponível no momento. Você está na versão mais recente."
+    }
   },
   "settings": {
     "models": {
@@ -67,7 +128,39 @@
         "removeModel": "Remover modelo",
         "addModel": "+ Adicionar modelo",
         "addProvider": "+ Adicionar provedor personalizado"
-      }
+      },
+      "apiKeyCard": {
+        "anthropic": "Os modelos Claude mais recentes.",
+        "connected": "CONECTADO",
+        "getKey": "Obter chave",
+        "google": "Os modelos Gemini mais recentes.",
+        "openai": "Os modelos OpenAI mais recentes.",
+        "openrouter": "Centenas de modelos de todos os provedores principais."
+      },
+      "apiKeysDesc": "Pague por uso. Cada chave é armazenada localmente no seu dispositivo.",
+      "connectSubscription": "Conectar uma assinatura",
+      "connectWithApiKeys": "Ou conectar com chaves de API",
+      "providers": {
+        "chatgptDesc": "Os modelos ChatGPT mais recentes",
+        "claudeDesc": "Os modelos Claude mais recentes",
+        "geminiDesc": "Os modelos Gemini mais recentes"
+      },
+      "subscription": {
+        "dismiss": "Descartar",
+        "error": "Não foi possível iniciar o login. Tente novamente.",
+        "starting": "Iniciando serviço de assinatura...",
+        "startingDesc": "Isso conecta suas assinaturas de IA existentes. Se isso não carregar, certifique-se de que o Node.js está instalado."
+      },
+      "subscriptionCard": {
+        "comingSoon": "Em breve",
+        "connect": "Conectar",
+        "connected": "Conectado",
+        "connecting": "Conectando...",
+        "disconnect": "Desconectar",
+        "enterCode": "Digite o código:",
+        "waiting": "Aguardando autorização..."
+      },
+      "subscriptionDesc": "Já paga por Claude, ChatGPT ou Gemini? Conecte aqui sem custo extra."
     },
     "interface": {
       "sectionTitle": "Interface",
@@ -93,7 +186,9 @@
       "autoRevealSubAgentsDesc": "Mostra automaticamente os cartões de sub-agentes (de CreateAgent / InvokeAgent) conectados ao agente principal no painel.",
       "browserSectionTitle": "Navegador",
       "defaultHomepage": "Página inicial padrão",
-      "defaultHomepageDesc": "URL carregada ao abrir um novo cartão de navegador no painel."
+      "defaultHomepageDesc": "URL carregada ao abrir um novo cartão de navegador no painel.",
+      "languageEn": "English",
+      "languagePtBr": "Português (Brasil)"
     },
     "header": {
       "tabs": {
@@ -170,6 +265,20 @@
         "onboardingTour": "Tour de introdução",
         "onboardingTourDesc": "Refaça o tour \"Me mostre\" quando quiser.",
         "restartTour": "Reiniciar o tour"
+      },
+      "softwareUpdate": {
+        "available": "A versão {{version}} está disponível.",
+        "checkButton": "Verificar atualizações",
+        "checking": "Verificando atualizações…",
+        "downloadButton": "Baixar",
+        "downloaded": "A versão {{version}} está pronta para instalar.",
+        "downloading": "Baixando atualização… {{percent}}%",
+        "failed": "Falha ao verificar atualizações.",
+        "idle": "Verificar se há novas versões do Maestro Studio.",
+        "installButton": "Reiniciar e atualizar",
+        "installing": "Reiniciando…",
+        "title": "Atualização de software",
+        "upToDate": "Você está na versão mais recente."
       }
     },
     "usage": {
@@ -206,7 +315,8 @@
       "savingsQuip3": "Suas assinaturas fizeram, na surdina, o trabalho de uma fatura de API de {{cost}}. O Maestro Studio só passou por fora do pedágio.",
       "savingsQuip4": "{{cost}} que ficaram no seu bolso ao longo de {{sessions}} sessões. Culpa por token: zero.",
       "noToolCallsYet": "Nenhuma chamada de ferramenta ainda"
-    }
+    },
+    "saveError": "Não foi possível salvar essa alteração. Tente novamente em instantes."
   },
   "onboarding": {
     "stageLabels": {
@@ -239,31 +349,71 @@
     "steps": {
       "welcome_open": {
         "title": "Bem-vindo",
-        "description": ""
+        "description": "",
+        "popup": "Deixe-me abrir um chat para você."
       },
       "connect_model": {
         "title": "Continue: conecte seu modelo",
-        "description": "Suas execuções gratuitas são limitadas. Adicione seu próprio modelo para continuar construindo."
+        "description": "Suas execuções gratuitas são limitadas. Adicione seu próprio modelo para continuar construindo.",
+        "hint": "Termine de conectar seu modelo.",
+        "option": {
+          "apiKey": "Tenho uma chave de API",
+          "subscription": "Já tenho uma assinatura de IA"
+        },
+        "popup": {
+          "apiKey": "Coloque sua chave de API aqui.",
+          "close": "Pronto! Feche isso.",
+          "models": "Agora vamos para Modelos.",
+          "settings": "Vamos para Configurações.",
+          "subscription": "Conecte sua assinatura aqui."
+        },
+        "question": "Como você gostaria de conectar um modelo de IA?"
       },
       "launch_agent": {
         "title": "Inicie seu primeiro Agente",
-        "description": "Diga ao chat o que você quer feito e uma equipe entra em ação."
+        "description": "Diga ao chat o que você quer feito e uma equipe entra em ação.",
+        "popup": {
+          "askQuestion": "O que você quer que seja feito? Digite aqui e coloco uma equipe nisso.",
+          "openChat": "Deixe-me abrir um chat para você."
+        }
       },
       "use_browser": {
         "title": "Use o navegador integrado",
-        "description": "Sem precisar alternar entre apps. Você e seus agentes trabalham no mesmo lugar."
+        "description": "Sem precisar alternar entre apps. Você e seus agentes trabalham no mesmo lugar.",
+        "popup": "Abra um navegador."
       },
       "agent_use_browser": {
         "title": "Faça um agente usar o navegador",
-        "description": "Deixe um agente assumir o controle do seu navegador."
+        "description": "Deixe um agente assumir o controle do seu navegador.",
+        "popup": {
+          "askTask": "Agora peça para fazer algo na web com suas próprias palavras, depois envie.",
+          "dragBox": "Sua vez! Arraste uma caixa ao redor do navegador para conectá-lo.",
+          "fitToView": "Atenção! Isso encaixa tudo de volta na visualização.",
+          "minimap": "Coloque um minimapa quando as coisas ficarem aglomeradas.",
+          "newChat": "Hora de um novo chat que navega na web.",
+          "selectElement": "Toque aqui para conectar um navegador a este chat.",
+          "tidyLayout": "E isso arruma seu layout automaticamente."
+        }
       },
       "agent_control_agents": {
         "title": "Faça um agente controlar outros agentes",
-        "description": "Deixe um agente orquestrar outros agentes."
+        "description": "Deixe um agente orquestrar outros agentes.",
+        "popup": {
+          "askTask": "Diga ao chat chefe o que fazer com seu ajudante, com suas palavras, depois envie.",
+          "dragBox": "Sua vez! Arraste uma caixa ao redor do chat anterior para transformá-lo em um ajudante.",
+          "intro": "Lembra do chat que você acabou de fazer? Vamos deixar um novo no comando.",
+          "newChat": "Crie um novo chat. Este será o chefe.",
+          "selectElement": "Toque aqui para conectar o chat anterior.",
+          "working": "Lá vai! O ajudante entra em ação e retorna para o chefe. Aproveite para explorar enquanto isso."
+        }
       },
       "make_app": {
         "title": "Crie um App",
-        "description": "Peça e veja aplicações interativas surgirem."
+        "description": "Peça e veja aplicações interativas surgirem.",
+        "popup": {
+          "cooking": "Preparando seu app! Ele vai aparecer na tela como um card ao vivo em um instante. Explore enquanto ele está sendo criado.",
+          "intro": "Apps são apenas algo que você pede. Tente \"crie um rastreador de hábitos\" — qualquer agente consegue fazer um."
+        }
       }
     },
     "infoByStepId": {
@@ -300,7 +450,15 @@
       "justOnce": "Só esta vez",
       "denyAll": "Negar tudo",
       "approveCount": "Aprovar {{count}}",
-      "denyCount": "Negar {{count}}"
+      "denyCount": "Negar {{count}}",
+      "summary": {
+        "date": "Data: {{start}}",
+        "search": "Pesquisa: \"{{query}}\"",
+        "subject": "Assunto: {{subject}}",
+        "to": "Para {{to}}",
+        "toWithSubject": "Para {{to}}: {{subject}}"
+      },
+      "workflowsServerLabel": "Workflows"
     },
     "errors": {
       "modelRateLimit": {
@@ -424,6 +582,371 @@
       "tipCompact": "resume agora os turnos antigos",
       "tipClear": "nova sessão do SDK, mantendo o histórico da conversa visível",
       "tipContext": "abre este painel lateral"
+    },
+    "agent": {
+      "defaultName": "Agente",
+      "revealOnDashboard": "Revelar no painel"
+    },
+    "browserFeed": {
+      "action": {
+        "click": "Clicar {{selector}}",
+        "evaluateJs": "Avaliar JS",
+        "inspectElements": "Inspecionar elementos",
+        "navigate": "Navegar → {{url}}",
+        "readPageText": "Ler texto da página",
+        "screenshot": "Captura de tela",
+        "type": "Digitar \"{{text}}\" em {{selector}}"
+      },
+      "browserLabel": "Navegador {{n}}",
+      "doneContinue": "Concluído, continuar",
+      "needsHelp": "Agente do navegador precisa de ajuda",
+      "result": {
+        "screenshotCaptured": "Captura de tela realizada"
+      },
+      "skip": "Pular",
+      "startingAgent": "Iniciando agente do navegador..."
+    },
+    "chatInput": {
+      "activity": {
+        "compactingMemory": "Compactando memória"
+      },
+      "attachment": {
+        "unnamedFile": "arquivo"
+      },
+      "chip": {
+        "appFiles": "Arquivos do aplicativo",
+        "copied": "Copiado!",
+        "notOnThisModel": " · não neste modelo"
+      },
+      "contextRing": {
+        "tooltip": "{{pct}}% · {{used}} / {{limit}} contexto usado"
+      },
+      "dropzone": {
+        "attachingFiles": "Anexando arquivos…",
+        "dropFilesHere": "Solte os arquivos aqui"
+      },
+      "mode": {
+        "fallbackLabel": "Agente"
+      },
+      "oversize": {
+        "shrinking": "Reduzindo",
+        "shrinkingMany_one": "Reduzindo <b>{{name}}</b> e mais {{count}} para caber",
+        "shrinkingMany_other": "Reduzindo <b>{{name}}</b> e mais {{count}} para caber",
+        "shrinkingMessagePlural": "Reduzindo {{firstName}} e {{count}} outro para caber",
+        "shrinkingMessageSingle": "Reduzindo {{firstName}} para caber",
+        "shrinkingOne": "Reduzindo <b>{{name}}</b> para caber",
+        "slowHint": "Isso pode levar até um minuto. Aguarde firme."
+      },
+      "pasteDialog": {
+        "charCount": "{{count}} caracteres",
+        "title": "Texto colado",
+        "unavailable": "Este texto colado não está mais disponível. Cole novamente para restaurá-lo."
+      },
+      "pastedCard": {
+        "agent": "Agente",
+        "browser": "Navegador",
+        "view": "Visualização"
+      },
+      "placeholder": {
+        "agentWorkingDisabled": "Agente está trabalhando...",
+        "autoRun": "Descreva quais dados gerar…",
+        "default": "Pergunte qualquer coisa, @ para contexto, / para comandos",
+        "queued": "{{count}} na fila, digite outro ou aguarde…",
+        "runningWillQueue": "Agente está trabalhando, mensagens serão enfileiradas…"
+      },
+      "runContext": {
+        "chipLabel": "Run anexada · {{title}}",
+        "removeAria": "Remover contexto de execução"
+      },
+      "sendBlock": {
+        "tooLong": "Essa mensagem é muito longa para enviar. Tente encurtá-la ou dividi-la em algumas menores."
+      },
+      "shrink": {
+        "errorAll": "Não foi possível reduzir os arquivos. Tente remover alguns ou escolha um modelo com uma janela maior em Configurações.",
+        "errorPartial": "Não foi possível reduzir {{failed}} de {{total}} arquivos. Remova ou tente novamente os que ainda estão marcados.",
+        "errorSingle": "Não foi possível reduzir o arquivo. Tente removê-lo ou escolha um modelo com uma janela maior em Configurações."
+      }
+    },
+    "compactionMarker": {
+      "olderTurnsSummarized": "Turnos anteriores resumidos",
+      "turnsSummarized_one": "{{count}} turno anterior resumido",
+      "turnsSummarized_other": "{{count}} turnos anteriores resumidos"
+    },
+    "contextRecoveredPill": {
+      "label": "Recuperado e repetido",
+      "tooltip": "A memória deste chat transbordou no meio da resposta. O Maestro Studio a recuperou e retentou automaticamente; nada foi perdido."
+    },
+    "createAgent": {
+      "subAgentFallback": "Sub-agente",
+      "title": "CreateAgent"
+    },
+    "elapsed": {
+      "milliseconds": "{{ms}}ms",
+      "minutesSeconds": "{{mins}}m {{secs}}s",
+      "seconds": "{{secs}}s"
+    },
+    "feedbackDialog": {
+      "detailsPrompt": "Por favor, forneça detalhes: (opcional)",
+      "negativePlaceholder": "O que deu errado nessa resposta?",
+      "negativeTitle": "Dar feedback negativo",
+      "placeholderNegative": "O que deu errado nesta resposta?",
+      "placeholderPositive": "O que foi bom nesta resposta?",
+      "positivePlaceholder": "O que foi bom nessa resposta?",
+      "positiveTitle": "Dar feedback positivo",
+      "privacyNote": "Compartilhado com o Maestro para ajudar a melhorar seus agentes. Enviamos sua classificação e nota, não sua conversa.",
+      "promptLabel": "Forneça detalhes: (opcional)",
+      "titleNegative": "Dar feedback negativo",
+      "titlePositive": "Dar feedback positivo"
+    },
+    "forceStopAgentBar": {
+      "continueEditing": "Continuar editando",
+      "forceStopAgent": "Forçar Parada do Agente",
+      "saveWorkflow": "Salvar workflow",
+      "testFinished": "Teste finalizado",
+      "testStopped": "Teste parado"
+    },
+    "invokeAgent": {
+      "title": "InvokeAgent"
+    },
+    "mcpCards": {
+      "calendar": {
+        "end": "Fim",
+        "moreItems": "+{{count}} mais",
+        "noTitle": "(sem título)",
+        "start": "Início",
+        "where": "Onde"
+      },
+      "generic": {
+        "emptyResponse": "(resposta vazia)",
+        "moreFields": "+{{count}} mais campos"
+      },
+      "gmail": {
+        "attachmentFallback": "anexo",
+        "date": "Data",
+        "from": "De",
+        "moreMessages": "+{{count}} mais",
+        "noSubject": "(sem assunto)",
+        "to": "Para"
+      },
+      "truncatedNotice": "… ({{count}} mais caracteres; modelo recebeu saída completa)"
+    },
+    "messageBubble": {
+      "context": {
+        "actionsRequested_one": "{{count}} ação solicitada",
+        "actionsRequested_other": "{{count}} ações solicitadas",
+        "attachedSuffix": " anexado",
+        "elementsSelected_one": "{{count}} elemento selecionado",
+        "elementsSelected_other": "{{count}} elementos selecionados",
+        "files_one": "{{count}} arquivo",
+        "files_other": "{{count}} arquivos",
+        "folders_one": "{{count}} pasta",
+        "folders_other": "{{count}} pastas",
+        "skills_one": "{{count}} habilidade",
+        "skills_other": "{{count}} habilidades"
+      },
+      "reasoning": {
+        "streaming": "Raciocinando…",
+        "tokens": "{{count}} tokens de raciocínio",
+        "took": "Levou {{metric}}.",
+        "variant1": "Ainda está pensando, só não podemos espiar por trás da cortina.",
+        "variant2": "As rodas estão girando, mas este provedor mantém seus pensamentos privados.",
+        "variant3": "O cérebro está ocupado lá; o provedor simplesmente não está nos deixando ouvir.",
+        "variant4": "Refletindo silenciosamente. Só Claude mostra seu trabalho em voz alta.",
+        "variant5": "O pensamento aconteceu, só não em aberto. (GPT e Gemini guardam segredo.)",
+        "variant6": "O raciocínio está em andamento, mas este provedor não o transmite. Confie no processo."
+      },
+      "saveAndSubmit": "Salvar e Enviar",
+      "thinking": {
+        "liveWithTokens": "{{label}}… ~{{tokens}} tokens",
+        "pastForDuration": "{{label}} por {{duration}}",
+        "toolsUsed_one": "{{count}} ferramenta usada",
+        "toolsUsed_other": "{{count}} ferramentas usadas"
+      },
+      "tokens": {
+        "countLabel": "{{count}} tokens",
+        "input": "Entrada",
+        "note": "A entrada mostrada é sua mensagem, histórico e saídas de ferramentas. O preâmbulo de estrutura fixa (prompt do sistema, definições de ferramentas, descrições de MCP) é excluído, pois é sobrecarga constante do tempo de execução do agente, nada que você possa reduzir.",
+        "output": "Saída",
+        "total": "Total",
+        "totalCombined": "{{total}} tokens (entrada + saída + filhos)"
+      }
+    },
+    "modelPicker": {
+      "activeFilters_one": "{{count}} filtro ativo",
+      "activeFilters_other": "{{count}} filtros ativos",
+      "badge": {
+        "noImage": "Sem imagem",
+        "noPdf": "Sem PDF"
+      },
+      "breakdown": {
+        "apiKey": "Chave de API",
+        "free": "Gratuito",
+        "longContext": "Contexto 1M+",
+        "payPerUse": "Pagamento por uso",
+        "reasoning": "Raciocínio",
+        "subscription": "Assinatura"
+      },
+      "costLabel": {
+        "any": "Qualquer",
+        "freeOnly": "Apenas gratuito"
+      },
+      "ctxLabel": {
+        "any": "Qualquer"
+      },
+      "empty": {
+        "noMatchFilters": "Nenhum modelo corresponde aos filtros atuais.",
+        "noMatchQuery": "Nenhum modelo corresponde a \"{{query}}\".",
+        "tryClearingFilters": "Tente limpar os filtros acima."
+      },
+      "filter": {
+        "apiKey": "Chave de API",
+        "maxCost": "Custo máximo",
+        "minContext": "Contexto mínimo",
+        "reasoning": "Raciocínio",
+        "reset": "Redefinir",
+        "subscription": "Assinatura"
+      },
+      "footer": {
+        "hint": "Digite para pesquisar, Esc para fechar",
+        "modelsAvailable_one": "{{count}} modelo disponível",
+        "modelsAvailable_other": "{{count}} modelos disponíveis",
+        "modelsCount_one": "{{count}} modelo",
+        "modelsCount_other": "{{count}} modelos"
+      },
+      "hideFilters": "Ocultar filtros",
+      "probeError": {
+        "headsUp": "Aviso",
+        "invalidKey": "A chave deste modelo parece inválida, verifique em Configurações.",
+        "noCredits": "Este modelo está sem créditos, verifique o faturamento.",
+        "notConnected": "Este modelo não está conectado, adicione seu provedor em Configurações.",
+        "unavailable": "Este modelo não está disponível agora."
+      },
+      "recentHeading": "Recentes",
+      "searchPlaceholder": "Pesquisar modelos…",
+      "showFilters": "Mostrar filtros"
+    },
+    "modelTooltip": {
+      "capabilities": "Capacidades",
+      "capability": {
+        "freeTier": "Plano gratuito",
+        "longContext": "Contexto 1M+",
+        "million1Context": "Contexto de 1M+",
+        "reasoning": "Raciocínio",
+        "subscription": "Assinatura",
+        "tools": "Ferramentas"
+      },
+      "context": "Contexto",
+      "cost": "Custo",
+      "free": "Gratuito",
+      "intelligence": "Inteligência",
+      "pricing": "Preço",
+      "pricingLine": "{{inCost}}/M entrada · {{outCost}}/M saída",
+      "row": {
+        "capabilities": "Capacidades",
+        "context": "Contexto",
+        "cost": "Custo",
+        "intelligence": "Inteligência",
+        "pricing": "Precificação",
+        "speed": "Velocidade"
+      },
+      "speed": "Velocidade",
+      "value": {
+        "free": "Gratuito",
+        "pricingPerMillion": "{{in}}/M entrada · {{out}}/M saída"
+      }
+    },
+    "rateLimitPill": {
+      "backAt": "Retorna ~{{time}}",
+      "rateLimited": "Taxa limitada",
+      "tooltip": "Seu plano atingiu seu limite de taxa, será retomado automaticamente"
+    },
+    "revealLabel": {
+      "agent": "Agente",
+      "createAgent": "Criar Agente",
+      "invokeAgent": "Invocar Agente"
+    },
+    "settingsTool": {
+      "labels": {
+        "browserHomepage": "Página inicial do navegador",
+        "defaultFolder": "Pasta padrão",
+        "defaultMode": "Modo padrão",
+        "defaultModel": "Modelo padrão",
+        "maxTurns": "Turnos máximos",
+        "newAgentShortcut": "Atalho novo-agente",
+        "systemPrompt": "Prompt do sistema",
+        "theme": "Tema",
+        "thinkingLevel": "Nível de pensamento",
+        "zoomSensitivity": "Sensibilidade do zoom"
+      },
+      "noChanges": "Sem alterações.",
+      "valueNone": "nenhum"
+    },
+    "tokenBreakdown": {
+      "input": "Entrada",
+      "output": "Saída",
+      "total": "Total"
+    },
+    "tool": {
+      "denied": "negado",
+      "unknownName": "Desconhecido"
+    },
+    "toolGroup": {
+      "deniedCount": "{{count}} negado",
+      "workflowActions": "Ações de workflow"
+    },
+    "toolInput": {
+      "includeLabel": "incluir: {{include}}",
+      "limitLabel": "limite: {{limit}}",
+      "moreEdits": "… +{{count}} mais edições",
+      "offsetLabel": "deslocamento: {{offset}}",
+      "pathLabel": "caminho: {{path}}",
+      "patternLabel": "padrão: {{pattern}}"
+    },
+    "toolOutput": {
+      "empty": "(vazio)",
+      "noOutput": "(sem saída)"
+    },
+    "toolSummary": {
+      "emails_one": "{{count}} email",
+      "emails_other": "{{count}} emails",
+      "error": "erro",
+      "events_one": "{{count}} evento",
+      "events_other": "{{count}} eventos",
+      "exitCode": "saída {{code}}",
+      "files_one": "{{count}} arquivo",
+      "files_other": "{{count}} arquivos",
+      "grepInPath": "{{query}} em {{path}}",
+      "lines_one": "{{count}} linha",
+      "lines_other": "{{count}} linhas",
+      "matches_one": "{{count}} correspondência",
+      "matches_other": "{{count}} correspondências",
+      "results": "resultados",
+      "sent": "enviado",
+      "stderr": "stderr"
+    },
+    "toolbar": {
+      "attachFile": "Anexar arquivo",
+      "exitSelectMode": "Sair do modo seleção",
+      "gemini3SearchWarning": "A busca web quebra no Gemini 3 preview enquanto o pensamento está ativado. Desative se você precisar de busca.",
+      "queueMessage": "Mensagem na fila",
+      "selectUiElement": "Selecionar elemento UI",
+      "sendMessage": "Enviar mensagem",
+      "stopAgent": "Parar agente",
+      "thinkingLevelAuto": "Automático",
+      "thinkingLevelAutoDesc": "Modelo decide (recomendado)",
+      "thinkingLevelHigh": "Alto",
+      "thinkingLevelHighDesc": "Pensamento extenso (mais lento)",
+      "thinkingLevelLabel": "Nível de Pensamento",
+      "thinkingLevelLow": "Baixo",
+      "thinkingLevelLowDesc": "Pensamento mínimo",
+      "thinkingLevelMedium": "Médio",
+      "thinkingLevelMediumDesc": "Balanceado",
+      "thinkingLevelOff": "Desligado",
+      "thinkingLevelOffDesc": "Sem pensamento (mais rápido)",
+      "voiceInputComingSoon": "Entrada de voz (em breve)"
+    },
+    "welcome": {
+      "greeting": "Olá, sou Maestro Studio, sua equipe de IA pessoal. Posso fazer praticamente qualquer coisa no seu laptop, então traga-me qualquer coisa: um problema difícil, uma ideia meio formada, algo que você precisa escrever. Vamos descobrir juntos.\n\nPor onde você quer começar?"
     }
   },
   "provedorIa": {
@@ -478,7 +1001,8 @@
       "passkeysBody": "O Maestro Studio não tem suporte a passkeys. Entre com senha ou por outro método.",
       "ok": "OK",
       "iframeTitle": "Navegador",
-      "tab": "Aba"
+      "tab": "Aba",
+      "aiBadge": "IA"
     },
     "canvasControls": {
       "zoomOut": "Reduzir zoom",
@@ -575,14 +1099,21 @@
       "openAnotherWindow": "Abrir em outra janela",
       "showToolbar": "Mostrar a barra de ferramentas",
       "hideToolbar": "Ocultar a barra de ferramentas",
-      "removeFromDashboard": "Remover do painel"
+      "removeFromDashboard": "Remover do painel",
+      "filesMissing": "Os arquivos deste app estão faltando.",
+      "removeCard": "Remover cartão",
+      "resetHardReload": "Resetar e recarregar à força",
+      "restartBackend": "Reiniciar backend.py + recarregar visualização"
     },
     "cardSearch": {
       "placeholder": "Buscar cards...",
       "noCards": "Nenhum card encontrado",
       "agentFallback": "Agente {{id}}",
       "viewFallback": "Tela: {{id}}",
-      "browserFallback": "Navegador {{id}}"
+      "browserFallback": "Navegador {{id}}",
+      "typeAgent": "Agente",
+      "typeBrowser": "Navegador",
+      "typeView": "Visualização"
     },
     "noteCard": {
       "placeholder": "Escreva uma nota…"
@@ -600,7 +1131,8 @@
       "results_one": "{{count}} resultado",
       "results_other": "{{count}} resultados",
       "feedEmpty": "O feed do {{site}} voltou vazio, navegando no lugar disso",
-      "readingFeed": "Lendo o feed de dados do {{site}}"
+      "readingFeed": "Lendo o feed de dados do {{site}}",
+      "viaDataFeed": "via o feed de dados da página"
     },
     "browserOverlay": {
       "title": "Agente de navegador",
@@ -638,6 +1170,10 @@
       "viewing": "Visualizando",
       "createAgent": "Criar agente",
       "invokeAgent": "Chamar agente"
+    },
+    "defaultName": "Dashboard",
+    "viewPreview": {
+      "title": "Prévia da Aplicação"
     }
   },
   "overlays": {
@@ -708,6 +1244,82 @@
       "approvals": "Aprovações",
       "completedCount": "Concluídos ({{total}})",
       "clearAll": "Limpar tudo"
+    },
+    "directoryBrowser": {
+      "attachFile": "Anexar arquivo",
+      "attachFolder": "Anexar pasta",
+      "attachThisFolder": "Anexar esta pasta",
+      "empty": "Pasta vazia",
+      "go": "Ir",
+      "hint": "Clique para selecionar, clique duas vezes para abrir pastas",
+      "pathPlaceholder": "Digite um caminho...",
+      "selected": "Selecionado: {{name}}",
+      "title": "Procurar arquivos e pastas"
+    },
+    "import": {
+      "added": "Adicionado {{name}}",
+      "addedApp": "Adicionado {{name}} aos seus Apps",
+      "dropZone": "Solte para adicionar ao Maestro Studio",
+      "errorFinish": "Não conseguimos finalizar a importação.",
+      "errorRead": "Não conseguimos ler este arquivo."
+    },
+    "importModal": {
+      "addButton": "Adicionar ao Maestro Studio",
+      "conflictWarning": "Alguns itens já existem e serão adicionados como cópias."
+    },
+    "includesList": {
+      "hide": "Ocultar",
+      "needsLabel": "Necessário",
+      "show": "Mostrar"
+    },
+    "providerHealthToast": {
+      "message_one": "Seu login {{labels}} expirou; conversas nele falharão até que você se reconecte.",
+      "message_other": "Seus logins {{labels}} expiraram; conversas neles falharão até que você se reconecte.",
+      "reconnectButton": "Reconectar"
+    },
+    "share": {
+      "comingSoon": "Em breve",
+      "createLinkSubtitle": "Um link que abre direto no Maestro Studio.",
+      "createLinkTitle": "Criar link de compartilhamento",
+      "downloadButton": "Baixar .swarm",
+      "downloadFileSubtitle": "Salve um arquivo que você pode enviar para qualquer pessoa.",
+      "downloadFileTitle": "Baixar arquivo .swarm",
+      "errorBuild": "Não conseguimos gerar o arquivo.",
+      "errorRead": "Não conseguimos ler isto para compartilhar.",
+      "saved": "{{filename}} salvo",
+      "title": "Compartilhar {{name}}",
+      "tryAgain": "Tentar novamente"
+    },
+    "trustedPatterns": {
+      "description": "Arquivos como chaves SSH e arquivos de inicialização do shell normalmente pedem confirmação antes de cada escrita, mesmo com Escrever definido como \"sempre permitir\". Os padrões que você escolheu sempre permitir aparecem abaixo. Remova um para voltar a ser perguntado.",
+      "pattern": {
+        "awsCredentials": "Credenciais da AWS (~/.aws)",
+        "bashProfile": "Arquivo de inicialização do shell (.bash_profile)",
+        "bashrc": "Arquivo de inicialização do shell (.bashrc)",
+        "dockerCredentials": "Credenciais do Docker",
+        "etcConfig": "Configuração do sistema (/etc)",
+        "gcloudCredentials": "Credenciais do Google Cloud",
+        "gitconfig": "Configuração global do Git",
+        "gpgKeys": "Chaves de criptografia GPG",
+        "kubeConfig": "Configuração do Kubernetes (~/.kube)",
+        "macKeychain": "Chaveiro do macOS",
+        "macSystemFolder": "Pasta de sistema do macOS",
+        "netrc": "Dados de login salvos (~/.netrc)",
+        "npmrc": "Arquivo de autenticação do npm (~/.npmrc)",
+        "passwd": "Lista de usuários do sistema (/etc/passwd)",
+        "profile": "Arquivo de inicialização do shell (.profile)",
+        "pypirc": "Arquivo de autenticação do PyPI (~/.pypirc)",
+        "shadow": "Arquivo de senhas do sistema (/etc/shadow)",
+        "sshFolder": "Pasta SSH (~/.ssh)",
+        "sudoers": "Permissões de sudo (/etc/sudoers)",
+        "sudoersD": "Permissões de sudo (/etc/sudoers.d)",
+        "usrLocalEtcConfig": "Configuração do sistema (/usr/local/etc)",
+        "zprofile": "Arquivo de inicialização do shell (.zprofile)",
+        "zshenv": "Arquivo de ambiente do shell (.zshenv)",
+        "zshrc": "Arquivo de inicialização do shell (.zshrc)"
+      },
+      "removePattern": "Remover {{label}}",
+      "title": "Padrões de arquivo confiáveis"
     }
   },
   "tools": {
@@ -829,6 +1441,16 @@
       "envVarsHeading": "Variáveis de ambiente",
       "addVariable": "+ Adicionar variável",
       "installTool": "Instalar ferramenta"
+    },
+    "customToolConnect": {
+      "connectM365": "Conectar Microsoft 365"
+    },
+    "registryBrowser": {
+      "allFilter": "Tudo",
+      "communityFilter": "Comunidade",
+      "curatedFilter": "Selecionado",
+      "googleFilter": "Google",
+      "searchPlaceholder": "Pesquisar servidores MCP..."
     }
   },
   "skills": {
@@ -1086,7 +1708,11 @@
       "firesAt": "Dispara às {{time}}",
       "lastRun": "Última execução: {{status}}",
       "lastRunCost": "Custo da última execução: US$ {{cost}}",
-      "estMonthly": "Estimativa mensal: US$ {{cost}}"
+      "estMonthly": "Estimativa mensal: US$ {{cost}}",
+      "month": "Mês",
+      "sample": "Exemplo",
+      "today": "Hoje",
+      "week": "Semana"
     },
     "repeat": {
       "forever": "Para sempre",
@@ -1149,7 +1775,256 @@
       "repeat": "Repetir"
     },
     "scheduleChip": {
-      "tweakHint": "Clique para ajustar o horário"
+      "tweakHint": "Clique para ajustar o horário",
+      "quickTimeEdit": "EDIÇÃO RÁPIDA DE HORÁRIO",
+      "savedAsYouChange": "Salvo conforme você altera."
+    },
+    "colorSwatch": {
+      "workflowColor": "Cor do workflow"
+    },
+    "compose": {
+      "describeWorkflow": "Descreva o workflow a automatizar",
+      "describeWorkflowHint": "Me diga o que você quer que este workflow faça. Vou transformar em passos que você consegue rodar em horários, e você consegue ajustar qualquer coisa no caminho.",
+      "draft": "Rascunho",
+      "hideScheduleSteps": "Ocultar agendamento e passos",
+      "settingUp": "Configurando seu workflow…",
+      "showScheduleSteps": "Mostrar agendamento e passos",
+      "untitledWorkflow": "Workflow sem nome"
+    },
+    "composeView": {
+      "newsDigest": "Resumo de notícias da minha área",
+      "newsDigestPrompt": "A cada semana, forneça-me um resumo das últimas notícias e pesquisas da minha área.",
+      "planWeekend": "Planejar meu fim de semana para mim",
+      "planWeekendPrompt": "Sexta-feira à tarde, planeje meu fim de semana com base no clima e no que está próximo.",
+      "recapSpendingPrompt": "Todo domingo, resuma meu gasto, assinaturas, contas futuras e cobranças estranhas.",
+      "recapWeeklySpending": "Recapitular meu gasto semanal",
+      "summarizeInboxDaily": "Resumir minha caixa de entrada diariamente",
+      "summarizeInboxPrompt": "Cada manhã, resuma minha caixa de entrada e redija respostas para os emails importantes.",
+      "watchWebpage": "Monitorar uma página da web para mudanças",
+      "watchWebpagePrompt": "Monitore uma página da web e me alerte quando ela mudar."
+    },
+    "detailView": {
+      "hideScheduleAndSteps": "Ocultar agendamento e etapas",
+      "run": "Executar",
+      "running": "Executando…",
+      "showScheduleAndSteps": "Mostrar agendamento e etapas",
+      "statusActive": "Ativo",
+      "statusPaused": "Pausado",
+      "untitledWorkflow": "Workflow sem título"
+    },
+    "history": {
+      "empty": "Nenhuma execução ainda.",
+      "openRun": "Abrir esta execução",
+      "title": "Histórico"
+    },
+    "home": {
+      "comingUp": "Próximas",
+      "dismiss": "Descartar",
+      "missed": "Perdidas",
+      "missedWhileClosed": "Perdidas enquanto o app estava fechado",
+      "moreCount": "{{count}} mais",
+      "noRunsYet": "Nenhuma execução ainda.",
+      "nothingScheduled": "Nada agendado para os próximos 7 dias.",
+      "ongoingRuns": "Execuções em andamento",
+      "reRun": "Reexecutar",
+      "reRunAll": "Reexecutar tudo",
+      "recents": "Recentes",
+      "showAllMissed": "Mostrar todos os {{count}} perdidas",
+      "showLess": "Mostrar menos",
+      "success": "Sucesso",
+      "watch": "Assistir"
+    },
+    "homeView": {
+      "comingUp": "Próximas",
+      "completed": "Concluído",
+      "dismiss": "Descartar",
+      "failed": "Falhou",
+      "missed": "Perdidas",
+      "missedWhileAppClosed": "Perdidas enquanto o app estava fechado",
+      "moreRuns": "{{count}} mais",
+      "noRuns": "Nenhuma execução ainda.",
+      "nothingScheduled": "Nada agendado para os próximos 7 dias.",
+      "ongoingRuns": "Execuções em andamento",
+      "reRun": "Executar novamente",
+      "reRunAll": "Executar novamente todas",
+      "recents": "Recentes",
+      "runStatus_one": "1 execução",
+      "runStatus_other": "{{count}} execuções",
+      "running": "Executando",
+      "showAll": "Mostrar todas as {{count}} perdidas",
+      "showLess": "Mostrar menos",
+      "stepLabel": "Etapa {{step}}/{{total}}",
+      "steps": "etapas",
+      "success": "Sucesso",
+      "watch": "Acompanhar",
+      "workflowDefaultTitle": "Workflow",
+      "workflowUntitledTitle": "Sem título"
+    },
+    "missedRunsToast": {
+      "dismiss": "Descartar",
+      "missedRuns_one": "1 execução agendada foi perdida enquanto você estava ausente",
+      "missedRuns_other": "{{count}} execuções agendadas foram perdidas enquanto você estava ausente",
+      "review": "Revisar"
+    },
+    "runMonitor": {
+      "allStepsComplete": "Todos os {{total}} passos concluídos",
+      "done": "Concluído",
+      "failed": "Falhou",
+      "failedAtStep": "Falhou no passo {{index}}",
+      "failedBeforeAgent": "Esta execução falhou antes de um agente rodar.",
+      "idle": "Inativo",
+      "manualRun": "EXECUÇÃO MANUAL",
+      "noAgentChat": "Nenhuma conversa com agente para esta execução.",
+      "reRun": "REEXECUÇÃO",
+      "run": "EXECUÇÃO",
+      "running": "Rodando",
+      "scheduledRun": "EXECUÇÃO AGENDADA",
+      "stepCount": "{{total}} passos",
+      "stepOf": "Passo {{index}} de {{total}}",
+      "stopRun": "Parar execução",
+      "waitingForRunStart": "Esperando a execução começar…",
+      "waitingToStart": "Aguardando a execução começar…"
+    },
+    "scheduleTestWarningDialog": {
+      "description": "Execuções agendadas não podem pausar para solicitar permissão. Se este workflow usa ferramentas que precisam da sua aprovação, pode falhar quando for executado automaticamente. Uma execução de teste rápida permite que você aprove essas ferramentas agora.",
+      "scheduleAnyway": "Agendar mesmo assim",
+      "testFirst": "Testar primeiro",
+      "title": "Testar antes de agendar?"
+    },
+    "status": {
+      "failure": "Falhou",
+      "neverRun": "Nunca executado",
+      "paused": "Pausado",
+      "ranLate": "Atrasou",
+      "running": "Em execução",
+      "skipped": "Ignorado",
+      "success": "Sucesso"
+    },
+    "stepList": {
+      "hiddenMore": "... {{count}} mais",
+      "removeStep": "Remover etapa",
+      "removeStepDisabled": "O workflow precisa de pelo menos uma etapa",
+      "removeStepLabel": "Remover etapa {{step}}"
+    },
+    "trash": {
+      "deleteConfirmation": "Deletar permanentemente \"{{title}}\"? Não dá para desfazer.",
+      "deleteForever": "Deletar permanentemente",
+      "deletedWorkflows": "Workflows deletados",
+      "empty": "Lixeira vazia",
+      "emptyDescription": "Workflows deletados aparecem aqui. Restaure ou remova permanentemente.",
+      "restore": "Restaurar",
+      "trash": "Lixeira"
+    },
+    "workflowRunningToast": {
+      "message": "{{title}} está sendo executado agora",
+      "view": "Visualizar"
+    }
+  },
+  "analytics": {
+    "costTracking": "Rastreamento de Custos",
+    "costTrackingDesc": "Gasto por modelo, provedor e período",
+    "metricsTitle": "Métricas",
+    "modelDistribution": "Distribuição de Modelos",
+    "modelDistributionDesc": "Quais modelos e provedores são mais populares",
+    "pageTitle": "Análises",
+    "retentionFunnels": "Retenção & Funis",
+    "retentionFunnelsDesc": "Engajamento do usuário, adoção de recursos, fluxo de integração",
+    "sessionsUsage": "Sessões & Uso",
+    "sessionsUsageDesc": "Com que frequência os agentes são iniciados, duração da sessão, taxa de conclusão",
+    "taskCategories": "Categorias de Tarefas",
+    "taskCategoriesDesc": "O que os usuários fazem: codificação, email, pesquisa, redes sociais, navegação",
+    "toolUsage": "Uso de Ferramentas",
+    "toolUsageDesc": "Ferramentas MCP mais usadas, tempos de execução, taxa de aprovação",
+    "usageDescription": "Os dados de uso são coletados automaticamente: sessões, custos, uso de ferramentas, distribuição de modelos e categorias de tarefas. Todos os dados são anônimos e podem ser desabilitados em Configurações.",
+    "yourUsage": "Seu uso"
+  },
+  "dashboardSelection": {
+    "delete": "Excluir",
+    "duplicate": "Duplicar",
+    "moreActions": "Mais ações",
+    "newDashboard": "Novo dashboard",
+    "noDashboards": "Nenhum dashboard ainda",
+    "noHint": "Crie seu primeiro dashboard para começar",
+    "noMatchingSearch": "Nenhum dashboard corresponde sua busca",
+    "noSearchHint": "Tente um termo de busca diferente",
+    "previewAlt": "Prévia do {{name}}",
+    "rename": "Renomear",
+    "searchPlaceholder": "Pesquisar dashboards...",
+    "subtitle": "Monitore e gerencie seus agentes em um único workspace.",
+    "title": "Dashboards",
+    "updatedLabel": "Atualizado"
+  },
+  "feedback": {
+    "errorBoundary": {
+      "description": "Capturamos antes de tudo travar. O erro está abaixo; copie se quiser compartilhar. Recarregar geralmente resolve.",
+      "reload": "Recarregar",
+      "resetAndReload": "Limpar e recarregar",
+      "title": "Algo deu errado."
+    }
+  },
+  "modes": {
+    "agent": {
+      "description": "Agente autônomo completo com acesso de leitura e escrita para ferramentas.",
+      "name": "Agente"
+    },
+    "ask": {
+      "description": "Conversa somente leitura. Navegue pela base de código, pesquise a web e discuta ideias; mas sem edições, shells ou gravações de arquivo.",
+      "name": "Perguntar"
+    },
+    "plan": {
+      "description": "Analise pedidos e produza um plano detalhado passo a passo sem executar.",
+      "name": "Plano"
+    },
+    "skill-builder": {
+      "description": "Crie e itere sobre skills usando codificação assistida por IA.",
+      "name": "Construtor de Skills"
+    },
+    "view-builder": {
+      "description": "Crie e itere sobre artefatos de App reutilizáveis.",
+      "name": "Construtor de Apps"
+    }
+  },
+  "views": {
+    "codePanel": {
+      "loadingFiles": "Carregando arquivos…",
+      "selectFileToEdit": "Selecione um arquivo para editar",
+      "tooLargeToEdit": "Este arquivo tem {{size}} MB, grande demais para editar aqui."
+    },
+    "history": {
+      "autoBackup": "backup automático",
+      "branchFailed": "Não deu para fazer uma cópia. Tente de novo.",
+      "branchSuccess": "Salvo como novo app.",
+      "daysAgo_one": "{{count}} dia atrás",
+      "daysAgo_other": "{{count}} dias atrás",
+      "goBackButton": "Voltar para esta versão",
+      "goBackDescription": "Isso traz seu app de volta para como era aqui. Sua versão atual é salva primeiro, então você sempre consegue voltar.",
+      "goBackQuestion": "Voltar para esta versão?",
+      "hoursAgo_one": "{{count}} hora atrás",
+      "hoursAgo_other": "{{count}} horas atrás",
+      "justNow": "agora mesmo",
+      "minutesAgo_one": "{{count}} minuto atrás",
+      "minutesAgo_other": "{{count}} minutos atrás",
+      "noHistoryYet": "Sem histórico ainda. Toda vez que você muda seu app, a gente salva um snapshot aqui para você voltar.",
+      "nowCurrent": "Agora (atual)",
+      "restore": "Restaurar",
+      "restoreFailed": "Não foi possível restaurar essa versão.",
+      "restoreSuccess": "Seu app voltou para esta versão.",
+      "saveAsNewApp": "Salvar como novo app",
+      "saveFailed": "Não deu para salvar esta versão. Tente de novo.",
+      "saveThisVersion": "Salvar esta versão",
+      "savedByYou": "salvo por você",
+      "savedSuccess": "Esta versão foi salva.",
+      "savedVersion": "Versão salva",
+      "saving": "Salvando",
+      "title": "Histórico",
+      "updatedTheApp": "Atualizou o app"
+    },
+    "preview": {
+      "noPreviewAvailable": "Nenhuma pré-visualização disponível",
+      "restoring": "Restaurando pré-visualização..."
+    },
+    "terminal": {
+      "waitingForOutput": "Esperando saída... o stdout/stderr do backend e o console.log do app rodando vão aparecer aqui."
     }
   }
 }

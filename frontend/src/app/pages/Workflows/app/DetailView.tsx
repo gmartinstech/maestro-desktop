@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { runWorkflowNow } from '@/shared/state/workflowsSlice';
 import { openWorkflowMonitor, setWorkflowsRunContext, clearWorkflowsRunContext } from '@/shared/state/dashboardLayoutSlice';
@@ -19,6 +20,7 @@ import type { AppNav } from './types';
 
 const DetailView: React.FC<{ workflowId: string; nav: AppNav }> = ({ workflowId }) => {
   const WC = useWC();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const patch = useWorkflowPatch();
   const workflow = useAppSelector((s) => s.workflows.items[workflowId]);
@@ -44,7 +46,7 @@ const DetailView: React.FC<{ workflowId: string; nav: AppNav }> = ({ workflowId 
   const running = isRunning(workflow, active);
   const enabled = isScheduleActive(workflow.schedule);
   const status = running ? 'running' : enabled ? 'success' : 'paused';
-  const statusText = running ? 'Running' : enabled ? 'Active' : 'Paused';
+  const statusText = running ? t('workflows.homeView.running') : enabled ? t('workflows.detailView.statusActive') : t('workflows.detailView.statusPaused');
 
   const runNow = () => {
     if (running) return;
@@ -61,11 +63,11 @@ const DetailView: React.FC<{ workflowId: string; nav: AppNav }> = ({ workflowId 
             <ColorSwatch value={colorForWorkflow(workflow)} onChange={(hex) => patch(workflow, { color: hex })} size={14} />
             <InlineEditableTitle
               value={workflow.title || ''}
-              onCommit={(t) => patch(workflow, { title: t, auto_named: false })}
-              placeholder="Untitled workflow"
+              onCommit={(v) => patch(workflow, { title: v, auto_named: false })}
+              placeholder={t('workflows.detailView.untitledWorkflow')}
               sx={{ flex: 1, minWidth: 0, fontFamily: "'Newsreader',serif", fontSize: 25, fontWeight: 500, color: WC.ink, letterSpacing: '-0.01em' }}
             >
-              <Typewriter value={workflow.title || 'Untitled workflow'} enabled={workflow.auto_named !== false}>
+              <Typewriter value={workflow.title || t('workflows.detailView.untitledWorkflow')} enabled={workflow.auto_named !== false}>
                 {(t) => (
                   <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Newsreader',serif", fontSize: 25, fontWeight: 500, color: WC.ink, letterSpacing: '-0.01em' }}>{t}</span>
                 )}
@@ -76,11 +78,11 @@ const DetailView: React.FC<{ workflowId: string; nav: AppNav }> = ({ workflowId 
               {running
                 ? <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(140,133,122,0.3)', borderTopColor: WC.muted, animation: 'os-spin 0.7s linear infinite', flex: 'none' }} />
                 : <div style={{ width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: `8px solid ${WC.paper}`, flex: 'none' }} />}
-              <span>{running ? 'Running…' : 'Run'}</span>
+              <span>{running ? t('workflows.detailView.running') : t('workflows.detailView.run')}</span>
             </button>
             <div
               onClick={() => setPaneOpen((v) => !v)}
-              title={paneOpen ? 'Hide schedule & steps' : 'Show schedule & steps'}
+              title={paneOpen ? t('workflows.detailView.hideScheduleAndSteps') : t('workflows.detailView.showScheduleAndSteps')}
               style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: paneOpen ? WC.ink3 : WC.muted, flex: 'none' }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M14 4v16" /><path d={paneOpen ? 'M19 9l-2 3 2 3' : 'M17 9l2 3-2 3'} /></svg>

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/shared/i18n/i18n';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
@@ -53,10 +54,17 @@ export function statusDotColor(status: LastRunStatus | null | undefined, c: Retu
 }
 
 // Human-readable status word. We surface "ran late" instead of the underscore-y "ran_late" everywhere it'd be visible to a user.
+const STATUS_WORD_KEYS: Record<LastRunStatus, string> = {
+  success: 'workflows.status.success',
+  failure: 'workflows.status.failure',
+  ran_late: 'workflows.status.ranLate',
+  running: 'workflows.status.running',
+  skipped: 'workflows.status.skipped',
+};
+
 export function statusWord(status: LastRunStatus | null | undefined): string {
-  if (!status) return 'Never run';
-  if (status === 'ran_late') return 'Ran late';
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  if (!status) return i18n.t('workflows.status.neverRun');
+  return i18n.t(STATUS_WORD_KEYS[status]);
 }
 
 // Status pill rendered next to the title. Bigger than the previous 9px dot and pairs the color with a short word so a non-dev knows what they're looking at instead of squinting at a single grey pixel.
@@ -194,7 +202,7 @@ export function ScheduleChip({ workflow }: { workflow: Workflow }) {
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
         <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 220 }}>
           <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: c.text.muted, letterSpacing: '0.06em' }}>
-            QUICK TIME EDIT
+            {t('workflows.scheduleChip.quickTimeEdit')}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Select
@@ -235,7 +243,7 @@ export function ScheduleChip({ workflow }: { workflow: Workflow }) {
             </Select>
           </Box>
           <Typography sx={{ fontSize: '0.68rem', color: c.text.ghost, mt: 0.25 }}>
-            Saved as you change.
+            {t('workflows.scheduleChip.savedAsYouChange')}
           </Typography>
         </Box>
       </Popover>

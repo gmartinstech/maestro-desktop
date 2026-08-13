@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -20,25 +21,25 @@ import {
   fetchOutputs,
 } from '@/shared/state/outputsSlice';
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: any): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const s = Math.max(0, Math.round((Date.now() - then) / 1000));
-  if (s < 60) return 'just now';
+  if (s < 60) return t('views.history.justNow');
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} minute${m === 1 ? '' : 's'} ago`;
+  if (m < 60) return t('views.history.minutesAgo', { count: m });
   const h = Math.round(m / 60);
-  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  if (h < 24) return t('views.history.hoursAgo', { count: h });
   const d = Math.round(h / 24);
-  if (d < 7) return `${d} day${d === 1 ? '' : 's'} ago`;
+  if (d < 7) return t('views.history.daysAgo', { count: d });
   return new Date(iso).toLocaleDateString();
 }
 
-function describe(v: OutputVersion): string {
+function describe(v: OutputVersion, t: any): string {
   const label = v.label?.trim();
   if (label) return label;
-  if (v.source === 'manual') return 'Saved version';
-  return 'Updated the app';
+  if (v.source === 'manual') return t('views.history.savedVersion');
+  return t('views.history.updatedTheApp');
 }
 
 interface Props {
@@ -55,6 +56,7 @@ interface Props {
 
 const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onBranched, onRestored }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   // Refetch when a build (or manual save) captures a new version while we're open.
   const captureSignal = useAppSelector((s) => s.outputs.captureSignal[outputId] ?? 0);
@@ -92,13 +94,13 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
     try {
       // No reloadKey bump: captureOutputVersion.fulfilled bumps captureSignal, which already drives the refetch. Bumping both = a double fetch.
       await dispatch(captureOutputVersion({ id: outputId, source: 'manual', label: saveLabel || '' })).unwrap();
-      flash('ok', 'Saved this version.');
+      flash('ok', t('views.history.savedSuccess'));
     } catch {
-      flash('err', "Couldn't save this version. Try again.");
+      flash('err', t('views.history.saveFailed'));
     } finally {
       if (mountedRef.current) setSaving(false);
     }
-  }, [dispatch, outputId, saveLabel, flash]);
+  }, [dispatch, outputId, saveLabel, flash, t]);
 
   const handleRestore = useCallback(async (versionId: string) => {
     setConfirmId(null);
@@ -107,34 +109,34 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
       await dispatch(restoreOutputVersion({ id: outputId, versionId })).unwrap();
       setReloadKey((k) => k + 1);
       onRestored?.();
-      flash('ok', 'Brought your app back to this version.');
+      flash('ok', t('views.history.restoreSuccess'));
     } catch (e) {
-      flash('err', e instanceof Error ? e.message : 'Could not restore that version.');
+      flash('err', e instanceof Error ? e.message : t('views.history.restoreFailed'));
     } finally {
       if (mountedRef.current) setBusyId(null);
     }
-  }, [dispatch, outputId, flash, onRestored]);
+  }, [dispatch, outputId, flash, onRestored, t]);
 
   const handleBranch = useCallback(async (versionId: string) => {
     setBusyId(versionId);
     try {
       const newId = await dispatch(branchOutputVersion({ id: outputId, versionId })).unwrap();
       await dispatch(fetchOutputs());
-      flash('ok', 'Saved as a new app.');
+      flash('ok', t('views.history.branchSuccess'));
       onBranched?.(newId);
     } catch {
-      flash('err', "Couldn't make a copy. Try again.");
+      flash('err', t('views.history.branchFailed'));
     } finally {
       if (mountedRef.current) setBusyId(null);
     }
-  }, [dispatch, outputId, onBranched, flash]);
+  }, [dispatch, outputId, onBranched, flash, t]);
 
   const confirmTarget = versions.find((v) => v.id === confirmId) || null;
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 1.25, gap: 1 }}>
-        <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: c.text.primary }}>History</Typography>
+        <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: c.text.primary }}>{t('views.history.title')}</Typography>
         <Button
           size="small"
           startIcon={<BookmarkAddOutlinedIcon sx={{ fontSize: 16 }} />}
@@ -142,7 +144,7 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
           disabled={saving || isAgentActive}
           sx={{ textTransform: 'none', fontSize: '0.78rem', color: c.accent.primary, '&:hover': { bgcolor: `${c.accent.primary}12` } }}
         >
-          {saving ? 'Saving' : 'Save this version'}
+          {saving ? t('views.history.saving') : t('views.history.saveThisVersion')}
         </Button>
       </Box>
 
@@ -165,14 +167,14 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
           <Box sx={{ textAlign: 'center', pt: 6, px: 2 }}>
             <HistoryIcon sx={{ fontSize: 34, color: c.text.tertiary, opacity: 0.5, mb: 1 }} />
             <Typography sx={{ fontSize: '0.85rem', color: c.text.muted, lineHeight: 1.5 }}>
-              No history yet. Every time you change your app, we'll save a snapshot here so you can go back.
+              {t('views.history.noHistoryYet')}
             </Typography>
           </Box>
         ) : (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c.accent.primary, flexShrink: 0 }} />
-              <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary }}>Now (current)</Typography>
+              <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, color: c.text.secondary }}>{t('views.history.nowCurrent')}</Typography>
             </Box>
             {versions.map((v) => (
               <Box
@@ -193,10 +195,10 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontSize: '0.84rem', color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {describe(v)}
+                    {describe(v, t)}
                   </Typography>
                   <Typography sx={{ fontSize: '0.74rem', color: c.text.muted }}>
-                    {timeAgo(v.created_at)}{v.source === 'manual' ? ' · saved by you' : v.source === 'pre_restore' ? ' · auto-backup' : ''}
+                    {timeAgo(v.created_at, t)}{v.source === 'manual' ? ` · ${t('views.history.savedByYou')}` : v.source === 'pre_restore' ? ` · ${t('views.history.autoBackup')}` : ''}
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
@@ -207,7 +209,7 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
                     disabled={!!busyId || isAgentActive}
                     sx={{ textTransform: 'none', fontSize: '0.74rem', color: c.text.secondary, minWidth: 0, '&:hover': { bgcolor: `${c.text.primary}08` } }}
                   >
-                    Restore
+                    {t('views.history.restore')}
                   </Button>
                   <Button
                     size="small"
@@ -216,7 +218,7 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
                     disabled={!!busyId}
                     sx={{ textTransform: 'none', fontSize: '0.74rem', color: c.text.secondary, minWidth: 0, '&:hover': { bgcolor: `${c.text.primary}08` } }}
                   >
-                    Save as new app
+                    {t('views.history.saveAsNewApp')}
                   </Button>
                 </Box>
               </Box>
@@ -228,19 +230,19 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
       <Dialog open={!!confirmTarget} onClose={() => setConfirmId(null)} PaperProps={{ sx: { borderRadius: 3, bgcolor: c.bg.surface, p: 0.5, maxWidth: 380 } }}>
         <Box sx={{ p: 2.5 }}>
           <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: c.text.primary, mb: 1 }}>
-            Go back to this version?
+            {t('views.history.goBackQuestion')}
           </Typography>
           <Typography sx={{ fontSize: '0.84rem', color: c.text.muted, lineHeight: 1.5, mb: 2.5 }}>
-            This brings your app back to how it was here. Your current version is saved first, so you can always come back.
+            {t('views.history.goBackDescription')}
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-            <Button onClick={() => setConfirmId(null)} sx={{ textTransform: 'none', color: c.text.secondary }}>Cancel</Button>
+            <Button onClick={() => setConfirmId(null)} sx={{ textTransform: 'none', color: c.text.secondary }}>{t('common.cancel')}</Button>
             <Button
               variant="contained" disableElevation
               onClick={() => confirmTarget && handleRestore(confirmTarget.id)}
               sx={{ textTransform: 'none', bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.primary } }}
             >
-              Go back to this version
+              {t('views.history.goBackButton')}
             </Button>
           </Box>
         </Box>

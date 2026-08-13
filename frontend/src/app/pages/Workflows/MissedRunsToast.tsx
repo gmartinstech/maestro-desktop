@@ -1,6 +1,7 @@
 // Bottom-left nudge shown on launch when scheduled runs elapsed while the app was closed. It stays put until the user acts (no auto-hide): Review opens the Workflows app (its Home surfaces the missed runs); the X dismisses it.
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -13,6 +14,7 @@ import { openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 
 export default function MissedRunsToast() {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.missedRuns.toastOpen);
   const count = useAppSelector((s) => s.missedRuns.items.length);
@@ -41,11 +43,11 @@ export default function MissedRunsToast() {
         action={
           <>
             <Button size="small" onClick={onReview} sx={{ color: c.accent.primary, fontWeight: 700 }}>
-              Review
+              {t('workflows.missedRunsToast.review')}
             </Button>
             <IconButton
               size="small"
-              aria-label="Dismiss"
+              aria-label={t('workflows.missedRunsToast.dismiss')}
               onClick={() => dispatch(hideMissedRunsToast())}
               sx={{ color: c.text.muted, ml: 0.25, '&:hover': { color: c.text.primary } }}
             >
@@ -54,7 +56,7 @@ export default function MissedRunsToast() {
           </>
         }
       >
-        {`${count} scheduled run${count === 1 ? '' : 's'} ${count === 1 ? 'was' : 'were'} missed while you were away`}
+        {t('workflows.missedRunsToast.missedRuns', { count })}
       </Alert>
     </Snackbar>
   );

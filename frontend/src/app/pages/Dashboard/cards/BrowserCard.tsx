@@ -1069,7 +1069,7 @@ const BrowserCard: React.FC<Props> = ({
                 }}
               />
               <Typography sx={{ fontSize: '0.65rem', fontWeight: 600, color: accentColor, lineHeight: 1 }}>
-                AI
+                {t('dashboard.browserCard.aiBadge')}
               </Typography>
             </Box>
           )}

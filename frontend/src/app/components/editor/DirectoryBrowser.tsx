@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -40,6 +41,7 @@ interface DirectoryBrowserProps {
 }
 
 const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSelect, initialPath }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [browseData, setBrowseData] = useState<BrowseResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,7 +123,7 @@ const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSe
       }}
     >
       <DialogTitle sx={{ color: c.text.primary, fontWeight: 600, pb: 1 }}>
-        Browse Files &amp; Folders
+        {t('overlays.directoryBrowser.title')}
       </DialogTitle>
       <DialogContent sx={{
         display: 'flex',
@@ -145,7 +147,7 @@ const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSe
             onKeyDown={handleKeyDown}
             size="small"
             fullWidth
-            placeholder="Type a path..."
+            placeholder={t('overlays.directoryBrowser.pathPlaceholder')}
             sx={{
               '& .MuiOutlinedInput-root': {
                 bgcolor: c.bg.page,
@@ -166,7 +168,7 @@ const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSe
               px: 2,
             }}
           >
-            Go
+            {t('overlays.directoryBrowser.go')}
           </Button>
         </Box>
 
@@ -251,7 +253,7 @@ const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSe
           ) : !hasEntries ? (
             <Box sx={{ py: 4, textAlign: 'center' }}>
               <Typography sx={{ color: c.text.ghost, fontSize: '0.85rem' }}>
-                Empty directory
+                {t('overlays.directoryBrowser.empty')}
               </Typography>
             </Box>
           ) : (
@@ -312,12 +314,12 @@ const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSe
       <DialogActions sx={{ px: 3, pb: 2, justifyContent: 'space-between' }}>
         <Typography sx={{ color: c.text.ghost, fontSize: '0.72rem', pl: 1 }}>
           {selected
-            ? `Selected: ${selected.name}`
-            : 'Click to select, double-click folders to open'}
+            ? t('overlays.directoryBrowser.selected', { name: selected.name })
+            : t('overlays.directoryBrowser.hint')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button onClick={onClose} sx={{ color: c.text.tertiary, textTransform: 'none' }}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant="contained"
@@ -330,7 +332,9 @@ const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSe
               borderRadius: 2,
             }}
           >
-            {selected ? `Attach ${selected.type === 'file' ? 'File' : 'Folder'}` : 'Attach This Folder'}
+            {selected
+              ? t(selected.type === 'file' ? 'overlays.directoryBrowser.attachFile' : 'overlays.directoryBrowser.attachFolder')
+              : t('overlays.directoryBrowser.attachThisFolder')}
           </Button>
         </Box>
       </DialogActions>

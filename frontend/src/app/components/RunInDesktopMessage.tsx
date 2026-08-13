@@ -1,4 +1,5 @@
 import React from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 
@@ -8,7 +9,9 @@ interface Props {
 
 // Shown when a browser/app card is rendered OUTSIDE Electron (the dev URL opened directly in a web browser). The real <webview> only exists in the desktop app; rather than a crippled <iframe> the agent can't drive, tell the user to launch correctly.
 const RunInDesktopMessage: React.FC<Props> = ({ kind = 'browser' }) => {
-  const noun = kind === 'app' ? 'Apps' : 'Browsers';
+  const { t } = useTranslation();
+  // Interpolated into the body sentence, so it has to be declined per language rather than concatenated.
+  const noun = t(kind === 'app' ? 'common.runInDesktop.nounApps' : 'common.runInDesktop.nounBrowsers');
   return (
     <Box
       sx={{
@@ -26,10 +29,11 @@ const RunInDesktopMessage: React.FC<Props> = ({ kind = 'browser' }) => {
       }}
     >
       <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: '#bbb' }}>
-        Open this in the Maestro Studio desktop app
+        {t('common.runInDesktop.title')}
       </Typography>
       <Typography sx={{ fontSize: '0.82rem', lineHeight: 1.5, maxWidth: 360 }}>
-        {noun} run inside the Maestro Studio desktop window, not a regular web browser. It looks like you opened the dev URL directly in a browser; launch Maestro Studio (the Electron window from <code>bash run.sh</code>) and use it there instead.
+        {/* Trans, not t(): the body wraps the shell command in <code>, which a plain string cannot carry. */}
+        <Trans i18nKey="common.runInDesktop.body" values={{ noun }} components={{ cmd: <code /> }} />
       </Typography>
     </Box>
   );

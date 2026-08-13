@@ -1,5 +1,6 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
+import { tr } from './translatedOps';
 
 // App Builder is folded into normal agents now: the user just asks an agent to build
 // an app and its live card drops on the canvas. So this step points at the dashboard
@@ -16,7 +17,7 @@ export const step08: OnboardingStep = {
     { kind: 'move_to', target: S.chatInput },
     {
       kind: 'popup',
-      text: 'Apps are just something you ask for. Try "build me a habit tracker" — any agent can make one.',
+      text: tr('onboarding.steps.make_app.popup.intro'),
     },
     {
       kind: 'wait_user',
@@ -25,7 +26,7 @@ export const step08: OnboardingStep = {
     },
     {
       kind: 'popup',
-      text: "Cooking up your app! It'll pop onto the canvas as a live card in a sec. Go explore while it brews.",
+      text: tr('onboarding.steps.make_app.popup.cooking'),
     },
     { kind: 'delay', ms: 4000 },
     { kind: 'outro' },

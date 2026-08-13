@@ -1,6 +1,7 @@
 // Clickable "your {workflow} is running now" nudge for scheduled runs that fire while the user isn't looking. Detection lives in the upsertRun reducer (it owns the into-running edge); this just renders the redux toast state and, on View, opens the Workflows app to that workflow's live detail.
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -11,6 +12,7 @@ import { openWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 
 export default function WorkflowRunningToast() {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const toast = useAppSelector((s) => s.workflows.runningToast);
 
@@ -39,11 +41,11 @@ export default function WorkflowRunningToast() {
         }}
         action={
           <Button size="small" onClick={onView} sx={{ color: c.accent.primary, fontWeight: 700 }}>
-            View
+            {t('workflows.workflowRunningToast.view')}
           </Button>
         }
       >
-        {toast ? `${toast.workflowTitle} is running now` : ''}
+        {toast ? t('workflows.workflowRunningToast.message', { workflowName: toast.workflowTitle }) : ''}
       </Alert>
     </Snackbar>
   );

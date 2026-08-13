@@ -38,6 +38,33 @@ const IDENTICAL_BY_DESIGN = new Set([
   'appShell.menuTooltip',
   'appShell.apps',
   'tools.customTool.docs',
+  'common.runInDesktop.nounApps',
+  // Each shows its OWN language's endonym regardless of the active UI language, by design.
+  'settings.interface.languageEn',
+  'settings.interface.languagePtBr',
+  'agentChat.approvalBar.workflowsServerLabel',
+  // Tool identifiers, not display copy — the agent's tool-call name, shown verbatim.
+  'agentChat.createAgent.title',
+  'agentChat.invokeAgent.title',
+  // Unit abbreviations ("ms", "s") carry over unchanged in pt-BR product copy.
+  'agentChat.elapsed.milliseconds',
+  'agentChat.elapsed.minutesSeconds',
+  'agentChat.elapsed.seconds',
+  'agentChat.messageBubble.thinking.liveWithTokens',
+  'agentChat.messageBubble.tokens.countLabel',
+  // "Total" is spelled identically in Portuguese.
+  'agentChat.messageBubble.tokens.total',
+  'agentChat.tokenBreakdown.total',
+  'agentChat.toolSummary.emails_one',
+  'agentChat.toolSummary.emails_other',
+  // A Unix stream name, not a word.
+  'agentChat.toolSummary.stderr',
+  // "Dashboard" is the product's own established loanword throughout this namespace.
+  'dashboard.defaultName',
+  'dashboardSelection.title',
+  // Google is a proper noun.
+  'tools.registryBrowser.googleFilter',
+  'workflows.homeView.workflowDefaultTitle',
 ]);
 
 const en = flatten(read('en.json'));

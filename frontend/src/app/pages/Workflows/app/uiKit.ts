@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import i18n from '@/shared/i18n/i18n';
 import { useThemeMode, useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
@@ -167,11 +168,11 @@ export function knob(on: boolean): CSSProperties {
 
 export function statusLabel(status: RunStatus): string {
   switch (status) {
-    case 'success': return 'Success';
-    case 'failure': return 'Failed';
-    case 'ran_late': return 'Ran late';
-    case 'running': return 'Running';
-    case 'skipped': return 'Skipped';
-    default: return 'Paused';
+    case 'success': return i18n.t('workflows.status.success');
+    case 'failure': return i18n.t('workflows.status.failure');
+    case 'ran_late': return i18n.t('workflows.status.ranLate');
+    case 'running': return i18n.t('workflows.status.running');
+    case 'skipped': return i18n.t('workflows.status.skipped');
+    default: return i18n.t('workflows.status.paused');
   }
 }

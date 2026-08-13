@@ -383,7 +383,8 @@ async function runOp(op: ACOp, ctx: RunContext): Promise<void> {
     case 'popup': {
       if (ctx.silent) return;
       await ensurePopupDwell(ctx);
-      ac.showPopup(op.text);
+      const text = typeof op.text === 'function' ? op.text() : op.text;
+      ac.showPopup(text);
       ctx.popupShownAt.current = performance.now();
       ctx.popupDwellMs.current = op.dwellMs ?? null;
       return;
@@ -392,7 +393,12 @@ async function runOp(op: ACOp, ctx: RunContext): Promise<void> {
       if (ctx.silent) return;
       await ensurePopupDwell(ctx);
       ctx.popupShownAt.current = null;
-      const id = await ac.showMultiChoice(op.question, op.options);
+      const question = typeof op.question === 'function' ? op.question() : op.question;
+      const options = op.options.map((opt) => ({
+        ...opt,
+        label: typeof opt.label === 'function' ? opt.label() : opt.label,
+      }));
+      const id = await ac.showMultiChoice(question, options);
       if (id) {
         store.dispatch(
           recordMultiChoice({ stepId: ctx.stepId, opId: op.opId, answerId: id }),

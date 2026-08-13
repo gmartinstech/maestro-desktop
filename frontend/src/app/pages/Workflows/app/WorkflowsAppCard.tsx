@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '@/shared/hooks';
 import { closeWorkflowsApp, setWorkflowsHubPosition, setWorkflowsHubSize } from '@/shared/state/dashboardLayoutSlice';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
@@ -57,6 +58,7 @@ const WorkflowsAppCard: React.FC<Props> = ({
   isSelected = false, isHighlighted = false, multiDragDelta = null,
   onCardSelect, onDragStart, onDragMove, onDragEnd, onBringToFront,
 }) => {
+  const { t } = useTranslation();
   const WC = useWC();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
@@ -225,11 +227,11 @@ const WorkflowsAppCard: React.FC<Props> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <EventRepeatIcon sx={{ fontSize: 18, color: WC.accent, display: 'block' }} />
-          <span style={{ fontFamily: FONT_SERIF, fontSize: 14.5, fontWeight: 500, color: WC.ink, letterSpacing: '-0.01em', lineHeight: 1, transform: 'translateY(2.5px)' }}>Workflows</span>
+          <span style={{ fontFamily: FONT_SERIF, fontSize: 14.5, fontWeight: 500, color: WC.ink, letterSpacing: '-0.01em', lineHeight: 1, transform: 'translateY(2.5px)' }}>{t('dashboard.toolbar.workflows')}</span>
         </div>
         <div style={{ flex: 1 }} />
         <IconButton
-          aria-label="Close"
+          aria-label={t('common.close')}
           data-no-drag
           size="small"
           onClick={(e) => { e.stopPropagation(); dispatch(closeWorkflowsApp()); }}

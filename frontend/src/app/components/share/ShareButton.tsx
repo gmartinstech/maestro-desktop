@@ -1,5 +1,6 @@
 // The reusable top-right Share affordance. Drop it on any modality's surface. 'icon' is the Anthropic-style header icon; 'menuItem' is for a sidebar "..." overflow menu. Click always stops propagation so card/header parents that own their own onClick don't also fire.
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
@@ -28,6 +29,7 @@ const ShareButton: React.FC<Props> = ({
   iconFontSize = 18,
   onOpen,
 }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [open, setOpen] = useState(false);
 
@@ -49,10 +51,10 @@ const ShareButton: React.FC<Props> = ({
           <ListItemIcon sx={{ minWidth: 0, color: c.text.tertiary }}>
             <IosShareIcon sx={{ fontSize: 16 }} />
           </ListItemIcon>
-          Share
+          {t('common.share')}
         </MenuItem>
       ) : (
-        <Tooltip title="Share">
+        <Tooltip title={t('common.share')}>
           <IconButton size={size} onClick={start} sx={iconSx}>
             <IosShareIcon sx={{ fontSize: iconFontSize }} />
           </IconButton>

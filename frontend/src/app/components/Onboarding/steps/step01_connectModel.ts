@@ -1,6 +1,7 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
 import { hasModelConnected } from './skipPredicates';
+import { tr } from './translatedOps';
 
 export const step01: OnboardingStep = {
   id: 'connect_model',
@@ -14,13 +15,13 @@ export const step01: OnboardingStep = {
   skipIf: (s) => hasModelConnected(s),
   ops: [
     { kind: 'move_to', target: S.sidebarSettingsButton },
-    { kind: 'popup', text: 'Pop into Settings.' },
+    { kind: 'popup', text: tr('onboarding.steps.connect_model.popup.settings') },
     {
       kind: 'wait_user',
       condition: { kind: 'click_target', target: S.sidebarSettingsButton },
     },
     { kind: 'move_to', target: S.settingsModelsTab },
-    { kind: 'popup', text: 'Hop over to Models.' },
+    { kind: 'popup', text: tr('onboarding.steps.connect_model.popup.models') },
     {
       kind: 'wait_user',
       condition: { kind: 'click_target', target: S.settingsModelsTab },
@@ -28,22 +29,22 @@ export const step01: OnboardingStep = {
     {
       kind: 'multi_choice',
       opId: 'connect_method',
-      question: 'How would you like to connect an AI model?',
+      question: tr('onboarding.steps.connect_model.question'),
       options: [
         {
           id: 'subscription',
-          label: 'I already have an AI subscription',
+          label: tr('onboarding.steps.connect_model.option.subscription'),
           thenOps: [
             { kind: 'move_to', target: S.settingsExternalSubs },
-            { kind: 'popup', text: 'Hook up your subscription here.' },
+            { kind: 'popup', text: tr('onboarding.steps.connect_model.popup.subscription') },
           ],
         },
         {
           id: 'api_key',
-          label: 'I have an API key',
+          label: tr('onboarding.steps.connect_model.option.apiKey'),
           thenOps: [
             { kind: 'move_to', target: S.settingsApiKeys },
-            { kind: 'popup', text: 'Drop your API key in.' },
+            { kind: 'popup', text: tr('onboarding.steps.connect_model.popup.apiKey') },
           ],
         },
       ],
@@ -58,7 +59,7 @@ export const step01: OnboardingStep = {
       hint: 'Finish connecting your model.',
     },
     { kind: 'move_to', target: S.settingsCloseButton },
-    { kind: 'popup', text: 'Nice! Close it up.' },
+    { kind: 'popup', text: tr('onboarding.steps.connect_model.popup.close') },
     {
       kind: 'wait_user',
       condition: { kind: 'event_bus', event: 'settings:closed' },

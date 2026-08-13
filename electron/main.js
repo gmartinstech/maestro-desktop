@@ -58,6 +58,7 @@ const getPort = require('get-port');
 const http = require('http');
 const cdpRoutes = require('./cdp-routes');
 const workflowsLifecycle = require('./workflowsLifecycle');
+const { t, setLanguage, resolveBootLanguage } = require('./i18n/strings');
 
 // Squirrel makes the APP create its own shortcuts: on --squirrel-install it must
 // call Update.exe --createShortcut and exit, else the user finds only Setup.exe
@@ -605,6 +606,19 @@ function createSplashWindow() {
   });
   w.setMenuBarVisibility(false);
   w.loadURL(dataUrl);
+  // Send button labels if language is not pt-BR (the HTML default).
+  w.webContents.once('did-finish-load', () => {
+    const currentLang = require('./i18n/strings').getCurrentLanguage();
+    if (currentLang === 'en') {
+      try {
+        w.webContents.send('splash:language', {
+          viewLogs: t('appShell.splash.viewLogs'),
+          restart: t('appShell.splash.restart'),
+          quit: t('appShell.splash.quit'),
+        });
+      } catch (_) {}
+    }
+  });
   // If the splash is dismissed BEFORE the main window has shown itself,
   // treat that as the user intentionally bailing out of boot. Without
   // this, splash.close() would silently leave a backend running with
@@ -637,21 +651,21 @@ function emitSplashStatus(payload) {
 // broken. Used by the long-wait branches in waitForBackend below.
 function osStillStartingText() {
   if (process.platform === 'win32') {
-    return 'Still starting — Windows Defender is scanning files (first launch only)…';
+    return t('appShell.boot.stillStartingWin');
   }
   if (process.platform === 'darwin') {
-    return 'Still starting — macOS is verifying the bundle (first launch only)…';
+    return t('appShell.boot.stillStartingMac');
   }
-  return 'Still starting (first launch is slower than subsequent launches)…';
+  return t('appShell.boot.stillStartingGeneric');
 }
 function osTakingTooLongText() {
   if (process.platform === 'win32') {
-    return 'Backend is taking longer than usual. Defender scans of 14k files can take a few minutes on slow drives.';
+    return t('appShell.boot.takingTooLongWin');
   }
   if (process.platform === 'darwin') {
-    return 'Backend is taking longer than usual. macOS first-launch checks can be slow on cold cache.';
+    return t('appShell.boot.takingTooLongMac');
   }
-  return 'Backend is taking longer than usual. You can wait, view logs, or restart.';
+  return t('appShell.boot.takingTooLongGeneric');
 }
 
 /**
@@ -1006,7 +1020,7 @@ async function startBackend() {
     // routes are mounted — perfect milestone for the splash to flip
     // from "starting backend" to "loading components".
     if (text.indexOf('Application startup complete') !== -1) {
-      emitSplashStatus('Loading components…');
+      emitSplashStatus(t('appShell.splash.loadingComponents'));
     }
   });
 
@@ -1043,7 +1057,7 @@ async function startBackend() {
     }
   });
 
-  emitSplashStatus('Starting backend…');
+  emitSplashStatus(t('appShell.splash.startingBackend'));
   await waitForBackend(backendPort, { process: backendProcess });
   perfMark('backend-http-ready');
   console.log(`Backend ready on port ${backendPort}`);
@@ -1473,10 +1487,10 @@ async function showCrashRecoveryOverlay() {
   try {
     const result = await dialog.showMessageBox({
       type: 'error',
-      title: 'Maestro Studio needs to reload',
-      message: 'Maestro Studio had repeated UI errors and stopped auto-recovering.',
-      detail: 'Reload to try again, or quit if this keeps happening.',
-      buttons: ['Reload', 'Quit'],
+      title: t('appShell.crash.title'),
+      message: t('appShell.crash.message'),
+      detail: t('appShell.crash.detail'),
+      buttons: [t('appShell.crash.reload'), t('appShell.crash.quit')],
       defaultId: 0,
       cancelId: 1,
       noLink: true,
@@ -1513,12 +1527,12 @@ function friendlyUpdateError(err) {
   // looking for the pre-release channel feed. This is the screenshot case.
   if (autoUpdater && autoUpdater.allowPrerelease &&
       /404|not found|cannot find|no published|latest.*\.yml/.test(raw)) {
-    return 'No experimental builds available right now. You are on the latest version.';
+    return t('appShell.update.noExperimental');
   }
   if (/net::|enotfound|etimedout|econnrefused|getaddrinfo|network/.test(raw)) {
-    return 'Could not reach the update server. Check your connection and try again.';
+    return t('appShell.update.networkError');
   }
-  return 'Update check failed. Please try again later.';
+  return t('appShell.update.checkFailed');
 }
 
 // Phase 2 provenance: which exact commit produced this build. The build
@@ -1717,6 +1731,9 @@ function killBackend() {
 }
 
 app.whenReady().then(async () => {
+  // Resolve UI language from settings.json if available; defaults to pt-BR.
+  resolveBootLanguage(app);
+
   // Register before any window exists so the accelerators are live from the first frame.
   Menu.setApplicationMenu(buildAppMenu());
 
@@ -1864,7 +1881,7 @@ app.whenReady().then(async () => {
   // of double-clicking. Without this, on a cold-Defender Windows install
   // the dock/taskbar icon flashes for 30-60s with nothing visible.
   splashWindow = createSplashWindow();
-  emitSplashStatus('Starting Maestro Studio…');
+  emitSplashStatus(t('appShell.splash.starting'));
 
   // Widevine CDM and backend startup are independent — run them
   // concurrently. Backend is the long pole on Windows (Defender + Python
@@ -1892,7 +1909,7 @@ app.whenReady().then(async () => {
     if (isDev) {
       backendPort = parseInt(process.env.MAESTRO_PORT || '8324', 10);
       console.log(`Dev mode: using existing backend on port ${backendPort}`);
-      emitSplashStatus('Connecting to dev backend…');
+      emitSplashStatus(t('appShell.splash.connectingBackend'));
       // Load the token before marking ready, same as prod, so the workflow
       // poller's setBackend() gets a real token instead of '' (else it 401s).
       await loadAuthToken();
@@ -1902,7 +1919,7 @@ app.whenReady().then(async () => {
       backendPort = await pickBackendPort();
       const _backendBoot = startBackend().catch((err) => {
         console.error('[boot] backend startup failed:', err && err.message);
-        emitSplashStatus({ text: 'Backend failed to start', level: 'error', logs: recentBackendStderr.slice(-20).join('') });
+        emitSplashStatus({ text: t('appShell.splash.backendFailed'), level: 'error', logs: recentBackendStderr.slice(-20).join('') });
       });
     }
     // Start the embedded frontend HTTP server before createWindow so loadURL has a real port. Only relevant in packaged mode; in dev, frontend lives on webpack-dev-server :3000.
@@ -1913,7 +1930,7 @@ app.whenReady().then(async () => {
         console.error('[boot] frontend server failed to start, falling back to file://:', err && err.message);
       }
     }
-    emitSplashStatus('Almost ready…');
+    emitSplashStatus(t('appShell.splash.almostReady'));
     // Must run before createWindow loads the URL, or the renderer fetches the stale bundle first.
     await clearStaleFrontendCache();
     createWindow();
@@ -1977,7 +1994,7 @@ app.whenReady().then(async () => {
     // The user picks: view logs, restart, or quit. This eliminates the
     // class of "I clicked Maestro Studio and nothing happened" reports.
     emitSplashStatus({
-      text: "Maestro Studio couldn't start: " + (err && err.message ? err.message : String(err)),
+      text: t('appShell.splash.startupFailed') + (err && err.message ? err.message : String(err)),
       level: 'error',
       showActions: true,
       logs: recentBackendStderr.slice(-30).join(''),
@@ -2057,22 +2074,22 @@ function buildBrowserContextMenu(contents, params, webContentsId) {
     if (suggestions.length) {
       for (const s of suggestions) template.push({ label: s, click: () => { try { contents.replaceMisspelling(s); } catch (_) {} } });
     } else {
-      template.push({ label: 'No spelling suggestions', enabled: false });
+      template.push({ label: t('appShell.context.noSuggestions'), enabled: false });
     }
-    template.push({ label: 'Add to Dictionary', click: () => { try { contents.session.addWordToSpellCheckerDictionary(params.misspelledWord); } catch (_) {} } });
+    template.push({ label: t('appShell.context.addDict'), click: () => { try { contents.session.addWordToSpellCheckerDictionary(params.misspelledWord); } catch (_) {} } });
     sep();
   }
 
   if (params.linkURL) {
-    template.push({ label: 'Open Link in New Tab', click: () => openInNewBrowserTab(params.linkURL, webContentsId) });
-    template.push({ label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) });
+    template.push({ label: t('appShell.context.openNewTab'), click: () => openInNewBrowserTab(params.linkURL, webContentsId) });
+    template.push({ label: t('appShell.context.copyLink'), click: () => clipboard.writeText(params.linkURL) });
     sep();
   }
 
   if (params.mediaType === 'image' && params.srcURL) {
-    template.push({ label: 'Open Image in New Tab', click: () => openInNewBrowserTab(params.srcURL, webContentsId) });
-    template.push({ label: 'Copy Image', click: () => { try { contents.copyImageAt(params.x, params.y); } catch (_) {} } });
-    template.push({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) });
+    template.push({ label: t('appShell.context.openImageNewTab'), click: () => openInNewBrowserTab(params.srcURL, webContentsId) });
+    template.push({ label: t('appShell.context.copyImage'), click: () => { try { contents.copyImageAt(params.x, params.y); } catch (_) {} } });
+    template.push({ label: t('appShell.context.copyImageAddr'), click: () => clipboard.writeText(params.srcURL) });
     sep();
   }
 
@@ -2091,13 +2108,13 @@ function buildBrowserContextMenu(contents, params, webContentsId) {
   const nav = contents.navigationHistory;
   const canBack = nav ? nav.canGoBack() : contents.canGoBack();
   const canFwd = nav ? nav.canGoForward() : contents.canGoForward();
-  template.push({ label: 'Back', enabled: canBack, click: () => { try { nav ? nav.goBack() : contents.goBack(); } catch (_) {} } });
-  template.push({ label: 'Forward', enabled: canFwd, click: () => { try { nav ? nav.goForward() : contents.goForward(); } catch (_) {} } });
-  template.push({ label: 'Reload', click: () => { try { contents.reload(); } catch (_) {} } });
+  template.push({ label: t('appShell.context.back'), enabled: canBack, click: () => { try { nav ? nav.goBack() : contents.goBack(); } catch (_) {} } });
+  template.push({ label: t('appShell.context.forward'), enabled: canFwd, click: () => { try { nav ? nav.goForward() : contents.goForward(); } catch (_) {} } });
+  template.push({ label: t('appShell.context.reload'), click: () => { try { contents.reload(); } catch (_) {} } });
 
   if (isDev) {
     sep();
-    template.push({ label: 'Inspect Element', click: () => { try { contents.inspectElement(params.x, params.y); } catch (_) {} } });
+    template.push({ label: t('appShell.context.inspect'), click: () => { try { contents.inspectElement(params.x, params.y); } catch (_) {} } });
   }
 
   try {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemText from '@mui/material/ListItemText';
@@ -38,6 +39,7 @@ export const ModelPickerList: React.FC<Props> = ({
   filteredModelGroups, setModelAnchor, anyFilterActive, pendingKinds, pendingPayloadEstimate,
   buildModelTooltip, tooltipSlotProps,
 }) => {
+  const { t } = useTranslation();
   return (
     <>
       {showRecents && (
@@ -66,9 +68,9 @@ export const ModelPickerList: React.FC<Props> = ({
           }}
         >
           {modelSearch.trim() ? (
-            <>No models match "{modelSearch.trim()}".{anyFilterActive && (<><br/><Box component="span" sx={{ fontSize: '0.7rem' }}>Try clearing the filters above.</Box></>)}</>
+            <>{t('agentChat.modelPicker.empty.noMatchQuery', { query: modelSearch.trim() })}{anyFilterActive && (<><br/><Box component="span" sx={{ fontSize: '0.7rem' }}>{t('agentChat.modelPicker.empty.tryClearingFilters')}</Box></>)}</>
           ) : (
-            <>No models match the current filters.</>
+            <>{t('agentChat.modelPicker.empty.noMatchFilters')}</>
           )}
         </Box>
       )}

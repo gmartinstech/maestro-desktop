@@ -1,4 +1,5 @@
 import React, { RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -30,12 +31,13 @@ export const ToolbarActions: React.FC<Props> = ({
   c, elementSelection, autoRunMode, ownerId, sessionId, generalFileInputRef,
   addImageFiles, uploadAndAttachFiles, hasContent, disabled, isRunning, onStop, handleSend,
 }) => {
+  const { t } = useTranslation();
   return (
     <>
       {elementSelection && !autoRunMode && (() => {
         const isMySelectMode = elementSelection.selectMode && elementSelection.activeOwnerId === ownerId;
         return (
-          <Tooltip title={isMySelectMode ? 'Exit select mode' : 'Select UI element'}>
+          <Tooltip title={isMySelectMode ? t('agentChat.toolbar.exitSelectMode') : t('agentChat.toolbar.selectUiElement')}>
             <IconButton
               size="small"
               onMouseDown={(e) => e.preventDefault()}
@@ -93,7 +95,7 @@ export const ToolbarActions: React.FC<Props> = ({
           e.target.value = '';
         }}
       />
-      <Tooltip title="Attach file">
+      <Tooltip title={t('agentChat.toolbar.attachFile')}>
         <IconButton
           size="small"
           onClick={() => generalFileInputRef.current?.click()}
@@ -109,7 +111,7 @@ export const ToolbarActions: React.FC<Props> = ({
       {!autoRunMode && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           {hasContent && (
-            <Tooltip title={isRunning ? 'Queue message' : 'Send message'}>
+            <Tooltip title={isRunning ? t('agentChat.toolbar.queueMessage') : t('agentChat.toolbar.sendMessage')}>
               <IconButton
                 size="small"
                 onClick={handleSend}
@@ -131,7 +133,7 @@ export const ToolbarActions: React.FC<Props> = ({
             </Tooltip>
           )}
           {isRunning ? (
-            <Tooltip title="Stop agent">
+            <Tooltip title={t('agentChat.toolbar.stopAgent')}>
               <IconButton
                 size="small"
                 onClick={onStop}
@@ -149,7 +151,7 @@ export const ToolbarActions: React.FC<Props> = ({
               </IconButton>
             </Tooltip>
           ) : !hasContent ? (
-            <Tooltip title="Voice input (coming soon)">
+            <Tooltip title={t('agentChat.toolbar.voiceInputComingSoon')}>
               <span>
                 <IconButton
                   size="small"

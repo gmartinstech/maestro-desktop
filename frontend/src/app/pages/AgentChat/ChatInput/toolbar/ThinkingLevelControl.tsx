@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
@@ -23,14 +24,15 @@ interface Props {
 export const ThinkingLevelControl: React.FC<Props> = ({
   c, model, allModelFlat, thinkingLevel, onThinkingLevelChange, thinkingAnchor, setThinkingAnchor, menuPaperProps,
 }) => {
+  const { t } = useTranslation();
   const currentModel = allModelFlat.find((m: any) => m.value === model) as any;
   if (!currentModel?.reasoning || !onThinkingLevelChange) return null;
   const levels: Array<{ value: ThinkingLevel; label: string; desc: string }> = [
-    { value: 'auto', label: 'Auto', desc: 'Model decides (recommended)' },
-    { value: 'off', label: 'Off', desc: 'No thinking (fastest)' },
-    { value: 'low', label: 'Low', desc: 'Minimal thinking' },
-    { value: 'medium', label: 'Medium', desc: 'Balanced' },
-    { value: 'high', label: 'High', desc: 'Extensive thinking (slowest)' },
+    { value: 'auto', label: t('agentChat.toolbar.thinkingLevelAuto'), desc: t('agentChat.toolbar.thinkingLevelAutoDesc') },
+    { value: 'off', label: t('agentChat.toolbar.thinkingLevelOff'), desc: t('agentChat.toolbar.thinkingLevelOffDesc') },
+    { value: 'low', label: t('agentChat.toolbar.thinkingLevelLow'), desc: t('agentChat.toolbar.thinkingLevelLowDesc') },
+    { value: 'medium', label: t('agentChat.toolbar.thinkingLevelMedium'), desc: t('agentChat.toolbar.thinkingLevelMediumDesc') },
+    { value: 'high', label: t('agentChat.toolbar.thinkingLevelHigh'), desc: t('agentChat.toolbar.thinkingLevelHighDesc') },
   ];
   const current = levels.find((l) => l.value === thinkingLevel) || levels[0];
   return (
@@ -63,7 +65,7 @@ export const ThinkingLevelControl: React.FC<Props> = ({
       >
         <MenuItem disabled sx={{ opacity: '1 !important', py: 0.5, px: 1.5, minHeight: 'auto', pointerEvents: 'none' }}>
           <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: c.text.tertiary }}>
-            Thinking Level
+            {t('agentChat.toolbar.thinkingLevelLabel')}
           </Typography>
         </MenuItem>
         {/* Gemini 3 preview rejects "thought signature" on tool-call turns when thinking is on; warn search users. */}
@@ -73,7 +75,7 @@ export const ThinkingLevelControl: React.FC<Props> = ({
           return (
             <MenuItem disabled sx={{ opacity: '1 !important', py: 0.6, px: 1.5, minHeight: 'auto', pointerEvents: 'none', mx: 0.5, my: 0.25, borderRadius: 1, bgcolor: 'rgba(245, 158, 11, 0.06)', border: '1px solid rgba(245, 158, 11, 0.18)' }}>
               <Typography sx={{ fontSize: '0.66rem', color: c.text.muted, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 240 }}>
-                Web search breaks on Gemini 3 preview while thinking is on. Set to <strong>Off</strong> if you need search.
+                {t('agentChat.toolbar.gemini3SearchWarning')}
               </Typography>
             </MenuItem>
           );

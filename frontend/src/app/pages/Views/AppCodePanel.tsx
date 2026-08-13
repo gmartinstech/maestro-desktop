@@ -2,6 +2,7 @@
 // tree, edits save via the same per-file PUT the full ViewEditor uses. Owns all
 // its state so DashboardViewCard mounts it on demand with just a workspaceId.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { API_BASE } from '@/shared/config';
@@ -18,6 +19,7 @@ interface Props {
 }
 
 const AppCodePanel: React.FC<Props> = ({ workspaceId, onFileSaved }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [files, setFiles] = useState<Record<string, string>>({});
   const [oversizeFiles, setOversizeFiles] = useState<Record<string, number>>({});
@@ -102,7 +104,7 @@ const AppCodePanel: React.FC<Props> = ({ workspaceId, onFileSaved }) => {
         ))}
         {filePaths.length === 0 && (
           <Typography sx={{ fontSize: '0.72rem', color: c.text.ghost, px: 1.5, py: 1 }}>
-            Loading files…
+            {t('views.codePanel.loadingFiles')}
           </Typography>
         )}
       </Box>
@@ -110,7 +112,7 @@ const AppCodePanel: React.FC<Props> = ({ workspaceId, onFileSaved }) => {
         {activeFile && oversizeFiles[activeFile] != null ? (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', px: 3 }}>
             <Typography sx={{ color: c.text.muted, fontSize: '0.8rem', textAlign: 'center', maxWidth: 320, lineHeight: 1.5 }}>
-              This file is {(oversizeFiles[activeFile] / (1024 * 1024)).toFixed(1)} MB, too large to edit here.
+              {t('views.codePanel.tooLargeToEdit', { size: (oversizeFiles[activeFile] / (1024 * 1024)).toFixed(1) })}
             </Typography>
           </Box>
         ) : activeFile && files[activeFile] != null ? (
@@ -124,7 +126,7 @@ const AppCodePanel: React.FC<Props> = ({ workspaceId, onFileSaved }) => {
         ) : (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
             <Typography sx={{ color: c.text.ghost, fontSize: '0.8rem' }}>
-              Select a file to edit
+              {t('views.codePanel.selectFileToEdit')}
             </Typography>
           </Box>
         )}

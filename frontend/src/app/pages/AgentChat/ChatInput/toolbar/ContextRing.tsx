@@ -1,18 +1,20 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
+import { useTranslation } from 'react-i18next';
 import { formatTokenCount } from '../helpers';
 
 export const ContextRing: React.FC<{ used: number; limit: number; accentColor: string; trackColor: string }> = ({ used, limit, accentColor, trackColor }) => {
+  const { t } = useTranslation();
   // Track the previous fill so a DROP (compaction freed space) can play a brief "settle" cue: the ring eases down AND flashes once toward the track color, signaling "we just made room" without a loud banner. A rise just eases up.
   const prevUsed = React.useRef(used);
   const [justCompacted, setJustCompacted] = React.useState(false);
   React.useEffect(() => {
     if (used < prevUsed.current - 1) {
       setJustCompacted(true);
-      const t = setTimeout(() => setJustCompacted(false), 700);
+      const timer = setTimeout(() => setJustCompacted(false), 700);
       prevUsed.current = used;
-      return () => clearTimeout(t);
+      return () => clearTimeout(timer);
     }
     prevUsed.current = used;
   }, [used]);
@@ -24,7 +26,7 @@ export const ContextRing: React.FC<{ used: number; limit: number; accentColor: s
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - pct / 100);
-  const tooltip = `${pct.toFixed(1)}% · ${formatTokenCount(used)} / ${formatTokenCount(limit)} context used`;
+  const tooltip = t('agentChat.chatInput.contextRing.tooltip', { pct: pct.toFixed(1), used: formatTokenCount(used), limit: formatTokenCount(limit) });
 
   return (
     <Tooltip title={tooltip}>

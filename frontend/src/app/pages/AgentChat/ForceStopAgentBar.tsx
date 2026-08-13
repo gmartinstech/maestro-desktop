@@ -1,6 +1,7 @@
 // Footer for an agent card that's a workflow sidecar (Test Agent, or a watched run). It replaces the normal composer: while the agent runs you can't meaningfully chat, but you often want to kill it. Once a Test Agent finishes, the red "Force Stop" becomes the decision point: keep editing the workflow, or save the edits (which commits the draft and closes this card).
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import StopCircleOutlined from '@mui/icons-material/StopCircleOutlined';
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function ForceStopAgentBar({ onStop, onSaveWorkflow, onContinueEditing, testState }: Props) {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const done = testState === 'complete' || testState === 'error';
 
@@ -33,7 +35,7 @@ export default function ForceStopAgentBar({ onStop, onSaveWorkflow, onContinueEd
             '&:hover': { bgcolor: c.status.error + '22' },
           }}>
           <StopCircleOutlined sx={{ fontSize: 17 }} />
-          Force Stop Agent
+          {t('agentChat.forceStopAgentBar.forceStopAgent')}
         </Box>
       </Box>
     );
@@ -44,7 +46,7 @@ export default function ForceStopAgentBar({ onStop, onSaveWorkflow, onContinueEd
     <Box sx={{ px: 2, py: 1.5, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: tone, fontSize: '0.8rem', fontWeight: 600 }}>
         <CheckCircleOutlineRounded sx={{ fontSize: 16 }} />
-        {testState === 'complete' ? 'Test finished' : 'Test stopped'}
+        {testState === 'complete' ? t('agentChat.forceStopAgentBar.testFinished') : t('agentChat.forceStopAgentBar.testStopped')}
       </Box>
       <Box sx={{ display: 'flex', gap: 1 }}>
         <Box
@@ -56,7 +58,7 @@ export default function ForceStopAgentBar({ onStop, onSaveWorkflow, onContinueEd
             border: `1px solid ${c.border.medium}`,
             '&:hover': { bgcolor: c.bg.elevated, color: c.text.primary },
           }}>
-          Continue editing
+          {t('agentChat.forceStopAgentBar.continueEditing')}
         </Box>
         <Box
           role="button"
@@ -66,7 +68,7 @@ export default function ForceStopAgentBar({ onStop, onSaveWorkflow, onContinueEd
             fontSize: '0.82rem', fontWeight: 700, color: '#fff', bgcolor: c.accent.primary,
             '&:hover': { filter: 'brightness(1.05)' },
           }}>
-          Save workflow
+          {t('agentChat.forceStopAgentBar.saveWorkflow')}
         </Box>
       </Box>
     </Box>

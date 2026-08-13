@@ -24,7 +24,7 @@ import WindowedMarkdown from './WindowedMarkdown';
 import WindowedPlainText from './WindowedPlainText';
 import { renderUserTextWithPills } from './renderUserTextWithPills';
 import { estimateRenderedTextHeight, oversizedCharThreshold, RECHECK_VISIBILITY_EVENT } from './markdownMeasure';
-import { THINKING_LABELS } from '../thinkingLabels';
+import { getThinkingLabels } from '../thinkingLabels';
 import { extractPlatformNote } from '../parsing/toolResultParsing';
 import { AgentMessage, retryLastUserMessage } from '@/shared/state/agentsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
@@ -525,7 +525,8 @@ function labelIndexFromId(id: string | undefined): number {
   for (let i = 0; i < id.length; i++) {
     h = ((h << 5) - h + id.charCodeAt(i)) | 0;
   }
-  return Math.abs(h) % THINKING_LABELS.length;
+  const labels = getThinkingLabels();
+  return Math.abs(h) % labels.length;
 }
 
 const ThinkingBubble: React.FC<{
@@ -541,10 +542,11 @@ const ThinkingBubble: React.FC<{
   dynamicLabel?: string | null;
   revealRef?: React.RefObject<HTMLElement | null>;
 }> = ({ content, isStreaming, messageId, persistedElapsedMs, persistedTokens, persistedInputTokens, persistedToolCount, dynamicLabel, revealRef }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
 
   const turnLabel = useMemo(
-    () => THINKING_LABELS[labelIndexFromId(messageId)],
+    () => getThinkingLabels()[labelIndexFromId(messageId)],
     [messageId],
   );
 
@@ -628,13 +630,13 @@ const ThinkingBubble: React.FC<{
       const tooltipBody = input != null && output != null ? (
         <Box sx={{ p: 0.5, fontFamily: c.font.sans, fontSize: '0.78rem', lineHeight: 1.5 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-            <span>Input</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{input.toLocaleString()}</span>
+            <span>{t('agentChat.tokenBreakdown.input')}</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{input.toLocaleString()}</span>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-            <span>Output</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{output.toLocaleString()}</span>
+            <span>{t('agentChat.tokenBreakdown.output')}</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{output.toLocaleString()}</span>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 0.25, pt: 0.25, borderTop: `1px solid ${c.border.subtle}`, fontWeight: 600 }}>
-            <span>Total</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{total.toLocaleString()}</span>
+            <span>{t('agentChat.tokenBreakdown.total')}</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{total.toLocaleString()}</span>
           </Box>
           <Box sx={{ mt: 0.5, color: c.text.ghost, fontSize: '0.7rem', fontStyle: 'italic' }}>
             Input shown is your message, history, and tool outputs. The fixed
@@ -774,10 +776,11 @@ const ProviderReasoningExplanation: React.FC<{
   tokens: number | null;
   elapsedMs: number | null;
 }> = ({ isStreaming, tokens, elapsedMs }) => {
+  const { t } = useTranslation();
   if (isStreaming) {
     return (
       <Box component="span" sx={{ fontStyle: 'italic', opacity: 0.85 }}>
-        Reasoning…
+        {t('agentChat.messageBubble.reasoning.streaming')}
         <StreamingCursor />
       </Box>
     );
@@ -790,24 +793,24 @@ const ProviderReasoningExplanation: React.FC<{
       segs.push(`${Math.max(1, Math.round(elapsedMs / 1000))}s`);
     }
     if (tokens && tokens > 0) {
-      segs.push(`${tokens.toLocaleString()} reasoning tokens`);
+      segs.push(t('agentChat.messageBubble.reasoning.tokens', { count: tokens.toLocaleString() }));
     }
     return segs.join(', ');
   })();
   const variants = [
-    "It's still thinking, we just aren't allowed to peek behind the curtain.",
-    "Wheels are turning, but this provider keeps its thoughts private.",
-    "Brain's busy back there; the provider just isn't letting us listen in.",
-    "Mulling it over quietly. Only Claude shows its work out loud.",
-    "Thinking happened, just not in the open. (GPT and Gemini play their cards close.)",
-    "Reasoning's underway, but this provider doesn't broadcast it. Trust the process.",
+    t('agentChat.messageBubble.reasoning.variant1'),
+    t('agentChat.messageBubble.reasoning.variant2'),
+    t('agentChat.messageBubble.reasoning.variant3'),
+    t('agentChat.messageBubble.reasoning.variant4'),
+    t('agentChat.messageBubble.reasoning.variant5'),
+    t('agentChat.messageBubble.reasoning.variant6'),
   ];
   const idx = useMemo(() => Math.floor(Math.random() * variants.length), []);
   const line = variants[idx];
 
   return (
     <Box component="span" sx={{ fontStyle: 'italic', opacity: 0.85 }}>
-      {line} {metric ? `Took ${metric}.` : ''}
+      {line} {metric ? t('agentChat.messageBubble.reasoning.took', { metric }) : ''}
     </Box>
   );
 };
@@ -1090,7 +1093,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                   onClick={handleCancelEdit}
                   sx={{ color: c.text.muted, fontSize: '0.75rem' }}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   size="small"
@@ -1103,7 +1106,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                     '&:hover': { bgcolor: c.accent.hover },
                   }}
                 >
-                  Save & Submit
+                  {t('agentChat.messageBubble.saveAndSubmit')}
                 </Button>
               </Box>
             </Box>

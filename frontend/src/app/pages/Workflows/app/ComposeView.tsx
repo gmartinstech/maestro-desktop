@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { createWorkflow, updateWorkflow } from '@/shared/state/workflowsSlice';
 import { sendMessage } from '@/shared/state/agentsSlice';
@@ -14,20 +15,20 @@ import ScheduleCard from './ScheduleCard';
 import StepsCard from './StepsCard';
 import type { AppNav } from './types';
 
-// Short pill label for the clean cluster, plus the richer prompt actually sent so the agent gets real detail. Spread across personas (work, money, research, lifestyle, monitoring) so most people see one that fits. Keep labels similar length so they cluster two-per-row.
-const NEW_CHIPS: Array<{ label: string; prompt: string }> = [
-  { label: 'Summarize my inbox daily', prompt: 'Each morning, summarize my inbox and draft replies to the important emails.' },
-  { label: 'Recap my weekly spending', prompt: 'Every Sunday, recap my spending, subscriptions, upcoming bills, and any weird charges.' },
-  { label: 'Digest of news in my field', prompt: 'Each week, give me a digest of the latest news and research in my field.' },
-  { label: 'Plan my weekend for me', prompt: 'Friday afternoon, plan my weekend from the weather and what\'s nearby.' },
-  { label: 'Watch a webpage for changes', prompt: 'Watch a webpage and alert me when it changes.' },
-];
-
 const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const WC = useWC();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const patch = useWorkflowPatch();
   const [draftId, setDraftId] = useState<string | null>(null);
+  // Short pill label for the clean cluster, plus the richer prompt actually sent so the agent gets real detail. Spread across personas (work, money, research, lifestyle, monitoring) so most people see one that fits. Keep labels similar length so they cluster two-per-row.
+  const NEW_CHIPS: Array<{ label: string; prompt: string }> = [
+    { label: t('workflows.composeView.summarizeInboxLabel'), prompt: t('workflows.composeView.summarizeInboxPrompt') },
+    { label: t('workflows.composeView.recapSpendingLabel'), prompt: t('workflows.composeView.recapSpendingPrompt') },
+    { label: t('workflows.composeView.digestNewsLabel'), prompt: t('workflows.composeView.digestNewsPrompt') },
+    { label: t('workflows.composeView.planWeekendLabel'), prompt: t('workflows.composeView.planWeekendPrompt') },
+    { label: t('workflows.composeView.watchWebpageLabel'), prompt: t('workflows.composeView.watchWebpagePrompt') },
+  ];
   // null = follow the auto open-on-first-message behavior; true/false = user override.
   const [paneManual, setPaneManual] = useState<boolean | null>(null);
   const created = useRef(false);
@@ -41,11 +42,11 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
     created.current = true;
     (async () => {
       try {
-        const wf = await dispatch(createWorkflow({ unsaved: true, title: 'Untitled workflow', steps: [], schedule: defaultSchedule() })).unwrap();
+        const wf = await dispatch(createWorkflow({ unsaved: true, title: t('workflows.compose.untitledWorkflow'), steps: [], schedule: defaultSchedule() })).unwrap();
         setDraftId(wf.id);
       } catch { /* surfaced by the empty state */ }
     })();
-  }, [dispatch]);
+  }, [dispatch, t]);
 
   const sessionId = useEditAgentSession(draftId ?? '');
   const session = useAppSelector((s) => (sessionId ? s.agents.sessions[sessionId] : undefined));
@@ -90,7 +91,7 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: WC.page }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid rgba(${WC.inkRGB},0.15)`, borderTopColor: WC.accent, animation: 'os-spin 0.7s linear infinite' }} />
-          <span style={{ fontFamily: "'Newsreader',serif", fontStyle: 'italic', fontSize: 14, color: WC.ink4 }}>Setting up your workflow…</span>
+          <span style={{ fontFamily: "'Newsreader',serif", fontStyle: 'italic', fontSize: 14, color: WC.ink4 }}>{t('workflows.compose.settingUp')}</span>
         </div>
       </div>
     );
@@ -103,20 +104,20 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
           <ColorSwatch value={colorForWorkflow(workflow)} onChange={(hex) => patch(workflow, { color: hex })} size={15} />
           <InlineEditableTitle
             value={workflow.title || ''}
-            onCommit={(t) => patch(workflow, { title: t, auto_named: false })}
-            placeholder="Untitled workflow"
+            onCommit={(titleVal) => patch(workflow, { title: titleVal, auto_named: false })}
+            placeholder={t('workflows.compose.untitledWorkflow')}
             sx={{ flex: 1, minWidth: 0, fontFamily: "'Newsreader',serif", fontSize: 21, fontWeight: 500, color: WC.ink, letterSpacing: '-0.01em' }}
           >
-            <Typewriter value={workflow.title || 'Untitled workflow'} enabled={workflow.auto_named !== false}>
+            <Typewriter value={workflow.title || t('workflows.compose.untitledWorkflow')} enabled={workflow.auto_named !== false}>
               {(t) => (
                 <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Newsreader',serif", fontSize: 21, fontWeight: 500, color: WC.ink, letterSpacing: '-0.01em' }}>{t}</span>
               )}
             </Typewriter>
           </InlineEditableTitle>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 500, color: WC.muted, background: `rgba(${WC.inkRGB},0.07)`, padding: '4px 10px', borderRadius: 999, flex: 'none' }}>Draft</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 500, color: WC.muted, background: `rgba(${WC.inkRGB},0.07)`, padding: '4px 10px', borderRadius: 999, flex: 'none' }}>{t('workflows.compose.draft')}</span>
           <div
             onClick={() => setPaneManual(!paneOpen)}
-            title={paneOpen ? 'Hide schedule & steps' : 'Show schedule & steps'}
+            title={paneOpen ? t('workflows.compose.hideScheduleSteps') : t('workflows.compose.showScheduleSteps')}
             style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: paneOpen ? WC.ink3 : WC.muted, flex: 'none' }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M14 4v16" /><path d={paneOpen ? 'M19 9l-2 3 2 3' : 'M17 9l2 3-2 3'} /></svg>
@@ -131,9 +132,9 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 16, padding: '0 28px 96px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <div style={{ width: 11, height: 11, borderRadius: 3, background: WC.accent, flex: 'none' }} />
-                <h2 style={{ margin: 0, fontFamily: FONT_SERIF, fontSize: 25, fontWeight: 500, fontStyle: 'italic', color: WC.ink }}>Describe the workflow to automate</h2>
+                <h2 style={{ margin: 0, fontFamily: FONT_SERIF, fontSize: 25, fontWeight: 500, fontStyle: 'italic', color: WC.ink }}>{t('workflows.compose.describeWorkflow')}</h2>
               </div>
-              <div style={{ fontSize: 13.5, color: WC.muted, maxWidth: 430, lineHeight: 1.55 }}>Tell me what you want this workflow to do. I'll turn it into steps you can run on a schedule, and you can tweak anything as we go.</div>
+              <div style={{ fontSize: 13.5, color: WC.muted, maxWidth: 430, lineHeight: 1.55 }}>{t('workflows.compose.describeWorkflowHint')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, justifyContent: 'center', width: '100%', maxWidth: 440, marginTop: 6, pointerEvents: 'auto' }}>
                 {NEW_CHIPS.map((c) => (
                   <button

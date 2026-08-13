@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import { useTranslation } from 'react-i18next';
 import CommandPicker from '@/app/components/editor/CommandPicker';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { SelectedElement } from '@/app/components/editor/ElementSelectionContext';
@@ -106,6 +107,7 @@ interface Props {
 
 export const ChatInputView: React.FC<Props> = (p) => {
   const { c } = p;
+  const { t } = useTranslation();
   return (
     <Box
       ref={p.containerRef}
@@ -143,7 +145,7 @@ export const ChatInputView: React.FC<Props> = (p) => {
         >
           <AttachFileIcon sx={{ fontSize: 16, color: c.accent.primary, mr: 0.5 }} />
           <Typography sx={{ color: c.accent.primary, fontSize: '0.85rem', fontWeight: 500 }}>
-            Drop files here
+            {t('agentChat.chatInput.dropzone.dropFilesHere')}
           </Typography>
         </Box>
       )}
@@ -164,7 +166,7 @@ export const ChatInputView: React.FC<Props> = (p) => {
         >
           <CircularProgress size={14} sx={{ color: c.accent.primary, mr: 1 }} />
           <Typography sx={{ color: c.accent.primary, fontSize: '0.85rem', fontWeight: 500 }}>
-            Attaching files…
+            {t('agentChat.chatInput.dropzone.attachingFiles')}
           </Typography>
         </Box>
       )}
@@ -196,11 +198,11 @@ export const ChatInputView: React.FC<Props> = (p) => {
           >
             <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: p.runContext.color, flex: 'none' }} />
             <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, color: c.text.secondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Run attached · {p.runContext.title}
+              {t('agentChat.chatInput.runContext.chipLabel', { title: p.runContext.title })}
             </Typography>
             <Box
               role="button"
-              aria-label="Remove run context"
+              aria-label={t('agentChat.chatInput.runContext.removeAria')}
               onClick={p.onClearRunContext}
               sx={{ width: 15, height: 15, flex: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: c.text.tertiary, '&:hover': { color: c.text.secondary } }}
             >
@@ -237,7 +239,7 @@ export const ChatInputView: React.FC<Props> = (p) => {
         autoRunMode={p.autoRunMode}
         isRunning={p.isRunning}
         queueLength={p.queueLength}
-        placeholderLabel={p.placeholderOverride ?? 'Ask anything, @ for context, / for commands'}
+        placeholderLabel={p.placeholderOverride ?? t('agentChat.chatInput.placeholder.default')}
         onInput={p.handleInput}
         onClick={p.handleEditorClick}
         onKeyDown={p.handleKeyDown}

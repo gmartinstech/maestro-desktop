@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -19,6 +20,7 @@ interface Props {
 }
 
 const FeedbackDialog: React.FC<Props> = ({ open, sentiment, sessionId, messageId, onClose, onSubmitted }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [comment, setComment] = useState('');
 
@@ -44,11 +46,11 @@ const FeedbackDialog: React.FC<Props> = ({ open, sentiment, sessionId, messageId
     >
       <Box sx={{ p: 2 }}>
         <Typography sx={{ color: c.text.primary, fontSize: '1.15rem', fontWeight: 600, mb: 2 }}>
-          {isUp ? 'Give positive feedback' : 'Give negative feedback'}
+          {isUp ? t('agentChat.feedbackDialog.positiveTitle') : t('agentChat.feedbackDialog.negativeTitle')}
         </Typography>
 
         <Typography sx={{ color: c.text.secondary, fontSize: '0.85rem', mb: 1 }}>
-          Please provide details: (optional)
+          {t('agentChat.feedbackDialog.promptLabel')}
         </Typography>
         <TextField
           autoFocus
@@ -57,7 +59,7 @@ const FeedbackDialog: React.FC<Props> = ({ open, sentiment, sessionId, messageId
           minRows={3}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder={isUp ? 'What was good about this response?' : 'What went wrong with this response?'}
+          placeholder={isUp ? t('agentChat.feedbackDialog.positivePlaceholder') : t('agentChat.feedbackDialog.negativePlaceholder')}
           sx={{
             '& .MuiOutlinedInput-root': {
               bgcolor: c.bg.page,
@@ -72,12 +74,12 @@ const FeedbackDialog: React.FC<Props> = ({ open, sentiment, sessionId, messageId
         />
 
         <Typography sx={{ color: c.text.tertiary, fontSize: '0.75rem', fontStyle: 'italic', mt: 1.5 }}>
-          Shared with Maestro to help improve your agents. We send your rating and note, not your conversation.
+          {t('agentChat.feedbackDialog.privacyNote')}
         </Typography>
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
           <Button onClick={handleClose} sx={{ color: c.text.secondary, textTransform: 'none' }}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
@@ -90,7 +92,7 @@ const FeedbackDialog: React.FC<Props> = ({ open, sentiment, sessionId, messageId
               '&:hover': { bgcolor: c.text.secondary },
             }}
           >
-            Submit
+            {t('common.submit')}
           </Button>
         </Box>
       </Box>

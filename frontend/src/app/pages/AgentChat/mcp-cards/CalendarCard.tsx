@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import EventIcon from '@mui/icons-material/Event';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -6,6 +7,7 @@ import { useCardColors } from './cardColors';
 import { formatTimestamp } from './mcpCardHelpers';
 
 export const CalendarCard: React.FC<{ data: Record<string, any>; hideHeader?: boolean }> = ({ data, hideHeader }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const { TC_BG, TC_BORDER, TC_HOVER, TC_HEADING, TC_BODY, TC_DIM, TC_SUCCESS } = useCardColors();
   const items: any[] = data.items || (Array.isArray(data) ? data : []);
@@ -27,26 +29,26 @@ export const CalendarCard: React.FC<{ data: Record<string, any>; hideHeader?: bo
           }}>
             <EventIcon sx={{ fontSize: 14, color: TC_SUCCESS, opacity: 0.8 }} />
             <span style={{ color: TC_HEADING, fontSize: '0.78rem', fontWeight: 600, fontFamily: c.font.sans }}>
-              {single.summary || '(no title)'}
+              {single.summary || t('agentChat.mcpCards.calendar.noTitle')}
             </span>
           </Box>
         )}
         <Box sx={{ px: 1.5, py: 1, display: 'flex', flexDirection: 'column', gap: 0.3 }}>
           {start && (
             <Box sx={{ display: 'flex', gap: 0.75, fontSize: '0.7rem', alignItems: 'baseline' }}>
-              <span style={{ color: TC_DIM, minWidth: 48, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Start</span>
+              <span style={{ color: TC_DIM, minWidth: 48, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('agentChat.mcpCards.calendar.start')}</span>
               <span style={{ color: TC_BODY, fontFamily: c.font.sans }}>{formatTimestamp(start)}</span>
             </Box>
           )}
           {end && (
             <Box sx={{ display: 'flex', gap: 0.75, fontSize: '0.7rem', alignItems: 'baseline' }}>
-              <span style={{ color: TC_DIM, minWidth: 48, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>End</span>
+              <span style={{ color: TC_DIM, minWidth: 48, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('agentChat.mcpCards.calendar.end')}</span>
               <span style={{ color: TC_BODY, fontFamily: c.font.sans }}>{formatTimestamp(end)}</span>
             </Box>
           )}
           {single.location && (
             <Box sx={{ display: 'flex', gap: 0.75, fontSize: '0.7rem', alignItems: 'baseline' }}>
-              <span style={{ color: TC_DIM, minWidth: 48, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Where</span>
+              <span style={{ color: TC_DIM, minWidth: 48, fontFamily: c.font.mono, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('agentChat.mcpCards.calendar.where')}</span>
               <span style={{ color: TC_BODY, fontFamily: c.font.sans }}>{single.location}</span>
             </Box>
           )}
@@ -79,7 +81,7 @@ export const CalendarCard: React.FC<{ data: Record<string, any>; hideHeader?: bo
             '&:hover': { bgcolor: TC_HOVER },
           }}>
             <span style={{ color: TC_HEADING, fontSize: '0.72rem', fontWeight: 500, fontFamily: c.font.sans }}>
-              {item.summary || '(no title)'}
+              {item.summary || t('agentChat.mcpCards.calendar.noTitle')}
             </span>
             <span style={{ color: TC_DIM, fontSize: '0.6rem', flexShrink: 0, fontFamily: c.font.mono }}>
               {formatTimestamp(item.start?.dateTime || item.start?.date || item.start)}
@@ -88,7 +90,7 @@ export const CalendarCard: React.FC<{ data: Record<string, any>; hideHeader?: bo
         ))}
         {items.length > 6 && (
           <span style={{ color: TC_DIM, fontSize: '0.64rem', fontStyle: 'italic', textAlign: 'center', display: 'block' }}>
-            +{items.length - 6} more
+            {t('agentChat.mcpCards.calendar.moreItems', { count: items.length - 6 })}
           </span>
         )}
       </Box>

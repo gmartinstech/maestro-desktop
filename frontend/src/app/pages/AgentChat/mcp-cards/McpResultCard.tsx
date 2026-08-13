@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { ParsedMcpResult } from '../parsing/toolResultParsing';
@@ -10,6 +11,7 @@ import { DriveCard } from './DriveCard';
 import { GenericMcpCard } from './GenericMcpCard';
 
 export const McpResultCard: React.FC<{ parsed: ParsedMcpResult; compact?: boolean }> = ({ parsed, compact }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const tc = useTermColors();
   const { TC_BODY } = useCardColors();
@@ -34,7 +36,7 @@ export const McpResultCard: React.FC<{ parsed: ParsedMcpResult; compact?: boolea
   if (!hasData && rawText && rawText.trim()) {
     const DISPLAY_CAP = 6000;
     const preview = rawText.length > DISPLAY_CAP
-      ? rawText.slice(0, DISPLAY_CAP) + `\n… (${rawText.length - DISPLAY_CAP} more chars; model received full output)`
+      ? rawText.slice(0, DISPLAY_CAP) + `\n${t('agentChat.mcpCards.truncatedNotice', { count: rawText.length - DISPLAY_CAP })}`
       : rawText;
     return (
       <Box sx={{ px: 1.5, py: 1 }}>

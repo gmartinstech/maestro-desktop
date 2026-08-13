@@ -4,9 +4,11 @@ import Fade from '@mui/material/Fade';
 import IconButton from '@mui/material/IconButton';
 import Modal from '@mui/material/Modal';
 import CloseIcon from '@mui/icons-material/Close';
+import { Trans, useTranslation } from 'react-i18next';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
 function ShrinkingLabel() {
+  const { t } = useTranslation();
   return (
     <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.6 }}>
       <Box component="span" sx={{
@@ -18,7 +20,7 @@ function ShrinkingLabel() {
           '50%': { opacity: 1 },
         },
       }} />
-      Shrinking
+      {t('agentChat.chatInput.oversize.shrinking')}
     </Box>
   );
 }
@@ -45,8 +47,8 @@ const OversizePopup: React.FC<OversizePopupProps> = ({
   const firstName = snap[0].name;
   const shrinking = summarizingAll || !!summarizingPath;
   const label = n === 1
-    ? <>Shrinking <strong>{firstName}</strong> to fit</>
-    : <>Shrinking <strong>{firstName}</strong> and {n - 1} other{n > 2 ? 's' : ''} to fit</>;
+    ? <Trans i18nKey="agentChat.chatInput.oversize.shrinkingOne" values={{ name: firstName }} components={{ b: <strong /> }} />
+    : <Trans i18nKey="agentChat.chatInput.oversize.shrinkingMany" count={n - 1} values={{ name: firstName, count: n - 1 }} components={{ b: <strong /> }} />;
   return (
     <Fade in={queued} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
       <Box
@@ -126,16 +128,17 @@ const ErrorToast: React.FC<{ c: ClaudeTokens; message: string | null; onClose: (
  *  being slow; visible only when the user has actually been waiting long enough
  *  to start wondering if it's frozen. */
 function SlowHint({ active, color }: { active: boolean; color: string }) {
+  const { t } = useTranslation();
   const [show, setShow] = React.useState(false);
   React.useEffect(() => {
     if (!active) { setShow(false); return; }
-    const t = setTimeout(() => setShow(true), 10000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setShow(true), 10000);
+    return () => clearTimeout(timer);
   }, [active]);
   return (
     <Fade in={show} timeout={250}>
       <Box sx={{ color, fontSize: '0.75rem', mt: 0.5, lineHeight: 1.3, opacity: 0.7 }}>
-        This may take up to a minute. Sit tight.
+        {t('agentChat.chatInput.oversize.slowHint')}
       </Box>
     </Fade>
   );

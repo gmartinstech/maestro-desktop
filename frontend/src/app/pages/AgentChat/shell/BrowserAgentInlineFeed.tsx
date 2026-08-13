@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -39,7 +40,7 @@ interface FeedEntry {
   sessionLabel?: string;
 }
 
-function formatMessage(msg: AgentMessage): FeedEntry | null {
+function formatMessage(msg: AgentMessage, t: any): FeedEntry | null {
   if (msg.role === 'user') return null;
 
   if (msg.role === 'assistant' && typeof msg.content === 'string') {
@@ -58,28 +59,30 @@ function formatMessage(msg: AgentMessage): FeedEntry | null {
     let brief = '';
     switch (tool) {
       case 'BrowserNavigate':
-        brief = `Navigate → ${input.url || '...'}`;
+        brief = t('agentChat.browserFeed.action.navigate', { url: input.url || '...' });
         break;
       case 'BrowserClick':
-        brief = `Click ${input.selector || '...'}`;
+        brief = t('agentChat.browserFeed.action.click', { selector: input.selector || '...' });
         break;
       case 'BrowserType': {
         const txt = (input.text || '').slice(0, 40);
         const ellipsis = (input.text || '').length > 40 ? '…' : '';
-        brief = `Type "${txt}${ellipsis}" into ${input.selector || '...'}`;
+        brief = t('agentChat.browserFeed.action.type', { text: `${txt}${ellipsis}`, selector: input.selector || '...' });
         break;
       }
       case 'BrowserScreenshot':
-        brief = 'Screenshot';
+        brief = t('agentChat.browserFeed.action.screenshot');
         break;
       case 'BrowserGetText':
-        brief = 'Read page text';
+        brief = t('agentChat.browserFeed.action.readPageText');
         break;
       case 'BrowserGetElements':
-        brief = `Inspect elements${input.selector ? ` (${input.selector})` : ''}`;
+        brief = input.selector
+          ? t('agentChat.browserFeed.action.inspectElements') + ` (${input.selector})`
+          : t('agentChat.browserFeed.action.inspectElements');
         break;
       case 'BrowserEvaluate':
-        brief = `Evaluate JS`;
+        brief = t('agentChat.browserFeed.action.evaluateJs');
         break;
       default:
         brief = `${tool}(${JSON.stringify(input).slice(0, 60)})`;
@@ -97,7 +100,7 @@ function formatMessage(msg: AgentMessage): FeedEntry | null {
     const text = content?.text || '';
 
     if (toolName === 'BrowserScreenshot') {
-      return { type: 'result', text: `Screenshot captured${elapsed ? ` (${elapsed}ms)` : ''}` };
+      return { type: 'result', text: t('agentChat.browserFeed.result.screenshotCaptured') };
     }
     const preview = text.length > 120 ? text.slice(0, 120) + '…' : text;
     return { type: 'result', text: `${preview}${elapsed ? ` (${elapsed}ms)` : ''}` };
@@ -169,6 +172,7 @@ const selectBrowserSessions = createSelector(
 );
 
 const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const { mode } = useThemeMode();
@@ -210,7 +214,7 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
     return browserSessions.map((session) => {
       const entries: FeedEntry[] = [];
       for (const msg of session.messages) {
-        const entry = formatMessage(msg);
+        const entry = formatMessage(msg, t);
         if (entry) entries.push(entry);
       }
       const stream: StreamingMessage | undefined = streamingBySession[session.id];
@@ -219,7 +223,7 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
       }
       return { session, entries };
     });
-  }, [browserSessions, streamingBySession]);
+  }, [browserSessions, streamingBySession, t]);
 
   const totalMessages = browserSessions.reduce(
     (n, s) => n + s.messages.length + (streamingBySession[s.id] ? 1 : 0),
@@ -304,7 +308,7 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
                 fontFamily: c.font.mono,
               }}
             >
-              Starting browser agent...
+              {t('agentChat.browserFeed.startingAgent')}
             </Typography>
           )}
 
@@ -315,7 +319,7 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
           {session.pending_approvals?.filter(
             (a) => a.tool_name === 'RequestHumanIntervention',
           ).map((intervention) => {
-            const problem = (intervention.tool_input as any)?.problem || 'Browser agent needs help';
+            const problem = (intervention.tool_input as any)?.problem || t('agentChat.browserFeed.needsHelp');
             return (
               <Box
                 key={intervention.id}
@@ -345,7 +349,7 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
                 >
                   {problem}
                 </Typography>
-                <Tooltip title="Done, continue" arrow>
+                <Tooltip title={t('agentChat.browserFeed.doneContinue')} arrow>
                   <IconButton
                     size="small"
                     onClick={() => dispatch(handleApproval({ requestId: intervention.id, behavior: 'allow' }))}
@@ -361,7 +365,7 @@ const BrowserAgentInlineFeed: React.FC<Props> = ({ parentSessionId, browserId })
                     <CheckIcon sx={{ fontSize: 11 }} />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Skip" arrow>
+                <Tooltip title={t('agentChat.browserFeed.skip')} arrow>
                   <IconButton
                     size="small"
                     onClick={() => dispatch(handleApproval({ requestId: intervention.id, behavior: 'deny', message: 'User declined to help' }))}

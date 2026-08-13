@@ -3,11 +3,11 @@ import { Box, Typography, ButtonBase } from '@mui/material';
 import { motion } from '../_motionWin';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useCursorPosition } from './cursorStore';
-import type { ACMultiChoiceOption } from '../steps/types';
+import type { ResolvedACMultiChoiceOption } from '../steps/types';
 
 interface Props {
   question: string;
-  options: ACMultiChoiceOption[];
+  options: ResolvedACMultiChoiceOption[];
   onAnswer: (id: string) => void;
   offset?: { x: number; y: number };
 }

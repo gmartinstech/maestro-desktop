@@ -47,3 +47,63 @@ def test_selected_app_context_is_appended_when_present():
             selected_browser_ids=None, selected_app_output_ids=["app-1"], selected_setting_ids=None,
         )
     assert "<picked_app>/x</picked_app>" in out
+
+
+def p_compose_with_language(language, default_system_prompt="You are a helpful agent."):
+    """Compose a turn prompt with the settings language pinned, bypassing the settings file."""
+    from backend.apps.settings.models import AppSettings
+    session = AgentSession(name="t", model="sonnet", dashboard_id="d")
+    settings = AppSettings(language=language)
+    with patch.object(sp, "build_browser_context", return_value=None), \
+         patch.object(sp, "build_mcp_registry_summary", return_value=None), \
+         patch.object(sp, "build_selected_app_context", return_value=None), \
+         patch.object(sp, "build_selected_settings_context", return_value=None), \
+         patch("backend.apps.settings.store.load_settings", return_value=settings):
+        return sp.compose_turn_system_prompt(
+            session, mode_sys_prompt=None, default_system_prompt=default_system_prompt,
+            selected_browser_ids=None, selected_app_output_ids=None, selected_setting_ids=None,
+        )
+
+
+@pytest.mark.parametrize("language", ["pt-BR", None])
+def test_language_directive_is_portuguese_for_ptbr_and_for_unset(language):
+    # None is a fresh install, whose UI is already pt-BR, so the prompt must not fall back to English.
+    out = p_compose_with_language(language)
+    assert "<language_directive>" in out
+    assert "português do Brasil" in out
+
+
+def test_language_directive_is_english_only_when_explicitly_chosen():
+    out = p_compose_with_language("en")
+    assert "<language_directive>" in out
+    assert "português do Brasil" not in out
+
+
+def test_ptbr_swaps_the_untouched_default_prompt_for_its_translation():
+    from backend.apps.settings.models import DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_PT_BR
+    out = p_compose_with_language("pt-BR", default_system_prompt=DEFAULT_SYSTEM_PROMPT)
+    assert DEFAULT_SYSTEM_PROMPT_PT_BR in out
+    assert DEFAULT_SYSTEM_PROMPT not in out
+
+
+def test_a_user_written_prompt_survives_verbatim_in_portuguese():
+    # The default prompt is user-editable, so translating it would silently discard their text.
+    out = p_compose_with_language("pt-BR", default_system_prompt="MY OWN PROMPT")
+    assert "MY OWN PROMPT" in out
+
+
+def test_unreadable_settings_do_not_break_a_turn():
+    from backend.apps.settings.models import AppSettings
+    session = AgentSession(name="t", model="sonnet", dashboard_id="d")
+    with patch.object(sp, "build_browser_context", return_value=None), \
+         patch.object(sp, "build_mcp_registry_summary", return_value=None), \
+         patch.object(sp, "build_selected_app_context", return_value=None), \
+         patch.object(sp, "build_selected_settings_context", return_value=None), \
+         patch("backend.apps.settings.store.load_settings", side_effect=OSError("disk gone")):
+        out = sp.compose_turn_system_prompt(
+            session, mode_sys_prompt=None, default_system_prompt="base",
+            selected_browser_ids=None, selected_app_output_ids=None, selected_setting_ids=None,
+        )
+    assert "base" in out
+    assert "português do Brasil" in out
+    assert isinstance(AppSettings().language, type(None))

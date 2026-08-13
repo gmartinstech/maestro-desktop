@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import InputBase from '@mui/material/InputBase';
@@ -19,6 +20,7 @@ interface Props {
 
 // Click-to-rename title. Reads as plain text until clicked, then becomes an inline input that commits on Enter/blur and cancels on Escape. Lives on pointer-drag card headers, so it stops pointer propagation (+ data-no-drag) to avoid starting a card drag while editing.
 export default function InlineEditableTitle({ value, onCommit, sx, placeholder, children }: Props) {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -94,7 +96,7 @@ export default function InlineEditableTitle({ value, onCommit, sx, placeholder, 
       onClick={begin}
       // Card headers drag via onPointerDown + preventDefault, which otherwise swallows this click. Stop the pointer here so the click reaches us and enters edit mode (same trick the draft-title InputBase uses).
       onPointerDown={(e) => e.stopPropagation()}
-      title="Click to rename"
+      title={t('common.clickToRename')}
       sx={{
         minWidth: 0, cursor: 'text', borderRadius: 0.5, px: 0.25, mx: -0.25,
         '&:hover': { bgcolor: c.bg.elevated },

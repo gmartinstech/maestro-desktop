@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -30,6 +31,7 @@ function friendlyConnectError(detail: string): string {
 
 const SubscriptionCards: React.FC = () => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   // status + connections live in subscriptionsSlice so the onboarding gate (hasModelConnected) sees OAuth connections immediately.
   const status = useAppSelector((s) => s.subscriptions.status);
@@ -170,10 +172,10 @@ const SubscriptionCards: React.FC = () => {
       <Box sx={{ p: 2, borderRadius: `${c.radius.md}px`, border: `1px solid ${c.border.subtle}`, textAlign: 'center' }}>
         <CircularProgress size={18} sx={{ color: c.text.ghost, mb: 1 }} />
         <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, mb: 0.5 }}>
-          Starting subscription service...
+          {t('settings.models.subscription.starting')}
         </Typography>
         <Typography sx={{ fontSize: '0.65rem', color: c.text.ghost }}>
-          This connects your existing AI subscriptions. If this doesn't load, make sure Node.js is installed.
+          {t('settings.models.subscription.startingDesc')}
         </Typography>
       </Box>
     );
@@ -192,7 +194,7 @@ const SubscriptionCards: React.FC = () => {
           </Typography>
           <Box
             role="button"
-            aria-label="Dismiss"
+            aria-label={t('settings.models.subscription.dismiss')}
             onClick={() => setConnectError(null)}
             sx={{ color: c.text.muted, cursor: 'pointer', fontSize: '0.9rem', lineHeight: 1, px: 0.3, '&:hover': { color: c.text.secondary } }}
           >

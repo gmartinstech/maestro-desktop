@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export const ModelPickerFooter: React.FC<Props> = ({ c, pickerSummary, tooltipSlotProps }) => {
+  const { t } = useTranslation();
   return (
     <Box
       onClick={(e) => e.stopPropagation()}
@@ -26,16 +28,16 @@ export const ModelPickerFooter: React.FC<Props> = ({ c, pickerSummary, tooltipSl
       }}
     >
       <Box component="span" sx={{ flexShrink: 0, pointerEvents: 'none' }}>
-        Type to search, Esc to close
+        {t('agentChat.modelPicker.footer.hint')}
       </Box>
       {(() => {
         const breakdown: Array<[string, number]> = ([
-          ['Free',          pickerSummary.free],
-          ['Subscription',  pickerSummary.subscription],
-          ['API key',       pickerSummary.apiKey],
-          ['Pay-per-use',   pickerSummary.paid],
-          ['Reasoning',     pickerSummary.reasoning],
-          ['1M+ context',   pickerSummary.longContext],
+          [t('agentChat.modelPicker.breakdown.free'),          pickerSummary.free],
+          [t('agentChat.modelPicker.breakdown.subscription'),  pickerSummary.subscription],
+          [t('agentChat.modelPicker.breakdown.apiKey'),       pickerSummary.apiKey],
+          [t('agentChat.modelPicker.breakdown.payPerUse'),   pickerSummary.paid],
+          [t('agentChat.modelPicker.breakdown.reasoning'),     pickerSummary.reasoning],
+          [t('agentChat.modelPicker.breakdown.longContext'),   pickerSummary.longContext],
         ] as Array<[string, number]>).filter(([, n]) => n > 0);
         const breakdownTooltip = breakdown.length > 0 ? (
           <Box sx={{ fontSize: '0.74rem', lineHeight: 1.6, minWidth: 180 }}>
@@ -45,7 +47,7 @@ export const ModelPickerFooter: React.FC<Props> = ({ c, pickerSummary, tooltipSl
               pb: 0.6, mb: 0.6,
               borderBottom: `1px solid ${c.border.subtle}`,
             }}>
-              {pickerSummary.total} model{pickerSummary.total === 1 ? '' : 's'} available
+              {t('agentChat.modelPicker.footer.modelsAvailable', {count: pickerSummary.total})}
             </Box>
             <Box sx={{
               display: 'grid',
@@ -75,7 +77,7 @@ export const ModelPickerFooter: React.FC<Props> = ({ c, pickerSummary, tooltipSl
               fontVariantNumeric: 'tabular-nums',
               whiteSpace: 'nowrap',
             }}>
-              {pickerSummary.total} model{pickerSummary.total === 1 ? '' : 's'}
+              {t('agentChat.modelPicker.footer.modelsCount', {count: pickerSummary.total})}
             </Box>
           </Tooltip>
         );

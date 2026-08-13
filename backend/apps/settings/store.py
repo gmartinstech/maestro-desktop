@@ -17,7 +17,7 @@ from pydantic import ValidationError
 
 from backend.config.paths import SETTINGS_DIR as DATA_DIR
 from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
-from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
+from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_PT_BR
 
 logger = logging.getLogger(__name__)
 

@@ -1,15 +1,17 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useCardColors } from './cardColors';
 
 export const GenericMcpCard: React.FC<{ data: Record<string, any> }> = ({ data }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const { TC_DIM, TC_BODY } = useCardColors();
   const entries = Object.entries(data).filter(([, v]) => v != null);
 
   if (entries.length === 0)
-    return <span style={{ color: TC_DIM, fontStyle: 'italic', fontSize: '0.7rem', padding: '8px 12px', display: 'block' }}>(empty response)</span>;
+    return <span style={{ color: TC_DIM, fontStyle: 'italic', fontSize: '0.7rem', padding: '8px 12px', display: 'block' }}>{t('agentChat.mcpCards.generic.emptyResponse')}</span>;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3, px: 1.5, py: 1 }}>
@@ -43,7 +45,7 @@ export const GenericMcpCard: React.FC<{ data: Record<string, any> }> = ({ data }
       })}
       {entries.length > 20 && (
         <span style={{ color: TC_DIM, fontSize: '0.62rem', fontStyle: 'italic' }}>
-          +{entries.length - 20} more fields
+          {t('agentChat.mcpCards.generic.moreFields', { count: entries.length - 20 })}
         </span>
       )}
     </Box>

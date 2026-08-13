@@ -153,7 +153,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             maxWidth: 320,
           }}
         >
-          {dashboardName || 'Dashboard'}
+          {dashboardName || t('dashboard.defaultName')}
         </Typography>
         {hasItems && (
           <KeyboardArrowDownIcon
@@ -169,7 +169,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {dashboardId && (
           <Box sx={{ ml: 0.25, display: 'flex' }}>
             <ShareButton
-              target={{ kind: 'dashboard', id: dashboardId, name: dashboardName || 'Dashboard' }}
+              target={{ kind: 'dashboard', id: dashboardId, name: dashboardName || t('dashboard.defaultName') }}
               iconFontSize={15}
               onOpen={() => {
                 // Layout saves are debounced, so a just-added app/agent card may not be on disk yet. The export reads disk, flush the live layout now so Share captures the current board, not a stale one.

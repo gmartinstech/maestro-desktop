@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -45,6 +46,7 @@ function formatRelativeTime(dateStr: string | null): string {
 }
 
 const DashboardSelection: React.FC = () => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -157,10 +159,10 @@ const DashboardSelection: React.FC = () => {
         >
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: c.text.primary }}>
-              Dashboards
+              {t('dashboardSelection.title')}
             </Typography>
             <Typography sx={{ color: c.text.tertiary, fontSize: '0.9rem', mt: 0.5 }}>
-              Monitor and manage your agents from a single workspace.
+              {t('dashboardSelection.subtitle')}
             </Typography>
           </Box>
           <Button
@@ -176,13 +178,13 @@ const DashboardSelection: React.FC = () => {
               '&:hover': { bgcolor: c.accent.hover },
             }}
           >
-            New dashboard
+            {t('dashboardSelection.newDashboard')}
           </Button>
         </Box>
 
         <Box sx={{ mb: 3 }}>
           <TextField
-            placeholder="Search dashboards..."
+            placeholder={t('dashboardSelection.searchPlaceholder')}
             size="small"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -213,10 +215,10 @@ const DashboardSelection: React.FC = () => {
         ) : dashboards.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 10, color: c.text.muted }}>
             <Typography sx={{ fontSize: '1.1rem', mb: 1 }}>
-              {search ? 'No dashboards match your search' : 'No dashboards yet'}
+              {search ? t('dashboardSelection.noMatchingSearch') : t('dashboardSelection.noDashboards')}
             </Typography>
             <Typography sx={{ fontSize: '0.85rem', color: c.text.tertiary }}>
-              {search ? 'Try a different search term' : 'Create your first dashboard to get started'}
+              {search ? t('dashboardSelection.noSearchHint') : t('dashboardSelection.noHint')}
             </Typography>
           </Box>
         ) : (
@@ -267,7 +269,7 @@ const DashboardSelection: React.FC = () => {
                     <Box
                       component="img"
                       src={d.thumbnail}
-                      alt={`${d.name} preview`}
+                      alt={t('dashboardSelection.previewAlt', { name: d.name })}
                       sx={{
                         width: '100%',
                         height: '100%',
@@ -288,7 +290,7 @@ const DashboardSelection: React.FC = () => {
                       transition: 'opacity 0.15s',
                     }}
                   >
-                    <Tooltip title="More actions">
+                    <Tooltip title={t('dashboardSelection.moreActions')}>
                       <IconButton
                         size="small"
                         onClick={(e) => handleOpenMenu(e, d)}
@@ -340,7 +342,7 @@ const DashboardSelection: React.FC = () => {
                     </Typography>
                   )}
                   <Typography sx={{ fontSize: '0.75rem', color: c.text.ghost }}>
-                    Updated {formatRelativeTime(d.updated_at)}
+                    {t('dashboardSelection.updatedLabel')} {formatRelativeTime(d.updated_at)}
                   </Typography>
                 </Box>
               </Box>
@@ -368,15 +370,15 @@ const DashboardSelection: React.FC = () => {
       >
         <MenuItem onClick={handleStartRename}>
           <ListItemIcon><EditIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-          <ListItemText>Rename</ListItemText>
+          <ListItemText>{t('dashboardSelection.rename')}</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleDuplicate}>
           <ListItemIcon><ContentCopyIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-          <ListItemText>Duplicate</ListItemText>
+          <ListItemText>{t('dashboardSelection.duplicate')}</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleDelete} sx={{ color: c.status.error }}>
           <ListItemIcon><DeleteOutlineIcon sx={{ fontSize: 18, color: c.status.error }} /></ListItemIcon>
-          <ListItemText>Delete</ListItemText>
+          <ListItemText>{t('dashboardSelection.delete')}</ListItemText>
         </MenuItem>
       </Menu>
     </Box>

@@ -1,6 +1,7 @@
 // Bottom-left nudge shown at launch when a subscription login died while the app was closed (silent token rotation): names the provider(s) and jumps straight to Settings -> Models to reconnect. Stays put until the user acts; the X dismisses it.
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
@@ -12,6 +13,7 @@ import { hideProviderHealthToast } from '@/shared/state/subscriptionsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
 
 export default function ProviderHealthToast() {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.subscriptions.healthToastOpen);
@@ -44,11 +46,11 @@ export default function ProviderHealthToast() {
         action={
           <>
             <Button size="small" onClick={onReconnect} sx={{ color: c.accent.primary, fontWeight: 700 }}>
-              Reconnect
+              {t('overlays.providerHealthToast.reconnectButton')}
             </Button>
             <IconButton
               size="small"
-              aria-label="Dismiss"
+              aria-label={t('common.dismiss')}
               onClick={() => dispatch(hideProviderHealthToast())}
               sx={{ color: c.text.muted, ml: 0.25, '&:hover': { color: c.text.primary } }}
             >
@@ -57,7 +59,7 @@ export default function ProviderHealthToast() {
           </>
         }
       >
-        Your {labels} login{dead.length > 1 ? 's have' : ' has'} expired; chats on {dead.length > 1 ? 'them' : 'it'} will fail until you reconnect.
+        {t('overlays.providerHealthToast.message', { labels, count: dead.length })}
       </Alert>
     </Snackbar>
   );

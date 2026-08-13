@@ -1,5 +1,7 @@
 // Render an agent's SettingsWrite/SettingsRead so the transcript shows WHAT it touched at a glance, with secrets masked. The agent's raw `changes` input can carry a key it's trying to set, and the generic MCP renderer would paint it; a settings value is the one new place a secret could land on screen, so it's the one place we mask. Mirrors the backend's name rule (redaction.is_secret_field).
 
+import i18n from '@/shared/i18n/i18n';
+
 const SECRET_NAME_RE = /_(key|token|secret)$/i;
 // Narrow, prefix-anchored so it can't mask a long path or system prompt (those have slashes/spaces); it only catches a real key pasted into a non-secret field.
 const KEYISH_VALUE_RE = /^(sk-|sk-ant-|AIza|ghp_|gho_|github_pat_|xox[baprs]-)/;
@@ -21,25 +23,27 @@ function maskValue(key: string, value: unknown, cap: number): string {
     if (KEYISH_VALUE_RE.test(value.trim())) return '••••';
     return value.length > cap ? value.slice(0, cap) + '…' : value;
   }
-  if (value === null || value === undefined) return 'none';
+  if (value === null || value === undefined) return i18n.t('agentChat.settingsTool.valueNone');
   return JSON.stringify(value);
 }
 
-const LABELS: Record<string, string> = {
-  default_model: 'Default model',
-  default_mode: 'Default mode',
-  default_system_prompt: 'System prompt',
-  default_thinking_level: 'Thinking level',
-  default_max_turns: 'Max turns',
-  default_folder: 'Default folder',
-  theme: 'Theme',
-  browser_homepage: 'Browser homepage',
-  new_agent_shortcut: 'New-agent shortcut',
-  zoom_sensitivity: 'Zoom sensitivity',
+const LABELS_KEYS: Record<string, string> = {
+  default_model: 'agentChat.settingsTool.labels.defaultModel',
+  default_mode: 'agentChat.settingsTool.labels.defaultMode',
+  default_system_prompt: 'agentChat.settingsTool.labels.systemPrompt',
+  default_thinking_level: 'agentChat.settingsTool.labels.thinkingLevel',
+  default_max_turns: 'agentChat.settingsTool.labels.maxTurns',
+  default_folder: 'agentChat.settingsTool.labels.defaultFolder',
+  theme: 'agentChat.settingsTool.labels.theme',
+  browser_homepage: 'agentChat.settingsTool.labels.browserHomepage',
+  new_agent_shortcut: 'agentChat.settingsTool.labels.newAgentShortcut',
+  zoom_sensitivity: 'agentChat.settingsTool.labels.zoomSensitivity',
 };
 
 function humanizeKey(key: string): string {
-  return LABELS[key] || key.replace(/_/g, ' ').replace(/^\w/, (ch) => ch.toUpperCase());
+  const labelKey = LABELS_KEYS[key];
+  if (labelKey) return i18n.t(labelKey);
+  return key.replace(/_/g, ' ').replace(/^\w/, (ch) => ch.toUpperCase());
 }
 
 interface SettingsChangeRow {
@@ -64,5 +68,5 @@ export function settingsWriteSummary(input: unknown): string {
 /** Expanded body: one masked change per line. Replaces the raw-JSON render. */
 export function settingsWriteDisplay(input: unknown): string {
   const rows = settingsChangeRows(input, 200);
-  return rows.length === 0 ? 'No changes.' : rows.map((r) => `${r.label}: ${r.value}`).join('\n');
+  return rows.length === 0 ? i18n.t('agentChat.settingsTool.noChanges') : rows.map((r) => `${r.label}: ${r.value}`).join('\n');
 }

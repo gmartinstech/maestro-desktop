@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
@@ -52,6 +53,7 @@ const DEFAULT_MODEL_FALLBACK = [
 const Settings: React.FC = () => {
   const open = useAppSelector((s) => s.settings.modalOpen);
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const settings = useAppSelector((s) => s.settings.data);
   const loaded = useAppSelector((s) => s.settings.loaded);
@@ -310,7 +312,7 @@ const Settings: React.FC = () => {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert onClose={() => setSaveError(false)} severity="error" sx={{ bgcolor: c.bg.surface, color: c.text.primary, border: `1px solid ${c.status.error}` }}>
-          Couldn't save that change. Try again in a moment.
+          {t('settings.saveError')}
         </Alert>
       </Snackbar>
     </Dialog>

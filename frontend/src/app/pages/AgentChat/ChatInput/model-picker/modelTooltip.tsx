@@ -1,9 +1,17 @@
 import React, { useCallback, useMemo } from 'react';
 import Box from '@mui/material/Box';
+import { useTranslation } from 'react-i18next';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { tierIntelligence, tierSpeed, tierCost } from './modelPicker';
 
+function formatPerMillion(costPer1m: number | undefined, language: string): string {
+  return new Intl.NumberFormat(language || 'en-US', {
+    style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).format(costPer1m ?? 0);
+}
+
 export function useModelTooltip(c: ClaudeTokens) {
+  const { t, i18n } = useTranslation();
   const buildModelTooltip = useCallback((opt: any): React.ReactNode => {
     const [intel, speed, cost] = (Array.isArray(opt.tiers) && opt.tiers.length === 3)
       ? opt.tiers
@@ -46,11 +54,11 @@ export function useModelTooltip(c: ClaudeTokens) {
     const SPEED_PALETTE  = ['#2DBFAA', '#42D6BF', '#5EEAD4', '#7FF1DF', '#A3F7E9'];
     const COST_PALETTE   = ['#C7752E', '#DD8A3D', '#F59E0B', '#FAB23C', '#FCC773'];
     const capabilities = [
-      opt.reasoning && 'Reasoning',
-      'Tools',
-      billingKind === 'free' && 'Free tier',
-      billingKind === 'subscription' && 'Subscription',
-      (opt.context_window ?? 0) >= 1_000_000 && '1M+ context',
+      opt.reasoning && t('agentChat.modelTooltip.capability.reasoning'),
+      t('agentChat.modelTooltip.capability.tools'),
+      billingKind === 'free' && t('agentChat.modelTooltip.capability.freeTier'),
+      billingKind === 'subscription' && t('agentChat.modelTooltip.capability.subscription'),
+      (opt.context_window ?? 0) >= 1_000_000 && t('agentChat.modelTooltip.capability.million1Context'),
     ].filter(Boolean).join(' · ');
     return (
       <Box sx={{ fontSize: '0.74rem', lineHeight: 1.55, minWidth: 256 }}>
@@ -70,38 +78,41 @@ export function useModelTooltip(c: ClaudeTokens) {
           alignItems: 'center',
           color: c.text.muted,
         }}>
-          <span>Intelligence</span><Bars filled={intel} palette={INTEL_PALETTE} />
-          <span>Speed</span><Bars filled={speed} palette={SPEED_PALETTE} />
+          <span>{t('agentChat.modelTooltip.intelligence')}</span><Bars filled={intel} palette={INTEL_PALETTE} />
+          <span>{t('agentChat.modelTooltip.speed')}</span><Bars filled={speed} palette={SPEED_PALETTE} />
           {billingKind === 'subscription' ? null : (
             <>
-              <span>Cost</span>
+              <span>{t('agentChat.modelTooltip.cost')}</span>
               {billingKind === 'free'
-                ? <Box component="span" sx={{ color: '#10b981', fontWeight: 600 }}>Free</Box>
+                ? <Box component="span" sx={{ color: '#10b981', fontWeight: 600 }}>{t('agentChat.modelTooltip.free')}</Box>
                 : <Bars filled={cost} palette={COST_PALETTE} />}
             </>
           )}
-          <span>Context</span>
+          <span>{t('agentChat.modelTooltip.context')}</span>
           <span style={{ fontVariantNumeric: 'tabular-nums', color: c.text.secondary }}>
-            {(opt.context_window ?? 0).toLocaleString()}
+            {(opt.context_window ?? 0).toLocaleString(i18n.language)}
           </span>
           {billingKind === 'paid' && (opt.input_cost_per_1m || opt.output_cost_per_1m) ? (
             <>
-              <span>Pricing</span>
+              <span>{t('agentChat.modelTooltip.pricing')}</span>
               <span style={{ fontVariantNumeric: 'tabular-nums', color: c.text.secondary }}>
-                ${opt.input_cost_per_1m?.toFixed(2)}/M in · ${opt.output_cost_per_1m?.toFixed(2)}/M out
+                {t('agentChat.modelTooltip.pricingLine', {
+                  inCost: formatPerMillion(opt.input_cost_per_1m, i18n.language),
+                  outCost: formatPerMillion(opt.output_cost_per_1m, i18n.language),
+                })}
               </span>
             </>
           ) : null}
           {capabilities && (
             <>
-              <span>Capabilities</span>
+              <span>{t('agentChat.modelTooltip.capabilities')}</span>
               <span style={{ color: c.text.secondary }}>{capabilities}</span>
             </>
           )}
         </Box>
       </Box>
     );
-  }, [c]);
+  }, [c, t, i18n.language]);
 
   const tooltipSlotProps = useMemo(() => ({
     tooltip: {

@@ -1,5 +1,6 @@
 // The "what's inside this bundle" panel, shared by the Share and Import modals. Kept deliberately spare: the bundle's name already lives in the modal title, so here it's just one line of type + counts, the requirements as small icon chips, and an optional expand for the full contents. No boxes, the modal's whitespace does the grouping.
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
@@ -31,6 +32,7 @@ const REQ_ICON: Record<string, React.ReactNode> = {
 const pluralize = (label: string, n: number): string => (n === 1 ? label : `${label}s`);
 
 const IncludesList: React.FC<{ summary: BundleSummary }> = ({ summary }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [expanded, setExpanded] = useState(false);
   const includes = summary.includes;
@@ -60,7 +62,7 @@ const IncludesList: React.FC<{ summary: BundleSummary }> = ({ summary }) => {
             onClick={() => setExpanded((v) => !v)}
             sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: c.text.tertiary, cursor: 'pointer', '&:hover': { color: c.accent.primary } }}
           >
-            <Typography sx={{ fontSize: '0.72rem' }}>{expanded ? 'Hide' : 'Show'}</Typography>
+            <Typography sx={{ fontSize: '0.72rem' }}>{expanded ? t('overlays.includesList.hide') : t('overlays.includesList.show')}</Typography>
             <KeyboardArrowDownIcon sx={{ fontSize: 14, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }} />
           </Box>
         )}
@@ -84,7 +86,7 @@ const IncludesList: React.FC<{ summary: BundleSummary }> = ({ summary }) => {
       {summary.requirements.length > 0 && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
           <Typography sx={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: c.text.tertiary, mr: 0.25 }}>
-            Needs
+            {t('overlays.includesList.needsLabel')}
           </Typography>
           {summary.requirements.map((r, i) => (
             <Tooltip key={`req-${i}`} title={r.detail || ''} placement="top" arrow disableInteractive>

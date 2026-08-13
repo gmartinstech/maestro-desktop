@@ -122,11 +122,11 @@
   <div class="center">
     <img class="logo" src="__MAESTRO_LOGO__" alt="">
     <div class="name">Maestro Studio</div>
-    <div class="status" id="status">Starting&hellip;</div>
+    <div class="status" id="status">Iniciando…</div>
     <div class="actions" id="actions">
-      <button id="logsBtn">View logs</button>
-      <button id="restartBtn">Restart</button>
-      <button id="quitBtn">Quit</button>
+      <button id="logsBtn">Ver logs</button>
+      <button id="restartBtn">Reiniciar</button>
+      <button id="quitBtn">Sair</button>
     </div>
     <pre class="logs" id="logsPanel"></pre>
   </div>
@@ -491,6 +491,13 @@
   });
   document.getElementById('quitBtn').addEventListener('click', function () {
     ipcRenderer.send('splash:action', 'quit');
+  });
+
+  // Handle language change from main process. main.js sends splash:language with labels if language is en.
+  ipcRenderer.on('splash:language', function (_e, labels) {
+    if (labels && labels.viewLogs) document.getElementById('logsBtn').textContent = labels.viewLogs;
+    if (labels && labels.restart) document.getElementById('restartBtn').textContent = labels.restart;
+    if (labels && labels.quit) document.getElementById('quitBtn').textContent = labels.quit;
   });
 })();
 </script>

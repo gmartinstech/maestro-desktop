@@ -33,10 +33,10 @@ export interface ApiKeyConfig {
 
 export const API_KEY_CARDS: ApiKeyConfig[] = [
   { field: 'provedor_ia_token', label: 'provedor-ia', desc: 'The Maestro models, through MartinsTech.', descKey: 'settings.models.provedorIaDesc', placeholder: 'PROVEDOR_IA_TOKEN', href: PROVEDOR_IA_LOGIN_URL, linkKey: 'settings.models.provedorIaGetToken' },
-  { field: 'anthropic_api_key', label: 'Anthropic', desc: 'The latest Claude models.', placeholder: 'sk-ant-...', href: 'https://console.anthropic.com/settings/keys' },
-  { field: 'openai_api_key', label: 'OpenAI', desc: 'The latest OpenAI models.', placeholder: 'sk-...', href: 'https://platform.openai.com/api-keys' },
-  { field: 'google_api_key', label: 'Google', desc: 'The latest Gemini models.', placeholder: 'AIza...', href: 'https://aistudio.google.com/apikey' },
-  { field: 'openrouter_api_key', label: 'OpenRouter', desc: 'Hundreds of models from every major provider.', placeholder: 'sk-or-...', href: 'https://openrouter.ai/keys' },
+  { field: 'anthropic_api_key', label: 'Anthropic', desc: 'The latest Claude models.', descKey: 'settings.models.apiKeyCard.anthropic', placeholder: 'sk-ant-...', href: 'https://console.anthropic.com/settings/keys', linkKey: 'settings.models.apiKeyCard.getKey' },
+  { field: 'openai_api_key', label: 'OpenAI', desc: 'The latest OpenAI models.', descKey: 'settings.models.apiKeyCard.openai', placeholder: 'sk-...', href: 'https://platform.openai.com/api-keys', linkKey: 'settings.models.apiKeyCard.getKey' },
+  { field: 'google_api_key', label: 'Google', desc: 'The latest Gemini models.', descKey: 'settings.models.apiKeyCard.google', placeholder: 'AIza...', href: 'https://aistudio.google.com/apikey', linkKey: 'settings.models.apiKeyCard.getKey' },
+  { field: 'openrouter_api_key', label: 'OpenRouter', desc: 'Hundreds of models from every major provider.', descKey: 'settings.models.apiKeyCard.openrouter', placeholder: 'sk-or-...', href: 'https://openrouter.ai/keys', linkKey: 'settings.models.apiKeyCard.getKey' },
 ];
 
 const ApiKeyCard: React.FC<{
@@ -57,7 +57,7 @@ const ApiKeyCard: React.FC<{
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography sx={labelSx}>{config.label}</Typography>
         {value ? (
-          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: c.status.success, bgcolor: `${c.status.success}15`, px: 0.75, py: 0.15, borderRadius: '3px' }}>CONNECTED</Typography>
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: c.status.success, bgcolor: `${c.status.success}15`, px: 0.75, py: 0.15, borderRadius: '3px' }}>{t('settings.models.apiKeyCard.connected')}</Typography>
         ) : null}
       </Box>
       <Typography sx={{ ...descSx, mb: 1 }}>{desc}</Typography>
@@ -87,7 +87,7 @@ const ApiKeyCard: React.FC<{
           rel="noopener"
           sx={{ color: c.accent.primary, fontSize: '0.72rem', whiteSpace: 'nowrap', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 0.3, '&:hover': { textDecoration: 'underline' } }}
         >
-          {config.linkKey ? t(config.linkKey) : 'Get key'} <OpenInNewIcon sx={{ fontSize: 11 }} />
+          {config.linkKey ? t(config.linkKey) : t('settings.models.apiKeyCard.getKey')} <OpenInNewIcon sx={{ fontSize: 11 }} />
         </Typography>
       </Box>
     </Box>

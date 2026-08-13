@@ -3,6 +3,7 @@
 summary, a current-time pin, the App Builder skill, picked app cards, picked Settings rows).
 Lifted out of the agent loop; calls the prompt_context builders directly (no manager needed)."""
 
+import logging
 import os
 from datetime import datetime
 from typing import List, Optional
@@ -21,6 +22,33 @@ from backend.apps.agents.manager.prompt.prompt_context import (
     compose_system_prompt,
 )
 
+logger = logging.getLogger(__name__)
+
+
+@typechecked
+def p_resolve_prompt_language() -> str:
+    """The UI language the prompt should speak. Unset means pt-BR, matching the frontend default in
+    frontend/src/shared/i18n/i18n.ts — a fresh install shows a Portuguese UI, so an English prompt
+    there would make the agent answer in the wrong language. Never raises: a turn must not die
+    because settings were unreadable."""
+    try:
+        from backend.apps.settings.store import load_settings
+        return "en" if load_settings().language == "en" else "pt-BR"
+    except Exception:
+        logger.exception("Could not read the language setting; defaulting the prompt to pt-BR")
+        return "pt-BR"
+
+
+@typechecked
+def p_localize_default_prompt(default_system_prompt: Optional[str], language: str) -> Optional[str]:
+    """Swap in the pt-BR default prompt, but ONLY when the stored value is the untouched English
+    default. `default_system_prompt` is a persisted, user-editable setting, so a user who wrote their
+    own prompt must get it back verbatim in either language."""
+    if language != "pt-BR" or default_system_prompt is None:
+        return default_system_prompt
+    from backend.apps.settings.models import DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_PT_BR
+    return DEFAULT_SYSTEM_PROMPT_PT_BR if default_system_prompt == DEFAULT_SYSTEM_PROMPT else default_system_prompt
+
 
 @typechecked
 def compose_turn_system_prompt(
@@ -35,8 +63,9 @@ def compose_turn_system_prompt(
     browser_ctx = build_browser_context(session.dashboard_id, selected_browser_ids=selected_browser_ids)
     mcp_registry_ctx = build_mcp_registry_summary(session.allowed_tools, session.active_mcps, get_all_tool_names)
     skills_catalog_ctx = build_installed_skills_catalog()
+    language = p_resolve_prompt_language()
     composed_prompt = compose_system_prompt(
-        default_system_prompt,
+        p_localize_default_prompt(default_system_prompt, language),
         mode_sys_prompt,
         session.system_prompt,
         browser_ctx,
@@ -98,5 +127,27 @@ def compose_turn_system_prompt(
     settings_ctx = build_selected_settings_context(selected_setting_ids)
     if settings_ctx:
         composed_prompt = f"{composed_prompt}\n\n{settings_ctx}" if composed_prompt else settings_ctx
+
+    # Last block in the prompt, so it wins over any English phrasing in the blocks above it.
+    if language == "pt-BR":
+        lang_ctx = (
+            "<language_directive>\n"
+            "Escreva em português do Brasil todo o conteúdo que o usuário vai ler: respostas em prosa, resumos, "
+            "planos, títulos de tarefas e de itens de TODO, perguntas do AskUserQuestion e mensagens de erro.\n"
+            "Mantenha exatamente como estão, sem traduzir: código e identificadores, caminhos de arquivo, comandos "
+            "de shell, saída de log, nomes de ferramentas e conteúdo citado de arquivos ou da web.\n"
+            "Não traduza nomes de produtos (Maestro Studio, Claude, Anthropic, MCP, GitHub) nem os termos técnicos "
+            "que pessoas da área usam em inglês no Brasil (prompt, token, workflow, deploy, commit, build, log).\n"
+            "</language_directive>"
+        )
+    else:
+        lang_ctx = (
+            "<language_directive>\n"
+            "Write all user-facing content in English: prose replies, summaries, plans, task and TODO titles, "
+            "AskUserQuestion prompts, and error messages.\n"
+            "Leave code, identifiers, file paths, shell commands, log output, and quoted content as-is.\n"
+            "</language_directive>"
+        )
+    composed_prompt = f"{composed_prompt}\n\n{lang_ctx}" if composed_prompt else lang_ctx
 
     return composed_prompt

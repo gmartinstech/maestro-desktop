@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import IconButton from '@mui/material/IconButton';
@@ -44,6 +45,7 @@ interface Props {
 
 // The live run view, a real canvas card (standard claudeTokens chrome) spawned beside the Workflows window. The orange connector back to the window is drawn by the shared TetherLayer, same mechanism as an agent spinning up a browser.
 const RunMonitor: React.FC<Props> = ({ workflow, cardX, cardY, cardWidth, cardHeight, cardZOrder, zoom, panX, panY, onDragStart, onDragMove, onDragEnd }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const runs = useAppSelector((s) => s.workflows.runs[workflow.id]);
@@ -206,7 +208,11 @@ const RunMonitor: React.FC<Props> = ({ workflow, cardX, cardY, cardWidth, cardHe
         </div>
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: c.text.tertiary }}>
-          {isRunning ? 'Waiting for the run to start…' : failed ? 'This run failed before any agent ran.' : 'No agent chat for this run.'}
+          {isRunning
+            ? t('workflows.runMonitor.waitingToStart')
+            : failed
+              ? t('workflows.runMonitor.failedBeforeAgent')
+              : t('workflows.runMonitor.noAgentChat')}
         </div>
       )}
 
@@ -216,7 +222,7 @@ const RunMonitor: React.FC<Props> = ({ workflow, cardX, cardY, cardWidth, cardHe
         <div style={{ flex: 'none', borderTop: `1px solid ${c.border.subtle}`, background: c.bg.elevated, padding: '11px 14px 13px', display: 'flex', gap: 9 }}>
           <button onClick={stopRun} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: c.status.errorBg, border: `1px solid ${c.status.error}33`, borderRadius: c.radius.md, padding: 9, fontSize: 13, fontWeight: 600, color: c.status.error, cursor: 'pointer' }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
-            <span>Stop run</span>
+            <span>{t('workflows.runMonitor.stopRun')}</span>
           </button>
         </div>
       )}

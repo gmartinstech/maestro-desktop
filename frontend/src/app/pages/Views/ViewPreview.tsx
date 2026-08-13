@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { Skeleton } from '@/app/components/feedback/Loading';
@@ -115,6 +116,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
   // Bg matches host theme so the 60-90s vite-boot gap doesn't flash white on dark hosts.
   const _hostTokens = useClaudeTokens();
   const _hostBg = _hostTokens.bg.page;
+  const { t } = useTranslation();
   const [reloadKey, setReloadKey] = useState(0);
   // Track in state so the iframe URL rebuilds the moment the token IPC roundtrip resolves (else first render 401s with a JSON body).
   const [authToken, setAuthToken] = useState(() => getAuthToken());
@@ -413,7 +415,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
           ...style,
         }}
       >
-        No preview available
+        {t('views.preview.noPreviewAvailable')}
       </Box>
     );
   }
@@ -480,7 +482,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
             background: _hostBg,
             ...style,
           }}
-          title="App Preview"
+          title={t('dashboard.viewPreview.title')}
         />
       ) : (
         <RunInDesktopMessage kind="app" />
@@ -502,7 +504,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
         >
           <Skeleton variant="card" width={140} height={14} delayMs={0} />
           <Typography sx={{ fontSize: '0.78rem', color: '#888', letterSpacing: '0.01em' }}>
-            Restoring preview...
+            {t('views.preview.restoring')}
           </Typography>
         </Box>
       )}

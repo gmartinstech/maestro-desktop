@@ -1,4 +1,5 @@
 import React from 'react';
+import type { TFunction } from 'i18next';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined';
 import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
@@ -13,4 +14,6 @@ export const ICON_MAP: Record<string, React.ReactNode> = {
   tune: <TuneOutlinedIcon sx={{ fontSize: 14 }} />,
 };
 
-export const FALLBACK_MODE_BASE = { label: 'Agent', icon: ICON_MAP.smart_toy };
+export function getFallbackModeBase(t: TFunction) {
+  return { label: t('agentChat.chatInput.mode.fallbackLabel'), icon: ICON_MAP.smart_toy };
+}

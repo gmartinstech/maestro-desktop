@@ -1,5 +1,6 @@
 // Confirmation surface shown only for bundles that carry something with a consequence (an app that runs code, or actions that must be connected). Safe bundles never reach here; the entry point auto-imports them. This is purely presentational: the entry point owns preflight, commit, and navigation.
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Dialog from '@mui/material/Dialog';
@@ -23,6 +24,7 @@ interface Props {
 }
 
 const ImportModal: React.FC<Props> = ({ preflight, open, committing, onConfirm, onClose }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   return (
     <Dialog
@@ -62,12 +64,12 @@ const ImportModal: React.FC<Props> = ({ preflight, open, committing, onConfirm, 
             )}
             {preflight.conflicts.length > 0 && (
               <Typography sx={{ fontSize: '0.78rem', color: c.text.muted, mt: 1.5 }}>
-                Some items already exist and will be added as copies.
+                {t('overlays.importModal.conflictWarning')}
               </Typography>
             )}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
               <Button onClick={onClose} sx={{ textTransform: 'none', color: c.text.secondary }}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 variant="contained"
@@ -87,7 +89,7 @@ const ImportModal: React.FC<Props> = ({ preflight, open, committing, onConfirm, 
                   boxShadow: 'none',
                 }}
               >
-                Add to Maestro Studio
+                {t('overlays.importModal.addButton')}
               </Button>
             </Box>
           </Box>

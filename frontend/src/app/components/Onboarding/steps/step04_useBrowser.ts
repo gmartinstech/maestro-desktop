@@ -1,6 +1,7 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
 import { hasAnyBrowserSpawned } from './skipPredicates';
+import { tr } from './translatedOps';
 
 export const step04: OnboardingStep = {
   id: 'use_browser',
@@ -16,7 +17,7 @@ export const step04: OnboardingStep = {
   requiresDashboard: true,
   ops: [
     { kind: 'move_to', target: S.browserButton },
-    { kind: 'popup', text: 'Pop open a browser.' },
+    { kind: 'popup', text: tr('onboarding.steps.use_browser.popup') },
     {
       kind: 'wait_user',
       condition: { kind: 'event_bus', event: 'browser:spawned' },

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -41,6 +42,7 @@ function prefixForLine(line: TerminalLine): string {
 
 const TerminalPanel: React.FC<Props> = ({ lines }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
 
@@ -84,7 +86,7 @@ const TerminalPanel: React.FC<Props> = ({ lines }) => {
       >
         {lines.length === 0 ? (
           <Typography sx={{ color: '#8b949e', fontFamily: c.font.mono, fontSize: '0.78rem', fontStyle: 'italic' }}>
-            Waiting for output... backend stdout/stderr and the running app's console.log will show here.
+            {t('views.terminal.waitingForOutput')}
           </Typography>
         ) : (
           lines.map((line) => (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
@@ -28,6 +29,7 @@ const CustomToolConnect: React.FC<CustomToolConnectProps> = ({
   onM365Disconnect: handleM365Disconnect,
   onDisconnectIntegration: handleDisconnectIntegration,
 }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   return (
     <>
@@ -53,7 +55,7 @@ const CustomToolConnect: React.FC<CustomToolConnectProps> = ({
                             onClick={(e) => { e.stopPropagation(); handleDeviceCodeConnect(tool.id); }}
                             sx={{ borderColor: `${ig.color}40`, color: ig.color, '&:hover': { borderColor: ig.color, bgcolor: `${ig.color}10` }, textTransform: 'none', fontSize: '0.78rem', borderRadius: 1.5, py: 0.5, flexShrink: 0 }}
                           >
-                            Connect Microsoft 365
+                            {t('tools.customToolConnect.connectM365')}
                           </Button>
                         )}
                         {!isDisabled && ig?.credentialFields && tool.auth_status !== 'connected' && (

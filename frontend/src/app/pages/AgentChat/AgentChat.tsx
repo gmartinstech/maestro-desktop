@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/shared/i18n/i18n';
 import { useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -52,7 +53,7 @@ import { createSessionWs, acquireSessionWs, releaseSessionWs } from '@/shared/ws
 import StreamingBubble from './bubbles/StreamingBubble';
 import WelcomeQuickReplies from './WelcomeQuickReplies';
 import { useWelcomeGreeting } from './useWelcomeGreeting';
-import { THINKING_LABELS } from './thinkingLabels';
+import { getThinkingLabels } from './thinkingLabels';
 import MessageBubble from './bubbles/MessageBubble';
 import { estimateRenderedTextHeight, RECHECK_VISIBILITY_EVENT } from './bubbles/markdownMeasure';
 import CompactionMarker from './bubbles/CompactionMarker';
@@ -158,12 +159,13 @@ const thinkingShimmerKeyframes = `
 
 // Pick a label deterministically per session-turn so the pill has variety without flickering between renders. Shared list with MessageBubble.
 function streamingLabelFor(seedKey: string | undefined): string {
-  if (!seedKey) return THINKING_LABELS[0].live;
+  const labels = getThinkingLabels();
+  if (!seedKey) return labels[0].live;
   let h = 0;
   for (let i = 0; i < seedKey.length; i++) {
     h = ((h << 5) - h + seedKey.charCodeAt(i)) | 0;
   }
-  return THINKING_LABELS[Math.abs(h) % THINKING_LABELS.length].live;
+  return labels[Math.abs(h) % labels.length].live;
 }
 
 const ThinkingBubble: React.FC<{ label?: string | null; seedKey?: string }> = ({ label, seedKey }) => {
@@ -1376,9 +1378,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                     const m = (session.model || '').toLowerCase();
                     const isApiRoute = m.endsWith('-api');
                     if (isApiRoute) {
+                      const formatted = new Intl.NumberFormat(i18n.language || 'en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 4,
+                      }).format(session.cost_usd);
                       return (
                         <Typography variant="caption" sx={{ color: c.accent.primary }}>
-                          ${session.cost_usd.toFixed(4)}
+                          {formatted}
                         </Typography>
                       );
                     }
@@ -1398,9 +1406,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                       );
                     }
                     // own-key Anthropic OR anything else → real $ figure.
+                    const formatted = new Intl.NumberFormat(i18n.language || 'en-US', {
+                      style: 'currency',
+                      currency: 'USD',
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 4,
+                    }).format(session.cost_usd);
                     return (
                       <Typography variant="caption" sx={{ color: c.accent.primary }}>
-                        ${session.cost_usd.toFixed(4)}
+                        {formatted}
                       </Typography>
                     );
                   })()}

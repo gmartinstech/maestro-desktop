@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -74,6 +75,7 @@ const RegistryBrowserDialog: React.FC<RegistryBrowserDialogProps> = ({
   onEditInstall: handleEditInstall,
   onLoadMore: handleLoadMore,
 }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   return (
       <Dialog
@@ -115,7 +117,7 @@ const RegistryBrowserDialog: React.FC<RegistryBrowserDialogProps> = ({
         }}>
           <Box sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'center' }}>
             <TextField
-              placeholder="Search MCP servers..."
+              placeholder={t('tools.registryBrowser.searchPlaceholder')}
               value={regQuery}
               onChange={(e) => handleRegSearch(e.target.value)}
               fullWidth
@@ -145,10 +147,10 @@ const RegistryBrowserDialog: React.FC<RegistryBrowserDialogProps> = ({
                 },
               }}
             >
-              <ToggleButton value="curated">Curated</ToggleButton>
-              <ToggleButton value="">All</ToggleButton>
-              <ToggleButton value="community"><PublicIcon sx={{ fontSize: 14, mr: 0.5 }} />Community</ToggleButton>
-              <ToggleButton value="google"><CloudIcon sx={{ fontSize: 14, mr: 0.5 }} />Google</ToggleButton>
+              <ToggleButton value="curated">{t('tools.registryBrowser.curatedFilter')}</ToggleButton>
+              <ToggleButton value="">{t('tools.registryBrowser.allFilter')}</ToggleButton>
+              <ToggleButton value="community"><PublicIcon sx={{ fontSize: 14, mr: 0.5 }} />{t('tools.registryBrowser.communityFilter')}</ToggleButton>
+              <ToggleButton value="google"><CloudIcon sx={{ fontSize: 14, mr: 0.5 }} />{t('tools.registryBrowser.googleFilter')}</ToggleButton>
             </ToggleButtonGroup>
             <Tooltip title={regSort === 'name' ? 'Sort by stars' : 'Sort by name'}>
               <IconButton
@@ -224,7 +226,7 @@ const RegistryBrowserDialog: React.FC<RegistryBrowserDialogProps> = ({
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setRegistryClose()} sx={{ color: c.text.tertiary, textTransform: 'none' }}>Close</Button>
+          <Button onClick={() => setRegistryClose()} sx={{ color: c.text.tertiary, textTransform: 'none' }}>{t('common.close')}</Button>
         </DialogActions>
       </Dialog>
   );

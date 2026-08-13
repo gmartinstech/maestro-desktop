@@ -1,3 +1,5 @@
+import i18n from '@/shared/i18n/i18n';
+
 // One source of truth for the agent's whimsical "busy" verbs, shared by the streaming pill (AgentChat) and the per-message thinking bubble (MessageBubble). `live` shows while the agent works; `past` shows once the step is done ("Marinated for 3s"). Keep them fun but never self-deprecating (no "hallucinating") so they read as personality, not a malfunction.
 export interface ThinkingLabel {
   live: string;
@@ -5,7 +7,7 @@ export interface ThinkingLabel {
 }
 
 // Index 0 is the safe default the pill falls back to with no seed, so keep it the plain one. Everything after is fair game for chaos.
-export const THINKING_LABELS: ReadonlyArray<ThinkingLabel> = [
+const EN_THINKING_LABELS: ReadonlyArray<ThinkingLabel> = [
   { live: 'Thinking',       past: 'Thought' },
   { live: 'Tokenmaxing',    past: 'Tokenmaxed' },
   { live: 'Pondering',      past: 'Pondered' },
@@ -57,3 +59,60 @@ export const THINKING_LABELS: ReadonlyArray<ThinkingLabel> = [
   { live: 'Tryharding',     past: 'Tryharded' },
   { live: 'Grinding',       past: 'Grinded' },
 ];
+
+const PT_BR_THINKING_LABELS: ReadonlyArray<ThinkingLabel> = [
+  { live: 'Pensando',        past: 'Pensou' },
+  { live: 'Maximizando tokens', past: 'Maximizou tokens' },
+  { live: 'Ponderando',      past: 'Ponderou' },
+  { live: 'Cozinhando',      past: 'Cozinhou' },
+  { live: 'Sacando',         past: 'Sacou' },
+  { live: 'Marinando',       past: 'Marinou' },
+  { live: 'Acendendo faísca', past: 'Acendeu faísca' },
+  { live: 'Raciocinando',    past: 'Racionou' },
+  { live: 'Bolando',         past: 'Bolou' },
+  { live: 'Coando',          past: 'Coou' },
+  { live: 'Refletindo',      past: 'Refletiu' },
+  { live: 'Desemaranhan​do',    past: 'Desemara​nhou' },
+  { live: 'Triturando',      past: 'Triturou' },
+  { live: 'Cozendo',         past: 'Cozeu' },
+  { live: 'Travando',        past: 'Travou' },
+  { live: 'Materializando',  past: 'Materializou' },
+  { live: 'Ligando neurônios', past: 'Ligou neurônios' },
+  { live: 'Vibrando',        past: 'Vibrou' },
+  { live: 'Tramando',        past: 'Tramou' },
+  { live: 'Improvisando',    past: 'Improvisou' },
+  { live: 'Calculando',      past: 'Calculou' },
+  { live: 'Mexendo',         past: 'Mexeu' },
+  { live: 'Polindo',         past: 'Poliu' },
+  { live: 'Chefando',        past: 'Chefou' },
+  { live: 'Otimizando',      past: 'Otimizou' },
+  { live: 'Ligando neurônios', past: 'Ligou neurônios' },
+  { live: 'Ruminando',       past: 'Ruminou' },
+  { live: 'Fervilhando',     past: 'Fervilhou' },
+  { live: 'Infusionando',    past: 'Infusionou' },
+  { live: 'Atarraxando',     past: 'Atarraxou' },
+  { live: 'Explorando',      past: 'Explorou' },
+  { live: 'Conjurando',      past: 'Conjurou' },
+  { live: 'Sintetizando',    past: 'Sintetizou' },
+  { live: 'Acelerando',      past: 'Acelerou' },
+  { live: 'Cafeínando',      past: 'Cafeínou' },
+  { live: 'Investigando',    past: 'Investigou' },
+  { live: 'Fantasiando',     past: 'Fantasiou' },
+  { live: 'Acelerando',      past: 'Acelerou' },
+  { live: 'Teorizando',      past: 'Teorizou' },
+  { live: 'Desconfiando',    past: 'Desconfiou' },
+  { live: 'Obsessão',        past: 'Obcecou' },
+  { live: 'Burlando',        past: 'Burlou' },
+  { live: 'Maximizando',     past: 'Maximizou' },
+  { live: 'Pontificando',    past: 'Pontificou' },
+  { live: 'Vibrando',        past: 'Vibrou' },
+  { live: 'Dominando',       past: 'Dominou' },
+  { live: 'Selvagendo',      past: 'Selvagou' },
+  { live: 'Side-questing',   past: 'Side-questou' },
+  { live: 'Forçando',        past: 'Forçou' },
+  { live: 'Moendo',          past: 'Moeu' },
+];
+
+export function getThinkingLabels(): ReadonlyArray<ThinkingLabel> {
+  return i18n.language === 'pt-BR' ? PT_BR_THINKING_LABELS : EN_THINKING_LABELS;
+}

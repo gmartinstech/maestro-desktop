@@ -12,6 +12,7 @@ import Alert from '@mui/material/Alert';
 import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
 import LinkIcon from '@mui/icons-material/Link';
+import { useTranslation } from 'react-i18next';
 
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
@@ -26,6 +27,7 @@ interface Props {
 }
 
 const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
+  const { t } = useTranslation();
   const c = useClaudeTokens();
   const [preflight, setPreflight] = useState<ExportPreflight | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,7 +42,7 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
     let alive = true;
     exportPreflight(target)
       .then((pf) => alive && setPreflight(pf))
-      .catch((e) => alive && setError(e?.message || "We couldn't read this for sharing."))
+      .catch((e) => alive && setError(e?.message || t('overlays.share.errorRead')))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
@@ -57,10 +59,10 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
     setDownloading(true);
     try {
       await downloadSwarm(target, preflight.filename);
-      setToast(`Saved ${preflight.filename}`);
+      setToast(t('overlays.share.saved', { filename: preflight.filename }));
       onClose();
     } catch (e: any) {
-      setError(e?.message || "We couldn't build the file.");
+      setError(e?.message || t('overlays.share.errorBuild'));
     } finally {
       setDownloading(false);
     }
@@ -128,7 +130,7 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 3, pt: 2.5, pb: 1 }}>
           <Typography sx={{ fontSize: '1.05rem', fontWeight: 700, color: c.text.primary }}>
-            Share {target.name}
+            {t('overlays.share.title', { name: target.name })}
           </Typography>
           <IconButton size="small" onClick={onClose} sx={{ color: c.text.tertiary }}>
             <CloseIcon sx={{ fontSize: 18 }} />
@@ -145,7 +147,7 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
               <Box sx={{ py: 1 }}>
                 <Typography sx={{ fontSize: '0.85rem', color: c.text.secondary, mb: 1 }}>{error}</Typography>
                 <Button size="small" onClick={load} sx={{ textTransform: 'none', color: c.accent.primary }}>
-                  Try again
+                  {t('overlays.share.tryAgain')}
                 </Button>
               </Box>
             ) : preflight ? (
@@ -153,14 +155,14 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
             ) : null}
           </Box>
 
-          {optionRow(true, <DownloadIcon sx={{ fontSize: 20 }} />, 'Download .swarm file', 'Save a file you can send to anyone.')}
+          {optionRow(true, <DownloadIcon sx={{ fontSize: 20 }} />, t('overlays.share.downloadFileTitle'), t('overlays.share.downloadFileSubtitle'))}
           {optionRow(
             false,
             <LinkIcon sx={{ fontSize: 20 }} />,
-            'Create share link',
-            'A link that opens straight in Maestro Studio.',
+            t('overlays.share.createLinkTitle'),
+            t('overlays.share.createLinkSubtitle'),
             true,
-            'Coming soon',
+            t('overlays.share.comingSoon'),
           )}
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
@@ -188,7 +190,7 @@ const ShareModal: React.FC<Props> = ({ target, open, onClose }) => {
                 boxShadow: 'none',
               }}
             >
-              Download .swarm
+              {t('overlays.share.downloadButton')}
             </Button>
           </Box>
         </Box>

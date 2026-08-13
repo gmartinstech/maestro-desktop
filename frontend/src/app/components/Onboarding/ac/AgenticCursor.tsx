@@ -12,7 +12,7 @@ import { cursorStore, useCursorPosition } from './cursorStore';
 import { resolveSelector } from '../selectors';
 import ACPopup from './ACPopup';
 import ACMultiChoice from './ACMultiChoice';
-import type { ACMultiChoiceOption } from '../steps/types';
+import type { ResolvedACMultiChoiceOption } from '../steps/types';
 
 export interface AgenticCursorHandle {
   fadeIn: (from: { x: number; y: number }) => Promise<void>;
@@ -35,7 +35,7 @@ export interface AgenticCursorHandle {
   /** Non-blocking popup above cursor; auto-clears on next physical-move op. */
   showPopup: (text: string) => void;
   /** Single-select multi-choice; resolves with the chosen option id. */
-  showMultiChoice: (q: string, opts: ACMultiChoiceOption[]) => Promise<string>;
+  showMultiChoice: (q: string, opts: ResolvedACMultiChoiceOption[]) => Promise<string>;
   hidePopup: () => void;
   getPosition: () => { x: number; y: number };
 }
@@ -46,7 +46,7 @@ interface PopupState {
 
 interface MultiChoiceState {
   question: string;
-  options: ACMultiChoiceOption[];
+  options: ResolvedACMultiChoiceOption[];
   resolve: (id: string) => void;
 }
 

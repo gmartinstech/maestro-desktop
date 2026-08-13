@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -16,6 +17,7 @@ import type { SettingsStyles } from '../settingsStyles';
 
 const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const { rowLastSx, labelSx, descSx } = styles;
   const updateStatus = useAppSelector((s) => s.update.status);
@@ -56,15 +58,15 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
     <Box sx={rowLastSx}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: updateStatus === 'downloading' ? 1 : 0 }}>
         <Box>
-          <Typography sx={labelSx}>Software update</Typography>
+          <Typography sx={labelSx}>{t('settings.general.softwareUpdate.title')}</Typography>
           <Typography sx={descSx}>
-            {updateStatus === 'checking' && 'Checking for updates…'}
-            {updateStatus === 'not-available' && 'You\'re on the latest version.'}
-            {updateStatus === 'available' && `Version ${availableVersion} is available.`}
-            {updateStatus === 'downloading' && `Downloading update… ${Math.round(downloadPercent)}%`}
-            {updateStatus === 'downloaded' && `Version ${availableVersion} is ready to install.`}
-            {updateStatus === 'error' && (updateError || 'Update check failed.')}
-            {updateStatus === 'idle' && 'Check for new versions of Maestro Studio.'}
+            {updateStatus === 'checking' && t('settings.general.softwareUpdate.checking')}
+            {updateStatus === 'not-available' && t('settings.general.softwareUpdate.upToDate')}
+            {updateStatus === 'available' && t('settings.general.softwareUpdate.available', { version: availableVersion })}
+            {updateStatus === 'downloading' && t('settings.general.softwareUpdate.downloading', { percent: Math.round(downloadPercent) })}
+            {updateStatus === 'downloaded' && t('settings.general.softwareUpdate.downloaded', { version: availableVersion })}
+            {updateStatus === 'error' && (updateError || t('settings.general.softwareUpdate.failed'))}
+            {updateStatus === 'idle' && t('settings.general.softwareUpdate.idle')}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, ml: 2 }}>
@@ -92,7 +94,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
                 '&:hover': { color: c.accent.primary, borderColor: c.accent.primary },
               }}
             >
-              Check for Updates
+              {t('settings.general.softwareUpdate.checkButton')}
             </Button>
           )}
           {updateStatus === 'available' && (
@@ -110,7 +112,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
                 '&:hover': { bgcolor: `${c.accent.primary}10` },
               }}
             >
-              Download
+              {t('settings.general.softwareUpdate.downloadButton')}
             </Button>
           )}
           {updateStatus === 'downloaded' && (
@@ -132,7 +134,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
                 borderRadius: 1.5,
               }}
             >
-              {installing ? 'Restarting…' : 'Restart & Update'}
+              {installing ? t('settings.general.softwareUpdate.installing') : t('settings.general.softwareUpdate.installButton')}
             </Button>
           )}
         </Box>

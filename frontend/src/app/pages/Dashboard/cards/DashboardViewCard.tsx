@@ -734,10 +734,10 @@ const DashboardViewCard: React.FC<Props> = ({
               <RestartAltIcon sx={{ fontSize: 18, color: c.text.muted, flexShrink: 0 }} />
               <Box>
                 <Typography sx={{ fontSize: '0.82rem', fontWeight: 500, color: c.text.primary, lineHeight: 1.2 }}>
-                  Reset & Hard Reload
+                  {t('dashboard.viewCard.resetHardReload')}
                 </Typography>
                 <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost, mt: 0.25 }}>
-                  Restart backend.py + reload preview
+                  {t('dashboard.viewCard.restartBackend')}
                 </Typography>
               </Box>
             </Box>
@@ -805,6 +805,7 @@ const DashboardOutputPreview: React.FC<{
   onRuntimeLog?: (line: RuntimeLogLine) => void;
 }> = ({ previewRef, output, cardKey, instance = 1, inputData, backendResult, interactive, onAppClicked, onRuntimeLog }) => {
   const tokens = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const workspaceId = output.workspace_id ?? null;
   const { frontendUrl, isNewMode, isHydrating } = useRuntimePreviewUrl({
@@ -880,7 +881,7 @@ const DashboardOutputPreview: React.FC<{
         }}
       >
         <Typography sx={{ color: tokens.text.secondary, fontSize: '0.9rem' }}>
-          This app's files are missing.
+          {t('dashboard.viewCard.filesMissing')}
         </Typography>
         <Typography
           onClick={() => void removeViewCardCleanly(cardKey ?? output.id, dispatch)}
@@ -892,7 +893,7 @@ const DashboardOutputPreview: React.FC<{
             '&:hover': { textDecoration: 'underline' },
           }}
         >
-          Remove card
+          {t('dashboard.viewCard.removeCard')}
         </Typography>
       </Box>
     );

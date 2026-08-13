@@ -1,5 +1,6 @@
 import React, { RefObject } from 'react';
 import Box from '@mui/material/Box';
+import { useTranslation } from 'react-i18next';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
 interface Props {
@@ -22,12 +23,13 @@ export const EditorSurface: React.FC<Props> = ({
   c, editorRef, disabled, hasContent, hasAttachments, autoRunMode, isRunning, queueLength,
   placeholderLabel, onInput, onClick, onKeyDown, onPaste,
 }) => {
+  const { t } = useTranslation();
   const placeholderText = disabled
-    ? 'Agent is working...'
+    ? t('agentChat.chatInput.placeholder.agentWorkingDisabled')
     : autoRunMode
-      ? 'Describe what data to generate…'
+      ? t('agentChat.chatInput.placeholder.autoRun')
       : isRunning
-        ? (queueLength > 0 ? `${queueLength} queued, type another or wait…` : 'Agent is working, messages will queue…')
+        ? (queueLength > 0 ? t('agentChat.chatInput.placeholder.queued', { count: queueLength }) : t('agentChat.chatInput.placeholder.runningWillQueue'))
         : placeholderLabel;
 
   return (

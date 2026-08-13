@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import type { CSSProperties } from 'react';
 import { useAppSelector } from '@/shared/hooks';
 import { startOfWeek, startOfMonthGrid, addDays, sameDay } from '@/app/pages/Workflows/scheduleUtils';
@@ -11,8 +12,15 @@ interface Occ { wfId: string; title: string; at: Date; color: string; }
 interface DayPop { title: string; runs: Occ[]; x: number; y: number; }
 type OpenDayPop = (title: string, runs: Occ[], e: React.MouseEvent) => void;
 
-const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const POP_W = 240;
+const DOW_REFERENCE_SUNDAY = new Date(2023, 0, 1); // a Sunday; Intl.DateTimeFormat only needs a correct day-of-week
+
+// Locale-driven short weekday labels, index 0 = Sunday, to match Date#getDay(). Was a hardcoded
+// English DOW array; Intl gives correct abbreviations (dom, seg, ter... in pt-BR) for free.
+function weekdayLabels(language: string): string[] {
+  const fmt = new Intl.DateTimeFormat(language, { weekday: 'short' });
+  return Array.from({ length: 7 }, (_, i) => fmt.format(addDays(DOW_REFERENCE_SUNDAY, i)).toUpperCase());
+}
 
 function miniTime(d: Date): string {
   let h = d.getHours();
@@ -36,6 +44,7 @@ const tabBtn = (active: boolean, WC: WCPalette): CSSProperties => ({
 
 const CalendarView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const WC = useWC();
+  const { t } = useTranslation();
   const items = useAppSelector((s) => s.workflows.items);
   // Tick the clock so the now-line and "today" highlight stay live instead of freezing at first render.
   const [now, setNow] = useState(() => new Date());
@@ -97,7 +106,7 @@ const CalendarView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: WC.page }}>
       <div style={{ flex: 'none', padding: '14px 26px', borderBottom: `1px solid ${WC.line}`, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <button onClick={() => nav.setRefDate(new Date())} style={{ background: WC.paper, border: `1px solid rgba(${WC.inkRGB},0.14)`, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, color: WC.ink, cursor: 'pointer' }}>Today</button>
+        <button onClick={() => nav.setRefDate(new Date())} style={{ background: WC.paper, border: `1px solid rgba(${WC.inkRGB},0.14)`, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, color: WC.ink, cursor: 'pointer' }}>{t('workflows.calendar.today')}</button>
         <div style={{ display: 'flex', gap: 4 }}>
           <button onClick={() => step(-1)} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid rgba(${WC.inkRGB},0.12)`, background: WC.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.ink3 }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg></button>
           <button onClick={() => step(1)} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid rgba(${WC.inkRGB},0.12)`, background: WC.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: WC.ink3 }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg></button>
@@ -105,8 +114,8 @@ const CalendarView: React.FC<{ nav: AppNav }> = ({ nav }) => {
         <h1 style={{ margin: 0, fontFamily: "'Newsreader',serif", fontSize: 22, fontWeight: 600, color: WC.ink, letterSpacing: '-0.01em' }}>{title}</h1>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', background: WC.inset, border: `1px solid ${WC.line}`, borderRadius: 9, padding: 3, gap: 2 }}>
-          <button onClick={() => nav.setCalView('week')} style={tabBtn(nav.calView === 'week', WC)}>Week</button>
-          <button onClick={() => nav.setCalView('month')} style={tabBtn(nav.calView === 'month', WC)}>Month</button>
+          <button onClick={() => nav.setCalView('week')} style={tabBtn(nav.calView === 'week', WC)}>{t('workflows.calendar.week')}</button>
+          <button onClick={() => nav.setCalView('month')} style={tabBtn(nav.calView === 'month', WC)}>{t('workflows.calendar.month')}</button>
         </div>
       </div>
 
@@ -150,6 +159,8 @@ const moreStyle = (WC: WCPalette): CSSProperties => ({
 
 const MonthGrid: React.FC<GridProps> = ({ ref0, now, occByDay, dayKey, onSelect, openDayPop }) => {
   const WC = useWC();
+  const { t, i18n } = useTranslation();
+  const DOW = useMemo(() => weekdayLabels(i18n.language), [i18n.language]);
   const start = startOfMonthGrid(ref0);
   // Only as many weeks as the month actually spans (5 or 6), like the design, so rows aren't squashed by a dangling extra week of next-month days.
   const monthEnd = new Date(ref0.getFullYear(), ref0.getMonth() + 1, 0);
@@ -189,7 +200,7 @@ const MonthGrid: React.FC<GridProps> = ({ ref0, now, occByDay, dayKey, onSelect,
         <div ref={probeEventRef} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 3px' }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%' }} />
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10 }}>12:00am</span>
-          <span style={{ fontSize: 11 }}>Sample</span>
+          <span style={{ fontSize: 11 }}>{t('workflows.calendar.sample')}</span>
         </div>
         <span ref={probeMoreRef} style={moreStyle(WC)}>+0 more</span>
       </div>
@@ -235,6 +246,8 @@ const MonthGrid: React.FC<GridProps> = ({ ref0, now, occByDay, dayKey, onSelect,
 
 const WeekGrid: React.FC<GridProps> = ({ ref0, now, occByDay, dayKey, onSelect, openDayPop }) => {
   const WC = useWC();
+  const { i18n } = useTranslation();
+  const DOW = useMemo(() => weekdayLabels(i18n.language), [i18n.language]);
   const start = startOfWeek(ref0);
   const startMs = start.getTime();
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
