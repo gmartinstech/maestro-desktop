@@ -6,7 +6,7 @@ Maestro Studio currently checks for updates via GitHub Releases (Squirrel's
 built-in `autoUpdater` on Windows, `electron-updater` on Mac). This design
 replaces the Windows update path with a self-hosted alternative: version
 numbers derived straight from git history, and update delivery from
-`cdn.martinstech.net/maestro/*` on the `cloudona` VPS. Mac is untouched —
+`cdn.martinstech.net/maestro/*` on the `cloudinha` VPS. Mac is untouched —
 it keeps its existing GitHub-releases + `electron-updater` path.
 
 ## 1. Versioning scheme
@@ -42,14 +42,14 @@ New script `release:win` in `electron/package.json`:
 1. Compute `count = git rev-list --count HEAD`, `version = 1.${count}`.
 2. Run `electron-builder --win --x64 --config.extraMetadata.version=${version}.0`.
 3. Compute sha256 of the produced exe.
-4. `scp` the exe to `cloudona:~/maestro-releases/incoming/`.
+4. `scp` the exe to `cloudinha:~/maestro-releases/incoming/`.
 5. Print a ready-to-paste block: version, filename, sha256, timestamp —
-   for the cloudona-side step below.
+   for the cloudinha-side step below.
 
 This is a **manual, deliberate step**, run only when shipping a release.
 A plain `git push` never triggers a build or publish.
 
-## 4. CDN layout (on cloudona, served as cdn.martinstech.net/maestro/)
+## 4. CDN layout (on cloudinha, served as cdn.martinstech.net/maestro/)
 
 ```
 cdn.martinstech.net/maestro/
@@ -78,11 +78,11 @@ Only the 3 most recent builds are retained; anything older is deleted
 }
 ```
 
-## 5. Cloudona-side publish step
+## 5. Cloudinha-side publish step
 
 After `release:win` scp's the exe to `~/maestro-releases/incoming/`, the
 operator pastes a prepared prompt into a Claude Code session running on
-cloudona. That prompt (drafted separately, not part of this repo) tells
+cloudinha. That prompt (drafted separately, not part of this repo) tells
 the agent to:
 
 - verify the incoming exe's sha256 against the value the local script
