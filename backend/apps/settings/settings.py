@@ -13,6 +13,12 @@ from typing import Literal, Optional
 from backend.config.Apps import SubApp
 from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
+from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_FIELD
+from backend.apps.settings.provedor_ia_token_status import (
+    ProvedorIaTokenStatus,
+    provedor_ia_token_status,
+    token_status,
+)
 from backend.apps.settings.store import (
     DATA_DIR,
     SETTINGS_FILE,
@@ -283,6 +289,28 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
         ))
 
     return body
+
+
+class ProvedorIaTokenPayload(BaseModel):
+    token: str
+
+
+@settings.router.get("/provedor-ia/token-status")
+async def get_provedor_ia_token_status() -> ProvedorIaTokenStatus:
+    """Whether to prompt for a Maestro sign-in. Returns state + runway, never any part of the token."""
+    return provedor_ia_token_status(load_settings())
+
+
+@settings.router.post("/provedor-ia/token")
+async def post_provedor_ia_token(body: ProvedorIaTokenPayload):
+    """Store a pasted token only when it still has runway; an already-expired paste is rejected, never saved."""
+    status = token_status(body.token)
+    if status.state in ("missing", "expired"):
+        # The reject body carries a state name only: the pasted credential must never reach a log or an HTTP response.
+        return JSONResponse(status_code=400, content={"ok": False, "reason": status.state})
+    async with settings_write_lock():
+        await apply_settings_patch({PROVEDOR_IA_TOKEN_FIELD: body.token.strip()})
+    return {"ok": True, "status": status.model_dump()}
 
 
 class AppThemeOverridePayload(BaseModel):
