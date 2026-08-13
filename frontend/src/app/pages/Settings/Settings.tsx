@@ -8,7 +8,6 @@ import DialogContent from '@mui/material/DialogContent';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { updateSettingsPatch, closeSettingsModal, AppSettings } from '@/shared/state/settingsSlice';
-import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { fetchModes } from '@/shared/state/modesSlice';
 import { useThemeMode, useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -215,7 +214,6 @@ const Settings: React.FC = () => {
       baselineRef.current = form;
     }
     dispatch(closeSettingsModal());
-    onboardingBus.emit('settings:closed');
   }, [dispatch, form, loaded, buildSubmit]);
 
   const styles = makeSettingsStyles(c);

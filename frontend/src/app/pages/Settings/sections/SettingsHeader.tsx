@@ -27,7 +27,7 @@ const SettingsHeader: React.FC<{
         <Typography sx={{ color: c.text.primary, fontWeight: 600, fontSize: '1rem' }}>
           {t('common.settings')}
         </Typography>
-        <IconButton onClick={onClose} size="small" data-onboarding="settings-close-button" sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
+        <IconButton onClick={onClose} size="small" sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
           <X size={18} />
         </IconButton>
       </Box>
@@ -55,7 +55,7 @@ const SettingsHeader: React.FC<{
         }}
       >
         <Tab label={t('settings.header.tabs.general')} value="general" disableRipple />
-        <Tab label={t('settings.header.tabs.models')} value="models" disableRipple data-onboarding="settings-models-tab" />
+        <Tab label={t('settings.header.tabs.models')} value="models" disableRipple />
         <Tab label={t('settings.header.tabs.skills')} value="skills" disableRipple />
         <Tab label={t('settings.header.tabs.tools')} value="tools" disableRipple />
         <Tab label={t('settings.header.tabs.commands')} value="commands" disableRipple />

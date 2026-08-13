@@ -132,7 +132,6 @@ const ServiceGroup: React.FC<ServiceGroupProps> = ({
   return (
       <Box sx={{ border: `1px solid ${c.border.subtle}`, borderRadius: 1.5, overflow: 'hidden', '&:hover': { borderColor: `${c.border.medium}` } }}>
         <Box
-          data-onboarding={isSubredditsForReddit ? 'actions-subreddits-chevron' : undefined}
           sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 0.75, cursor: 'pointer', bgcolor: isOpen ? c.bg.secondary : 'transparent', '&:hover': { bgcolor: c.bg.secondary } }}
           onClick={() => setExpandedServices((p) => ({ ...p, [svcKey]: !isOpen }))}
         >
@@ -141,7 +140,7 @@ const ServiceGroup: React.FC<ServiceGroupProps> = ({
             <Typography sx={{ color: c.text.primary, fontSize: '0.85rem', fontWeight: 600 }}>{serviceName}</Typography>
             <Chip label={count} size="small" sx={{ bgcolor: c.bg.page, color: c.text.muted, fontSize: '0.65rem', height: 18, '& .MuiChip-label': { px: 0.6 } }} />
           </Box>
-          <Box data-onboarding={showPermissionMarker ? 'actions-permission-toggle' : undefined}>
+          <Box>
             <PermToggle value={svcPolicy === 'mixed' ? 'ask' : svcPolicy} onChange={(v) => handleGroupPermissionChange(tool.id, allNames, v)} />
           </Box>
         </Box>

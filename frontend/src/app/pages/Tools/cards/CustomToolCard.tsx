@@ -106,7 +106,6 @@ const CustomToolCard: React.FC<CustomToolCardProps> = ({
                     <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
                       <Box
                         sx={{ display: 'flex', alignItems: 'center', gap: 2, cursor: isDisabled ? 'default' : 'pointer' }}
-                        data-onboarding={isYoutube ? 'actions-youtube-chevron' : isReddit ? 'actions-reddit-chevron' : undefined}
                         onClick={() => !isDisabled && onToggleExpand(tool.id, isExpanded)}
                       >
                         {ig && (
@@ -150,13 +149,6 @@ const CustomToolCard: React.FC<CustomToolCardProps> = ({
                         />
                         {ig && (
                           <Box
-                            data-onboarding={
-                              isYoutube
-                                ? 'actions-youtube-toggle'
-                                : isReddit
-                                  ? 'actions-reddit-toggle'
-                                  : undefined
-                            }
                             sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}
                             onClick={(e) => e.stopPropagation()}
                           >

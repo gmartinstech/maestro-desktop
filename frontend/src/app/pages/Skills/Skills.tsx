@@ -54,7 +54,6 @@ import {
   RegistrySkill,
   RegistrySkillDetail,
 } from '@/shared/state/skillRegistrySlice';
-import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 import ShareButton from '@/app/components/share/ShareButton';
 import { IMPORT_OPEN_EVENT } from '@/app/components/share/ImportEntryPoint';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
@@ -202,7 +201,6 @@ const Skills: React.FC = () => {
       return;
     }
     await dispatch(fetchSkills());
-    onboardingBus.emit('skill:installed');
     setSnackbar({ open: true, message: t('skills.page.installedLocal', { name: selectedReg.name }) });
   };
 
@@ -319,7 +317,6 @@ const Skills: React.FC = () => {
   }> = ({ label, selected, onClick, icon, onboardingId, trailing }) => (
     <Box
       onClick={onClick}
-      data-onboarding={onboardingId}
       sx={{
         display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.6,
         borderRadius: `${c.radius.sm}px`, cursor: 'pointer',
@@ -604,7 +601,6 @@ const Skills: React.FC = () => {
                     size="small"
                     startIcon={<DownloadIcon sx={{ fontSize: 15 }} />}
                     onClick={handleInstall}
-                    data-onboarding="skill-install-button"
                     sx={{
                       bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.pressed },
                       textTransform: 'none', borderRadius: `${c.radius.md}px`, px: 2, py: 0.5,
@@ -821,7 +817,6 @@ const Skills: React.FC = () => {
         onClose={() => setCommunityOpen(false)}
         onInstalled={(name) => {
           dispatch(fetchSkills());
-          onboardingBus.emit('skill:installed');
           setSnackbar({ open: true, message: t('skills.page.installedFromCommunity', { name }) });
         }}
       />

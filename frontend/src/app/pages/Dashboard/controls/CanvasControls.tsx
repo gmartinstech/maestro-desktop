@@ -79,7 +79,6 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
           px: 0.5,
           userSelect: 'none',
         }}
-        data-onboarding="canvas-controls"
       >
         <Tooltip title={t('dashboard.canvasControls.zoomOut')} placement="top">
           <IconButton size="small" onClick={actions.zoomOut} sx={{ color: c.text.muted }}>
@@ -118,7 +117,6 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
             size="small"
             onClick={onFitToView}
             sx={{ color: c.text.muted }}
-            data-onboarding="canvas-fit-to-view"
           >
             <FitScreenIcon sx={{ fontSize: '1rem' }} />
           </IconButton>
@@ -129,7 +127,6 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
             size="small"
             onClick={onTidy}
             sx={{ color: c.text.muted }}
-            data-onboarding="canvas-tidy-layout"
           >
             <AutoAwesomeIcon sx={{ fontSize: '1rem' }} />
           </IconButton>
@@ -142,7 +139,6 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
             size="small"
             onClick={() => setAndPersistMinimap(!minimapOpen)}
             sx={{ color: minimapOpen ? c.accent.primary : c.text.muted }}
-            data-onboarding="canvas-minimap-toggle"
           >
             <MapIcon sx={{ fontSize: '1rem' }} />
           </IconButton>

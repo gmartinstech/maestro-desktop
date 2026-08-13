@@ -37,7 +37,6 @@ import Dashboard from '@/app/pages/Dashboard/Dashboard';
 import DashboardHost from '@/app/components/Layout/DashboardHost';
 import { useLastDashboardId } from '@/shared/hooks/useLastDashboardId';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { hasModelConnected as selectHasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 import { shallowEqual } from 'react-redux';
 import { fetchDashboards, createDashboard, renameDashboard } from '@/shared/state/dashboardsSlice';
 import { Typewriter } from '@/app/components/feedback/Animated';
@@ -132,7 +131,10 @@ const AppShell: React.FC = () => {
 
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
   // "Connected" = the user's OWN model (key/sub/custom), NOT a non-empty /models list.
-  const hasModelConnected = useAppSelector(selectHasModelConnected);
+  const hasModelConnected = useAppSelector((s) => {
+    const subs = s.subscriptions.status;
+    return (subs?.subscriptions && Object.keys(subs.subscriptions).length > 0) || false;
+  });
   const showWarningBanner = !isOnline || (modelsLoaded && !hasModelConnected);
 
   const bannerDismissedForVersion = availableVersion != null && dismissedVersion === availableVersion;
@@ -499,7 +501,7 @@ const AppShell: React.FC = () => {
             size="small"
             onClick={() => setSidebarCollapsed((prev) => !prev)}
             // Onboarding runtime reads aria-expanded to detect a collapsed sidebar.
-            data-onboarding="sidebar-toggle"
+
             aria-expanded={!sidebarCollapsed}
             sx={{
               WebkitAppRegion: 'no-drag',
@@ -740,17 +742,11 @@ const AppShell: React.FC = () => {
             transition: 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
           },
           // Per-glyph hover choreography: each section icon reacts in its own way, springy then settles. Interaction-only, never ambient.
-          '& [data-onboarding="sidebar-dashboards"]:hover .MuiListItemIcon-root svg': {
-            transform: 'scale(1.14)',
-          },
-          '& [data-onboarding="sidebar-apps"]:hover .MuiListItemIcon-root svg': {
-            transform: 'rotate(8deg) scale(1.08)',
-          },
         }}>
           <Box sx={{ px: 1, mb: 0.25 }}>
             <ListItemButton
               onClick={handleDashboardsClick}
-              data-onboarding="sidebar-dashboards"
+
               // Onboarding reads expanded so it skips the click step (re-click would collapse).
               data-expanded={dashboardsExpanded ? 'true' : 'false'}
               aria-expanded={dashboardsExpanded}
@@ -910,7 +906,7 @@ const AppShell: React.FC = () => {
                 const fn = (window as any).__maestroPrefetchRoute;
                 if (typeof fn === 'function') fn('/apps');
               }}
-              data-onboarding="sidebar-apps"
+
               sx={{
                 borderRadius: 1.5,
                 py: 0.6,
@@ -1016,7 +1012,7 @@ const AppShell: React.FC = () => {
         >
           <ListItemButton
             onClick={() => dispatch(openSettingsModal())}
-            data-onboarding="sidebar-settings-button"
+
             sx={{
               borderRadius: 1.5,
               py: 0.6,

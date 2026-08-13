@@ -711,11 +711,6 @@ const AgentCard: React.FC<Props> = ({
       data-select-id={session.id}
       data-select-meta={JSON.stringify({ name: session.name || session.id, status: session.status, model: session.model, mode: session.mode })}
       // Onboarding tiebreaker: ISO-date sorts the newest card for per-agent selectors; DOM order isn't creation order.
-      data-onboarding-spawn-ms={
-        session.created_at
-          ? new Date(session.created_at).getTime() || undefined
-          : undefined
-      }
       onClick={(e: React.MouseEvent) => {
         if (justDraggedRef.current) return;
         onCardSelect?.(session.id, 'agent', e.shiftKey);

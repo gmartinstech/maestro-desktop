@@ -11,7 +11,6 @@ const LEGACY_KEY_RENAMES: ReadonlyArray<readonly [string, string]> = [
   ['self-swarm-theme-mode', 'maestro-theme-mode'],
   ['openswarm-sidebar-width', 'maestro-sidebar-width'],
   ['openswarm-update-dismissed', 'maestro-update-dismissed'],
-  ['openswarm.onboarding.v2', 'maestro.onboarding.v2'],
   ['openswarm.picker.recentModels', 'maestro.picker.recentModels'],
   ['openswarm.picker.recentSearches', 'maestro.picker.recentSearches'],
   ['openswarm.picker.filtersExpanded', 'maestro.picker.filtersExpanded'],

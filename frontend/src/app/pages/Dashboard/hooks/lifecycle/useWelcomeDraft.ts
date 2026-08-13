@@ -2,8 +2,6 @@ import { useCallback, type RefObject } from 'react';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { createDraftSession, expandSession } from '@/shared/state/agentsSlice';
 import { placeCard, setCardPosition, DEFAULT_CARD_W, EXPANDED_CARD_MIN_H } from '@/shared/state/dashboardLayoutSlice';
-import { markWelcomeShown } from '@/shared/state/onboardingProgressSlice';
-import { hasModelConnected } from '@/app/components/Onboarding/steps/skipPredicates';
 
 type SpawnOrigin = { x: number; y: number; type?: 'branch' };
 
@@ -17,20 +15,13 @@ interface Args {
   spawnOriginsRef: RefObject<Record<string, SpawnOrigin>>;
 }
 
-// First-run welcome chat. NOT auto-created: the onboarding cursor clicks the New Agent button, which calls handleNewAgent -> createWelcomeDraft, so the chat is clicked into existence. The user clicking New Agent by hand spawns the same thing (fail-safe). Returns the gate + creator.
+// Welcome chat disabled after onboarding removal.
 export function useWelcomeDraft({
   dashboardId, canvasEmpty, expandedSessionIds, viewportRef, canvasStateRef, spawnOriginsRef,
 }: Args): { welcomeEligible: boolean; createWelcomeDraft: () => void } {
   const dispatch = useAppDispatch();
-  const reduxEligible = useAppSelector(
-    (s) =>
-      s.settings.loaded &&
-      hasModelConnected(s) &&
-      !s.onboardingProgress.welcomeShown &&
-      !(s.onboardingProgress.completedSteps ?? []).includes('launch_agent'),
-  );
   const model = useAppSelector((s) => s.settings.data.default_model);
-  const welcomeEligible = reduxEligible && canvasEmpty;
+  const welcomeEligible = false;
 
   const createWelcomeDraft = useCallback(() => {
     try {
@@ -60,7 +51,6 @@ export function useWelcomeDraft({
         dispatch(setCardPosition({ sessionId: draftId, x, y }));
       }
       dispatch(expandSession(draftId));
-      dispatch(markWelcomeShown());
     } catch (err) {
       console.error('[welcome-draft] create failed', err);
     }

@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
-import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { serializeEditorContent, AttachedSkill } from '@/app/components/editor/richEditorUtils';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -228,9 +227,7 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     // Fits now (e.g. user shortened a too-long message): clear any lingering block banner.
     setSendBlock(null);
 
-    onboardingBus.emit('chat:message_sent');
     if (window.location.hash.includes('/apps/')) {
-      onboardingBus.emit('app:generation_started');
     }
 
     if (sessionId && trimmed.startsWith('/')) {

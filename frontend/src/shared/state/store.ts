@@ -17,7 +17,6 @@ import interactionReducer from './interactionSlice';
 import subscriptionsReducer from './subscriptionsSlice';
 import workflowsReducer from './workflowsSlice';
 import missedRunsReducer from './missedRunsSlice';
-import onboardingProgressReducer from '@/shared/state/onboardingProgressSlice';
 import provedorIaReducer from './provedorIaSlice';
 
 export const store = configureStore({
@@ -40,7 +39,6 @@ export const store = configureStore({
     subscriptions: subscriptionsReducer,
     workflows: workflowsReducer,
     missedRuns: missedRunsReducer,
-    onboardingProgress: onboardingProgressReducer,
     provedorIa: provedorIaReducer,
   },
   // Disable Redux Toolkit's dev-mode invariant middleware (serializable + immutable checks). These deep-walk the entire state on every dispatch, and our state is large enough to trigger 30-50ms pauses on hot paths (agent streaming, websocket heartbeats, settings sync). Console warns "SerializableStateInvariantMiddleware took 41ms" repeatedly under load. Production builds skip these middlewares anyway, so disabling them in dev makes dev behavior match prod, no surprises at packaging time. Trade-off: serializability bugs (e.g. accidentally putting a Map or Date directly into state) won't be caught at dev time. We've shipped many versions with stable slice shapes; that risk is now low.

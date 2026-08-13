@@ -26,15 +26,11 @@ import ImportEntryPoint from './components/share/ImportEntryPoint';
 import DashboardSelection from './pages/DashboardSelection/DashboardSelection';
 import ErrorBoundary from './components/feedback/ErrorBoundary';
 import ProvedorIaSessionGate from './components/ProvedorIaLogin/ProvedorIaSessionGate';
-import { setPanelMode, disableOnboardingAfterCrash } from '@/shared/state/onboardingProgressSlice';
 import { PROVEDOR_IA_DEFAULT_MODEL, PROVEDOR_IA_PROVIDER_NAME } from '@/shared/config';
 import i18n from '@/shared/i18n/i18n';
 import { resolveLanguageSync } from '@/shared/i18n/languageSync';
 
 const Analytics = React.lazy(() => import('./pages/Analytics/Analytics'));
-const OnboardingRoot = React.lazy(() =>
-  import('./components/Onboarding').then((m) => ({ default: m.OnboardingRoot })),
-);
 
 if (typeof window !== 'undefined') {
   // Diagnostic global error capture. The packaged bundle has no source maps, so without these handlers the only thing that reaches main-process stderr is "Uncaught TypeError: ... (bundle.js:2)" with zero stack context. Forward error.stack and Redux action.type when available so we can pinpoint the offender across the chat-spawn / workflow rendering paths even in minified prod.
@@ -527,11 +523,6 @@ const ThemedApp: React.FC = () => {
                     </Routes>
                   </Suspense>
                 </ErrorBoundary>
-                <OnboardingErrorGuard>
-                  <Suspense fallback={null}>
-                    <OnboardingRoot />
-                  </Suspense>
-                </OnboardingErrorGuard>
               </DeepLinkListener>
             </UpdateListener>
             </DefaultModelGuard>
@@ -541,29 +532,6 @@ const ThemedApp: React.FC = () => {
   );
 };
 
-/**
- * Onboarding must never be able to take the whole app down. It mounts beside the
- * routes (not under them), so before this guard a render throw bubbled to the root
- * boundary and blanked everything. Here we catch it locally: keep the dashboard
- * alive (fallback null), report it under its own scope so the stack finally shows
- * up in telemetry, and dismiss the tour in storage so the next launch doesn't drop
- * the user straight back into the same crash. Settings > restart tour re-enables it.
- */
-const OnboardingErrorGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const dispatch = useAppDispatch();
-  return (
-    <ErrorBoundary
-      scope="onboarding"
-      fallback={null}
-      onError={() => {
-        try { dispatch(setPanelMode('hidden')); } catch {}
-        disableOnboardingAfterCrash();
-      }}
-    >
-      {children}
-    </ErrorBoundary>
-  );
-};
 
 // useRouteTracker calls useLocation, must be inside HashRouter.
 const RouteTrackerMount: React.FC = () => {

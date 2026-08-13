@@ -7,8 +7,6 @@ import Button from '@mui/material/Button';
 import Switch from '@mui/material/Switch';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { closeSettingsModal, AppSettings } from '@/shared/state/settingsSlice';
-import { onboardingBus } from '@/app/components/Onboarding/eventBus';
-import { resetTour } from '@/shared/state/onboardingProgressSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import TrustedFilePatterns from '@/app/components/overlays/TrustedFilePatterns';
 import SoftwareUpdateRow from './SoftwareUpdateRow';
@@ -98,41 +96,6 @@ const GeneralAdvanced: React.FC<{
       <SoftwareUpdateRow styles={styles} />
 
       <TrustedFilePatterns />
-
-      <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box>
-          <Typography sx={{ ...labelSx, mb: 0.25 }}>{t('settings.general.advanced.onboardingTour')}</Typography>
-          <Typography sx={{ ...descSx, mb: 0 }}>
-            {t('settings.general.advanced.onboardingTourDesc')}
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          size="small"
-          data-onboarding="settings-restart-tour"
-          onClick={() => {
-            report('onboarding_v2', 'tour_restarted');
-            try {
-              window.localStorage.removeItem('maestro.onboarding.v2');
-            } catch { /* ignore */ }
-            dispatch(resetTour());
-            dispatch(closeSettingsModal());
-            onboardingBus.emit('settings:closed');
-            // In-place reset can't re-arm the welcome cursor's once-per-mount guard, so the tour never re-fired without a reload; reload from the now-cleared storage is the reliable restart (matches the workaround).
-            window.location.reload();
-          }}
-          sx={{
-            color: c.text.secondary,
-            borderColor: c.border.medium,
-            textTransform: 'none',
-            fontSize: '0.8rem',
-            whiteSpace: 'nowrap',
-            '&:hover': { color: c.accent.primary, borderColor: c.accent.primary },
-          }}
-        >
-          {t('settings.general.advanced.restartTour')}
-        </Button>
-      </Box>
     </>
   );
 };

@@ -31,12 +31,12 @@ const ModelsTab: React.FC<{
           {t('settings.models.subscriptionDesc')}
         </Typography>
 
-        <Box data-onboarding="settings-external-subs">
+        <Box>
           <SubscriptionCards />
         </Box>
       </Box>
 
-      <Box data-onboarding="settings-api-keys" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <Typography sx={{ fontSize: '0.7rem', color: c.text.ghost, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, mt: 1 }}>
           {t('settings.models.connectWithApiKeys')}
         </Typography>

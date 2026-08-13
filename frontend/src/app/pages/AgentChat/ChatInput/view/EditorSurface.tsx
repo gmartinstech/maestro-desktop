@@ -36,7 +36,6 @@ export const EditorSurface: React.FC<Props> = ({
     <Box sx={{ px: 1.5, pt: hasAttachments ? 0.5 : 1.25, pb: 0.25, position: 'relative' }}>
       <div
         ref={editorRef}
-        data-onboarding="chat-input"
         data-testid="chat-input"
         // A contenteditable div has no implicit textbox role, so assistive tech and
         // getByRole('textbox') both missed the composer entirely until this was explicit.

@@ -1,9 +1,8 @@
 import type { CSSProperties } from 'react';
 import i18n from '@/shared/i18n/i18n';
-import { useThemeMode, useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
-// The Workflows app renders in its own warm-paper visual language (from the Claude design), deliberately separate from the MUI theme so the window reads as a focused app. Two palettes (light/dark) keyed to the app theme; grab one per component with useWC(). inkRGB is the ink color as a bare "r,g,b" so the many rgba(ink, opacity) borders/hovers can flip with the theme too.
 export interface WCPalette {
   accent: string;
   paper: string;
@@ -31,74 +30,41 @@ export interface WCPalette {
   warn: string;
   warnBg: string;
   trackOff: string;
-  // Structural primitives shared with the rest of Maestro (sourced from claudeTokens in useWC), so the window stops looking built-separate.
   shadow: ClaudeTokens['shadow'];
   radius: ClaudeTokens['radius'];
   border: ClaudeTokens['border'];
 }
 
-// The identity half of the palette: accent, text, status, hairlines. The neutral surfaces + structural primitives are blended in from claudeTokens by useWC(), so the window is the same material as every other card.
-type WCColors = Omit<WCPalette, 'shadow' | 'radius' | 'border' | 'paper' | 'page' | 'panel' | 'rail' | 'inset' | 'raised'>;
-
-export const WC_LIGHT: WCColors = {
-  accent: '#C25A36',
-  ink: '#211E1B',
-  ink2: '#2B2722',
-  ink3: '#4B463E',
-  ink4: '#6B655C',
-  muted: '#73726C',
-  muted2: '#8C857A',
-  faint: '#A39C92',
-  inkRGB: '33,30,27',
-  line: 'rgba(33,30,27,0.07)',
-  line2: 'rgba(33,30,27,0.12)',
-  hover: 'rgba(33,30,27,0.045)',
-  selBg: 'rgba(33,30,27,0.06)',
-  success: '#2E7D5B',
-  successBg: 'rgba(46,125,91,0.12)',
-  danger: '#C2483A',
-  dangerBg: 'rgba(194,72,58,0.10)',
-  warn: '#B98A2E',
-  warnBg: 'rgba(185,138,46,0.14)',
-  trackOff: '#D5D1C8',
-};
-
-export const WC_DARK: WCColors = {
-  accent: '#C25A36',
-  ink: '#F2EFE9',
-  ink2: '#E2DDD4',
-  ink3: '#B3ABA0',
-  ink4: '#9A9389',
-  muted: '#938C82',
-  muted2: '#736D64',
-  faint: '#6E6860',
-  inkRGB: '240,236,228',
-  line: 'rgba(240,236,228,0.07)',
-  line2: 'rgba(240,236,228,0.12)',
-  hover: 'rgba(240,236,228,0.045)',
-  selBg: 'rgba(240,236,228,0.06)',
-  success: '#2E7D5B',
-  successBg: 'rgba(46,125,91,0.22)',
-  danger: '#C2483A',
-  dangerBg: 'rgba(194,72,58,0.18)',
-  warn: '#B98A2E',
-  warnBg: 'rgba(185,138,46,0.18)',
-  trackOff: 'rgba(240,236,228,0.18)',
-};
-
 export function useWC(): WCPalette {
-  const { mode } = useThemeMode();
   const c = useClaudeTokens();
-  const base = mode === 'dark' ? WC_DARK : WC_LIGHT;
   return {
-    ...base,
-    // Three-tone depth from the app tokens (matches the Claude design): the content area sits on `page`, cards/title bar pop on `surface` above it, and the sidebar/right rail recede on `secondary`. surface > page in BOTH themes, so cards always pop (no light/dark inversion). Light's palette inverts (elevated is lighter than surface in light, darker in dark), so the mid content tone must flip per mode: in light it steps UP to bg.elevated so the window stands apart from the bg.page canvas behind it and cards still pop on bg.surface above; in dark bg.page is already darker than the cards, so it stays. Rows mirror it (surface in light, elevated in dark) so they always sit above the content.
-    paper: c.bg.surface,                                       // cards, title bar, popovers
-    page: mode === 'dark' ? c.bg.secondary : c.bg.elevated,   // content area: one step above the canvas in both modes
-    panel: c.bg.surface,                                       // title bar
-    rail: mode === 'dark' ? c.bg.page : c.bg.secondary,        // sidebar / right rail: the recessed darkest column
+    accent: c.accent.primary,
+    ink: c.text.primary,
+    ink2: c.text.secondary,
+    ink3: c.text.muted,
+    ink4: c.text.tertiary,
+    muted: c.text.muted,
+    muted2: c.text.tertiary,
+    faint: c.text.ghost,
+    // Convert RGB values from hex for rgba composition: light theme uses dark text, dark theme uses light text
+    inkRGB: c.text.primary === '#1F2937' ? '31,41,55' : '249,250,251',
+    line: c.border.subtle,
+    line2: c.border.medium,
+    hover: `${c.accent.primary}0A`,
+    selBg: `${c.accent.primary}0F`,
+    success: '#2E7D5B',
+    successBg: 'rgba(46,125,91,0.12)',
+    danger: '#C2483A',
+    dangerBg: 'rgba(194,72,58,0.15)',
+    warn: '#B98A2E',
+    warnBg: 'rgba(185,138,46,0.15)',
+    trackOff: c.border.strong,
+    paper: c.bg.surface,
+    page: c.bg.page,
+    panel: c.bg.surface,
+    rail: c.bg.secondary,
     inset: c.bg.page,
-    raised: mode === 'dark' ? c.bg.elevated : c.bg.surface,    // extra-raised rows / dropdowns
+    raised: c.bg.elevated,
     shadow: c.shadow,
     radius: c.radius,
     border: c.border,

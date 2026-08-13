@@ -41,7 +41,6 @@ export const ToolbarActions: React.FC<Props> = ({
             <IconButton
               size="small"
               onMouseDown={(e) => e.preventDefault()}
-              data-onboarding="element-selection-toggle"
               onClick={() => {
                 if (isMySelectMode) {
                   elementSelection.setSelectMode(false);
@@ -116,7 +115,6 @@ export const ToolbarActions: React.FC<Props> = ({
                 size="small"
                 onClick={handleSend}
                 disabled={disabled}
-                data-onboarding="chat-send-button"
                 sx={{
                   bgcolor: c.accent.primary,
                   color: c.text.inverse,

@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useMemo, MutableRefObject } from 'react';
-import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 
 export interface SelectedElement {
   id: string;
@@ -73,7 +72,6 @@ export const ElementSelectionProvider: React.FC<{ children: React.ReactNode }> =
     });
     // Drag-select also emits agent:attached_to_browser; addElementForOwner alone misses this path.
     if (el.semanticType === 'browser-card' || el.semanticType === 'agent-card') {
-      onboardingBus.emit('agent:attached_to_browser');
     }
   }, []);
 
@@ -117,7 +115,6 @@ export const ElementSelectionProvider: React.FC<{ children: React.ReactNode }> =
       el.semanticType === 'browser-card' ||
       el.semanticType === 'agent-card'
     ) {
-      onboardingBus.emit('agent:attached_to_browser');
     }
   }, []);
 

@@ -39,13 +39,6 @@ const IntegrationGalleryCard: React.FC<IntegrationGalleryCardProps> = ({ integra
                           <Typography sx={{ color: c.text.muted, fontSize: '0.84rem' }}>{ig.description}</Typography>
                         </Box>
                         <Box
-                          data-onboarding={
-                            ig.id === 'youtube'
-                              ? 'actions-youtube-toggle'
-                              : ig.id === 'reddit'
-                                ? 'actions-reddit-toggle'
-                                : undefined
-                          }
                           sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}
                         >
                           {isLoading && <CircularProgress size={16} sx={{ color: ig.color }} />}

@@ -442,9 +442,8 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
         }}
       >
         {inputOpen && !historyOpen ? (
-          // historyOpen wins over the composer: clicking Schedule closes the composer via onCancel(), but that's a parent-state update that lands a render late, so without this guard the composer kept covering the calendar (the "Schedule does nothing" bug). data-onboarding-scope="dock" makes AC's per-agent resolver prefer this dock chat input over existing agent cards.
+          // historyOpen wins over the composer: clicking Schedule closes the composer via onCancel(), but that's a parent-state update that lands a render late, so without this guard the composer kept covering the calendar (the "Schedule does nothing" bug). makes AC's per-agent resolver prefer this dock chat input over existing agent cards.
           <div
-            data-onboarding-scope="dock"
             style={{ width: '100%', minHeight: 56, paddingBottom: 0, marginBottom: -4 }}
           >
             <ChatInput
@@ -620,7 +619,6 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               <Box
                 role="button"
                 aria-label={t('dashboard.toolbar.newAgent')}
-                data-onboarding="new-agent-button"
                 data-testid="new-agent-button"
                 tabIndex={0}
                 onClick={() => {
@@ -676,7 +674,6 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                 aria-label={t('dashboard.toolbar.addApp')}
                 tabIndex={0}
                 onClick={handleOpenViewPicker}
-                data-onboarding="dashboard-toolbar-apps"
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -709,7 +706,6 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               <Box
                 role="button"
                 aria-label={t('dashboard.toolbar.browser')}
-                data-onboarding="browser-button"
                 tabIndex={0}
                 onClick={onAddBrowser}
                 sx={{
