@@ -17,7 +17,6 @@ import os
 import secrets
 import shutil
 import socket
-import stat
 import subprocess
 import tempfile
 import time
@@ -114,25 +113,6 @@ def p_nine_router_data_dir() -> str:
         )
         return os.path.join(base, "9router")
     return os.path.join(os.path.expanduser("~"), ".9router")
-
-
-def harden_data_dir_permissions() -> None:
-    """Make the 9Router state dir owner-only. Its db.json holds live subscription access AND refresh
-    tokens in plaintext and 9Router writes it 0644, so on a shared machine any other local account
-    can read them. We tighten the DIRECTORY rather than the file because 9Router rewrites db.json on
-    every token refresh, which would drop a chmod on the file itself within the hour."""
-    if os.name == "nt":
-        return
-    data_dir = p_nine_router_data_dir()
-    try:
-        if not os.path.isdir(data_dir):
-            return
-        current = stat.S_IMODE(os.stat(data_dir).st_mode)
-        if current & 0o077:
-            os.chmod(data_dir, 0o700)
-            logger.info("tightened 9router data dir from %s to 0700", oct(current))
-    except OSError:
-        logger.warning("could not tighten 9router data dir permissions", exc_info=True)
 
 
 p_cli_token_cache: str | None = None
@@ -373,7 +353,6 @@ async def ensure_running():
         p_start_lock = asyncio.Lock()
     async with p_start_lock:
         await p_ensure_running_impl()
-    harden_data_dir_permissions()
     # Arm both healers the moment the router becomes a live dependency; users who never route through it never spawn them.
     if is_running():
         start_watchdog()

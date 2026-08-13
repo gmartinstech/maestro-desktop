@@ -138,7 +138,6 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
         # Read BEFORE build_agent_options consumes these flags: a fresh-session/fork request must force the persistent client to respawn (same branch id would otherwise fingerprint-match a client still holding the old transcript).
         p_force_respawn = bool(session.needs_fresh_session or session.needs_fork or fork_session)
         try:
-            logger.info(f"[SPAWN-PHASE] run-loop start session={session_id[:8]}")
             (options, options_kwargs, prompt_content, p_stderr_buffer,
              global_settings) = await self.build_agent_options(
                 session, session_id, prompt, prompt_content, builtin_perms,
@@ -149,9 +148,7 @@ class AgentManager(SessionLifecycle, SessionPersistence, Messaging, SessionContr
 
             thinking = ThinkingState()
             # Gate the CLI turn (spawn + stream) behind the admission slot so a burst can't run every turn at once; the slot is held ONLY for run_turn_with_retry, so the context-valve retry below re-acquires cleanly instead of nesting.
-            logger.info(f"[SPAWN-PHASE] admission-wait session={session_id[:8]}")
             async with self.turn_admission_slot(session, session_id):
-                logger.info(f"[SPAWN-PHASE] admitted session={session_id[:8]}")
                 await self.run_turn_with_retry(
                     session, session_id, prompt_content, options, options_kwargs,
                     turn, thinking, p_stderr_buffer, resolved_model, api_type, global_settings,

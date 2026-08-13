@@ -75,9 +75,6 @@ async def get_session(session_id: str):
 @agents.router.post("/launch")
 async def launch_agent(config: AgentConfig):
     session = await agent_manager.launch_agent(config)
-    # A launch that carries a prompt runs it as the first turn through the same path /message uses.
-    if config.prompt:
-        asyncio.create_task(agent_manager.send_message(session.id, config.prompt))
     return {"session_id": session.id, "session": session.model_dump(mode="json")}
 
 @agents.router.post("/sessions/{session_id}/message")
