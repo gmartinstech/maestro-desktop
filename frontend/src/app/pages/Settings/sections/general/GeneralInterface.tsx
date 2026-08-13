@@ -23,6 +23,7 @@ const GeneralInterface: React.FC<{
 }> = ({ form, setForm, styles }) => {
   const c = useClaudeTokens();
   const { t, i18n } = useTranslation();
+  const currentLanguage = form.language ?? (i18n.resolvedLanguage as 'pt-BR' | 'en' | undefined) ?? 'pt-BR';
   const [recordingShortcut, setRecordingShortcut] = useState(false);
   const { fieldSx, sectionSx, rowSx, rowLastSx, inlineRowSx, inlineRowLastSx, labelSx, descSx } = styles;
 
@@ -36,9 +37,9 @@ const GeneralInterface: React.FC<{
           <Typography sx={descSx}>{t('settings.interface.languageDesc')}</Typography>
         </Box>
         <ToggleButtonGroup
-          value={i18n.resolvedLanguage ?? i18n.language}
+          value={currentLanguage}
           exclusive
-          onChange={(_, v) => { if (v) i18n.changeLanguage(v); }}
+          onChange={(_, v) => { if (v) setForm({ ...form, language: v }); }}
           size="small"
           sx={{
             '& .MuiToggleButton-root': {

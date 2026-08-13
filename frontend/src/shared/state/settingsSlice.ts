@@ -36,6 +36,8 @@ export interface AppSettings {
   default_thinking_level: 'off' | 'low' | 'medium' | 'high' | 'auto';
   zoom_sensitivity: number;
   theme: 'light' | 'dark';
+  /** Explicit UI language choice; null before migration/first sync writes it. */
+  language?: 'pt-BR' | 'en' | null;
   new_agent_shortcut: string;
   anthropic_api_key: string | null;
   openai_api_key?: string | null;
@@ -94,6 +96,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   default_thinking_level: 'auto',
   zoom_sensitivity: 50,
   theme: 'light',
+  language: null,
   new_agent_shortcut: 'Meta+l',
   anthropic_api_key: null,
   browser_homepage: 'https://duckduckgo.com',
