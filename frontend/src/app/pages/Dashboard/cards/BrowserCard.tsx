@@ -1556,7 +1556,7 @@ const BrowserCard: React.FC<Props> = ({
                   letterSpacing: '0.02em',
                 }}
               >
-                {getActionLabel(agentAction ?? '')}
+                {getActionLabel(agentAction ?? '', t)}
               </Typography>
             </Box>
           </Box>

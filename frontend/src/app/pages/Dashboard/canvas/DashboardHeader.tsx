@@ -14,6 +14,7 @@ import { saveLayout, viewCardKey } from '@/shared/state/dashboardLayoutSlice';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition, NotePosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
 import type { CanvasActions } from '../hooks/interaction/useCanvasControls';
+import { useTranslation } from 'react-i18next';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
 
 interface DashboardHeaderProps {
@@ -57,6 +58,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onHighlightCard,
 }) => {
   const c = useClaudeTokens();
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -82,7 +84,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     const activeTab = bc.tabs.find((t) => t.id === bc.activeTabId);
     return {
       id: bc.browser_id,
-      title: activeTab?.title || 'New Tab',
+      title: activeTab?.title || t('dashboard.browserCard.newTab'),
       url: activeTab?.url || bc.url,
       card: bc,
     };
@@ -207,7 +209,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             }}
           >
             {agentItems.length > 0 && (
-              <CategoryGroup icon={<SmartToyOutlinedIcon />} label="Agents" count={agentItems.length} c={c}>
+              <CategoryGroup icon={<SmartToyOutlinedIcon />} label={t('dashboard.header.agents')} count={agentItems.length} c={c}>
                 {agentItems.map((item) => (
                   <ItemRow key={item.id} onClick={() => handleFocus(item.id, item.card)} c={c}>
                     <Box
@@ -229,7 +231,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                     <Typography
                       sx={{ fontSize: '0.7rem', color: c.text.ghost, flexShrink: 0 }}
                     >
-                      {friendlyStatusLabel(item.status)}
+                      {friendlyStatusLabel(item.status, t)}
                     </Typography>
                   </ItemRow>
                 ))}
@@ -237,7 +239,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             )}
 
             {viewItems.length > 0 && (
-              <CategoryGroup icon={<GridViewRoundedIcon />} label="Views" count={viewItems.length} c={c}>
+              <CategoryGroup icon={<GridViewRoundedIcon />} label={t('dashboard.header.views')} count={viewItems.length} c={c}>
                 {viewItems.map((item) => (
                   <ItemRow key={item.id} onClick={() => handleFocus(item.id, item.card)} c={c}>
                     <Typography
@@ -252,7 +254,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             )}
 
             {browserItems.length > 0 && (
-              <CategoryGroup icon={<LanguageIcon />} label="Browsers" count={browserItems.length} c={c}>
+              <CategoryGroup icon={<LanguageIcon />} label={t('dashboard.header.browsers')} count={browserItems.length} c={c}>
                 {browserItems.map((item) => (
                   <ItemRow key={item.id} onClick={() => handleFocus(item.id, item.card)} c={c}>
                     <Typography

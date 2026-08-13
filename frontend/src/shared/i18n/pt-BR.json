@@ -12,7 +12,14 @@
     "copy": "Copiar",
     "edit": "Editar",
     "remove": "Remover",
-    "delete": "Excluir"
+    "delete": "Excluir",
+    "status": {
+      "working": "trabalhando",
+      "needsYourOk": "aguarda sua aprovação",
+      "done": "concluído",
+      "needsAttention": "precisa de atenção"
+    },
+    "back": "voltar"
   },
   "appShell": {
     "appTitle": "Maestro Studio",
@@ -481,6 +488,156 @@
       "tidyLayout": "Organizar os cartões",
       "hideMinimap": "Ocultar minimapa",
       "showMinimap": "Mostrar minimapa"
+    },
+    "browserAction": {
+      "screenshot": "Capturando...",
+      "getText": "Lendo...",
+      "navigate": "Navegando...",
+      "click": "Clicando...",
+      "type": "Digitando...",
+      "evaluate": "Avaliando...",
+      "getElements": "Inspecionando...",
+      "scroll": "Rolando a página...",
+      "wait": "Aguardando...",
+      "pressKey": "Pressionando tecla...",
+      "listInteractives": "Lendo a estrutura da página...",
+      "clickElement": "Clicando no elemento...",
+      "clickPoint": "Tocando na tela...",
+      "batch": "Executando lote...",
+      "working": "Trabalhando..."
+    },
+    "emptyState": {
+      "prompt": "O que você quer resolver?",
+      "connectModel": "Conecte um modelo em Configurações para começar."
+    },
+    "starters": {
+      "pickOneOrTell": "escolha uma, ou me diga aqui embaixo",
+      "pickOneOrType": "escolha uma, ou digite aqui embaixo",
+      "research": {
+        "label": "Pesquisar",
+        "prompt1": "Monte um roteiro de 3 dias em Tóquio e transforme num PDF para imprimir",
+        "prompt2": "Faça uma apresentação de slides sobre buracos negros",
+        "prompt3": "Veja no que eu andei trabalhando e escreva um resumo rápido",
+        "prompt4": "Mande 3 agentes planejarem meu fim de semana ao mesmo tempo: onde comer, o que fazer, o que assistir"
+      },
+      "build": {
+        "label": "Criar um app",
+        "prompt1": "Faça um Minecraft que eu possa jogar agora",
+        "prompt2": "Crie um site pessoal a partir do meu currículo",
+        "prompt3": "Transforme uma planilha do meu computador num dashboard ao vivo",
+        "prompt4": "Crie um controle de hábitos que guarde minha sequência entre as visitas"
+      },
+      "browse": {
+        "label": "Usar a web",
+        "prompt1": "Mande um agente achar as passagens mais baratas para Tóquio e me mostrar as melhores opções",
+        "prompt2": "Peça a um agente para caçar o melhor preço de algo que eu quero comprar",
+        "prompt3": "Ache e tire print das cafeterias mais bem avaliadas da minha cidade",
+        "prompt4": "Acompanhe um agente me inscrevendo numa newsletter gratuita de um site"
+      },
+      "connect": {
+        "label": "Conectar seus apps",
+        "prompt1": "Resuma minha caixa de entrada do Gmail e marque o que realmente precisa de resposta",
+        "prompt2": "Transforme minhas notas do Notion num plano de ação claro",
+        "prompt3": "Olhe minha agenda e monte um plano realista para a semana",
+        "prompt4": "Puxe uma planilha do meu Google Drive e faça um gráfico do que importa"
+      }
+    },
+    "header": {
+      "agents": "Agentes",
+      "views": "Telas",
+      "browsers": "Navegadores"
+    },
+    "agentCard": {
+      "queued": "na fila",
+      "closeChat": "Fechar conversa",
+      "questionPending": "Pergunta pendente",
+      "learned": "Aprendeu",
+      "remembered": "Lembrou",
+      "memoryLearnedHint": "Guardou o que funcionou aqui, então na próxima vez é mais rápido",
+      "memoryRecalledHint": "Usando o que aprendeu aqui numa visita anterior",
+      "approve": "Aprovar",
+      "deny": "Recusar",
+      "approveAll": "Aprovar tudo",
+      "denyAll": "Recusar tudo",
+      "pendingApprovals_one": "{{count}} aprovação pendente",
+      "pendingApprovals_other": "{{count}} aprovações pendentes"
+    },
+    "viewCard": {
+      "startingPreview": "Iniciando a prévia",
+      "firstRunHint": "Na primeira execução o app é preparado, isso pode levar um instante.",
+      "building": "Criando…",
+      "preview": "Prévia",
+      "code": "Código",
+      "terminal": "Terminal",
+      "history": "Histórico",
+      "hardReloadHint": "Recarregar do zero (reinicia o runtime e recarrega o app)",
+      "reloadHint": "Recarregar a prévia; clique com o botão direito para recarregar do zero",
+      "openAnotherWindow": "Abrir em outra janela",
+      "showToolbar": "Mostrar a barra de ferramentas",
+      "hideToolbar": "Ocultar a barra de ferramentas",
+      "removeFromDashboard": "Remover do painel"
+    },
+    "cardSearch": {
+      "placeholder": "Buscar cards...",
+      "noCards": "Nenhum card encontrado",
+      "agentFallback": "Agente {{id}}",
+      "viewFallback": "Tela: {{id}}",
+      "browserFallback": "Navegador {{id}}"
+    },
+    "noteCard": {
+      "placeholder": "Escreva uma nota…"
+    },
+    "findBar": {
+      "placeholder": "Buscar na página"
+    },
+    "closeAgent": {
+      "title": "O agente ainda está rodando",
+      "body": "Este agente ainda está rodando. Fechar o card vai pausá-lo. Você pode retomar depois pelo histórico de conversas.",
+      "confirm": "Fechar e pausar"
+    },
+    "replayOverlay": {
+      "ariaLabel": "leitura rápida de dados",
+      "results_one": "{{count}} resultado",
+      "results_other": "{{count}} resultados",
+      "feedEmpty": "O feed do {{site}} voltou vazio, navegando no lugar disso",
+      "readingFeed": "Lendo o feed de dados do {{site}}"
+    },
+    "browserOverlay": {
+      "title": "Agente de navegador",
+      "done": "Concluído",
+      "error": "Erro",
+      "stopped": "Parado",
+      "waiting": "Aguardando…",
+      "needsHelp": "Precisa de ajuda",
+      "needsHelpBody": "O agente de navegador precisa da sua ajuda.",
+      "collapse": "Recolher",
+      "expand": "Expandir",
+      "stop": "Parar",
+      "clickAgainToConfirm": "Clique de novo para confirmar",
+      "resolveHint": "Resolva o problema no navegador acima e clique em Concluído.",
+      "skipReasonPlaceholder": "Por quê? (opcional)",
+      "doneContinue": "Concluído, continuar",
+      "skip": "Pular",
+      "starting": "Iniciando...",
+      "step": {
+        "navigate": "Navegar → {{url}}",
+        "click": "Clicar em {{selector}}",
+        "type": "Digitar \"{{text}}\" em {{selector}}",
+        "screenshot": "Captura de tela",
+        "readPageText": "Ler o texto da página",
+        "inspectElements": "Inspecionar elementos",
+        "evaluateJs": "Executar JS"
+      }
+    },
+    "tether": {
+      "browser": "Navegador",
+      "useBrowser": "Usar o navegador",
+      "makeWorkflow": "Criar Workflow",
+      "testing": "Testando",
+      "watching": "Acompanhando",
+      "viewing": "Visualizando",
+      "createAgent": "Criar agente",
+      "invokeAgent": "Chamar agente"
     }
   },
   "overlays": {

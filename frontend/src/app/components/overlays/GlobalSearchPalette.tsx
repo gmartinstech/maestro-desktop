@@ -313,7 +313,7 @@ const GlobalSearchPalette: React.FC<Props> = ({ open, onClose }) => {
                 const dashName = r.dashboardId ? dashboards[r.dashboardId]?.name : null;
                 const subtitle = [
                   dashName && t('overlays.globalSearch.inDashboard', { name: dashName }),
-                  r.closedAt ? t('overlays.globalSearch.closed') : friendlyStatusLabel(r.status),
+                  r.closedAt ? t('overlays.globalSearch.closed') : friendlyStatusLabel(r.status, t),
                 ].filter(Boolean).join(' · ');
                 return (
                   <ResultRow

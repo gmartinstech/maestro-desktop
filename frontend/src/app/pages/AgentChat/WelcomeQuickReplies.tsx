@@ -4,7 +4,8 @@ import Typography from '@mui/material/Typography';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
-import { STARTER_CATEGORIES } from '@/shared/starterCategories';
+import { useTranslation } from 'react-i18next';
+import { useStarterCategories } from '@/shared/starterCategories';
 
 // Quick-reply chips that sit UNDER the streamed greeting bubble. Two levels: category -> concrete prompts. Research/Write/Learn -> onPick (real run); Build -> onPickBuilder (prefill). The greeting itself is a real streamed assistant message (see useWelcomeGreeting); this is just the follow-up affordance. Pure UI, no run until the parent fires.
 const WelcomeQuickReplies: React.FC<{
@@ -12,8 +13,10 @@ const WelcomeQuickReplies: React.FC<{
   onPick: (prompt: string) => void;
   onPickBuilder: (prompt: string) => void;
 }> = ({ c, onPick, onPickBuilder }) => {
+  const { t } = useTranslation();
+  const categories = useStarterCategories();
   const [expanded, setExpanded] = React.useState<string | null>(null);
-  const currentCategory = STARTER_CATEGORIES.find((cat) => cat.id === expanded);
+  const currentCategory = categories.find((cat) => cat.id === expanded);
   const isAppBuilder = currentCategory?.target === 'app-builder';
   const currentPrompts = currentCategory?.prompts ?? [];
 
@@ -33,10 +36,10 @@ const WelcomeQuickReplies: React.FC<{
         {expanded === null ? (
           <motion.div key="categories" initial={false} style={{ display: 'flex', flexDirection: 'column' }}>
             <Typography sx={{ color: c.text.ghost, fontSize: '0.82rem', mb: 1.1 }}>
-              pick one, or just type below
+              {t('dashboard.starters.pickOneOrType')}
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-              {STARTER_CATEGORIES.map((cat, i) => (
+              {categories.map((cat, i) => (
                 <motion.button
                   key={cat.id}
                   onClick={() => setExpanded(cat.id)}
@@ -81,7 +84,7 @@ const WelcomeQuickReplies: React.FC<{
                 '&:hover': { color: c.text.secondary },
               }}
             >
-              <ArrowLeft size={14} /> back
+              <ArrowLeft size={14} /> {t('common.back')}
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.7 }}>
               {currentPrompts.map((prompt, i) => (
