@@ -1,6 +1,8 @@
 import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import fs from 'fs';
+import { mkdtempSync } from 'node:fs';
 import os from 'os';
+import { tmpdir } from 'node:os';
 import path from 'path';
 
 // Repo root is two levels up from this file (e2e/helpers/).
@@ -33,12 +35,17 @@ export function packagedAppPath(): string {
 // silently greening the test. Pre-seed user_id BEFORE launch so the gate
 // dismisses. We only seed when no settings.json exists, so this never touches
 // a developer's signed-in machine.
-function seedTestUserIfClean(): void {
+// dataRoot, when given, is an isolated MAESTRO_DATA_ROOT (see launchIsolatedApp
+// below): the settings file must be seeded under THAT root, not the real
+// %APPDATA% one, or the seed silently misses and the isolated app still shows
+// the sign-in gate.
+function seedTestUserIfClean(dataRoot?: string): void {
   // Gate on CI so a developer running `npm test` locally never has their real
   // (or absent) sign-in state replaced with a fake one.
   if (process.env.CI !== 'true' && process.env.MAESTRO_E2E_SEED !== '1') return;
-  const userData =
-    process.platform === 'win32'
+  const userData = dataRoot
+    ? path.join(dataRoot, 'settings')
+    : process.platform === 'win32'
       ? path.join(process.env.APPDATA || os.homedir(), 'Maestro Studio', 'data', 'settings')
       : process.platform === 'darwin'
         ? path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'settings')
@@ -102,6 +109,38 @@ export async function launchApp(): Promise<ElectronApplication> {
   // changes the cmdline propagation. If either path works, the spec succeeds.
   try { await app.context().addInitScript({ content: '(window).__MAESTRO_E2E__ = true;' }); } catch { /* best effort */ }
   return app;
+}
+
+// Same launch as launchApp(), but for specs that drive a REAL agent turn
+// (real-agent-roundtrip.spec.ts): those create actual persistent session and
+// workspace content via a live provider, and launchApp() runs against the
+// developer's/CI runner's real %APPDATA% profile with nothing to clean it up
+// afterwards, leaving an orphaned session/dashboard card behind on every run.
+// Redirects the same three roots golden's launchMaestro() does (see
+// e2e/golden/fixtures.ts) so the run is fully self-contained; the OS reclaims
+// the temp dirs, so there is nothing left to reap on the next launch.
+export async function launchIsolatedApp(): Promise<{
+  app: ElectronApplication;
+  dataRoot: string;
+  stateHome: string;
+  userData: string;
+}> {
+  const dataRoot = mkdtempSync(path.join(tmpdir(), 'maestro-e2e-data-'));
+  const stateHome = mkdtempSync(path.join(tmpdir(), 'maestro-e2e-home-'));
+  const userData = mkdtempSync(path.join(tmpdir(), 'maestro-e2e-userdata-'));
+  seedTestUserIfClean(dataRoot);
+  const app = await electron.launch({
+    executablePath: packagedAppPath(),
+    args: [`--user-data-dir=${userData}`],
+    env: {
+      ...process.env,
+      MAESTRO_E2E: '1',
+      MAESTRO_DATA_ROOT: dataRoot,
+      MAESTRO_STATE_HOME: stateHome,
+    },
+  });
+  try { await app.context().addInitScript({ content: '(window).__MAESTRO_E2E__ = true;' }); } catch { /* best effort */ }
+  return { app, dataRoot, stateHome, userData };
 }
 
 // The app opens a splash window first, then the main window that loads the React
