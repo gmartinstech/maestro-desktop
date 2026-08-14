@@ -9,10 +9,31 @@ for the full design).
 
 ## Versioning
 
-Version is always `1.{git rev-list --count HEAD}.0` (e.g. `1.482.0`) — computed
-fresh at build time by `scripts/build-app-win.ps1`, never stored or committed
-anywhere. There is nothing to bump: the commit count only grows, so two
-branches can never disagree on a version number. `electron/package.json`'s own
+Version is `1.{N}.0` (e.g. `1.482.0`) where `N` is normally
+`git rev-list --count HEAD` — computed fresh at build time by
+`scripts/build-app-win.ps1`, never stored or committed anywhere. There is
+nothing to bump.
+
+**The commit count is floored against what is already published.** It is not
+monotonic on its own: squash-merging a long-lived branch collapses its commits
+into one on `main`, so the count can go *down*. That happened — PR #8 was
+squash-merged, leaving `main` at 1747 while the CDN was already serving
+`1.1756.0`. A version that goes backwards is not cosmetic:
+
+- Squirrel **refuses to install** an older version over a newer one. It leaves an
+  empty `app-<version>\.dead` marker and keeps running the installed build, so
+  the installer appears to succeed while nothing changes.
+- No install already on the higher version will ever update, since the update
+  check only moves forward.
+
+So the build reads `latest.commitCount` from the published `version.json` and uses
+`max(commit count, published + 1)`. If the CDN is unreachable the build warns and
+proceeds unfloored (fine for local/dev builds); set `MAESTRO_VERSION_FLOOR`
+explicitly to skip the lookup or to force a value. **Prefer a merge commit or
+rebase over a squash-merge** for release-bearing PRs so the count stays monotonic
+on its own and the floor stays a backstop rather than the mechanism.
+
+`electron/package.json`'s own
 `version` field is just a placeholder overridden per-build via
 electron-builder's `extraMetadata`. The trailing `.0` isn't cosmetic — NuGet/
 Squirrel needs three dotted segments, and electron-builder's `${version}`

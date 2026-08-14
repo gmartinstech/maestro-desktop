@@ -599,15 +599,40 @@ Write-Host ""
 
 # --- Provenance stamp ---
 # Version = "1.<commit count>.0" (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md).
-# Computed fresh every build from git history -- nothing in the tree stores a version number, so
-# there is nothing to bump and nothing two branches could ever disagree on. electron\build-info.json
-# ships inside the asar; main.js reads it for the startup [provenance] log line and the About panel.
-# Gitignored + regenerated each build.
+# Computed fresh every build from git history, then floored against what is already published.
+# electron\build-info.json ships inside the asar; main.js reads it for the startup [provenance] log
+# line and the About panel. Gitignored + regenerated each build.
+#
+# The commit count alone is NOT monotonic across a squash-merge: squashing a 1756-commit branch onto
+# main collapses it to one commit, so main's count came back as 1747 while the CDN was already
+# serving 1.1756.0. A lower version is not just cosmetic -- Squirrel refuses to install it over a
+# newer one (it drops an `app-<ver>\.dead` marker and keeps running the old build) and no install
+# already on the higher version ever updates. So the published version is a floor: never go
+# backwards, whatever git history says. Set MAESTRO_VERSION_FLOOR to skip the network lookup.
 $BuildSha = (git -C $ProjectRoot rev-parse HEAD 2>$null)
 if (-not $BuildSha) { $BuildSha = 'unknown' }
 $CommitCount = (git -C $ProjectRoot rev-list --count HEAD 2>$null)
 if (-not $CommitCount) { throw "git rev-list --count HEAD failed -- is $ProjectRoot a git checkout?" }
-$BuildVersion = "1.$($CommitCount.Trim()).0"
+$CommitCount = [int]$CommitCount.Trim()
+$VersionFloor = 0
+if ($env:MAESTRO_VERSION_FLOOR) {
+    $VersionFloor = [int]$env:MAESTRO_VERSION_FLOOR
+    Write-Host "Version floor $VersionFloor taken from MAESTRO_VERSION_FLOOR."
+} else {
+    try {
+        $Published = Invoke-RestMethod -Uri 'https://cdn.martinstech.net/maestro/version.json' -TimeoutSec 15
+        if ($Published.latest.commitCount) { $VersionFloor = [int]$Published.latest.commitCount + 1 }
+        Write-Host "Published latest is $($Published.latest.version); floor is $VersionFloor."
+    } catch {
+        # Offline/dev builds must still work; only a -Publish build actually needs the floor to be right.
+        Write-Host "WARNING: could not read the published version.json, so the version is unfloored. Set MAESTRO_VERSION_FLOOR if this build is going to the CDN."
+    }
+}
+$EffectiveCount = [Math]::Max($CommitCount, $VersionFloor)
+if ($EffectiveCount -ne $CommitCount) {
+    Write-Host "Version floored: commit count $CommitCount -> $EffectiveCount (already-published version is higher)."
+}
+$BuildVersion = "1.$EffectiveCount.0"
 $BuildChannel = 'stable'
 $BuildShortSha = if ($BuildSha.Length -ge 12) { $BuildSha.Substring(0, 12) } else { $BuildSha }
 $BuildInfo = [ordered]@{
