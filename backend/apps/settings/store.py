@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from backend.config.paths import SETTINGS_DIR as DATA_DIR
 from backend.apps.settings.apply_maestro_defaults import apply_maestro_defaults
+from backend.apps.settings.maestro_credential_store import load_refresh_token
 from backend.apps.settings.maestro_picker_migration import migrate_picker_value
 from backend.apps.settings.maestro_token_status import token_looks_like_jwt
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_PT_BR
@@ -24,6 +25,25 @@ from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT, DEF
 logger = logging.getLogger(__name__)
 
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
+
+p_refresh_token_seen = False
+
+
+def p_has_refresh_token() -> bool:
+    """Whether the OS credential store holds a Keycloak refresh token, memoized once true.
+
+    A Windows Credential Manager read measures ~15ms, and this sits in load_settings(), which is
+    called all over the request path — so once a refresh token exists (i.e. after sign-in, when the
+    answer stops changing) the lookup must not be repeated. The false case is not cached: it flips to
+    true the moment a sign-in completes, and it costs nothing to re-check because the only caller
+    short-circuits on the JWT shape test first, and a token with no refresh pair is purged on the
+    spot, so the field stops looking like a JWT after one pass.
+    """
+    global p_refresh_token_seen
+    if p_refresh_token_seen:
+        return True
+    p_refresh_token_seen = bool(load_refresh_token())
+    return p_refresh_token_seen
 
 
 # Old field name -> new field name, applied oldest-first so a two-generation-old settings.json chains all the way through (openswarm_auth_token -> openswarm_bearer_token -> maestro_bearer_token).
@@ -53,13 +73,16 @@ def p_migrate_provedor_ia_identity(raw: dict) -> None:
     """One-time (idempotent, runs on every load) cleanup of the pre-Keycloak
     provedor-ia install shape, mutating `raw` in place:
 
-    1. A hand-pasted Keycloak JWT in provedor_ia_token is cleared outright (it has
-       no matching refresh token in the OS credential store and can never be
-       silently refreshed; clearing it makes token_status read `missing`, which is
-       exactly what triggers the new automatic Keycloak sign-in on next launch). A
-       static opaque key (`mtok_...`) is a distinct, still-supported credential
-       type and is left completely untouched, never even inspected past the JWT
-       shape check.
+    1. A hand-pasted Keycloak JWT in provedor_ia_token is cleared, but ONLY when the
+       OS credential store holds no refresh token. The access token minted by the new
+       PKCE flow is itself a JWT and lives in this same field, so a shape check alone
+       cannot tell the two apart -- clearing on shape alone wiped a freshly obtained
+       token on the very next load, flipping token_status to `missing` and kicking off
+       another sign-in in a loop. A stored refresh token is what proves the JWT is ours
+       and refreshable; without one it is a legacy paste that can never be renewed, and
+       clearing it is what triggers the automatic sign-in. A static opaque key
+       (`mtok_...`) is a distinct, still-supported credential type and is left
+       completely untouched, never even inspected past the JWT shape check.
     2. The stale `custom_providers` entry literally named "provedor-ia" is dropped;
        apply_maestro_defaults (called right after this, by every load_settings /
        atomic_write_settings) re-inserts a fresh "Maestro"-named entry when a
@@ -70,7 +93,7 @@ def p_migrate_provedor_ia_identity(raw: dict) -> None:
     Never logs the token value; only that a stale one was found and cleared.
     """
     token_field = raw.get("provedor_ia_token")
-    if isinstance(token_field, str) and token_field.strip() and token_looks_like_jwt(token_field.strip()):
+    if isinstance(token_field, str) and token_field.strip() and token_looks_like_jwt(token_field.strip()) and not p_has_refresh_token():
         raw["provedor_ia_token"] = None
         logger.info("Cleared a stale hand-pasted Maestro sign-in token; a fresh Keycloak sign-in will run automatically")
     providers = raw.get("custom_providers")

@@ -135,11 +135,32 @@ def windows_acl_command(path: str) -> list[str]:
     """
     return [
         "icacls", path, "/inheritance:r",
-        "/grant:r", f"{getpass.getuser()}:(OI)(CI)F",
+        "/grant:r", f"{p_current_user_principal()}:(OI)(CI)F",
         "/grant:r", "*S-1-5-18:(OI)(CI)F",
         "/grant:r", "*S-1-5-32-544:(OI)(CI)F",
         "/T", "/C", "/Q",
     ]
+
+
+def p_current_user_principal() -> str:
+    """An icacls principal for the current user that actually resolves.
+
+    getpass.getuser() returns a BARE name, which icacls fails to resolve on a domain-joined host
+    ("WILEY\\gmartinssi" logged in, "gmartinssi" passed). That grant is then skipped while the
+    preceding /inheritance:r has already applied, which is how a path ends up with an empty DACL.
+    The user's SID is preferred for the same reason the well-known SIDs above are: it is immune to
+    both localization and domain qualification.
+    """
+    try:
+        r = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, timeout=10, check=False, text=True)
+        sid = (r.stdout or "").strip().strip('"').split('","')[-1].strip('"')
+        if sid.startswith("S-1-"):
+            return f"*{sid}"
+    except Exception:
+        pass
+    domain = os.environ.get("USERDOMAIN", "").strip()
+    user = os.environ.get("USERNAME", "").strip() or getpass.getuser()
+    return f"{domain}\\{user}" if domain else user
 
 
 def p_harden_windows_acl(path: str) -> None:
@@ -161,11 +182,26 @@ def p_harden_windows_acl(path: str) -> None:
         # that nobody — including the owner — can open, propagated to db.json by /T. That is strictly
         # worse than the loose permissions we came to fix, so verify and roll back rather than trust
         # the return code, which is 0 on a partial apply.
-        if not p_windows_acl_is_usable(path):
+        # Check the FILES too, not just the dir. /T applies per-entry, so a file that was locked (9Router
+        # holding db.json open) can be left with an empty DACL while the dir above it ends up correctly
+        # hardened and the return code stays 0 — observed in the wild as a healthy dir with 3 ACEs over a
+        # db.json with none, which bricks the router into "Failed to create provider node" 500s.
+        p_bricked = [p for p in p_acl_paths_to_verify(path) if not p_windows_acl_is_usable(p)]
+        if p_bricked:
             subprocess.run(["icacls", path, "/inheritance:e", "/T", "/C", "/Q"], capture_output=True, timeout=20, check=False)
-            logger.warning("9Router data-dir ACL left no usable entries; restored inheritance instead of locking the app out of its own state")
+            logger.warning("9Router data-dir ACL left no usable entries on %d path(s); restored inheritance instead of locking the app out of its own state", len(p_bricked))
     except Exception as e:
         logger.debug("9Router data-dir ACL hardening skipped: %s", e)
+
+
+def p_acl_paths_to_verify(path: str) -> list[str]:
+    """The dir plus the state files whose loss actually breaks the router, for post-hardening checks."""
+    paths = [path]
+    for rel in CREDENTIAL_RELPATHS:
+        p_file = os.path.join(path, rel)
+        if os.path.isfile(p_file):
+            paths.append(p_file)
+    return paths
 
 
 def p_windows_acl_is_usable(path: str) -> bool:

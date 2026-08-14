@@ -13,8 +13,25 @@ import base64
 import json
 import time
 
+import pytest
+
+from backend.apps.settings import store
 from backend.apps.settings.store import migrate_legacy_fields
 from backend.apps.settings.maestro_picker_migration import migrate_picker_value
+
+
+@pytest.fixture(autouse=True)
+def p_no_stored_refresh_token(monkeypatch):
+    """Default every test to "no refresh token in the OS credential store".
+
+    The purge is deliberately conditional on that store, so without this the suite reads the
+    DEVELOPER'S real Windows Credential Manager and flips behaviour depending on whether they
+    happen to be signed in — which is exactly how these tests started passing/failing by machine.
+    """
+    monkeypatch.setattr(store, "load_refresh_token", lambda: None)
+    # The "a token exists" answer is memoized for the process, so clear it or the first test that
+    # stores one makes every later test believe the user is signed in.
+    monkeypatch.setattr(store, "p_refresh_token_seen", False)
 
 
 def p_b64(raw: bytes) -> str:
@@ -38,6 +55,17 @@ def test_a_live_jwt_in_the_field_is_still_purged():
     assert out["provedor_ia_token"] is None
     from backend.apps.settings.maestro_token_status import token_status
     assert token_status(out["provedor_ia_token"]).state == "missing"
+
+
+def test_our_own_freshly_minted_access_token_is_kept(monkeypatch):
+    """The PKCE access token is ALSO a JWT in this same field, so purging on shape alone wiped it on
+    the very next load: status flipped to `missing`, the app signed in again, stored another token,
+    and the next load wiped that one too. A stored refresh token is what distinguishes our token
+    (renewable) from a legacy paste (dead), so it must survive."""
+    monkeypatch.setattr(store, "load_refresh_token", lambda: "a-stored-refresh-token")
+    ours = p_jwt(int(time.time()) + 12 * 3600)
+    out = migrate_legacy_fields({"provedor_ia_token": ours})
+    assert out["provedor_ia_token"] == ours, "a refreshable token must not be purged, or sign-in loops"
 
 
 def test_an_expired_jwt_in_the_field_is_purged_too():
