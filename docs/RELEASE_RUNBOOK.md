@@ -40,13 +40,25 @@ without them. Do not re-add them to `.gitignore`.
 After editing `backend/requirements.txt`:
 
 ```
-uv pip compile backend/requirements.txt --python-version 3.13 \
+uv pip compile backend/requirements.txt --python-version 3.13 --universal \
     --generate-hashes --output-file backend/requirements.lock
 ```
+
+`--universal` is not optional. Without it the resolve is platform-specific: it
+strips the `sys_platform` markers the rest of the lock carries and silently drops
+packages that do not apply to the machine you ran it on (compiling on Windows
+removes `uvloop`). Diff the result before committing — a correct regeneration is
+purely additive.
 
 Commit both files together. Verify with a clean 3.13 env: install from the lock,
 `uv pip check`, and import anthropic / pydantic / httpx / trafilatura /
 claude_agent_sdk / uvicorn.
+
+The build only reinstalls `electron\python-env` when this lock's SHA256 differs
+from the marker written at `electron\python-env\.requirements-hash`. A dependency
+added to `requirements.txt` but never compiled into the lock is therefore absent
+from the packaged app, whose backend then dies on import and never serves — which
+presents as the app booting to a blank window, not as a build failure.
 
 ## Provenance
 
