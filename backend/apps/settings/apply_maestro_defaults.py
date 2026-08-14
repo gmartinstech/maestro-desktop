@@ -1,4 +1,4 @@
-"""Seed provedor-ia into settings so it is the app's provider with zero configuration.
+"""Seed Maestro into settings so it is the app's provider with zero configuration.
 
 Derived, never migrated: this runs on every settings load and every settings
 write, so a token arriving through PROVEDOR_IA_TOKEN is picked up without the
@@ -22,12 +22,12 @@ from typeguard import typechecked
 
 from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
 from backend.apps.settings.models import AppSettings, CustomProvider
-from backend.apps.settings.provedor_ia_catalog import catalog_models
-from backend.apps.settings.provedor_ia import (
+from backend.apps.settings.maestro_catalog import catalog_models
+from backend.apps.settings.maestro import (
     FALLBACK_DEFAULT_MODEL,
-    PROVEDOR_IA_DEFAULT_MODEL,
-    PROVEDOR_IA_MODELS,
-    PROVEDOR_IA_NAME,
+    MAESTRO_DEFAULT_MODEL,
+    MAESTRO_MODELS,
+    MAESTRO_NAME,
     PROVEDOR_IA_TOKEN_ENV,
     PROVEDOR_IA_TOKEN_FIELD,
 )
@@ -35,24 +35,40 @@ from backend.apps.settings.provedor_ia import (
 
 @typechecked
 def provedor_ia_token(settings: AppSettings) -> Optional[str]:
-    """The provedor-ia bearer: the settings field first, then PROVEDOR_IA_TOKEN."""
+    """The Maestro bearer: the settings field first, then PROVEDOR_IA_TOKEN.
+
+    A JWT arriving via the settings field is handled by the one-time upgrade
+    migration (store.p_migrate_provedor_ia_identity), which clears it outright. The
+    env var can't be migrated the same way (it isn't ours to edit), so a JWT read
+    from it here is refused on every call: it is the old vendor-installer contract, a
+    hand-minted, non-refreshable Keycloak access token, and honoring it would silently
+    resurrect the exact broken 10h-then-dead session this flow replaced. A static
+    opaque key (`mtok_...`) from either source is a distinct credential and passes
+    through unchanged.
+    """
     stored = (getattr(settings, PROVEDOR_IA_TOKEN_FIELD, None) or "").strip()
     if stored:
         return stored
-    return (os.environ.get(PROVEDOR_IA_TOKEN_ENV) or "").strip() or None
+    env_value = (os.environ.get(PROVEDOR_IA_TOKEN_ENV) or "").strip()
+    if not env_value:
+        return None
+    from backend.apps.settings.maestro_token_status import token_looks_like_jwt
+    if token_looks_like_jwt(env_value):
+        return None
+    return env_value
 
 
 @typechecked
-def provedor_ia_provider(token: str) -> CustomProvider:
-    """The managed provedor-ia entry; base_url reuses the one gateway constant.
+def maestro_provider(token: str) -> CustomProvider:
+    """The managed Maestro entry; base_url reuses the one gateway constant.
 
     Models come from the gateway when it has answered this session (see
-    provedor_ia_catalog), so a model added server-side needs no app release; the
+    maestro_catalog), so a model added server-side needs no app release; the
     shipped constant is the offline fallback for a cold start.
     """
-    models = catalog_models() or PROVEDOR_IA_MODELS
+    models = catalog_models() or MAESTRO_MODELS
     return CustomProvider(
-        name=PROVEDOR_IA_NAME,
+        name=MAESTRO_NAME,
         base_url=MAESTRO_DEFAULT_PROXY_URL,
         api_key=token,
         models=[m.model_dump() for m in models],
@@ -62,14 +78,14 @@ def provedor_ia_provider(token: str) -> CustomProvider:
 @typechecked
 def p_managed_index(providers: List[CustomProvider]) -> Optional[int]:
     for i, cp in enumerate(providers):
-        if (getattr(cp, "name", "") or "").strip().casefold() == PROVEDOR_IA_NAME:
+        if (getattr(cp, "name", "") or "").strip().casefold() == MAESTRO_NAME.casefold():
             return i
     return None
 
 
 @typechecked
-def apply_provedor_ia_defaults(settings: AppSettings) -> AppSettings:
-    """Upsert the provedor-ia provider when a token exists and keep default_model honest.
+def apply_maestro_defaults(settings: AppSettings) -> AppSettings:
+    """Upsert the Maestro provider when a token exists and keep default_model honest.
 
     Mutates and returns `settings`. Idempotent, so running it on every load and
     every write can never accumulate duplicate entries. Never deletes: a token
@@ -80,14 +96,14 @@ def apply_provedor_ia_defaults(settings: AppSettings) -> AppSettings:
     providers = list(settings.custom_providers or [])
     at = p_managed_index(providers)
     if token:
-        managed = provedor_ia_provider(token)
+        managed = maestro_provider(token)
         if at is None:
-            # First in the list so it heads the model picker: provedor-ia is the app's own provider, not an add-on.
+            # First in the list so it heads the model picker: Maestro is the app's own provider, not an add-on.
             providers.insert(0, managed)
         else:
             providers[at] = managed
         settings.custom_providers = providers
-    elif at is None and settings.default_model == PROVEDOR_IA_DEFAULT_MODEL:
-        # No token means no provedor-ia entry, so the shipped default would name a model the picker cannot offer.
+    elif at is None and settings.default_model == MAESTRO_DEFAULT_MODEL:
+        # No token means no Maestro entry, so the shipped default would name a model the picker cannot offer.
         settings.default_model = FALLBACK_DEFAULT_MODEL
     return settings

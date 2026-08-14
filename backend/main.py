@@ -467,6 +467,34 @@ async def subscriptions_callback(request: Request):
         logger.warning(f"OAuth callback with unknown state {state[:8] if state else '(empty)'}...")
         return HTMLResponse('<html><body style="background:#1a1a1a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><div style="text-align:center"><h2>Session expired</h2><p style="color:#888">Please try connecting again.</p></div></body></html>')
 
+    if pending.get("provider") == "maestro":
+        # Maestro's Keycloak Authorization Code + PKCE flow bypasses 9Router's own OAuth REST API entirely (it has no concept of arbitrary OIDC providers); exchange directly against Keycloak's token endpoint and store the result ourselves.
+        from backend.apps.settings.maestro_keycloak_auth import exchange_code_for_tokens, MaestroKeycloakAuthError
+        from backend.apps.settings.maestro_credential_store import store_refresh_token
+        from backend.apps.settings.maestro import PROVEDOR_IA_TOKEN_FIELD
+        from backend.apps.settings.maestro_catalog import refresh_catalog
+        from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
+        from backend.apps.settings.settings import apply_settings_patch, settings_write_lock
+        try:
+            tokens = await exchange_code_for_tokens(code, pending["code_verifier"], pending["redirect_uri"])
+        except MaestroKeycloakAuthError as e:
+            logger.warning(f"Maestro Keycloak token exchange failed: {e.status_code} {e.error}")
+            return HTMLResponse('<html><body style="background:#1a1a1a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><div style="text-align:center"><h2>Connection failed</h2><p style="color:#888">Sign-in failed. Please try again.</p></div></body></html>')
+        access_token = tokens.get("access_token")
+        refresh_token = tokens.get("refresh_token")
+        if not isinstance(access_token, str) or not access_token:
+            logger.warning("Maestro Keycloak token exchange returned no access_token")
+            return HTMLResponse('<html><body style="background:#1a1a1a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><div style="text-align:center"><h2>Connection failed</h2><p style="color:#888">Sign-in failed. Please try again.</p></div></body></html>')
+        if isinstance(refresh_token, str) and refresh_token:
+            store_refresh_token(refresh_token)
+        # Warm the catalog with the fresh token first: the write below re-derives the provider, so one pass seeds AND syncs the live model list, same as the old paste flow did.
+        await refresh_catalog(access_token, MAESTRO_DEFAULT_PROXY_URL)
+        async with settings_write_lock():
+            await apply_settings_patch({PROVEDOR_IA_TOKEN_FIELD: access_token})
+        mark_oauth_completed(state)
+        logger.info("Maestro Keycloak sign-in succeeded")
+        return HTMLResponse(P_SUCCESS_HTML)
+
     from backend.apps.nine_router import exchange_oauth
     try:
         await exchange_oauth(pending["provider"], code, pending["redirect_uri"], pending["code_verifier"], state)

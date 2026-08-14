@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import pytest
 
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_MODELS
-from backend.apps.settings.provedor_ia_catalog import (
+from backend.apps.settings.maestro import MAESTRO_MODELS
+from backend.apps.settings.maestro_catalog import (
     CATALOG_TTL_SECONDS,
     catalog_models,
     forget_catalog,
@@ -52,7 +52,7 @@ def test_live_payload_parses_into_the_shipped_contract():
     """The fetched catalog must be indistinguishable from the constant we ship."""
     rows = parse_catalog(P_LIVE_PAYLOAD)
     assert rows is not None
-    assert [m.model_dump() for m in rows] == [m.model_dump() for m in PROVEDOR_IA_MODELS]
+    assert [m.model_dump() for m in rows] == [m.model_dump() for m in MAESTRO_MODELS]
 
 
 def test_preferred_order_wins_over_the_gateway_order():
@@ -216,14 +216,14 @@ async def test_the_token_never_reaches_the_logs(stub_http, caplog):
 # --------------------------------------------------------------------------- The seam: seeding prefers the live catalog. ---------------------------------------------------------------------------
 
 def test_seeding_offers_the_fetched_catalog_over_the_constant(monkeypatch):
-    from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
+    from backend.apps.settings.apply_maestro_defaults import apply_maestro_defaults
     from backend.apps.settings.models import AppSettings
-    from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_ENV
+    from backend.apps.settings.maestro import PROVEDOR_IA_TOKEN_ENV
     monkeypatch.delenv(PROVEDOR_IA_TOKEN_ENV, raising=False)
     rows = parse_catalog({"data": [{"id": "maestro"}, {"id": "maestro-brand-new"}]})
     assert rows is not None
     remember_catalog(rows)
-    s = apply_provedor_ia_defaults(AppSettings(provedor_ia_token="pi-test-token-000000000000"))
+    s = apply_maestro_defaults(AppSettings(provedor_ia_token="pi-test-token-000000000000"))
     assert [m["value"] for m in s.custom_providers[0].models] == ["maestro", "maestro-brand-new"]
 
 
@@ -231,12 +231,12 @@ def test_seeding_offers_the_fetched_catalog_over_the_constant(monkeypatch):
 async def test_refreshing_from_settings_reseeds_the_provider(stub_http, monkeypatch):
     """The wiring startup and the sign-in endpoint both call: fetch, then re-derive."""
     from backend.apps.settings.models import AppSettings
-    from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_ENV
-    from backend.apps.settings.refresh_provedor_ia_catalog import refresh_provedor_ia_catalog
+    from backend.apps.settings.maestro import PROVEDOR_IA_TOKEN_ENV
+    from backend.apps.settings.refresh_maestro_catalog import refresh_maestro_catalog
     monkeypatch.delenv(PROVEDOR_IA_TOKEN_ENV, raising=False)
     stub_http.payload = {"data": [{"id": "maestro"}, {"id": "maestro-brand-new"}]}
     s = AppSettings(provedor_ia_token="pi-test-token-000000000000")
-    assert await refresh_provedor_ia_catalog(s) is True
+    assert await refresh_maestro_catalog(s) is True
     # The live gateway constant is the one the app actually ships against.
     assert stub_http.calls[0][0] == "https://llm.martinstech.net/v1/models"
     assert [m["value"] for m in s.custom_providers[0].models] == ["maestro", "maestro-brand-new"]
@@ -245,11 +245,11 @@ async def test_refreshing_from_settings_reseeds_the_provider(stub_http, monkeypa
 @pytest.mark.asyncio
 async def test_refreshing_without_a_token_is_a_no_op(stub_http, monkeypatch):
     from backend.apps.settings.models import AppSettings
-    from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_ENV
-    from backend.apps.settings.refresh_provedor_ia_catalog import refresh_provedor_ia_catalog
+    from backend.apps.settings.maestro import PROVEDOR_IA_TOKEN_ENV
+    from backend.apps.settings.refresh_maestro_catalog import refresh_maestro_catalog
     monkeypatch.delenv(PROVEDOR_IA_TOKEN_ENV, raising=False)
     s = AppSettings()
-    assert await refresh_provedor_ia_catalog(s) is False
+    assert await refresh_maestro_catalog(s) is False
     assert stub_http.calls == []
     assert s.custom_providers == []
 
@@ -257,24 +257,24 @@ async def test_refreshing_without_a_token_is_a_no_op(stub_http, monkeypatch):
 @pytest.mark.asyncio
 async def test_refreshing_against_a_dead_gateway_leaves_settings_alone(stub_http, monkeypatch):
     from backend.apps.settings.models import AppSettings
-    from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_ENV
-    from backend.apps.settings.refresh_provedor_ia_catalog import refresh_provedor_ia_catalog
+    from backend.apps.settings.maestro import PROVEDOR_IA_TOKEN_ENV
+    from backend.apps.settings.refresh_maestro_catalog import refresh_maestro_catalog
     monkeypatch.delenv(PROVEDOR_IA_TOKEN_ENV, raising=False)
     stub_http.status = 401
     s = AppSettings(provedor_ia_token="pi-test-token-000000000000")
-    assert await refresh_provedor_ia_catalog(s) is False
+    assert await refresh_maestro_catalog(s) is False
     # Seeding still happened at load time, so the fallback models remain on offer.
-    s_seeded = [m.value for m in PROVEDOR_IA_MODELS]
-    from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
-    apply_provedor_ia_defaults(s)
+    s_seeded = [m.value for m in MAESTRO_MODELS]
+    from backend.apps.settings.apply_maestro_defaults import apply_maestro_defaults
+    apply_maestro_defaults(s)
     assert [m["value"] for m in s.custom_providers[0].models] == s_seeded
 
 
 def test_seeding_falls_back_to_the_constant_with_no_catalog(monkeypatch):
     """Cold start, or a gateway that has never answered: the picker still works."""
-    from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
+    from backend.apps.settings.apply_maestro_defaults import apply_maestro_defaults
     from backend.apps.settings.models import AppSettings
-    from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_ENV
+    from backend.apps.settings.maestro import PROVEDOR_IA_TOKEN_ENV
     monkeypatch.delenv(PROVEDOR_IA_TOKEN_ENV, raising=False)
-    s = apply_provedor_ia_defaults(AppSettings(provedor_ia_token="pi-test-token-000000000000"))
-    assert [m["value"] for m in s.custom_providers[0].models] == [m.value for m in PROVEDOR_IA_MODELS]
+    s = apply_maestro_defaults(AppSettings(provedor_ia_token="pi-test-token-000000000000"))
+    assert [m["value"] for m in s.custom_providers[0].models] == [m.value for m in MAESTRO_MODELS]

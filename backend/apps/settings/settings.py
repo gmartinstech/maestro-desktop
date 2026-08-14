@@ -11,17 +11,17 @@ from pydantic import BaseModel
 from typing import Literal, Optional
 
 from backend.config.Apps import SubApp
-from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
+from backend.apps.settings.apply_maestro_defaults import apply_maestro_defaults
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT
-from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_TOKEN_FIELD
-from backend.apps.settings.provedor_ia_catalog import refresh_catalog
-from backend.apps.settings.refresh_provedor_ia_catalog import refresh_provedor_ia_catalog
-from backend.apps.settings.provedor_ia_token_status import (
-    ProvedorIaTokenStatus,
-    provedor_ia_token_status,
-    token_status,
+from backend.apps.settings.maestro import PROVEDOR_IA_TOKEN_FIELD
+from backend.apps.settings.refresh_maestro_catalog import refresh_maestro_catalog
+from backend.apps.settings.maestro_token_status import (
+    MaestroTokenStatus,
+    maestro_token_status,
 )
+from backend.apps.settings.maestro_keycloak_auth import build_authorize_url, MAESTRO_KEYCLOAK_REDIRECT_URI
+from backend.apps.settings.maestro_scheduler import maestro_refresh_loop
+from backend.apps.oauth_state import pending_oauth
 from backend.apps.settings.store import (
     DATA_DIR,
     SETTINGS_FILE,
@@ -68,11 +68,12 @@ async def settings_lifespan():
                 await sync_openai_api_key(getattr(s, "openai_api_key", None) or None)
                 await sync_openrouter_api_key(getattr(s, "openrouter_api_key", None) or None)
             # Ask the gateway what it serves before pushing the node, so a model added server-side is routable this launch instead of next release.
-            await refresh_provedor_ia_catalog(s)
+            await refresh_maestro_catalog(s)
             await sync_custom_providers(getattr(s, "custom_providers", None) or [])
 
         p_asyncio.create_task(p_boot_router_then_sync())
         p_asyncio.create_task(p_upload_dir_gc_loop())
+        p_asyncio.create_task(maestro_refresh_loop())
     except Exception as e:
         logger.warning(f"9Router sync startup failed: {e}")
     yield
@@ -204,7 +205,7 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
             setattr(body, f, getattr(old, f, None))
 
     # Re-derive provedor-ia from the (possibly rotated) token, so a token change surfaces as a custom_providers diff and re-syncs its 9Router node below.
-    apply_provedor_ia_defaults(body)
+    apply_maestro_defaults(body)
 
     # Saving settings used to forward the whole object to the upstream telemetry sink, filtered by
     # a hand-maintained DENYLIST of top-level scalars. model_dump() serializes nested models, so
@@ -296,28 +297,30 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
     return body
 
 
-class ProvedorIaTokenPayload(BaseModel):
-    token: str
-
-
-@settings.router.get("/provedor-ia/token-status")
-async def get_provedor_ia_token_status() -> ProvedorIaTokenStatus:
+@settings.router.get("/maestro/token-status")
+async def get_maestro_token_status() -> MaestroTokenStatus:
     """Whether to prompt for a Maestro sign-in. Returns state + runway, never any part of the token."""
-    return provedor_ia_token_status(load_settings())
+    return maestro_token_status(load_settings())
 
 
-@settings.router.post("/provedor-ia/token")
-async def post_provedor_ia_token(body: ProvedorIaTokenPayload):
-    """Store a pasted token only when it still has runway; an already-expired paste is rejected, never saved."""
-    status = token_status(body.token)
-    if status.state in ("missing", "expired"):
-        # The reject body carries a state name only: the pasted credential must never reach a log or an HTTP response.
-        return JSONResponse(status_code=400, content={"ok": False, "reason": status.state})
-    # Warm the catalog with the pasted token first: the write below re-derives the provider, so one pass seeds AND syncs the live model list.
-    await refresh_catalog(body.token.strip(), MAESTRO_DEFAULT_PROXY_URL)
-    async with settings_write_lock():
-        await apply_settings_patch({PROVEDOR_IA_TOKEN_FIELD: body.token.strip()})
-    return {"ok": True, "status": status.model_dump()}
+class MaestroLoginStartResponse(BaseModel):
+    authorize_url: str
+
+
+@settings.router.post("/maestro/login/start")
+async def post_maestro_login_start() -> MaestroLoginStartResponse:
+    """Start the Keycloak Authorization Code + PKCE flow: mint the authorize URL and
+    remember its (state -> code_verifier) pending entry, the same store the 9Router
+    subscription OAuth lanes share, so /api/subscriptions/callback can complete either
+    kind of flow. The caller (Electron) opens `authorize_url` in the system browser."""
+    authorize_url, state, code_verifier = build_authorize_url()
+    pending_oauth[state] = {
+        "provider": "maestro",
+        "code_verifier": code_verifier,
+        "redirect_uri": MAESTRO_KEYCLOAK_REDIRECT_URI,
+        "created_at": time.time(),
+    }
+    return MaestroLoginStartResponse(authorize_url=authorize_url)
 
 
 class AppThemeOverridePayload(BaseModel):

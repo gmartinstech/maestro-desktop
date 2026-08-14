@@ -1,6 +1,6 @@
-"""What provedor-ia actually serves, asked of the gateway instead of assumed.
+"""What Maestro actually serves, asked of the gateway instead of assumed.
 
-`provedor_ia.PROVEDOR_IA_MODELS` is a hand-kept list, and a hand-kept list drifts:
+`maestro.MAESTRO_MODELS` is a hand-kept list, and a hand-kept list drifts:
 the vendor installer still offers three models while `GET /v1/models` returns four.
 So the catalog is fetched here and the constant demotes to the offline fallback,
 which means a model added server-side reaches the picker with no app release.
@@ -10,7 +10,7 @@ labels come from P_KNOWN_LABELS (else the id, prettified) and the window keeps t
 vendor's 128k/4096.
 
 Split in two on purpose. `parse_catalog` is pure, and the cache is read through a
-*sync* accessor, because `apply_provedor_ia_defaults` runs on every settings load
+*sync* accessor, because `apply_maestro_defaults` runs on every settings load
 and every settings write; a network call on that path would block the app. Only
 `refresh_catalog` touches the network, from startup and after a token is stored.
 """
@@ -25,7 +25,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, InstanceOf
 from typeguard import typechecked
 
-from backend.apps.settings.provedor_ia import ProvedorIaModel
+from backend.apps.settings.maestro import MaestroModel
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class P_CachedCatalog(BaseModel):
     """The last catalog the gateway confirmed, with the clock reading that proves its age."""
 
     model_config = ConfigDict(validate_assignment=True)
-    models: List[InstanceOf[ProvedorIaModel]]
+    models: List[InstanceOf[MaestroModel]]
     fetched_at: float
 
 
@@ -74,7 +74,7 @@ def p_sort_key(model_id: str) -> Tuple[int, int, str]:
 
 
 @typechecked
-def parse_catalog(payload: object) -> Optional[List[ProvedorIaModel]]:
+def parse_catalog(payload: object) -> Optional[List[MaestroModel]]:
     """Rows from an OpenAI `/v1/models` body, or None when it taught us nothing.
 
     None and empty are deliberately different: None keeps the caller on its
@@ -98,7 +98,7 @@ def parse_catalog(payload: object) -> Optional[List[ProvedorIaModel]]:
     if not ids:
         return None
     return [
-        ProvedorIaModel(
+        MaestroModel(
             value=model_id,
             label=p_label_for(model_id),
             context_window=P_DEFAULT_CONTEXT_WINDOW,
@@ -109,7 +109,7 @@ def parse_catalog(payload: object) -> Optional[List[ProvedorIaModel]]:
 
 
 @typechecked
-def remember_catalog(models: List[ProvedorIaModel], now: Optional[float] = None) -> None:
+def remember_catalog(models: List[MaestroModel], now: Optional[float] = None) -> None:
     """Publish a fetched catalog to the sync readers."""
     global p_cached_catalog
     p_cached_catalog = P_CachedCatalog(
@@ -125,7 +125,7 @@ def forget_catalog() -> None:
 
 
 @typechecked
-def catalog_models(now: Optional[float] = None) -> Optional[List[ProvedorIaModel]]:
+def catalog_models(now: Optional[float] = None) -> Optional[List[MaestroModel]]:
     """The cached catalog while it is fresh, else None. Safe on any hot path."""
     cached = p_cached_catalog
     if cached is None:
@@ -139,7 +139,7 @@ def catalog_models(now: Optional[float] = None) -> Optional[List[ProvedorIaModel
 @typechecked
 async def refresh_catalog(
     token: Optional[str], base_url: str, now: Optional[float] = None
-) -> Optional[List[ProvedorIaModel]]:
+) -> Optional[List[MaestroModel]]:
     """Fetch and cache the catalog. Never raises, never logs the token.
 
     Returns None on every miss — no token, a rejection, a malformed body, a dead
@@ -155,19 +155,19 @@ async def refresh_catalog(
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url, headers={"Authorization": f"Bearer {bearer}"})
     except Exception as e:
-        logger.debug("provedor-ia catalog fetch failed: %s", type(e).__name__)
+        logger.debug("Maestro catalog fetch failed: %s", type(e).__name__)
         return None
     if response.status_code != 200:
-        logger.debug("provedor-ia catalog fetch returned %s", response.status_code)
+        logger.debug("Maestro catalog fetch returned %s", response.status_code)
         return None
     try:
         payload = response.json()
     except Exception:
-        logger.debug("provedor-ia catalog body was not JSON")
+        logger.debug("Maestro catalog body was not JSON")
         return None
     models = parse_catalog(payload)
     if models is None:
-        logger.debug("provedor-ia catalog body carried no usable models")
+        logger.debug("Maestro catalog body carried no usable models")
         return None
     remember_catalog(models, now=now)
     return models

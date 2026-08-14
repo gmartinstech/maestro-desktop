@@ -1,6 +1,6 @@
 """Settings persistence primitives (read/write/migrate the settings.json file).
 
-A leaf: imports only settings.models, settings.apply_provedor_ia_defaults and
+A leaf: imports only settings.models, settings.apply_maestro_defaults and
 config.paths, never service or nine_router. Lets service.client reach load/save
 downward instead of looping back up through settings.settings.
 """
@@ -16,7 +16,9 @@ from typing import List, Tuple
 from pydantic import ValidationError
 
 from backend.config.paths import SETTINGS_DIR as DATA_DIR
-from backend.apps.settings.apply_provedor_ia_defaults import apply_provedor_ia_defaults
+from backend.apps.settings.apply_maestro_defaults import apply_maestro_defaults
+from backend.apps.settings.maestro_picker_migration import migrate_picker_value
+from backend.apps.settings.maestro_token_status import token_looks_like_jwt
 from backend.apps.settings.models import AppSettings, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_PT_BR
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,47 @@ def migrate_legacy_fields(raw: dict) -> dict:
             value = raw.pop(old)
             if new not in raw:
                 raw[new] = value
+    p_migrate_provedor_ia_identity(raw)
     return raw
+
+
+def p_migrate_provedor_ia_identity(raw: dict) -> None:
+    """One-time (idempotent, runs on every load) cleanup of the pre-Keycloak
+    provedor-ia install shape, mutating `raw` in place:
+
+    1. A hand-pasted Keycloak JWT in provedor_ia_token is cleared outright (it has
+       no matching refresh token in the OS credential store and can never be
+       silently refreshed; clearing it makes token_status read `missing`, which is
+       exactly what triggers the new automatic Keycloak sign-in on next launch). A
+       static opaque key (`mtok_...`) is a distinct, still-supported credential
+       type and is left completely untouched, never even inspected past the JWT
+       shape check.
+    2. The stale `custom_providers` entry literally named "provedor-ia" is dropped;
+       apply_maestro_defaults (called right after this, by every load_settings /
+       atomic_write_settings) re-inserts a fresh "Maestro"-named entry when a
+       (surviving, i.e. opaque) token still exists, so the picker never shows both
+       the dead entry and the new one side by side.
+    3. default_model is rewritten `custom/provedor-ia/<model>` -> `custom/maestro/<model>`.
+
+    Never logs the token value; only that a stale one was found and cleared.
+    """
+    token_field = raw.get("provedor_ia_token")
+    if isinstance(token_field, str) and token_field.strip() and token_looks_like_jwt(token_field.strip()):
+        raw["provedor_ia_token"] = None
+        logger.info("Cleared a stale hand-pasted Maestro sign-in token; a fresh Keycloak sign-in will run automatically")
+    providers = raw.get("custom_providers")
+    if isinstance(providers, list):
+        kept = [
+            cp for cp in providers
+            if not (isinstance(cp, dict) and (cp.get("name") or "").strip().casefold() == "provedor-ia")
+        ]
+        if len(kept) != len(providers):
+            raw["custom_providers"] = kept
+    default_model = raw.get("default_model")
+    if isinstance(default_model, str):
+        migrated = migrate_picker_value(default_model)
+        if migrated != default_model:
+            raw["default_model"] = migrated
 
 
 def p_coerce_settings(raw: dict) -> AppSettings:
@@ -107,19 +149,19 @@ def load_settings() -> AppSettings:
                 raw = json.load(f)
         except (json.JSONDecodeError, OSError, ValueError):
             p_preserve_corrupt_settings()
-            return apply_provedor_ia_defaults(AppSettings())
+            return apply_maestro_defaults(AppSettings())
         if not isinstance(raw, dict):
             # Valid JSON but not an object (e.g. a bare list/number); unusable.
             p_preserve_corrupt_settings()
-            return apply_provedor_ia_defaults(AppSettings())
+            return apply_maestro_defaults(AppSettings())
         settings = p_coerce_settings(migrate_legacy_fields(raw))
         if settings.default_system_prompt is None:
             settings.default_system_prompt = DEFAULT_SYSTEM_PROMPT
-        apply_provedor_ia_defaults(settings)
+        apply_maestro_defaults(settings)
         p_cached_settings = settings.model_copy(deep=True)
         p_cached_sig = sig
         return settings
-    return apply_provedor_ia_defaults(AppSettings())
+    return apply_maestro_defaults(AppSettings())
 
 
 # threading.Lock guards every SETTINGS_FILE write; works for sync paths and async run_in_executor paths.
@@ -143,7 +185,7 @@ def atomic_write_settings(payload: dict) -> None:
                     p_cached_settings = p_coerce_settings(migrate_legacy_fields(dict(payload)))
                     if p_cached_settings.default_system_prompt is None:
                         p_cached_settings.default_system_prompt = DEFAULT_SYSTEM_PROMPT
-                    apply_provedor_ia_defaults(p_cached_settings)
+                    apply_maestro_defaults(p_cached_settings)
                     p_cached_sig = p_settings_sig()
                     return
                 except PermissionError:

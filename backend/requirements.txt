@@ -16,6 +16,9 @@ python-dotenv==1.1.1
 Pillow==12.2.0
 httpx==0.28.1
 trafilatura==2.0.0
+# keyring: OS-native credential store (Windows Credential Manager / macOS Keychain /
+# Linux Secret Service) for the Maestro Keycloak refresh token; see maestro_credential_store.py.
+keyring==25.7.0
 # swarm-analytics: typed client for the product-analytics ingest; fire-and-forget so it never breaks the app.
 swarm-analytics==0.1.1
 # tzlocal: dev-mode fallback for resolving the user's IANA timezone when

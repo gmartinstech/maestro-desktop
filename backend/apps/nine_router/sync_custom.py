@@ -16,8 +16,8 @@ from backend.apps.nine_router.sync import (
     find_keyed_connection,
     nr,
 )
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_NAME
-from backend.apps.settings.provedor_ia_token_status import token_status
+from backend.apps.settings.maestro import MAESTRO_NAME
+from backend.apps.settings.maestro_token_status import token_status
 
 logger = logging.getLogger(__name__)
 
@@ -185,9 +185,9 @@ async def sync_custom_providers(providers: list) -> None:
             continue
         # Local OpenAI-compat servers (LM Studio, Ollama, etc.) reject a blank Bearer header even with auth disabled. Substitute a placeholder; real auth deployments always have api_key set.
         api_key = api_key.strip() or "no-auth-required"
-        # A definitively-expired provedor-ia JWT is dead weight: handing it to 9Router only gives it a bearer to keep replaying at the gateway (a 401 per model/health poll, against a 10/min failed-auth throttle). Signing in again rewrites the token, which re-diffs custom_providers and re-syncs this node.
-        if name.strip().casefold() == PROVEDOR_IA_NAME and token_status(api_key).state == "expired":
-            logger.info("9Router: skipping provedor-ia node (token expired, sign-in needed)")
+        # A definitively-expired Maestro JWT is dead weight: handing it to 9Router only gives it a bearer to keep replaying at the gateway (a 401 per model/health poll, against a 10/min failed-auth throttle). Signing in again rewrites the token, which re-diffs custom_providers and re-syncs this node.
+        if name.strip().casefold() == MAESTRO_NAME.casefold() and token_status(api_key).state == "expired":
+            logger.info("9Router: skipping Maestro node (token expired, sign-in needed)")
             continue
         slug = p_custom_provider_slug(name)
         prefix = f"cp-{slug}"

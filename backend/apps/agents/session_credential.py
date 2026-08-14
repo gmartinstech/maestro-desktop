@@ -30,7 +30,7 @@ from backend.apps.agents.providers.registry import (
     find_custom_provider_for_value,
     get_api_type,
 )
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_SLUG, PROVEDOR_IA_TOKEN_FIELD
+from backend.apps.settings.maestro import MAESTRO_SLUG, PROVEDOR_IA_TOKEN_FIELD
 
 if TYPE_CHECKING:
     from backend.apps.settings.models import AppSettings
@@ -97,7 +97,7 @@ def resolve_powering_credential(model_value: str, settings: AppSettings) -> Powe
         # provedor-ia is seeded from a top-level bearer field, so blanking THAT is the suicide the guard must also catch.
         return PoweringCredential(
             kind="api_key", provider="custom",
-            protected_field=PROVEDOR_IA_TOKEN_FIELD if slug == PROVEDOR_IA_SLUG else None,
+            protected_field=PROVEDOR_IA_TOKEN_FIELD if slug == MAESTRO_SLUG else None,
             protected_custom_slug=slug,
             label=f"custom provider '{slug}'" if slug else "custom provider",
         )
