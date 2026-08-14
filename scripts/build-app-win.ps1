@@ -360,12 +360,22 @@ Write-Host ""
 # --- Step 2: Python env ---
 $PythonEnv = Join-Path $ProjectRoot 'electron\python-env'
 $PythonExe = Join-Path $PythonEnv 'python.exe'
-if ((Test-Path $PythonExe) -and -not $env:MAESTRO_REBUILD_PYTHON) {
+# Gated on requirements.lock's hash (the file build-python-env-win.ps1 actually installs from),
+# not mere presence: a bare Test-Path reused a stale env
+# after a dependency was added, shipping an installer whose backend died on import and never
+# served, which reads as "app boots to a blank window". Marker is deleted before the rebuild
+# so a failed/partial install can never look like a hit (same stance as Invoke-NpmCiIfNeeded).
+$Requirements = Join-Path $ProjectRoot 'backend\requirements.lock'
+$PythonMarker = Join-Path $PythonEnv '.requirements-hash'
+$RequirementsHash = (Get-FileHash -Algorithm SHA256 $Requirements).Hash
+if ((Test-Path $PythonExe) -and (Test-Path $PythonMarker) -and ((Get-Content -Raw $PythonMarker).Trim() -eq $RequirementsHash) -and -not $env:MAESTRO_REBUILD_PYTHON) {
     Write-Host "[2/5] Python environment already present at $PythonEnv (set `$env:MAESTRO_REBUILD_PYTHON='1' to force rebuild)."
 } else {
     Write-Host "[2/5] Building Python environment..."
+    Remove-Item -Force $PythonMarker -ErrorAction SilentlyContinue
     & (Join-Path $ScriptDir 'build-python-env-win.ps1')
     if ($LASTEXITCODE -ne 0) { throw "Python env build failed" }
+    Set-Content -Path $PythonMarker -Value $RequirementsHash -NoNewline
 }
 if (-not (Test-Path (Join-Path $ProjectRoot 'electron\python-env'))) {
     throw "Python environment not found at electron\python-env\"
