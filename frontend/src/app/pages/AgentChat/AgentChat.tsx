@@ -22,7 +22,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
 import { openSettingsModal, dismissMcpSuggestion } from '@/shared/state/settingsSlice';
-import { openProvedorIaPrompt } from '@/shared/state/provedorIaSlice';
+import { startMaestroLogin } from '@/shared/state/maestroSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import {
   sendMessage as sendMessageThunk,
@@ -1506,28 +1506,28 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             <Box>
             {session.context_overflow && (() => {
               const reason = session.context_overflow.reason;
-              // A provedor-ia 401 is the expected end of a 10h token, so it gets the sign-in flow instead of a Settings detour.
-              const isProvedorIa = reason === 'provedor_ia_token_expired';
-              const isAuth = isProvedorIa || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
+              // A Maestro 401 is the expected end of a 10h token, so it gets the sign-in flow instead of a Settings detour.
+              const isMaestro = reason === 'maestro_token_expired';
+              const isAuth = isMaestro || reason === 'anthropic_auth_invalid' || reason === 'auth_error';
               const isOutOfTokens = reason === 'out_of_tokens';
               const title = isOutOfTokens
                 ? t('agentChat.chat.outOfTokens')
-                : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.title')
+                : isMaestro ? t('agentChat.errors.maestroSessionExpired.title')
                 : isAuth ? t('agentChat.chat.signInRequired') : t('agentChat.chat.contextFull');
               const primaryLabel = isOutOfTokens
                 ? t('agentChat.chat.gotIt')
-                : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.cta')
+                : isMaestro ? t('agentChat.errors.maestroSessionExpired.cta')
                 : isAuth ? t('agentChat.chat.openSettings') : t('agentChat.chat.startFreshChat');
               // In the workflow build chat, switching models here also sets the workflow's scheduled run model, so spell that consequence out.
               const message = isOutOfTokens && workflowEditId
                 ? t('agentChat.chat.outOfTokensWorkflowMessage', { message: session.context_overflow.message })
-                : isProvedorIa ? t('agentChat.errors.provedorIaSessionExpired.detail')
+                : isMaestro ? t('agentChat.errors.maestroSessionExpired.detail')
                 : session.context_overflow.message;
               const onPrimary = () => {
                 if (isOutOfTokens) {
                   if (id) dispatch(clearContextOverflow({ sessionId: id }));
-                } else if (isProvedorIa) {
-                  dispatch(openProvedorIaPrompt());
+                } else if (isMaestro) {
+                  dispatch(startMaestroLogin());
                 } else if (isAuth) {
                   dispatch(openSettingsModal('models'));
                 } else {

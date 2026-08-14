@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from backend.apps.settings.maestro_picker_migration import migrate_picker_value
 from backend.apps.swarm.exportable import DepRef, ExportContext, RemapTable
 from backend.apps.swarm.models import EntityType, Requirement, RequirementKind
 
@@ -95,7 +96,8 @@ class SessionExportable:
             "name": payload.get("name") or "Agent",
             "status": "completed",
             "provider": payload.get("provider") or "anthropic",
-            "model": payload.get("model") or "sonnet",
+            # A bundle exported before the provedor-ia -> maestro slug rename can still carry the stale picker value; rewrite it on the way in so the imported session is never stale on disk.
+            "model": migrate_picker_value(payload.get("model") or "sonnet"),
             "mode": payload.get("mode") or "agent",
             "system_prompt": payload.get("system_prompt"),
             "allowed_tools": payload.get("allowed_tools") or [],

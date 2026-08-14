@@ -184,3 +184,84 @@ def test_load_settings_end_to_end_purges_a_stale_jwt_and_migrates_the_picker_val
     assert maestro_token_status(s).state == "missing"
     # The stale-named entry is gone, and with no surviving token nothing new was inserted in its place.
     assert s.custom_providers == []
+
+
+# --------------------------------------------------------------------------- (f) agent sessions: same rename, read through session_store.
+
+
+def test_a_session_with_a_stale_picker_value_migrates_on_load(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.agents.manager.session.session_store import load_session_data
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    am.save_session("s1", {"id": "s1", "model": "custom/provedor-ia/maestro"})
+    assert load_session_data("s1")["model"] == "custom/maestro/maestro"
+
+
+def test_a_session_with_an_unrelated_model_is_returned_unchanged(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.agents.manager.session.session_store import load_session_data
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    am.save_session("s1", {"id": "s1", "model": "sonnet"})
+    am.save_session("s2", {"id": "s2", "model": "custom/other-provider/x"})
+    assert load_session_data("s1")["model"] == "sonnet"
+    assert load_session_data("s2")["model"] == "custom/other-provider/x"
+
+
+def test_load_all_session_data_migrates_every_stale_session(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.agents.manager.session.session_store import load_all_session_data
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    am.save_session("s1", {"id": "s1", "model": "custom/provedor-ia/maestro"})
+    am.save_session("s2", {"id": "s2", "model": "sonnet"})
+    loaded = dict(load_all_session_data())
+    assert loaded["s1"]["model"] == "custom/maestro/maestro"
+    assert loaded["s2"]["model"] == "sonnet"
+
+
+def test_session_load_does_not_rewrite_the_file_on_disk(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.agents.manager.session.session_store import load_session_data
+    from backend.config.json_store import read_json_or_none
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    am.save_session("s1", {"id": "s1", "model": "custom/provedor-ia/maestro"})
+    load_session_data("s1")  # migrated in memory
+    assert read_json_or_none(str(tmp_path / "s1.json"))["model"] == "custom/provedor-ia/maestro"  # untouched on disk
+
+
+def test_get_history_reports_the_migrated_model(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    am.save_session("s1", {"id": "s1", "name": "old", "model": "custom/provedor-ia/maestro", "closed_at": "2026-01-01"})
+    history = am.agent_manager.get_history()
+    assert history["sessions"][0]["model"] == "custom/maestro/maestro"
+
+
+def test_session_migration_is_idempotent(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.agents.manager.session.session_store import load_session_data
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    am.save_session("s1", {"id": "s1", "model": "custom/maestro/maestro"})
+    assert load_session_data("s1")["model"] == "custom/maestro/maestro"
+
+
+# --------------------------------------------------------------------------- (g) swarm bundle import: a stale value in the bundle is rewritten on the way in.
+
+
+def test_swarm_session_import_migrates_a_stale_picker_value(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.swarm.entities.SessionExportable import SessionExportable
+    from backend.apps.swarm.exportable import RemapTable
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    payload = {"name": "Shared Agent", "provider": "custom", "model": "custom/provedor-ia/maestro", "mode": "agent"}
+    sid = SessionExportable.import_(payload, {}, RemapTable())
+    assert am.load_session_data(sid)["model"] == "custom/maestro/maestro"
+
+
+def test_swarm_session_import_leaves_an_unrelated_model_untouched(tmp_path, monkeypatch):
+    from backend.apps.agents import agent_manager as am
+    from backend.apps.swarm.entities.SessionExportable import SessionExportable
+    from backend.apps.swarm.exportable import RemapTable
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(tmp_path))
+    payload = {"name": "Shared Agent", "provider": "anthropic", "model": "sonnet", "mode": "agent"}
+    sid = SessionExportable.import_(payload, {}, RemapTable())
+    assert am.load_session_data(sid)["model"] == "sonnet"

@@ -104,8 +104,6 @@
   },
   "settings": {
     "models": {
-      "provedorIaDesc": "Os modelos Maestro, via MartinsTech.",
-      "provedorIaGetToken": "Obter token",
       "customProviders": {
         "title": "Provedores personalizados",
         "readyBadge": "{{ready}} DE {{total}} PRONTOS",
@@ -134,6 +132,8 @@
         "connected": "CONECTADO",
         "getKey": "Obter chave",
         "google": "Os modelos Gemini mais recentes.",
+        "maestroDesc": "Chave de API estática para o gateway Maestro, se você tiver uma. A maioria das pessoas não precisa disso: o login acontece automaticamente.",
+        "maestroLink": "Abrir gateway",
         "openai": "Os modelos OpenAI mais recentes.",
         "openrouter": "Centenas de modelos de todos os provedores principais."
       },
@@ -502,7 +502,7 @@
         "detail": "A conta deste modelo não está ativa agora. Reconecte em Configurações, ou troque para outro modelo.",
         "cta": "Abrir Configurações"
       },
-      "provedorIaSessionExpired": {
+      "maestroSessionExpired": {
         "title": "Sua sessão do Maestro Studio venceu",
         "detail": "O código de acesso deste computador expirou, então o modelo não conseguiu responder. Entre de novo e você continua de onde parou.",
         "cta": "Entrar de novo"
@@ -949,23 +949,11 @@
       "greeting": "Olá, sou Maestro Studio, sua equipe de IA pessoal. Posso fazer praticamente qualquer coisa no seu laptop, então traga-me qualquer coisa: um problema difícil, uma ideia meio formada, algo que você precisa escrever. Vamos descobrir juntos.\n\nPor onde você quer começar?"
     }
   },
-  "provedorIa": {
+  "maestro": {
     "signIn": {
-      "title": "Entre no Maestro Studio",
-      "introMissing": "Para conversar com os modelos Maestro, este computador precisa de um código de acesso da sua conta MartinsTech. São três passos rápidos.",
-      "introExpired": "Sua sessão do Maestro Studio venceu, e por isso os modelos pararam de responder. Isso acontece a cada 10 horas: basta pegar um código novo, nos mesmos três passos.",
-      "step1": "Clique em “Abrir a página de login”. Seu navegador abre o site da MartinsTech.",
-      "step2": "Entre com o seu e-mail e a sua senha de sempre. A página mostra uma caixa com um texto comprido dentro: é o seu código de acesso.",
-      "step3": "Selecione esse texto inteiro, copie (Ctrl+C) e cole no campo abaixo.",
-      "openBrowser": "Abrir a página de login",
-      "pasteLabel": "Cole aqui o código de acesso",
-      "pastePlaceholder": "Cole o texto que você copiou da página",
-      "submit": "Entrar",
-      "later": "Agora não",
-      "privacy": "O código fica guardado só neste computador. Ele nunca aparece nas conversas, nos relatórios de erro ou em nada que você compartilhe.",
-      "errorExpired": "Esse código já venceu. Volte à página de login, gere um novo e cole aqui.",
-      "errorMissing": "Cole o código de acesso antes de continuar.",
-      "errorFailed": "Não deu para salvar o código. Confira se você copiou o texto inteiro e tente de novo."
+      "introMissing": "Entrando no Maestro Studio. Conclua o login na janela do navegador que acabou de abrir.",
+      "introExpired": "Sua sessão do Maestro Studio venceu. Abrimos a página de login no seu navegador — conclua por lá e você continua de onde parou.",
+      "retry": "Entrar de novo"
     },
     "warning": {
       "message": "Sua sessão do Maestro Studio termina em {{minutes}} min. Entre de novo agora para não parar no meio de uma tarefa.",

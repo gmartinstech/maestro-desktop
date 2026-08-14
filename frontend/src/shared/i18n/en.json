@@ -104,8 +104,6 @@
   },
   "settings": {
     "models": {
-      "provedorIaDesc": "The Maestro models, through MartinsTech.",
-      "provedorIaGetToken": "Get token",
       "customProviders": {
         "title": "Custom Providers",
         "readyBadge": "{{ready}} OF {{total}} READY",
@@ -134,6 +132,8 @@
         "connected": "CONNECTED",
         "getKey": "Get key",
         "google": "The latest Gemini models.",
+        "maestroDesc": "Static API key for the Maestro gateway, if you have one. Most people don't need this: sign-in happens automatically.",
+        "maestroLink": "Open gateway",
         "openai": "The latest OpenAI models.",
         "openrouter": "Hundreds of models from every major provider."
       },
@@ -502,7 +502,7 @@
         "detail": "This model's account isn't active right now. Reconnect it in Settings, or switch to a different model.",
         "cta": "Open Settings"
       },
-      "provedorIaSessionExpired": {
+      "maestroSessionExpired": {
         "title": "Your Maestro Studio session has expired",
         "detail": "The access code on this computer ran out, so the model couldn't answer. Sign in again and you'll pick up where you left off.",
         "cta": "Sign in again"
@@ -949,23 +949,11 @@
       "greeting": "Hi, I'm Maestro Studio, your personal AI team. I can do just about anything right on your laptop, so bring me anything: a tough problem, a half-formed idea, something you need to write. We'll figure it out together.\n\nWhere do you want to start?"
     }
   },
-  "provedorIa": {
+  "maestro": {
     "signIn": {
-      "title": "Sign in to Maestro Studio",
-      "introMissing": "To talk to the Maestro models, this computer needs an access code from your MartinsTech account. It takes three quick steps.",
-      "introExpired": "Your Maestro Studio session has expired, which is why the models stopped answering. This happens every 10 hours: just fetch a new code, same three steps.",
-      "step1": "Click “Open the sign-in page”. Your browser opens the MartinsTech site.",
-      "step2": "Sign in with your usual email and password. The page shows a box with a long piece of text inside: that is your access code.",
-      "step3": "Select that whole text, copy it (Ctrl+C), and paste it in the field below.",
-      "openBrowser": "Open the sign-in page",
-      "pasteLabel": "Paste your access code here",
-      "pastePlaceholder": "Paste the text you copied from the page",
-      "submit": "Sign in",
-      "later": "Not now",
-      "privacy": "The code is stored on this computer only. It never shows up in your chats, in error reports, or in anything you share.",
-      "errorExpired": "That code has already expired. Go back to the sign-in page, get a new one, and paste it here.",
-      "errorMissing": "Paste your access code before continuing.",
-      "errorFailed": "We couldn't save the code. Check that you copied the whole text and try again."
+      "introMissing": "Signing you in to Maestro Studio. Complete the sign-in in the browser window that just opened.",
+      "introExpired": "Your Maestro Studio session has expired. We've opened the sign-in page in your browser — complete it there and you'll pick up where you left off.",
+      "retry": "Sign in again"
     },
     "warning": {
       "message": "Your Maestro Studio session ends in {{minutes}} min. Sign in again now so you don't stop mid-task.",

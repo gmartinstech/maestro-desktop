@@ -1,6 +1,7 @@
 import os
 
 from backend.apps.agents.core.models import AgentSession
+from backend.apps.settings.maestro_picker_migration import migrate_picker_values_in_place
 from typing import Dict, List, Optional, Tuple
 from typeguard import typechecked
 from backend.config.json_store import read_json_or_none, atomic_write_json
@@ -22,7 +23,11 @@ def save_session(session_id: str, doc_data: Dict) -> None:
 
 @typechecked
 def load_session_data(session_id: str) -> Optional[Dict]:
-    return read_json_or_none(os.path.join(sessions_dir(), f"{session_id}.json"))
+    data = read_json_or_none(os.path.join(sessions_dir(), f"{session_id}.json"))
+    # A session's `model` field (and any nested model override) can still carry the pre-rename `custom/provedor-ia/<model>` picker value; rewrite it in memory only (same non-rewrite-on-disk stance as the workflow loader).
+    if data is not None:
+        migrate_picker_values_in_place(data)
+    return data
 
 
 @typechecked
@@ -42,6 +47,7 @@ def load_all_session_data() -> List[Tuple[str, Dict]]:
         if fname.endswith(".json"):
             data = read_json_or_none(os.path.join(dir_path, fname))
             if data is not None:
+                migrate_picker_values_in_place(data)
                 results.append((fname[:-5], data))
     return results
 
