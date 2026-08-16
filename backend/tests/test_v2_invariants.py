@@ -2780,15 +2780,20 @@ def test_sync_custom_providers_updates_existing_node_in_place():
             ),
         ]))
 
-    # Should PUT the node, PATCH the connection. NO new POSTs.
+    # Should PUT the node AND the connection. NO new POSTs.
+    # This asserted a conn PATCH until the real router was probed: 9Router answers
+    # PATCH /providers/<id> with 405, and the caller ignored the status, so a rotated key never
+    # landed and the connection served an expired bearer forever. The mock accepted PATCH, which is
+    # precisely why the suite stayed green while the live app returned "[401]: jwt expired".
     posts = [c for c in state["calls"] if c[0] == "POST"]
     puts = [c for c in state["calls"] if c[0] == "PUT"]
     patches = [c for c in state["calls"] if c[0] == "PATCH"]
     assert posts == [], f"expected no new nodes/conns, got {posts}"
-    assert len(puts) >= 1, f"expected node PUT, got {puts}"
-    assert len(patches) >= 1, f"expected conn PATCH, got {patches}"
-    # And the apiKey should be the new one in the patched payload.
-    assert patches[0][2]["apiKey"] == "new-key"
+    assert patches == [], f"PATCH is 405 on this router, got {patches}"
+    assert len(puts) >= 2, f"expected a node PUT and a connection PUT, got {puts}"
+    conn_puts = [c for c in puts if "/providers/" in c[1]]
+    assert conn_puts, f"the connection must be updated, got {puts}"
+    assert conn_puts[0][2]["apiKey"] == "new-key"
 
 
 def test_sync_custom_providers_deletes_orphaned_managed_nodes():

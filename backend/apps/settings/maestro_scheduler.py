@@ -76,14 +76,18 @@ async def maestro_refresh_loop() -> None:
     """Background task: check + silently refresh the Maestro token every
     MAESTRO_REFRESH_INTERVAL_SECONDS. Runs for the app's whole lifetime; started once
     from settings_lifespan alongside the catalog-refresh and upload-GC loops."""
-    from backend.apps.settings.settings import apply_settings_update, settings_write_lock
+    from backend.apps.settings.settings import apply_settings_patch, settings_write_lock
     from backend.apps.settings.store import load_settings
     while True:
         try:
-            async with settings_write_lock():
-                current = load_settings()
-                if await refresh_maestro_access_token_if_needed(current, now=time.time()):
-                    await apply_settings_update(current)
+            # The Keycloak round trip happens OUTSIDE the lock, and only the token field is written
+            # back. Holding a settings snapshot across that call and then saving the whole object
+            # reverted every unrelated field written while the network call was in flight — a user
+            # (or an agent) editing Settings during a refresh silently lost the edit.
+            probe = load_settings()
+            if await refresh_maestro_access_token_if_needed(probe, now=time.time()):
+                async with settings_write_lock():
+                    await apply_settings_patch({PROVEDOR_IA_TOKEN_FIELD: getattr(probe, PROVEDOR_IA_TOKEN_FIELD)})
         except Exception:
             logger.debug("Maestro background token refresh loop iteration failed", exc_info=True)
         await asyncio.sleep(MAESTRO_REFRESH_INTERVAL_SECONDS)

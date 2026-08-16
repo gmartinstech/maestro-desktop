@@ -118,3 +118,41 @@ async def test_a_missing_token_with_a_stored_refresh_token_still_refreshes(no_en
     changed = await refresh_maestro_access_token_if_needed(settings)
     assert changed is True
     assert settings.provedor_ia_token == fresh_access
+
+
+@pytest.mark.asyncio
+async def test_the_refresh_writes_only_the_token_and_never_reverts_a_concurrent_edit(no_env_token, monkeypatch):
+    """The loop used to snapshot settings, await Keycloak while holding that snapshot, then save the
+    WHOLE object — so anything written during the round trip was silently reverted (an API key set
+    mid-refresh came back blank). It must patch the token field alone, merged onto current state."""
+    import asyncio
+    import backend.apps.settings.maestro_scheduler as mod
+    import backend.apps.settings.settings as settings_mod
+    fresh_access = p_jwt(int(time.time()) + 12 * 3600)
+    monkeypatch.setattr(mod, "load_refresh_token", lambda: "rt-old")
+    monkeypatch.setattr(mod, "store_refresh_token", lambda t: None)
+
+    async def p_fake_refresh(refresh_token: str) -> Dict[str, Any]:
+        return {"access_token": fresh_access, "refresh_token": "rt-new"}
+
+    monkeypatch.setattr(mod, "refresh_tokens", p_fake_refresh)
+    captured: Dict[str, Any] = {}
+
+    async def p_capture_patch(changes: Dict[str, Any]):
+        captured.update(changes)
+        return AppSettings()
+
+    monkeypatch.setattr(settings_mod, "apply_settings_patch", p_capture_patch)
+    # The loop imports load_settings from store, so patching settings.load_settings leaves the real
+    # on-disk file in play and the test passes or fails on whatever token that machine happens to hold.
+    import backend.apps.settings.store as store_mod
+    monkeypatch.setattr(store_mod, "load_settings", lambda: AppSettings(provedor_ia_token=None))
+
+    async def p_stop_after_one(_seconds):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(mod.asyncio, "sleep", p_stop_after_one)
+    with pytest.raises(asyncio.CancelledError):
+        await mod.maestro_refresh_loop()
+    assert set(captured) == {"provedor_ia_token"}, f"only the token may be written, got {sorted(captured)}"
+    assert captured["provedor_ia_token"] == fresh_access

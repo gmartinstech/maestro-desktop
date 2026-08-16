@@ -113,3 +113,43 @@ def test_nonempty_list_reaps_only_removed(monkeypatch):
     deleted_ids = [u.split("/")[-1] for u in harness.deletes()]
     assert deleted_ids == ["id-cp-together"]
     assert f"id-{sc.NINE_ROUTER_OPENAI_KEYED_PREFIX}" not in deleted_ids
+
+
+def test_a_rotated_key_is_pushed_with_a_method_the_router_accepts(monkeypatch):
+    """9Router answers PATCH /providers/<id> with 405. The old code sent PATCH and ignored the
+    response, so a refreshed Keycloak token never reached the router: the connection kept the bearer
+    it was created with and every call failed "[401]: jwt expired" long after settings looked fine."""
+    async def p_existing_connection(node_id: str, name: str):
+        return {"id": "conn-1"}
+
+    harness = setup(monkeypatch, [managed("cp-maestro")])
+    monkeypatch.setattr(sc, "find_keyed_connection", p_existing_connection)
+    asyncio.run(sc.sync_custom_providers([{"name": "Maestro", "base_url": "https://llm.martinstech.net/v1", "api_key": "rotated-key"}]))
+    assert not any(m == "PATCH" for m, _ in harness.calls), "PATCH is 405 on this endpoint"
+    assert any(m == "PUT" and u.endswith("/providers/conn-1") for m, u in harness.calls), \
+        f"the rotated key must be PUT to the existing connection; calls={harness.calls}"
+
+
+def test_a_prefix_held_by_an_older_builds_node_is_adopted_not_duplicated(monkeypatch):
+    """The prefix is 9Router's routing key, so two nodes holding one is a coin flip over which
+    baseUrl serves a request. An upgrade left "maestro (OpenSwarm-managed)" on plain http:// under
+    cp-maestro; matching only our own name suffix missed it, so we POSTed a rival with the same
+    prefix, the stale one kept winning, and every call came back "[404]: unknown route"."""
+    stale = {"id": "id-stale", "prefix": "cp-maestro", "name": "maestro (OpenSwarm-managed)"}
+    harness = setup(monkeypatch, [stale])
+    asyncio.run(sc.sync_custom_providers([{"name": "Maestro", "base_url": "https://llm.martinstech.net/v1", "api_key": "k"}]))
+    posts = [u for m, u in harness.calls if m == "POST" and u.endswith("/provider-nodes")]
+    assert posts == [], "adopt the node already holding the prefix instead of creating a second one"
+    assert any(m == "PUT" and u.endswith("/provider-nodes/id-stale") for m, u in harness.calls), \
+        "the stale node must be updated in place (renamed, baseUrl corrected)"
+
+
+def test_a_duplicate_prefix_left_behind_is_removed(monkeypatch):
+    """Both records already exist (the shape a partially-upgraded install is in): keep one and delete
+    the rival, or requests keep landing on whichever one 9Router happens to pick."""
+    stale = {"id": "id-stale", "prefix": "cp-maestro", "name": "maestro (OpenSwarm-managed)"}
+    harness = setup(monkeypatch, [managed("cp-maestro"), stale])
+    asyncio.run(sc.sync_custom_providers([{"name": "Maestro", "base_url": "https://llm.martinstech.net/v1", "api_key": "k"}]))
+    deleted = [u.split("/")[-1] for u in harness.deletes()]
+    assert "id-stale" in deleted, f"the rival on the same prefix must go; deleted={deleted}"
+    assert "id-cp-maestro" not in deleted, "our own node must survive"
