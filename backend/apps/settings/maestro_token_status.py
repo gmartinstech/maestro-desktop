@@ -1,9 +1,12 @@
-"""Answer one question locally: should the app ask the user to sign in to provedor-ia again?
+"""Answer one question locally: should the app ask the user to sign in to Maestro again?
 
-A provedor-ia token is a Keycloak access token with a ~10h lifetime and NO refresh
-token (the gateway's /login grants `scope=openid` only, so `offline_access` never
-arrives), so every install stops working ~10h after setup. Users mint one by hand at
-https://llm.martinstech.net/login. See docs/PROVEDOR_IA.md for the real fix.
+A Maestro access token is a Keycloak access token with a ~12h lifetime. As long as the
+Keycloak Authorization Code + PKCE flow has run once (maestro_keycloak_auth.py) and the
+resulting refresh token (kept in the OS credential store, see maestro_credential_store.py)
+is still within its ~30 day idle timeout, maestro_scheduler.py refreshes the access token
+silently well before it expires, so this state machine should read `valid`/`expiring`
+almost always. It only reads `missing`/`expired` when there is no usable refresh token
+either, at which point the app must trigger a fresh browser sign-in.
 
 The `exp` claim is read WITHOUT signature verification, on purpose. This is a UI
 decision, never an authorization one: only the gateway may decide whether a token is
@@ -22,21 +25,21 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict
 from typeguard import typechecked
 
-from backend.apps.settings.apply_provedor_ia_defaults import provedor_ia_token
+from backend.apps.settings.apply_maestro_defaults import provedor_ia_token
 from backend.apps.settings.models import AppSettings
 
 # Under this much runway the UI shows a quiet "your session is ending" notice instead of waiting for the turn to die.
 EXPIRY_WARNING_MINUTES = 30
-ProvedorIaTokenState = Literal["missing", "expired", "expiring", "valid", "opaque"]
+MaestroTokenState = Literal["missing", "expired", "expiring", "valid", "opaque"]
 # The two states that mean "cannot work"; `opaque` is deliberately absent (see module docstring).
 P_DEAD_STATES = ("missing", "expired")
 
 
-class ProvedorIaTokenStatus(BaseModel):
+class MaestroTokenStatus(BaseModel):
     """What the login prompt needs to know, carrying no part of the token itself."""
 
     model_config = ConfigDict(validate_assignment=True)
-    state: ProvedorIaTokenState
+    state: MaestroTokenState
     expires_at: Optional[int] = None
     expires_in_minutes: Optional[int] = None
 
@@ -63,29 +66,42 @@ def p_unverified_jwt_exp(token: str) -> Optional[int]:
 
 
 @typechecked
-def token_status(token: Optional[str], now: Optional[float] = None) -> ProvedorIaTokenStatus:
-    """Classify a raw token string. `now` is injectable so tests never depend on the clock."""
-    cleaned = (token or "").strip()
-    if not cleaned:
-        return ProvedorIaTokenStatus(state="missing")
-    exp = p_unverified_jwt_exp(cleaned)
-    if exp is None:
-        return ProvedorIaTokenStatus(state="opaque")
-    seconds_left = exp - (time.time() if now is None else now)
-    if seconds_left <= 0:
-        return ProvedorIaTokenStatus(state="expired", expires_at=exp, expires_in_minutes=0)
-    minutes_left = int(seconds_left // 60)
-    state: ProvedorIaTokenState = "expiring" if minutes_left < EXPIRY_WARNING_MINUTES else "valid"
-    return ProvedorIaTokenStatus(state=state, expires_at=exp, expires_in_minutes=minutes_left)
+def token_looks_like_jwt(token: str) -> bool:
+    """True when `token` decodes as a JWT (whether or not it's still live).
+
+    Used by the upgrade migration (store.py) and the env-var reader
+    (apply_maestro_defaults.provedor_ia_token) to tell a hand-pasted Keycloak access
+    token, the credential type this whole flow replaced, apart from a static opaque
+    key (`mtok_...`), which is a distinct, still-supported credential and must never
+    be treated as one of these.
+    """
+    return p_unverified_jwt_exp(token) is not None
 
 
 @typechecked
-def provedor_ia_token_status(settings: AppSettings) -> ProvedorIaTokenStatus:
+def token_status(token: Optional[str], now: Optional[float] = None) -> MaestroTokenStatus:
+    """Classify a raw token string. `now` is injectable so tests never depend on the clock."""
+    cleaned = (token or "").strip()
+    if not cleaned:
+        return MaestroTokenStatus(state="missing")
+    exp = p_unverified_jwt_exp(cleaned)
+    if exp is None:
+        return MaestroTokenStatus(state="opaque")
+    seconds_left = exp - (time.time() if now is None else now)
+    if seconds_left <= 0:
+        return MaestroTokenStatus(state="expired", expires_at=exp, expires_in_minutes=0)
+    minutes_left = int(seconds_left // 60)
+    state: MaestroTokenState = "expiring" if minutes_left < EXPIRY_WARNING_MINUTES else "valid"
+    return MaestroTokenStatus(state=state, expires_at=exp, expires_in_minutes=minutes_left)
+
+
+@typechecked
+def maestro_token_status(settings: AppSettings) -> MaestroTokenStatus:
     """Status of the token the app would actually send: the settings field, else PROVEDOR_IA_TOKEN."""
     return token_status(provedor_ia_token(settings))
 
 
 @typechecked
-def needs_login(status: ProvedorIaTokenStatus) -> bool:
+def needs_login(status: MaestroTokenStatus) -> bool:
     """True when there is nothing usable to send, so the sign-in prompt must block the first turn."""
     return status.state in P_DEAD_STATES

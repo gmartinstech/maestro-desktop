@@ -3,7 +3,7 @@ from typing import Optional
 
 from typeguard import typechecked
 
-from backend.apps.agents.core.ProvedorIaSessionExpiredError import ProvedorIaSessionExpiredError
+from backend.apps.agents.core.MaestroSessionExpiredError import MaestroSessionExpiredError
 
 # Secret shapes that must never ride along when we ship a stderr tail or an error string to telemetry. own_key mode means the subprocess stderr can echo the user's OWN provider key, so this scrub is the wall between a diagnostic and a key leak; over-redacting is fine, leaking is not.
 P_TELEMETRY_SECRET_PATTERNS = (
@@ -110,8 +110,8 @@ def is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
     common cause: the Maestro Pro bearer or 9Router OAuth token has expired
     while the UI still shows the connection as 'connected'.
     """
-    # Our own pre-spawn refusal for a dead provedor-ia session: classified by TYPE so it can never be re-read as anything but auth.
-    if isinstance(exc, ProvedorIaSessionExpiredError):
+    # Our own pre-spawn refusal for a dead Maestro session: classified by TYPE so it can never be re-read as anything but auth.
+    if isinstance(exc, MaestroSessionExpiredError):
         return True
     combined = f"{exc!s}\n{extra_text}".strip()
     if not combined:
@@ -121,7 +121,7 @@ def is_auth_error(exc: BaseException, extra_text: str = "") -> bool:
         return False
     return bool(re.search(
         r"\b(401|403)\b"
-        # The provedor-ia gateway rejects a dead Keycloak access token with exactly this reason string.
+        # The Maestro gateway rejects a dead Keycloak access token with exactly this reason string.
         r"|jwt\s+expired"
         r"|invalid\s+authentication\s+credentials"
         r"|invalid.*api[_\s-]?key"

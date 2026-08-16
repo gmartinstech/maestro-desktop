@@ -119,7 +119,8 @@ def test_windows_path_skips_chmod_and_runs_icacls(tmp_path):
     # verification probe (and a rollback if the DACL came back empty), which are legitimate extras.
     hardens = [c for c in calls if "/inheritance:r" in c]
     assert len(hardens) == 1, f"ACL hardening must run once per process; calls={calls}"
-    assert all(c[0] == "icacls" for c in calls)
+    # whoami is the SID lookup behind the user grant (a bare name does not resolve on a domain host).
+    assert all(c[0] in ("icacls", "whoami") for c in calls)
 
 
 def test_a_partial_icacls_apply_is_rolled_back_not_left_bricked(tmp_path, monkeypatch):
@@ -139,3 +140,48 @@ def test_a_partial_icacls_apply_is_rolled_back_not_left_bricked(tmp_path, monkey
     monkeypatch.setattr(proc.subprocess, "run", p_fake_run)
     proc.p_harden_windows_acl(target)
     assert any("/inheritance:e" in c for c in calls), f"no rollback attempted; calls={calls}"
+
+
+def test_the_user_is_granted_by_a_principal_that_resolves(monkeypatch):
+    """A bare username does not resolve on a domain-joined host, so icacls skips that grant while
+    /inheritance:r has already applied — the empty-DACL path. Prefer the SID, then DOMAIN\\user."""
+    monkeypatch.setattr(
+        proc.subprocess, "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout='"WILEY\\gmartinssi","S-1-5-21-99-1001"\n', stderr=""),
+    )
+    assert proc.p_current_user_principal() == "*S-1-5-21-99-1001"
+
+    def p_no_whoami(*a, **k):
+        raise OSError("whoami missing")
+
+    monkeypatch.setattr(proc.subprocess, "run", p_no_whoami)
+    monkeypatch.setenv("USERDOMAIN", "WILEY")
+    monkeypatch.setenv("USERNAME", "gmartinssi")
+    assert proc.p_current_user_principal() == "WILEY\\gmartinssi", "must qualify with the domain, not pass a bare name"
+
+
+def test_a_bricked_credential_file_under_a_healthy_dir_is_rolled_back(tmp_path, monkeypatch):
+    """The real-world shape: /T applies per entry, so a db.json held open by the router is left with an
+    empty DACL while the dir above it hardens fine and icacls still exits 0. Verifying only the dir
+    misses it, and the router then fails every provider-node create with a 500."""
+    target = str(tmp_path / "9router")
+    os.makedirs(target, exist_ok=True)
+    p_db = os.path.join(target, "db.json")
+    with open(p_db, "w", encoding="utf-8") as fh:
+        fh.write("{}")
+    calls: list[list[str]] = []
+
+    def p_fake_run(argv, **kwargs):
+        calls.append(list(argv))
+        if "/inheritance:r" in argv or "/inheritance:e" in argv:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        # Probe: the dir reports a real ACE, db.json reports the path line only (empty DACL).
+        probed = argv[1] if len(argv) > 1 else ""
+        out = f"{probed} \n" if probed == p_db else f"{probed} WILEY\\gmartinssi:(OI)(CI)(F)\n"
+        return SimpleNamespace(returncode=0, stdout=out, stderr="")
+
+    monkeypatch.setattr(proc, "p_windows_acl_hardened", False, raising=False)
+    monkeypatch.setattr(proc.subprocess, "run", p_fake_run)
+    proc.p_harden_windows_acl(target)
+    assert any(p_db in c for c in calls), f"db.json was never verified; calls={calls}"
+    assert any("/inheritance:e" in c for c in calls), f"no rollback for the bricked file; calls={calls}"

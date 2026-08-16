@@ -1,7 +1,19 @@
 // e2e/golden/fixtures.ts
 import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
-import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';
 import { packagedAppPath } from '../helpers/launch';
+
+// A static opaque credential (`mtok_...` shape, but any non-JWT string classifies the same way —
+// see backend/apps/settings/maestro_token_status.py token_looks_like_jwt) reads as `state: "opaque"`,
+// which the app treats as always-usable and never dead. Seeding it directly into the isolated data
+// root's settings.json is how this suite gets an authenticated boot WITHOUT driving any UI: the old
+// paste-a-JWT dialog is gone, and the real flow opens the system browser to Keycloak, which this
+// suite must never do. Field name `provedor_ia_token` is unchanged on the backend.
+function seedOpaqueMaestroToken(dataRoot: string): void {
+  const settingsDir = join(dataRoot, 'settings');
+  mkdirSync(settingsDir, { recursive: true });
+  writeFileSync(join(settingsDir, 'settings.json'), JSON.stringify({ provedor_ia_token: 'mtok_e2e_fake_opaque_token' }, null, 2));
+}
 
 // firstWindow() returns the SPLASH, which main.js loads as a data: URL and then closes once the
 // real window is ready-to-show — so every later action raced a dying page. The splash's <title> is
@@ -26,6 +38,10 @@ export async function launchMaestro() {
   const dataRoot = mkdtempSync(join(tmpdir(), 'maestro-e2e-data-'));
   const stateHome = mkdtempSync(join(tmpdir(), 'maestro-e2e-home-'));
   const userData = mkdtempSync(join(tmpdir(), 'maestro-e2e-userdata-'));
+  // Seed BEFORE launch so the token-status check on boot reads "opaque" immediately: the gate's
+  // auto-login effect fires as soon as the first status lands, and a real Keycloak browser-open
+  // must never race this suite.
+  seedOpaqueMaestroToken(dataRoot);
   const app = await electron.launch({
     executablePath: packagedAppPath(),
     args: [`--user-data-dir=${userData}`],
@@ -44,11 +60,4 @@ export async function launchMaestro() {
   // driving the app and driving a blank page that merely has the right title.
   await win.waitForFunction(() => (document.querySelector('#root')?.childElementCount ?? 0) > 0, undefined, { timeout: 120_000 });
   return { app, win, dataRoot, stateHome, userData };
-}
-
-// An isolated profile has no provedor-ia token, so the sign-in gate correctly opens and blocks the
-// canvas. That is real first-run behaviour, not a bug: dismiss it the way a user would.
-export async function dismissSignInPrompt(win: Page): Promise<void> {
-  const later = win.getByTestId('provedor-ia-later');
-  if (await later.count()) await later.first().click();
 }

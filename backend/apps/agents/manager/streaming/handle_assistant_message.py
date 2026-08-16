@@ -16,7 +16,7 @@ from backend.apps.agents.manager.streaming.state import ThinkingState, TurnState
 from backend.apps.agents.manager.streaming.upsert_message import upsert_message
 from backend.apps.agents.manager.streaming.PartialReply import PartialReply
 from backend.apps.agents.manager.streaming import thinking as thinking_mod
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_NAME
+from backend.apps.settings.maestro import MAESTRO_NAME
 
 try:
     from claude_agent_sdk import AssistantMessage
@@ -111,13 +111,13 @@ async def handle_assistant_message(
                     "Reconnect on the Google / Gemini row, then send your message again."
                 )
                 reason = "gemini_token_expired"
-            elif "jwt expired" in lower_text or PROVEDOR_IA_NAME in (session.model or "").lower():
-                # A provedor-ia token is a 10h Keycloak access token with no refresh; the renderer replaces this text with the sign-in card.
+            elif "jwt expired" in lower_text or MAESTRO_NAME.casefold() in (session.model or "").lower():
+                # A Maestro token is a 10h Keycloak access token, refreshed automatically; the renderer replaces this text with the sign-in card.
                 friendly = (
                     "Maestro Studio sign-in expired. Sign in again to get a "
                     "fresh access code, then send your message again."
                 )
-                reason = "provedor_ia_token_expired"
+                reason = "maestro_token_expired"
             else:
                 friendly = (
                     "Provider authentication expired. Open Settings → Models and "

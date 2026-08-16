@@ -2,7 +2,7 @@
 
 Maestro Studio is MartinsTech's desktop orchestrator for AI coding agents — a fork of
 [Open Swarm](https://github.com/openswarm-ai/openswarm) (MIT), detached to run on our own
-provedor-ia gateway. See `docs/specs/` for the design and `docs/plans/` for the build plan.
+Maestro provider (gateway: https://llm.martinstech.net/v1). See `docs/specs/` for the design and `docs/plans/` for the build plan.
 
 <br>
 

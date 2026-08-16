@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Any, Literal
 
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_DEFAULT_MODEL
+from backend.apps.settings.maestro import MAESTRO_DEFAULT_MODEL
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a personal AI assistant running inside Maestro.\n\n"
@@ -65,8 +65,8 @@ DEFAULT_SYSTEM_PROMPT_PT_BR = (
 class AppSettings(BaseModel):
     default_system_prompt: Optional[str] = DEFAULT_SYSTEM_PROMPT
     default_folder: Optional[str] = None
-    # provedor-ia's fast model; apply_provedor_ia_defaults downgrades it to "sonnet" when there is no token to reach the gateway with.
-    default_model: str = PROVEDOR_IA_DEFAULT_MODEL
+    # provedor-ia's fast model; apply_maestro_defaults downgrades it to "sonnet" when there is no token to reach the gateway with.
+    default_model: str = MAESTRO_DEFAULT_MODEL
     default_mode: str = "agent"
     default_max_turns: Optional[int] = None
     default_thinking_level: Literal["off", "low", "medium", "high", "auto"] = "auto"

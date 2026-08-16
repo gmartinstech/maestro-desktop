@@ -16,8 +16,8 @@ from backend.apps.nine_router.sync import (
     find_keyed_connection,
     nr,
 )
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_NAME
-from backend.apps.settings.provedor_ia_token_status import token_status
+from backend.apps.settings.maestro import MAESTRO_NAME
+from backend.apps.settings.maestro_token_status import token_status
 
 logger = logging.getLogger(__name__)
 
@@ -102,10 +102,14 @@ async def sync_openai_compat_node(api_key: str | None) -> None:
         }
         async with nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
             if existing_conn:
-                await client.patch(
+                r = await client.put(
                     f"{NINE_ROUTER_API}/providers/{existing_conn['id']}",
                     json=conn_payload,
                 )
+                if r.status_code >= 300:
+                    logger.warning(
+                        f"9Router: failed to update OpenAI compat connection: {r.status_code} {r.text[:200]}"
+                    )
             else:
                 r = await client.post(f"{NINE_ROUTER_API}/providers", json=conn_payload)
                 if r.status_code >= 300:
@@ -175,6 +179,15 @@ async def sync_custom_providers(providers: list) -> None:
         and n["name"].endswith(NINE_ROUTER_CUSTOM_NAME_SUFFIX)
     ]
     managed_by_prefix = {n.get("prefix"): n for n in managed if n.get("prefix")}
+    # A prefix is 9Router's routing key, so two nodes sharing one is not a duplicate record but a
+    # coin flip over which baseUrl a request gets. Matching only on our own name suffix meant a node
+    # left by an OLDER build (e.g. "maestro (OpenSwarm-managed)" on plain http://) was invisible
+    # here, so we POSTed a second node with the SAME prefix and the stale one kept winning —
+    # "[404]: unknown route" on every call. Adopt whatever already holds the prefix instead.
+    p_all_by_prefix: dict = {}
+    for n in existing_nodes:
+        if isinstance(n, dict) and n.get("prefix"):
+            p_all_by_prefix.setdefault(n["prefix"], []).append(n)
 
     seen_prefixes: set[str] = set()
     for cp in providers or []:
@@ -185,16 +198,20 @@ async def sync_custom_providers(providers: list) -> None:
             continue
         # Local OpenAI-compat servers (LM Studio, Ollama, etc.) reject a blank Bearer header even with auth disabled. Substitute a placeholder; real auth deployments always have api_key set.
         api_key = api_key.strip() or "no-auth-required"
-        # A definitively-expired provedor-ia JWT is dead weight: handing it to 9Router only gives it a bearer to keep replaying at the gateway (a 401 per model/health poll, against a 10/min failed-auth throttle). Signing in again rewrites the token, which re-diffs custom_providers and re-syncs this node.
-        if name.strip().casefold() == PROVEDOR_IA_NAME and token_status(api_key).state == "expired":
-            logger.info("9Router: skipping provedor-ia node (token expired, sign-in needed)")
+        # A definitively-expired Maestro JWT is dead weight: handing it to 9Router only gives it a bearer to keep replaying at the gateway (a 401 per model/health poll, against a 10/min failed-auth throttle). Signing in again rewrites the token, which re-diffs custom_providers and re-syncs this node.
+        if name.strip().casefold() == MAESTRO_NAME.casefold() and token_status(api_key).state == "expired":
+            logger.info("9Router: skipping Maestro node (token expired, sign-in needed)")
             continue
         slug = p_custom_provider_slug(name)
         prefix = f"cp-{slug}"
         seen_prefixes.add(prefix)
         managed_name = f"{name.strip()}{NINE_ROUTER_CUSTOM_NAME_SUFFIX}"
 
-        node = managed_by_prefix.get(prefix)
+        # Prefer our own node, else adopt any other holder of this prefix (the PUT below renames it
+        # and corrects its baseUrl, so the stale record becomes the managed one instead of a rival).
+        p_same_prefix = p_all_by_prefix.get(prefix) or []
+        node = managed_by_prefix.get(prefix) or (p_same_prefix[0] if p_same_prefix else None)
+        p_rivals = [n for n in p_same_prefix if node and n.get("id") and n.get("id") != node.get("id")]
         node_payload = {
             "name": managed_name,
             "prefix": prefix,
@@ -211,6 +228,16 @@ async def sync_custom_providers(providers: list) -> None:
                     )
                     node_id = node["id"]
                     logger.info(f"9Router: updated custom node {prefix}")
+                    # Only ever nodes sharing THIS prefix, so the cp-openai node that
+                    # sync_openai_compat_node owns is untouched (reaping it once killed every gpt-*
+                    # request with "No credentials"). Leaving a rival in place is not cosmetic: the
+                    # prefix is the routing key, so requests keep landing on whichever one wins.
+                    for p_rival in p_rivals:
+                        try:
+                            await client.delete(f"{NINE_ROUTER_API}/provider-nodes/{p_rival['id']}")
+                            logger.info(f"9Router: removed a duplicate node for prefix {prefix} left by an older build")
+                        except Exception as e:
+                            logger.warning(f"9Router: could not remove duplicate node for {prefix}: {e}")
                 else:
                     r = await client.post(
                         f"{NINE_ROUTER_API}/provider-nodes", json=node_payload,
@@ -240,10 +267,19 @@ async def sync_custom_providers(providers: list) -> None:
             }
             async with nr().httpx.AsyncClient(timeout=5.0, headers=cli_auth_headers()) as client:
                 if existing_conn:
-                    await client.patch(
+                    # PUT, not PATCH: 9Router answers PATCH /providers/<id> with 405, and this call
+                    # never checked the status, so a rotated key silently never reached the router.
+                    # The connection kept whatever bearer it was first created with and every request
+                    # failed "[401]: jwt expired" once that one aged out — invisible in the logs.
+                    r = await client.put(
                         f"{NINE_ROUTER_API}/providers/{existing_conn['id']}",
                         json=conn_payload,
                     )
+                    if r.status_code >= 300:
+                        logger.warning(
+                            f"9Router: failed to update custom connection {prefix}: "
+                            f"{r.status_code} {r.text[:200]}"
+                        )
                 else:
                     r = await client.post(
                         f"{NINE_ROUTER_API}/providers", json=conn_payload,

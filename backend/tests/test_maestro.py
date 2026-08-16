@@ -16,19 +16,19 @@ import json
 
 import pytest
 
-from backend.apps.settings.apply_provedor_ia_defaults import (
-    apply_provedor_ia_defaults,
+from backend.apps.settings.apply_maestro_defaults import (
+    apply_maestro_defaults,
     provedor_ia_token,
 )
 from backend.apps.settings.credentials import MAESTRO_DEFAULT_PROXY_URL
 from backend.apps.settings.models import AppSettings, CustomProvider
-from backend.apps.settings.provedor_ia import (
+from backend.apps.settings.maestro import (
     FALLBACK_DEFAULT_MODEL,
-    PROVEDOR_IA_DEFAULT_MODEL,
-    PROVEDOR_IA_DEFAULT_MODEL_ID,
-    PROVEDOR_IA_MODELS,
-    PROVEDOR_IA_NAME,
-    PROVEDOR_IA_SLUG,
+    MAESTRO_DEFAULT_MODEL,
+    MAESTRO_DEFAULT_MODEL_ID,
+    MAESTRO_MODELS,
+    MAESTRO_NAME,
+    MAESTRO_SLUG,
     PROVEDOR_IA_TOKEN_ENV,
     PROVEDOR_IA_TOKEN_FIELD,
 )
@@ -44,28 +44,28 @@ def no_env_token(monkeypatch):
 # --------------------------------------------------------------------------- The contract (values come from the vendor installers, not from us). ---------------------------------------------------------------------------
 
 def test_contract_matches_the_vendor_installers():
-    assert [m.value for m in PROVEDOR_IA_MODELS] == [
+    assert [m.value for m in MAESTRO_MODELS] == [
         "maestro", "maestro-fast", "maestro-ultra", "maestro-code",
     ]
-    assert [m.label for m in PROVEDOR_IA_MODELS] == [
+    assert [m.label for m in MAESTRO_MODELS] == [
         "Maestro (default, fast)", "Maestro Fast", "Maestro Ultra", "Maestro Code",
     ]
-    for m in PROVEDOR_IA_MODELS:
+    for m in MAESTRO_MODELS:
         assert m.context_window == 128_000
         assert m.max_completion_tokens == 4_096
     assert MAESTRO_DEFAULT_PROXY_URL == "https://llm.martinstech.net/v1"
 
 
 def test_default_model_value_matches_the_registry_composition():
-    """PROVEDOR_IA_DEFAULT_MODEL is spelled out so the settings store stays a
+    """MAESTRO_DEFAULT_MODEL is spelled out so the settings store stays a
     leaf; this pins it to how the registry actually parses a picker value."""
     from backend.apps.agents.providers.registry import (
         CUSTOM_VALUE_PREFIX,
         custom_provider_slug_for_lookup,
     )
-    assert custom_provider_slug_for_lookup(PROVEDOR_IA_NAME) == PROVEDOR_IA_SLUG
-    assert PROVEDOR_IA_DEFAULT_MODEL == (
-        f"{CUSTOM_VALUE_PREFIX}{PROVEDOR_IA_SLUG}/{PROVEDOR_IA_DEFAULT_MODEL_ID}"
+    assert custom_provider_slug_for_lookup(MAESTRO_NAME) == MAESTRO_SLUG
+    assert MAESTRO_DEFAULT_MODEL == (
+        f"{CUSTOM_VALUE_PREFIX}{MAESTRO_SLUG}/{MAESTRO_DEFAULT_MODEL_ID}"
     )
 
 
@@ -73,10 +73,10 @@ def test_default_model_value_matches_the_registry_composition():
 
 def test_env_token_seeds_the_provider_and_keeps_maestro_default(no_env_token, monkeypatch):
     monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, P_FAKE_TOKEN)
-    s = apply_provedor_ia_defaults(AppSettings())
-    assert s.default_model == PROVEDOR_IA_DEFAULT_MODEL
+    s = apply_maestro_defaults(AppSettings())
+    assert s.default_model == MAESTRO_DEFAULT_MODEL
     cp = s.custom_providers[0]
-    assert cp.name == PROVEDOR_IA_NAME
+    assert cp.name == MAESTRO_NAME
     assert cp.base_url == MAESTRO_DEFAULT_PROXY_URL
     assert cp.api_key == P_FAKE_TOKEN
     assert [m["value"] for m in cp.models] == [
@@ -88,11 +88,11 @@ def test_settings_field_token_wins_over_env(no_env_token, monkeypatch):
     monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, "pi-env-token-111111111111")
     s = AppSettings(provedor_ia_token=P_FAKE_TOKEN)
     assert provedor_ia_token(s) == P_FAKE_TOKEN
-    assert apply_provedor_ia_defaults(s).custom_providers[0].api_key == P_FAKE_TOKEN
+    assert apply_maestro_defaults(s).custom_providers[0].api_key == P_FAKE_TOKEN
 
 
 def test_no_token_downgrades_the_default_model(no_env_token):
-    s = apply_provedor_ia_defaults(AppSettings())
+    s = apply_maestro_defaults(AppSettings())
     assert s.custom_providers == []
     # The shipped default would name a model the picker cannot offer, so it falls back.
     assert s.default_model == FALLBACK_DEFAULT_MODEL
@@ -100,11 +100,11 @@ def test_no_token_downgrades_the_default_model(no_env_token):
 
 def test_seeding_is_idempotent_and_refreshes_a_rotated_token(no_env_token):
     s = AppSettings(provedor_ia_token=P_FAKE_TOKEN)
-    apply_provedor_ia_defaults(s)
-    apply_provedor_ia_defaults(s)
+    apply_maestro_defaults(s)
+    apply_maestro_defaults(s)
     assert len(s.custom_providers) == 1
     s.provedor_ia_token = "pi-rotated-222222222222"
-    apply_provedor_ia_defaults(s)
+    apply_maestro_defaults(s)
     assert len(s.custom_providers) == 1
     assert s.custom_providers[0].api_key == "pi-rotated-222222222222"
 
@@ -114,13 +114,13 @@ def test_seeding_preserves_other_custom_providers(no_env_token):
         provedor_ia_token=P_FAKE_TOKEN,
         custom_providers=[CustomProvider(name="LMStudio", base_url="http://localhost:1234/v1")],
     )
-    apply_provedor_ia_defaults(s)
-    assert [cp.name for cp in s.custom_providers] == [PROVEDOR_IA_NAME, "LMStudio"]
+    apply_maestro_defaults(s)
+    assert [cp.name for cp in s.custom_providers] == [MAESTRO_NAME, "LMStudio"]
 
 
 def test_explicit_non_provedor_default_is_never_promoted(no_env_token, monkeypatch):
     monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, P_FAKE_TOKEN)
-    s = apply_provedor_ia_defaults(AppSettings(default_model="opus-4-8"))
+    s = apply_maestro_defaults(AppSettings(default_model="opus-4-8"))
     assert s.default_model == "opus-4-8"
 
 
@@ -134,8 +134,8 @@ def test_load_settings_seeds_from_disk(no_env_token, monkeypatch, tmp_path):
     monkeypatch.setattr(store, "p_cached_settings", None)
     monkeypatch.setattr(store, "p_cached_sig", None)
     s = store.load_settings()
-    assert s.default_model == PROVEDOR_IA_DEFAULT_MODEL
-    assert s.custom_providers[0].name == PROVEDOR_IA_NAME
+    assert s.default_model == MAESTRO_DEFAULT_MODEL
+    assert s.custom_providers[0].name == MAESTRO_NAME
 
 
 def test_resolved_model_routes_through_the_9router_custom_node(no_env_token, monkeypatch):
@@ -146,12 +146,12 @@ def test_resolved_model_routes_through_the_9router_custom_node(no_env_token, mon
         get_context_window,
         resolve_model_id_for_sdk,
     )
-    s = apply_provedor_ia_defaults(AppSettings())
-    entry = find_builtin_model(PROVEDOR_IA_DEFAULT_MODEL)
+    s = apply_maestro_defaults(AppSettings())
+    entry = find_builtin_model(MAESTRO_DEFAULT_MODEL)
     assert entry is not None and entry["api"] == "custom" and entry["route"] == "api"
-    assert resolve_model_id_for_sdk(PROVEDOR_IA_DEFAULT_MODEL, s) == f"cp-{PROVEDOR_IA_SLUG}/maestro"
-    assert find_custom_provider_for_value(s, PROVEDOR_IA_DEFAULT_MODEL) is not None
-    assert get_context_window(PROVEDOR_IA_NAME, PROVEDOR_IA_DEFAULT_MODEL, s) == 128_000
+    assert resolve_model_id_for_sdk(MAESTRO_DEFAULT_MODEL, s) == f"cp-{MAESTRO_SLUG}/maestro"
+    assert find_custom_provider_for_value(s, MAESTRO_DEFAULT_MODEL) is not None
+    assert get_context_window(MAESTRO_NAME, MAESTRO_DEFAULT_MODEL, s) == 128_000
 
 
 def test_list_models_offers_provedor_ia_first(no_env_token, monkeypatch):
@@ -159,13 +159,13 @@ def test_list_models_offers_provedor_ia_first(no_env_token, monkeypatch):
     import asyncio
     from unittest.mock import patch
     from backend.apps.agents.agents import list_models
-    cfg = apply_provedor_ia_defaults(AppSettings())
+    cfg = apply_maestro_defaults(AppSettings())
     with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
          patch("backend.apps.nine_router.is_running", return_value=False):
         groups = asyncio.run(list_models())["models"]
-    assert list(groups)[0] == PROVEDOR_IA_NAME
-    rows = groups[PROVEDOR_IA_NAME]
-    assert rows[0]["value"] == PROVEDOR_IA_DEFAULT_MODEL
+    assert list(groups)[0] == MAESTRO_NAME
+    rows = groups[MAESTRO_NAME]
+    assert rows[0]["value"] == MAESTRO_DEFAULT_MODEL
     assert rows[0]["label"] == "Maestro (default, fast)"
     assert rows[0]["context_window"] == 128_000
     assert rows[0]["max_completion_tokens"] == 4_096
@@ -186,7 +186,7 @@ def test_token_is_in_every_secret_set():
 
 def test_redacted_settings_never_carry_the_token(no_env_token):
     from backend.apps.settings.redaction import redact_settings
-    s = apply_provedor_ia_defaults(AppSettings(provedor_ia_token=P_FAKE_TOKEN))
+    s = apply_maestro_defaults(AppSettings(provedor_ia_token=P_FAKE_TOKEN))
     red = redact_settings(s.model_dump())
     assert red[PROVEDOR_IA_TOKEN_FIELD] == {"configured": True, "last4": P_FAKE_TOKEN[-4:]}
     # The seeded provider mirrors the token into its api_key, so that copy has to be redacted too.
@@ -196,7 +196,7 @@ def test_redacted_settings_never_carry_the_token(no_env_token):
 
 def test_swarm_scrub_drops_the_token(no_env_token):
     from backend.apps.swarm.redact import find_denied_keys, scrub_payload
-    s = apply_provedor_ia_defaults(AppSettings(provedor_ia_token=P_FAKE_TOKEN))
+    s = apply_maestro_defaults(AppSettings(provedor_ia_token=P_FAKE_TOKEN))
     scrubbed = scrub_payload(s.model_dump())
     assert find_denied_keys(scrubbed) == []
     assert P_FAKE_TOKEN not in json.dumps(scrubbed)
@@ -241,7 +241,7 @@ async def test_a_settings_write_logs_nothing_containing_the_token(no_env_token, 
                 saved = await apply_settings_update(body)
         assert saved.provedor_ia_token == P_FAKE_TOKEN
         # The write also derived the provider, which is what re-syncs the 9Router node.
-        assert any(cp.name == PROVEDOR_IA_NAME for cp in saved.custom_providers)
+        assert any(cp.name == MAESTRO_NAME for cp in saved.custom_providers)
         for rec in caplog.records:
             assert P_FAKE_TOKEN not in rec.getMessage()
     finally:
@@ -254,8 +254,8 @@ def test_agent_cannot_blank_the_token_powering_its_own_run(no_env_token):
         resolve_powering_credential,
         write_would_suicide,
     )
-    s = apply_provedor_ia_defaults(AppSettings(provedor_ia_token=P_FAKE_TOKEN))
-    p = resolve_powering_credential(PROVEDOR_IA_DEFAULT_MODEL, s)
+    s = apply_maestro_defaults(AppSettings(provedor_ia_token=P_FAKE_TOKEN))
+    p = resolve_powering_credential(MAESTRO_DEFAULT_MODEL, s)
     assert p.kind == "api_key" and p.protected_field == PROVEDOR_IA_TOKEN_FIELD
     for blank in (None, "", "   "):
         assert write_would_suicide(PROVEDOR_IA_TOKEN_FIELD, blank, p)
@@ -271,6 +271,6 @@ def test_token_is_never_hardcoded_in_the_source():
     import pathlib
     import re
     root = pathlib.Path(__file__).resolve().parents[1] / "apps" / "settings"
-    for name in ("provedor_ia.py", "apply_provedor_ia_defaults.py"):
+    for name in ("maestro.py", "apply_maestro_defaults.py"):
         body = (root / name).read_text(encoding="utf-8")
         assert not re.search(r"api_key\s*=\s*[\"'][^\"']+[\"']", body)

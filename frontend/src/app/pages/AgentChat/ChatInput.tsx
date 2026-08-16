@@ -227,9 +227,6 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
     // Fits now (e.g. user shortened a too-long message): clear any lingering block banner.
     setSendBlock(null);
 
-    if (window.location.hash.includes('/apps/')) {
-    }
-
     if (sessionId && trimmed.startsWith('/')) {
       const cmd = trimmed.split(/\s+/)[0].toLowerCase();
       const handled = await handleSlashCommand(cmd, sessionId);

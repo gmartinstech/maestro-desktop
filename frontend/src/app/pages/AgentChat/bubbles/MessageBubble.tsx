@@ -28,7 +28,7 @@ import { getThinkingLabels } from '../thinkingLabels';
 import { extractPlatformNote } from '../parsing/toolResultParsing';
 import { AgentMessage, retryLastUserMessage } from '@/shared/state/agentsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
-import { openProvedorIaPrompt } from '@/shared/state/provedorIaSlice';
+import { startMaestroLogin } from '@/shared/state/maestroSlice';
 import { fetchSubscriptionStatus } from '@/shared/state/subscriptionsSlice';
 import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -80,7 +80,7 @@ interface MaestroErrorInfo {
   title: string;
   detail: string;
   ctaLabel?: string;
-  ctaAction?: 'retry' | 'settings' | 'waitlist' | 'retry_last' | 'provedor_ia_login';
+  ctaAction?: 'retry' | 'settings' | 'waitlist' | 'retry_last' | 'maestro_login';
 }
 
 interface OverflowContext {
@@ -181,14 +181,14 @@ function parseMaestroError(text: string, t: TFunction, ctx?: OverflowContext): M
       ctaAction: 'settings',
     };
   }
-  // The provedor-ia gateway's own 401 reason, plus the backend's friendly text for it; a 10h token dying is a sign-in, not a Settings trip.
+  // The Maestro gateway's own 401 reason, plus the backend's friendly text for it; a 10h token dying is a sign-in, not a Settings trip.
   if (/jwt expired|Maestro Studio sign-in expired/i.test(text)) {
     return {
       kind: 'auth',
-      title: t('agentChat.errors.provedorIaSessionExpired.title'),
-      detail: t('agentChat.errors.provedorIaSessionExpired.detail'),
-      ctaLabel: t('agentChat.errors.provedorIaSessionExpired.cta'),
-      ctaAction: 'provedor_ia_login',
+      title: t('agentChat.errors.maestroSessionExpired.title'),
+      detail: t('agentChat.errors.maestroSessionExpired.detail'),
+      ctaLabel: t('agentChat.errors.maestroSessionExpired.cta'),
+      ctaAction: 'maestro_login',
     };
   }
   if (/No active subscription|Subscription canceled|Subscription past_due|Invalid.*token|Missing bearer token/i.test(text)) {
@@ -925,8 +925,8 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     } as OverflowContext;
   }, shallowEqual);
   const activeSessionId = useAppSelector((state) => state.agents.activeSessionId);
-  const provedorIaNeedsLogin = useAppSelector(
-    (state) => state.provedorIa.status?.state === 'missing' || state.provedorIa.status?.state === 'expired',
+  const maestroNeedsLogin = useAppSelector(
+    (state) => state.maestro.status?.state === 'missing' || state.maestro.status?.state === 'expired',
   );
   const maestroError = !isUser ? parseMaestroError(rawText, t, overflowCtx) : null;
 
@@ -1250,11 +1250,11 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                       variant="outlined"
                       onClick={() => {
                         const api = (window as any).maestro;
-                        if (maestroError.ctaAction === 'provedor_ia_login') {
-                          dispatch(openProvedorIaPrompt());
+                        if (maestroError.ctaAction === 'maestro_login') {
+                          dispatch(startMaestroLogin());
                         } else if (maestroError.ctaAction === 'settings') {
-                          // An auth card while the provedor-ia token is dead means the fix is a sign-in, not a Settings tour.
-                          if (maestroError.kind === 'auth' && provedorIaNeedsLogin) dispatch(openProvedorIaPrompt());
+                          // An auth card while the Maestro token is dead means the fix is a sign-in, not a Settings tour.
+                          if (maestroError.kind === 'auth' && maestroNeedsLogin) dispatch(startMaestroLogin());
                           else dispatch(openSettingsModal('models'));
                         } else if (maestroError.ctaAction === 'retry_last') {
                           if (activeSessionId) dispatch(retryLastUserMessage({ sessionId: activeSessionId }));

@@ -8,7 +8,7 @@ Fork of openswarm-ai/openswarm. Electron + React/TS (frontend/) + FastAPI/Python
 `npm run verify` — build + lint + typecheck + tests + golden smoke + call-home check. Green = safe to merge.
 
 ## Rules
-- Never call *.openswarm.com. Models go through provedor-ia (https://llm.martinstech.net/v1).
+- Never call *.openswarm.com. Models go through the Maestro provider (gateway: https://llm.martinstech.net/v1).
 - Retain LICENSE (© Haik Decie). Brand = Maestro Studio; appId net.martinstech.maestro.studio.
 - Small diffs. One ticket per branch/worktree. A different-vendor model (or human) reviews before merge.
 - MAESTRO_MOCK_AGENT=1 makes an agent turn stream a deterministic synthetic reply with no key,

@@ -46,7 +46,11 @@ def live_backend():
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
-    for _ in range(200):
+    # 30s, not 10s: the lifespan boots 9Router and polls the gateway's catalog, so a cold start is
+    # measured at ~10.2s on an idle Windows box — i.e. the old budget sat exactly ON the boot time and
+    # failed as "uvicorn did not start" whenever the machine was a hair slower, which reads like a
+    # backend crash rather than a stopwatch that ran out.
+    for _ in range(600):
         if getattr(server, "started", False):
             break
         time.sleep(0.05)

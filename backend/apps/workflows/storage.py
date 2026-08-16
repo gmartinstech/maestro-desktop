@@ -94,7 +94,11 @@ def _load_all_from_disk() -> None:
             continue
         try:
             with open(os.path.join(DATA_DIR, fname)) as f:
-                wf = Workflow(**json.load(f))
+                raw = json.load(f)
+            # A workflow/step model field can still carry the pre-rename `custom/provedor-ia/<model>` picker value; rewrite every one found, in memory only (same non-rewrite-on-disk stance as the timezone coercion below).
+            from backend.apps.settings.maestro_picker_migration import migrate_picker_values_in_place
+            migrate_picker_values_in_place(raw)
+            wf = Workflow(**raw)
             # Coerce legacy timezone="local" to the host IANA zone in memory only. We don't rewrite the file here so backup/sync tooling doesn't see mtime churn on every startup; the next user-driven save migrates the on-disk record naturally.
             if wf.schedule.timezone == "local":
                 wf.schedule.timezone = host_tz

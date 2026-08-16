@@ -31,7 +31,7 @@ import { streamStart, streamDelta, streamEnd, clearStreamingForSession } from '.
 import { addBrowserCardFromBackend, markBrowserCardEnding, keepBrowserCardOpen, placeBesideCard, placeBelowCard, placeBrowserBesideChat, setBrowserCardPosition, setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCards, GRID_GAP, WORKFLOW_CARD_GAP, openWorkflowsApp, openWorkflowMonitor } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
 import { fetchSettings } from '../state/settingsSlice';
-import { fetchProvedorIaTokenStatus } from '../state/provedorIaSlice';
+import { startMaestroLogin } from '../state/maestroSlice';
 import { displaySessionName } from '../state/sessionDisplay';
 import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard, upsertWorkflow, removeWorkflow } from '../state/workflowsSlice';
 import { stepsSignature } from '@/app/pages/Workflows/scheduleUtils';
@@ -620,8 +620,8 @@ class WebSocketManager {
             message: data.message ?? 'Authentication failed.',
           }));
         }
-        // Re-read the local token status so the card's sign-in CTA and the expiry notice agree with what just failed.
-        if (data.reason === 'provedor_ia_token_expired') store.dispatch(fetchProvedorIaTokenStatus());
+        // A dead Maestro token failed a live turn; kick off the Keycloak login right away instead of waiting on the gate's next poll.
+        if (data.reason === 'maestro_token_expired') store.dispatch(startMaestroLogin());
         break;
 
       case 'agent:out_of_tokens':

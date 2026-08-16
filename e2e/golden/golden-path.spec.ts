@@ -1,6 +1,6 @@
 // e2e/golden/golden-path.spec.ts
 import { test, expect } from '@playwright/test';
-import { launchMaestro, dismissSignInPrompt } from './fixtures';
+import { launchMaestro } from './fixtures';
 
 // Scoped deliberately to boot health, not a full agent turn. The old spec drove a chat flow that
 // predates the dashboard-first UI: clicking /new agent|create/ makes a draft card, and Enter in that
@@ -20,8 +20,8 @@ test('golden path: packaged app boots, renders, and serves a session', async () 
   const port = await win.evaluate(() => (window as any).__MAESTRO_PORT__ ?? null);
   expect(port, 'renderer never learned the backend port').toBeTruthy();
 
-  // An isolated profile has no provedor-ia token, so the sign-in gate opens over the canvas.
-  await dismissSignInPrompt(win);
+  // launchMaestro seeds an opaque Maestro credential before boot, so token-status reads "opaque"
+  // and the sign-in gate's auto-login effect never fires (no browser-open, no Keycloak call).
 
   // Prove the backend SERVES, not merely that it bound a port. Deliberately not driven through the
   // UI: a truly fresh profile has no dashboard, so the toolbar's new-agent button does not exist yet

@@ -28,7 +28,7 @@ Expect the **golden-path smoke** (`e2e/golden/golden-path.spec.ts`) to need a **
 
 ## 1. What this is
 
-Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + React/TS + FastAPI/Python desktop orchestrator for running many AI coding agents in parallel. We are: detaching it from openswarm-ai's cloud, rebranding to **Maestro Studio**, routing models through our own **provedor-ia** gateway (Keycloak auth), and localizing to **pt-BR**. **Desktop-only** — multi-tenant SaaS was explicitly dropped.
+Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + React/TS + FastAPI/Python desktop orchestrator for running many AI coding agents in parallel. We are: detaching it from openswarm-ai's cloud, rebranding to **Maestro Studio**, routing models through the **Maestro provider** (gateway: https://llm.martinstech.net/v1, Keycloak OAuth), and localizing to **pt-BR**. **Desktop-only** — multi-tenant SaaS was explicitly dropped.
 
 - "Maestro" is the MartinsTech **platform brand**; this repo is the agent-orchestration desktop component.
 - ⚠️ Do **not** confuse with `gmartinstech/maestro` — that's the separate live **Java fiscal/payroll platform** (nfse/folha/esocial). This fork is `gmartinstech/maestro-desktop`.
@@ -47,7 +47,7 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 ## 3. Bring these over (NOT in the repo)
 
 - **Design system**: lives at `G:\Shared drives\MartinsTech\.claude\skills\martinstech-design-system\` (`SKILL.md` + `assets/`). Icons are DONE — the robot PNGs are vendored into `assets/brand/maestro/`, so the share is no longer needed for a build. Still to bring over for the faithful BRD pass: `assets/fonts/` (**Inter** + **IBM Plex Mono**) to self-host, and `assets/maestro-tokens.css`. Brand palette: navy `#003566` / gold `#F5CC00`. There is no `bot-pixel.svg` — that filename was wrong; `SKILL.md:269` names `assets/maestro/maestro-*.png` as the product app icon (`mt-logo-*` is the company mark).
-- **Secrets** (never commit): provedor-ia `https://llm.martinstech.net/v1` + API key (`mtok_…`) or Keycloak JWT; Keycloak issuer/client; Windows code-signing (Azure Trusted Signing) for DET-2.
+- **Secrets** (never commit): Maestro provider gateway `https://llm.martinstech.net/v1` + credential (Keycloak OAuth refresh token or static `mtok_…` key); Keycloak issuer/client; Windows code-signing (Azure Trusted Signing) for DET-2.
 - **Tooling:** Node 20+ (dev used v25.2.1), npm, git, `gh` CLI (auth as `gmartinstech`), Ollama 0.32+ **with cloud models configured** (see §5), optionally LM Studio (`ornith-1.0-35b`).
 
 ## 4. How we work (execution model)
@@ -76,7 +76,7 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 - **Start with Task 1** (repoint auto-update/publish to `gmartinstech/maestro-desktop`) — pure file edits, no build, verifiable via `grep` + `review.mjs`.
 - **Acceptance for the whole epic:** `node scripts/check-callhome.mjs` exits 0, golden smoke passes, and a runtime network capture shows zero `*.openswarm.com` traffic.
 - **Human-only tasks:** DET-2 (Windows signing — needs Azure Trusted Signing creds). DET-6 (macOS signing) is **cancelled**: see §10.
-- **After DET**, author + execute (in order): **BRD** (rebrand — needs the design-system assets from §3), **PRV** (provedor-ia + Keycloak JWT), **DOM** (domain modes/workflows/skills/tools), **LOC** (pt-BR i18n). Scope for each is in the spec (§5) and the board.
+- **After DET**, author + execute (in order): **BRD** (rebrand — needs the design-system assets from §3), **PRV** (Maestro provider + Keycloak OAuth), **DOM** (domain modes/workflows/skills/tools), **LOC** (pt-BR i18n). Scope for each is in the spec (§5) and the board.
 
 ## 7. Open follow-ups / not-yet-done
 

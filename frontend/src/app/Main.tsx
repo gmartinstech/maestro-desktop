@@ -25,8 +25,8 @@ import AppShell from './components/Layout/AppShell';
 import ImportEntryPoint from './components/share/ImportEntryPoint';
 import DashboardSelection from './pages/DashboardSelection/DashboardSelection';
 import ErrorBoundary from './components/feedback/ErrorBoundary';
-import ProvedorIaSessionGate from './components/ProvedorIaLogin/ProvedorIaSessionGate';
-import { PROVEDOR_IA_DEFAULT_MODEL, PROVEDOR_IA_PROVIDER_NAME } from '@/shared/config';
+import MaestroSessionGate from './components/MaestroLogin/MaestroSessionGate';
+import { MAESTRO_DEFAULT_MODEL, MAESTRO_PROVIDER_NAME } from '@/shared/config';
 import i18n from '@/shared/i18n/i18n';
 import { resolveLanguageSync } from '@/shared/i18n/languageSync';
 
@@ -273,14 +273,14 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 const DEFAULT_MODEL_PRIORITY: string[] = [
-  PROVEDOR_IA_PROVIDER_NAME,
+  MAESTRO_PROVIDER_NAME,
   'Anthropic',
   'OpenAI',
   'Google',
 ];
 
 const DEFAULT_MODEL_PICKS: Record<string, string[]> = {
-  [PROVEDOR_IA_PROVIDER_NAME]: [PROVEDOR_IA_DEFAULT_MODEL],
+  [MAESTRO_PROVIDER_NAME]: [MAESTRO_DEFAULT_MODEL],
   Anthropic: ['sonnet-cc', 'sonnet'],
   OpenAI: ['gpt-5.4-mini', 'gpt-5.4'],
   Google: ['gemini-2.5-flash', 'gemini-3-flash', 'gemini-2.5-pro'],
@@ -508,7 +508,7 @@ const ThemedApp: React.FC = () => {
             <DefaultModelGuard>
             <UpdateListener>
               <CrashRecoveryChip />
-              <ProvedorIaSessionGate />
+              <MaestroSessionGate />
               <ImportEntryPoint />
               <DeepLinkListener>
                 <ErrorBoundary scope="routes">

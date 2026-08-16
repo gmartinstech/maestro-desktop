@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { API_BASE, PROVEDOR_IA_DEFAULT_MODEL } from '@/shared/config';
+import { API_BASE, MAESTRO_DEFAULT_MODEL } from '@/shared/config';
 
 const SETTINGS_API = `${API_BASE}/settings`;
 
@@ -90,7 +90,7 @@ interface SettingsState {
 export const DEFAULT_SETTINGS: AppSettings = {
   default_system_prompt: DEFAULT_SYSTEM_PROMPT,
   default_folder: null,
-  default_model: PROVEDOR_IA_DEFAULT_MODEL,
+  default_model: MAESTRO_DEFAULT_MODEL,
   default_mode: 'agent',
   default_max_turns: null,
   default_thinking_level: 'auto',

@@ -70,9 +70,6 @@ export const ElementSelectionProvider: React.FC<{ children: React.ReactNode }> =
       if (existing.some((e) => e.id === el.id)) return prev;
       return { ...prev, [ownerId]: [...existing, el] };
     });
-    // Drag-select also emits agent:attached_to_browser; addElementForOwner alone misses this path.
-    if (el.semanticType === 'browser-card' || el.semanticType === 'agent-card') {
-    }
   }, []);
 
   const updateSelectedElement = useCallback((id: string, patch: Partial<SelectedElement>) => {
@@ -110,12 +107,6 @@ export const ElementSelectionProvider: React.FC<{ children: React.ReactNode }> =
       if (existing.some((e) => e.semanticData?.selectId === el.semanticData?.selectId)) return prev;
       return { ...prev, [ownerId]: [...existing, el] };
     });
-    // Onboarding steps 5/6 wait on agent:attached_to_browser; both kinds resolve the same wait.
-    if (
-      el.semanticType === 'browser-card' ||
-      el.semanticType === 'agent-card'
-    ) {
-    }
   }, []);
 
   const removeOwnerElement = useCallback((ownerId: string, elementId: string) => {

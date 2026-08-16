@@ -10,7 +10,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useTranslation } from 'react-i18next';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { AppSettings } from '@/shared/state/settingsSlice';
-import { PROVEDOR_IA_LOGIN_URL } from '@/shared/config';
+import { MAESTRO_DEFAULT_PROXY_URL } from '@/shared/config';
 import type { SettingsStyles } from '../settingsStyles';
 
 type ApiKeyField =
@@ -32,7 +32,8 @@ export interface ApiKeyConfig {
 }
 
 export const API_KEY_CARDS: ApiKeyConfig[] = [
-  { field: 'provedor_ia_token', label: 'provedor-ia', desc: 'The Maestro models, through MartinsTech.', descKey: 'settings.models.provedorIaDesc', placeholder: 'PROVEDOR_IA_TOKEN', href: PROVEDOR_IA_LOGIN_URL, linkKey: 'settings.models.provedorIaGetToken' },
+  // Sign-in for a Keycloak JWT is now automatic (see MaestroSessionGate); this field survives only for the opaque `mtok_...` static key, a different long-lived credential type that isn't handled by that login flow.
+  { field: 'provedor_ia_token', label: 'Maestro (API key)', desc: 'Static API key for the Maestro gateway, if you have one. Most people don’t need this: sign-in happens automatically.', descKey: 'settings.models.apiKeyCard.maestroDesc', placeholder: 'mtok_...', href: MAESTRO_DEFAULT_PROXY_URL, linkKey: 'settings.models.apiKeyCard.maestroLink' },
   { field: 'anthropic_api_key', label: 'Anthropic', desc: 'The latest Claude models.', descKey: 'settings.models.apiKeyCard.anthropic', placeholder: 'sk-ant-...', href: 'https://console.anthropic.com/settings/keys', linkKey: 'settings.models.apiKeyCard.getKey' },
   { field: 'openai_api_key', label: 'OpenAI', desc: 'The latest OpenAI models.', descKey: 'settings.models.apiKeyCard.openai', placeholder: 'sk-...', href: 'https://platform.openai.com/api-keys', linkKey: 'settings.models.apiKeyCard.getKey' },
   { field: 'google_api_key', label: 'Google', desc: 'The latest Gemini models.', descKey: 'settings.models.apiKeyCard.google', placeholder: 'AIza...', href: 'https://aistudio.google.com/apikey', linkKey: 'settings.models.apiKeyCard.getKey' },

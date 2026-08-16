@@ -21,11 +21,11 @@ from typing import Any, Dict, Optional
 import pytest
 
 from backend.apps.settings.models import AppSettings
-from backend.apps.settings.provedor_ia import PROVEDOR_IA_NAME, PROVEDOR_IA_TOKEN_ENV
-from backend.apps.settings.provedor_ia_token_status import (
+from backend.apps.settings.maestro import MAESTRO_NAME, PROVEDOR_IA_TOKEN_ENV
+from backend.apps.settings.maestro_token_status import (
     EXPIRY_WARNING_MINUTES,
     needs_login,
-    provedor_ia_token_status,
+    maestro_token_status,
     token_status,
 )
 
@@ -119,52 +119,41 @@ def test_float_exp_is_accepted():
 def test_status_reads_the_settings_field_first(no_env_token, monkeypatch):
     monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, p_jwt({"exp": int(time.time()) - 60}))
     s = AppSettings(provedor_ia_token=p_jwt({"exp": int(time.time()) + 10 * 3600}))
-    assert provedor_ia_token_status(s).state == "valid"
+    assert maestro_token_status(s).state == "valid"
 
 
-def test_status_falls_back_to_the_env_var(no_env_token, monkeypatch):
+def test_status_falls_back_to_an_opaque_env_var(no_env_token, monkeypatch):
+    """A static key from the env var is a still-supported credential type."""
+    monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, "mtok_a_static_api_key_0000")
+    assert maestro_token_status(AppSettings()).state == "opaque"
+
+
+def test_a_jwt_from_the_env_var_is_refused_not_honored(no_env_token, monkeypatch):
+    """The old vendor-installer contract: a hand-minted, non-refreshable Keycloak
+    access token. It can never be silently refreshed, so it is never read, live or
+    dead, rather than resurrecting the exact broken session this flow replaced."""
+    monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, p_jwt({"exp": int(time.time()) + 10 * 3600}))
+    assert maestro_token_status(AppSettings()).state == "missing"
     monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, p_jwt({"exp": int(time.time()) - 60}))
-    assert provedor_ia_token_status(AppSettings()).state == "expired"
+    assert maestro_token_status(AppSettings()).state == "missing"
 
 
 def test_status_with_no_token_anywhere_is_missing(no_env_token):
-    assert provedor_ia_token_status(AppSettings()).state == "missing"
+    assert maestro_token_status(AppSettings()).state == "missing"
 
 
 def test_status_never_carries_any_part_of_the_token(no_env_token):
     """The status crosses to the renderer, so it must be state + runway and nothing else."""
     token = p_jwt({"exp": int(time.time()) + 3600, "sub": "someone", "preferred_username": "someone"})
-    status = provedor_ia_token_status(AppSettings(provedor_ia_token=token))
+    status = maestro_token_status(AppSettings(provedor_ia_token=token))
     dumped = json.dumps(status.model_dump())
     assert set(status.model_dump()) == {"state", "expires_at", "expires_in_minutes"}
     for fragment in token.split("."):
         assert fragment not in dumped
 
 
-# --------------------------------------------------------------------------- The paste path: an expired token must never be stored.
-def test_an_expired_paste_is_rejected_and_not_stored(no_env_token):
-    from fastapi.testclient import TestClient
-    import backend.auth as auth_mod
-    import backend.main as p_main
-    from backend.apps.settings.settings import load_settings, save_settings
-    if not auth_mod.TOKEN:
-        import secrets
-        auth_mod.TOKEN = secrets.token_urlsafe(32)
-    original = load_settings().model_copy(deep=True)
-    expired = p_jwt({"exp": int(time.time()) - 3600})
-    try:
-        client = TestClient(p_main.app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
-        r = client.post("/api/settings/provedor-ia/token", json={"token": expired})
-        assert r.status_code == 400
-        assert r.json() == {"ok": False, "reason": "expired"}
-        # The rejection body must name a state, never echo the credential back.
-        assert expired.split(".")[1] not in r.text
-        assert load_settings().provedor_ia_token != expired
-    finally:
-        save_settings(original)
-
-
-def test_a_blank_paste_is_rejected(no_env_token):
+# --------------------------------------------------------------------------- The hand-pasted-JWT path is gone; sign-in is Keycloak-only now.
+def test_the_paste_endpoint_no_longer_exists(no_env_token):
     from fastapi.testclient import TestClient
     import backend.auth as auth_mod
     import backend.main as p_main
@@ -172,12 +161,11 @@ def test_a_blank_paste_is_rejected(no_env_token):
         import secrets
         auth_mod.TOKEN = secrets.token_urlsafe(32)
     client = TestClient(p_main.app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
-    r = client.post("/api/settings/provedor-ia/token", json={"token": "   "})
-    assert r.status_code == 400
-    assert r.json()["reason"] == "missing"
+    r = client.post("/api/settings/provedor-ia/token", json={"token": "anything"})
+    assert r.status_code == 404
 
 
-def test_a_live_paste_is_stored_and_reported(no_env_token):
+def test_the_renamed_token_status_route_answers(no_env_token):
     from fastapi.testclient import TestClient
     import backend.auth as auth_mod
     import backend.main as p_main
@@ -186,19 +174,49 @@ def test_a_live_paste_is_stored_and_reported(no_env_token):
         import secrets
         auth_mod.TOKEN = secrets.token_urlsafe(32)
     original = load_settings().model_copy(deep=True)
-    live = p_jwt({"exp": int(time.time()) + 10 * 3600})
+    # A hand-pasted JWT would be purged by the upgrade migration on the next load; use
+    # the still-supported opaque credential type instead to exercise the route itself.
+    opaque = "mtok_a_static_api_key_0000"
     try:
+        s = load_settings()
+        s.provedor_ia_token = opaque
+        save_settings(s)
         client = TestClient(p_main.app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
-        r = client.post("/api/settings/provedor-ia/token", json={"token": live})
-        assert r.status_code == 200 and r.json()["ok"] is True
-        assert r.json()["status"]["state"] == "valid"
-        assert load_settings().provedor_ia_token == live
-        status = client.get("/api/settings/provedor-ia/token-status")
-        assert status.status_code == 200 and status.json()["state"] == "valid"
+        old_route = client.get("/api/settings/provedor-ia/token-status")
+        assert old_route.status_code == 404
+        status = client.get("/api/settings/maestro/token-status")
+        assert status.status_code == 200 and status.json()["state"] == "opaque"
         # The status route must not leak the token it just classified.
-        assert live.split(".")[1] not in status.text
+        assert opaque not in status.text
     finally:
         save_settings(original)
+
+
+def test_login_start_returns_a_keycloak_authorize_url_and_stores_pending_state(no_env_token):
+    from fastapi.testclient import TestClient
+    import backend.auth as auth_mod
+    import backend.main as p_main
+    from backend.apps.oauth_state import pending_oauth
+    if not auth_mod.TOKEN:
+        import secrets
+        auth_mod.TOKEN = secrets.token_urlsafe(32)
+    client = TestClient(p_main.app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
+    r = client.post("/api/settings/maestro/login/start")
+    assert r.status_code == 200
+    authorize_url = r.json()["authorize_url"]
+    assert authorize_url.startswith("https://martinstech.net/auth/realms/MartinsTech/protocol/openid-connect/auth?")
+    assert "client_id=provedor-ia-web" in authorize_url
+    assert "code_challenge_method=S256" in authorize_url
+    assert "client_secret" not in authorize_url
+    from urllib.parse import urlparse, parse_qs
+    qs = parse_qs(urlparse(authorize_url).query)
+    state = qs["state"][0]
+    try:
+        assert state in pending_oauth
+        assert pending_oauth[state]["provider"] == "maestro"
+        assert pending_oauth[state]["code_verifier"]
+    finally:
+        pending_oauth.pop(state, None)
 
 
 # --------------------------------------------------------------------------- Stop handing an expired bearer to 9Router.
@@ -271,7 +289,7 @@ def p_run_sync(monkeypatch, providers: list) -> list:
 
 
 def p_provider(api_key: str) -> Dict[str, str]:
-    return {"name": PROVEDOR_IA_NAME, "base_url": "https://llm.martinstech.net/v1", "api_key": api_key}
+    return {"name": MAESTRO_NAME, "base_url": "https://llm.martinstech.net/v1", "api_key": api_key}
 
 
 def test_an_expired_provedor_ia_token_is_not_pushed_to_9router(monkeypatch):

@@ -10,13 +10,13 @@
 
 ## 1. Summary
 
-**Maestro** is MartinsTech's fork of Open Swarm — an Electron + React/TS + FastAPI/Python orchestrator for running many AI coding agents in parallel. We will detach it from openswarm-ai's cloud/build/telemetry, rebrand it as Maestro, run it on our own `provedor-ia` gateway, and localize it to Brazilian Portuguese — delivered as a **desktop application** (not a hosted service). The work is executed by a **quality-first, multi-model agent harness** guarded by a model-agnostic verification gate, so no single iteration can silently break the app.
+**Maestro** is MartinsTech's fork of Open Swarm — an Electron + React/TS + FastAPI/Python orchestrator for running many AI coding agents in parallel. We will detach it from openswarm-ai's cloud/build/telemetry, rebrand it as Maestro, run it on our own Maestro provider (gateway: https://llm.martinstech.net/v1), and localize it to Brazilian Portuguese — delivered as a **desktop application** (not a hosted service). The work is executed by a **quality-first, multi-model agent harness** guarded by a model-agnostic verification gate, so no single iteration can silently break the app.
 
 ## 2. Goals & Non-Goals
 
 **Goals**
 1. A standalone, **Maestro-branded desktop app** that makes **zero calls** back to openswarm-ai infrastructure.
-2. All model traffic routed through our **`provedor-ia`** gateway (OpenAI-compatible), authenticated via **Keycloak**.
+2. All model traffic routed through our **Maestro provider** (gateway: https://llm.martinstech.net/v1, OpenAI-compatible), authenticated via **Keycloak OAuth**.
 3. Our **domain workflows** (modes, workflows, skills, tools) provisioned into the app.
 4. UI localized to **pt-BR**.
 5. A stability regime such that **every epic/iteration is verifiably non-breaking**.
@@ -30,7 +30,7 @@
 
 These shape every decision below.
 
-1. **Already multi-provider.** Open Swarm abstracts the *wire protocol beneath* the SDK, not the SDK. A bundled Node router (`9Router`) + local proxy shims translate OpenAI/Gemini/OpenRouter/**any custom OpenAI-compatible** endpoint into the Anthropic protocol the agent loop speaks. There is a real model **registry** (`apps/agents/providers/registry.py`) and a per-route env adapter (`configure_provider_env.py`). Cost tracking is already multi-vendor. → `provedor-ia` plugs into the existing "custom OpenAI-compatible provider" slot.
+1. **Already multi-provider.** Open Swarm abstracts the *wire protocol beneath* the SDK, not the SDK. A bundled Node router (`9Router`) + local proxy shims translate OpenAI/Gemini/OpenRouter/**any custom OpenAI-compatible** endpoint into the Anthropic protocol the agent loop speaks. There is a real model **registry** (`apps/agents/providers/registry.py`) and a per-route env adapter (`configure_provider_env.py`). Cost tracking is already multi-vendor. → the Maestro provider plugs into the existing "custom OpenAI-compatible provider" slot.
 2. **Runs fully cloud-less today.** Nothing hard-blocks startup if openswarm-ai is unreachable. Sign-in is optional; the "OpenSwarm Pro" metered proxy, Stripe, and free-trial are **inert in the default `own_key` mode**. → Runtime detachment is **LOW–MEDIUM** (env/config edits + UI removal). Only **build & code-signing** under our own identities is **HIGH** (Windows signing; Apple provisioning if we ever ship macOS).
 3. **Extensibility is runtime/config, not code.** Modes (JSON + REST), Workflows (the real, shipped "templates" — multi-step, schedulable), Skills (`SKILL.md` in `~/.claude/skills/`), and Tools (MCP config) are all addable without forking built-ins. No database — all JSON files.
 4. **Zero i18n.** ~1,800–2,500 hardcoded English strings across ~140 files. Greenfield.
@@ -43,7 +43,7 @@ These shape every decision below.
 | Surface | Where | Approach |
 |---|---|---|
 | Branding | `claudeTokens.ts`, `electron/package.json`, `main.js`, splash, 9 icon files | Rebrand to Maestro; apply MartinsTech design system |
-| Providers | `providers/registry.py`, `configure_provider_env.py`, `9Router`, `settings/credentials.py` | Register `provedor-ia` as custom OpenAI-compatible provider; Keycloak JWT |
+| Providers | `providers/registry.py`, `configure_provider_env.py`, `9Router`, `settings/credentials.py` | Register Maestro as custom OpenAI-compatible provider (gateway: https://llm.martinstech.net/v1); Keycloak OAuth |
 | Detach | `main.js` (feed/analytics/affiliate), `auth/router.py`, `subscription/*`, `configure_provider_env.py`, `index.html` CSP, build scripts | Remove/neutralize cloud paths; repoint or disable; our own signing/publish |
 | Domain content | `apps/modes`, `apps/workflows`, `apps/skills`, `apps/tools_lib`, `~/.claude/skills` | First-run provisioning bootstrap (no fork of built-ins) |
 | Localization | `frontend/src/**` (~140 files), `electron/main.js`, backend `detail=` strings | react-i18next, source-string-as-key + fallback-to-English |
@@ -63,8 +63,8 @@ Center of gravity. The app already runs cloud-less; most of this is config/UI re
 ### BRD — Rebrand → Maestro *(Phase 1)*
 - BRD-1 Product identity → Maestro (`net.martinstech.maestro`, titles, splash, installers) · BRD-2 Icon set from `bot-pixel.svg` (pixel-art robot, navy/gold) · BRD-3 Port the MartinsTech Maestro design system (`am.css`): navy + gold, **Inter + IBM Plex Mono**, dark-first + light counterpart · BRD-4 UI copy scrub (~42 files) · BRD-5 [optional] internal identifier rename.
 
-### PRV — Integrate provedor-ia *(Phase 1)*
-- PRV-1 Register `provedor-ia` as custom provider (`llm.martinstech.net/v1`) + model registry rows + default · PRV-2 Keycloak JWT auth (vs static key; refresh) · PRV-3 Verify streaming/tools/cost through the gateway · PRV-4 De-risk the Claude-CLI runtime path through 9Router translation.
+### PRV — Integrate Maestro provider *(Phase 1)*
+- PRV-1 Register Maestro as custom provider (gateway: https://llm.martinstech.net/v1) + model registry rows + default · PRV-2 Keycloak OAuth auth (loopback callback + PKCE; refresh tokens) · PRV-3 Verify streaming/tools/cost through the gateway · PRV-4 De-risk the Claude-CLI runtime path through 9Router translation.
 
 ### DOM — Our Domain Workflows *(Phase 2)*
 - DOM-1 First-run provisioning bootstrap · DOM-2 Modes · DOM-3 Workflows · DOM-4 Skills (reuse the design-system skills shipped in the DS zip) · DOM-5 MCP tools.
@@ -108,7 +108,7 @@ The regression oracle + gates that make cheap/local agents safe. **Built before 
 **Stance — quality-first.** Implement with frontier models; use local models as free reviewers.
 - **Implement:** Claude **Sonnet** + **OpenAI Codex**; **Opus** for hard/orchestration.
 - **Review (cross-vendor, mandatory):** reviewer ≠ implementer vendor; plus local **`ornith-1.0-35b`** (via pi→LM Studio) as a free second opinion on every diff; disagreement → Opus/human.
-- **Runtimes wired:** Claude subagents (`Agent(model=…)`), OpenAI Codex (`codex exec`), local via **pi** (LM Studio/Ollama), and the **`provedor-ia`** gateway as the OpenAI-compatible entry for non-Claude models.
+- **Runtimes wired:** Claude subagents (`Agent(model=…)`), OpenAI Codex (`codex exec`), local via **pi** (LM Studio/Ollama), and the **Maestro provider** gateway as the OpenAI-compatible entry for non-Claude models.
 - **Coordination:** stateless file handshake (task/result/done markers, Windows atomic rename) per the agent-dispatcher contract; one isolated git worktree per ticket.
 - **Human-only tickets:** credential/signing (DET-2/DET-6), Keycloak client setup (PRV-2).
 
