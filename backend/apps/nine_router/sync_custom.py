@@ -181,7 +181,7 @@ async def sync_custom_providers(providers: list) -> None:
     managed_by_prefix = {n.get("prefix"): n for n in managed if n.get("prefix")}
     # A prefix is 9Router's routing key, so two nodes sharing one is not a duplicate record but a
     # coin flip over which baseUrl a request gets. Matching only on our own name suffix meant a node
-    # left by an OLDER build (e.g. "maestro (OpenSwarm-managed)" on plain http://) was invisible
+    # left by an OLDER build (a pre-rebrand managed suffix, pointing at plain http://) was invisible
     # here, so we POSTed a second node with the SAME prefix and the stale one kept winning —
     # "[404]: unknown route" on every call. Adopt whatever already holds the prefix instead.
     p_all_by_prefix: dict = {}
