@@ -59,7 +59,7 @@ def test_preferred_order_wins_over_the_gateway_order():
     """`maestro` is the default model, so it must head the picker regardless of serve order."""
     rows = parse_catalog(P_LIVE_PAYLOAD)
     assert rows is not None
-    assert [m.value for m in rows] == ["maestro", "maestro-fast", "maestro-ultra", "maestro-code"]
+    assert [m.value for m in rows] == ["maestro-fast", "maestro", "maestro-ultra", "maestro-code"]
 
 
 def test_an_unknown_model_is_offered_with_a_prettified_label():
@@ -67,7 +67,7 @@ def test_an_unknown_model_is_offered_with_a_prettified_label():
     rows = parse_catalog({"data": [{"id": "maestro"}, {"id": "maestro-vision-pro"}]})
     assert rows is not None
     assert [(m.value, m.label) for m in rows] == [
-        ("maestro", "Maestro (default, fast)"),
+        ("maestro", "Maestro"),
         ("maestro-vision-pro", "Maestro Vision Pro"),
     ]
     assert rows[1].context_window == 128_000
@@ -162,7 +162,7 @@ def stub_http(monkeypatch):
 async def test_refresh_fetches_models_with_the_bearer_and_caches(stub_http):
     rows = await refresh_catalog("mtok-local-test-000", "https://gw.example/v1", now=500.0)
     assert rows is not None
-    assert [m.value for m in rows] == ["maestro", "maestro-fast", "maestro-ultra", "maestro-code"]
+    assert [m.value for m in rows] == ["maestro-fast", "maestro", "maestro-ultra", "maestro-code"]
     url, headers = stub_http.calls[0]
     assert url == "https://gw.example/v1/models"
     assert headers["Authorization"] == "Bearer mtok-local-test-000"

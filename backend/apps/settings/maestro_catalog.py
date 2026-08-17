@@ -36,13 +36,13 @@ P_DEFAULT_CONTEXT_WINDOW = 128_000
 P_DEFAULT_MAX_COMPLETION_TOKENS = 4_096
 # Labels we already ship, kept verbatim so a fetched catalog is byte-identical to the constant.
 P_KNOWN_LABELS: Dict[str, str] = {
-    "maestro": "Maestro (default, fast)",
+    "maestro": "Maestro",
     "maestro-fast": "Maestro Fast",
     "maestro-ultra": "Maestro Ultra",
     "maestro-code": "Maestro Code",
 }
-# `maestro` is the default model, so it heads the picker whatever order the gateway serves.
-P_PREFERRED_ORDER: Tuple[str, ...] = ("maestro", "maestro-fast", "maestro-ultra", "maestro-code")
+# maestro-fast is the default model, so it heads the picker whatever order the gateway serves.
+P_PREFERRED_ORDER: Tuple[str, ...] = ("maestro-fast", "maestro", "maestro-ultra", "maestro-code")
 
 
 class P_CachedCatalog(BaseModel):
