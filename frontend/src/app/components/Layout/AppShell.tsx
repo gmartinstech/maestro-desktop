@@ -131,9 +131,16 @@ const AppShell: React.FC = () => {
 
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
   // "Connected" = the user's OWN model (key/sub/custom), NOT a non-empty /models list.
+  // Subscriptions alone was a false negative for anyone whose only provider is a custom one: Maestro
+  // is reached as custom/maestro/<model>, so a signed-in user with a working model was still told
+  // "no AI model connected" forever, with the banner's own link sending them to a Settings tab that
+  // already showed the provider present.
   const hasModelConnected = useAppSelector((s) => {
     const subs = s.subscriptions.status;
-    return (subs?.subscriptions && Object.keys(subs.subscriptions).length > 0) || false;
+    if (subs?.subscriptions && Object.keys(subs.subscriptions).length > 0) return true;
+    const cfg = s.settings.data;
+    if ((cfg.custom_providers || []).some((cp) => (cp?.name || '').trim())) return true;
+    return Boolean(cfg.anthropic_api_key || cfg.openai_api_key || cfg.google_api_key || cfg.openrouter_api_key);
   });
   const showWarningBanner = !isOnline || (modelsLoaded && !hasModelConnected);
 

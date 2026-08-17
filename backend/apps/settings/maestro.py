@@ -39,9 +39,9 @@ class MaestroModel(BaseModel):
 
 # Straight from the vendor installers (launch.ps1?pi and ?chatgpt): 128k context and 4096 max output each. The set mirrors the gateway's own `allow` list; a mask missing here is simply unreachable from the picker.
 MAESTRO_MODELS: List[MaestroModel] = [
-    MaestroModel(value="maestro", label="Maestro (default, fast)",
-                    context_window=128_000, max_completion_tokens=4_096),
     MaestroModel(value="maestro-fast", label="Maestro Fast",
+                    context_window=128_000, max_completion_tokens=4_096),
+    MaestroModel(value="maestro", label="Maestro",
                     context_window=128_000, max_completion_tokens=4_096),
     MaestroModel(value="maestro-ultra", label="Maestro Ultra",
                     context_window=128_000, max_completion_tokens=4_096),
@@ -49,7 +49,12 @@ MAESTRO_MODELS: List[MaestroModel] = [
                     context_window=128_000, max_completion_tokens=4_096),
 ]
 
-MAESTRO_DEFAULT_MODEL_ID = "maestro"
+# maestro-fast, not maestro: measured straight against the gateway with an identical trivial prompt,
+# `maestro` (deepseek-v4-flash) took 8.44s against maestro-fast's (nemotron-3-nano) 1.49s, because it
+# spends most of its budget on reasoning tokens before emitting any content. A first turn that takes
+# ~8s reads as a hung app, so the snappy model is the better default and the picker still offers the
+# slower, more capable ones by name.
+MAESTRO_DEFAULT_MODEL_ID = "maestro-fast"
 # Picker-value shape is CUSTOM_VALUE_PREFIX + slug + "/" + model id, spelled out so this stays a leaf module; a test pins it to the registry's composition.
 MAESTRO_DEFAULT_MODEL = f"custom/{MAESTRO_SLUG}/{MAESTRO_DEFAULT_MODEL_ID}"
 # Where default_model lands when there is no token, hence no Maestro entry for the picker to offer.

@@ -45,10 +45,10 @@ def no_env_token(monkeypatch):
 
 def test_contract_matches_the_vendor_installers():
     assert [m.value for m in MAESTRO_MODELS] == [
-        "maestro", "maestro-fast", "maestro-ultra", "maestro-code",
+        "maestro-fast", "maestro", "maestro-ultra", "maestro-code",
     ]
     assert [m.label for m in MAESTRO_MODELS] == [
-        "Maestro (default, fast)", "Maestro Fast", "Maestro Ultra", "Maestro Code",
+        "Maestro Fast", "Maestro", "Maestro Ultra", "Maestro Code",
     ]
     for m in MAESTRO_MODELS:
         assert m.context_window == 128_000
@@ -80,7 +80,7 @@ def test_env_token_seeds_the_provider_and_keeps_maestro_default(no_env_token, mo
     assert cp.base_url == MAESTRO_DEFAULT_PROXY_URL
     assert cp.api_key == P_FAKE_TOKEN
     assert [m["value"] for m in cp.models] == [
-        "maestro", "maestro-fast", "maestro-ultra", "maestro-code",
+        "maestro-fast", "maestro", "maestro-ultra", "maestro-code",
     ]
 
 
@@ -149,7 +149,7 @@ def test_resolved_model_routes_through_the_9router_custom_node(no_env_token, mon
     s = apply_maestro_defaults(AppSettings())
     entry = find_builtin_model(MAESTRO_DEFAULT_MODEL)
     assert entry is not None and entry["api"] == "custom" and entry["route"] == "api"
-    assert resolve_model_id_for_sdk(MAESTRO_DEFAULT_MODEL, s) == f"cp-{MAESTRO_SLUG}/maestro"
+    assert resolve_model_id_for_sdk(MAESTRO_DEFAULT_MODEL, s) == f"cp-{MAESTRO_SLUG}/maestro-fast"
     assert find_custom_provider_for_value(s, MAESTRO_DEFAULT_MODEL) is not None
     assert get_context_window(MAESTRO_NAME, MAESTRO_DEFAULT_MODEL, s) == 128_000
 
@@ -166,7 +166,7 @@ def test_list_models_offers_provedor_ia_first(no_env_token, monkeypatch):
     assert list(groups)[0] == MAESTRO_NAME
     rows = groups[MAESTRO_NAME]
     assert rows[0]["value"] == MAESTRO_DEFAULT_MODEL
-    assert rows[0]["label"] == "Maestro (default, fast)"
+    assert rows[0]["label"] == "Maestro Fast"
     assert rows[0]["context_window"] == 128_000
     assert rows[0]["max_completion_tokens"] == 4_096
 
