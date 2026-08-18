@@ -104,8 +104,16 @@ async def emit_consolidated_thinking(thinking: ThinkingState, turn: TurnState, s
     cum_children_in = 0
     cum_children_out = 0
     try:
-        for child in sessions.values():
-            if getattr(child, "parent_session_id", None) != session.id:
+        now = time.time()
+        if turn.child_session_ids is None or now - turn.child_session_ids_cached_at > 1.0:
+            turn.child_session_ids = [
+                sid for sid, child in sessions.items()
+                if getattr(child, "parent_session_id", None) == session.id
+            ]
+            turn.child_session_ids_cached_at = now
+        for child_id in turn.child_session_ids:
+            child = sessions.get(child_id)
+            if child is None:
                 continue
             ct = getattr(child, "tokens", None)
             if not isinstance(ct, dict):
@@ -143,15 +151,21 @@ async def emit_consolidated_thinking(thinking: ThinkingState, turn: TurnState, s
         input_tokens=turn_total_tokens,
         tool_count=turn.tool_count or None,
     )
-    existing_idx = next(
-        (i for i, m in enumerate(session.messages)
-         if m.id == thinking.msg_id),
-        -1,
-    )
-    if existing_idx >= 0:
-        session.messages[existing_idx] = consolidated
+    if thinking.msg_index is not None and thinking.msg_index < len(session.messages) and session.messages[thinking.msg_index].id == thinking.msg_id:
+        session.messages[thinking.msg_index] = consolidated
     else:
-        session.messages.append(consolidated)
+        # Safe fallback in case something else reordered session.messages mid-turn, making a cached index wrong.
+        existing_idx = next(
+            (i for i, m in enumerate(session.messages)
+             if m.id == thinking.msg_id),
+            -1,
+        )
+        if existing_idx >= 0:
+            session.messages[existing_idx] = consolidated
+            thinking.msg_index = existing_idx
+        else:
+            session.messages.append(consolidated)
+            thinking.msg_index = len(session.messages) - 1
     try:
         await ws_manager.send_to_session(session_id, "agent:message", {
             "session_id": session_id,
