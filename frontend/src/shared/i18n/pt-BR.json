@@ -1080,7 +1080,8 @@
       "building": "Criando…",
       "preview": "Prévia",
       "code": "Código",
-      "terminal": "Terminal",
+      "logs": "Logs",
+      "shell": "Terminal",
       "history": "Histórico",
       "hardReloadHint": "Recarregar do zero (reinicia o runtime e recarrega o app)",
       "reloadHint": "Recarregar a prévia; clique com o botão direito para recarregar do zero",
@@ -2019,6 +2020,10 @@
     },
     "terminal": {
       "waitingForOutput": "Esperando saída... o stdout/stderr do backend e o console.log do app rodando vão aparecer aqui."
+    },
+    "shell": {
+      "exited": "O terminal encerrou com código {{code}}",
+      "connecting": "Iniciando terminal…"
     }
   }
 }

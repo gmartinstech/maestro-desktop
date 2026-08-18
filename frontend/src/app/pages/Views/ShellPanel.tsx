@@ -5,8 +5,26 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { useTermColors } from '@/app/pages/AgentChat/parsing/toolColorize';
+import { useTermColors, TermColors } from '@/app/pages/AgentChat/parsing/toolColorize';
 import { useTerminalSocket } from '@/shared/hooks/useTerminalSocket';
+
+// Maps the app's terminal palette onto xterm's ITheme so the shell matches the tool-output bubbles in chat.
+function p_xtermTheme(tc: TermColors) {
+  return {
+    background: tc.TERM_BG,
+    foreground: tc.OUTPUT_COLOR,
+    cursor: tc.CMD_COLOR,
+    selectionBackground: `${tc.CMD_COLOR}44`,
+    black: tc.DIM_COLOR,
+    red: tc.STDERR_COLOR,
+    green: tc.ADD_COLOR,
+    yellow: tc.WARN_COLOR,
+    blue: tc.PATH_COLOR,
+    magenta: tc.DIFF_HEADER_COLOR,
+    cyan: tc.PROMPT_COLOR,
+    white: tc.CMD_COLOR,
+  };
+}
 
 interface ShellPanelProps {
   workspaceId: string;
@@ -36,27 +54,20 @@ export function ShellPanel({ workspaceId, instance, active }: ShellPanelProps) {
   sendInputRef.current = sendInput;
   sendResizeRef.current = sendResize;
 
+  // Derived, not captured: the construction effect must not depend on the palette, or a theme switch would dispose the terminal and take the scrollback with it.
+  const themeRef = useRef(tc);
+  themeRef.current = tc;
+  const fontRef = useRef(c.font.mono);
+  fontRef.current = c.font.mono;
+
   useEffect(() => {
     if (!hostRef.current) return;
     const term = new Terminal({
-      fontFamily: c.font.mono,
+      fontFamily: fontRef.current,
       fontSize: 12,
       cursorBlink: true,
       convertEol: false,
-      theme: {
-        background: tc.TERM_BG,
-        foreground: tc.OUTPUT_COLOR,
-        cursor: tc.CMD_COLOR,
-        selectionBackground: `${tc.CMD_COLOR}44`,
-        black: tc.DIM_COLOR,
-        red: tc.STDERR_COLOR,
-        green: tc.ADD_COLOR,
-        yellow: tc.WARN_COLOR,
-        blue: tc.PATH_COLOR,
-        magenta: tc.DIFF_HEADER_COLOR,
-        cyan: tc.PROMPT_COLOR,
-        white: tc.CMD_COLOR,
-      },
+      theme: p_xtermTheme(themeRef.current),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -74,6 +85,14 @@ export function ShellPanel({ workspaceId, instance, active }: ShellPanelProps) {
       fitRef.current = null;
     };
   }, [workspaceId, instance]);
+
+  // Recolor in place on a theme switch rather than rebuilding, so the scrollback survives.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.theme = p_xtermTheme(tc);
+    term.options.fontFamily = c.font.mono;
+  }, [tc, c.font.mono]);
 
   useEffect(() => {
     const host = hostRef.current;

@@ -13,6 +13,7 @@ import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
+import KeyboardCommandKeyRoundedIcon from '@mui/icons-material/KeyboardCommandKeyRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import AddIcon from '@mui/icons-material/Add';
 import KeyboardArrowUpRounded from '@mui/icons-material/KeyboardArrowUpRounded';
@@ -26,6 +27,7 @@ import ViewPreview, { ViewPreviewHandle } from '@/app/pages/Views/ViewPreview';
 import TerminalPanel, { TerminalLine } from '@/app/pages/Views/TerminalPanel';
 import AppCodePanel from '@/app/pages/Views/AppCodePanel';
 import HistoryPanel from '@/app/pages/Views/HistoryPanel';
+import { ShellPanel } from '@/app/pages/Views/ShellPanel';
 import ShareButton from '@/app/components/share/ShareButton';
 import { getDefault } from '@/shared/inputSchemaDefaults';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
@@ -36,7 +38,7 @@ import {
 } from '@/shared/hooks/useRuntimePreviewUrl';
 import { postAppConsoleLine, terminalLineFromStream } from '@/shared/appTerminal';
 
-type AppCardView = 'preview' | 'code' | 'terminal' | 'history';
+type AppCardView = 'preview' | 'code' | 'logs' | 'shell' | 'history';
 
 const TERMINAL_BUFFER_CAP = 5000;
 
@@ -157,13 +159,18 @@ const DashboardViewCard: React.FC<Props> = ({
   const [inputData] = useState<Record<string, any>>(() => getDefault(output.input_schema));
   const [backendResult] = useState<Record<string, any> | null>(null);
 
-  // Preview/Code/Terminal switcher; only new-mode (workspace-backed) apps have code + terminal to show.
+  // Preview/Code/Logs/Shell switcher; only new-mode (workspace-backed) apps have code, logs and a shell to show.
   const [activeView, setActiveView] = useState<AppCardView>('preview');
+  // Latches on first visit so a shell is never spawned for a card the user never opened it on, but survives every tab switch after.
+  const [shellOpened, setShellOpened] = useState(false);
   const hasWorkspace = !!output.workspace_id;
   // Chevron rolls the whole header away so an immersive app fills the card; hovering the top edge peeks it back.
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [headerPeek, setHeaderPeek] = useState(false);
   const showControls = !headerCollapsed || headerPeek;
+  useEffect(() => {
+    if (activeView === 'shell') setShellOpened(true);
+  }, [activeView]);
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const terminalLineIdRef = useRef(0);
   // Fed by the runtime logs WS (which replays its ring buffer on connect); frontend console lines arrive on the same socket via the console-log beacon echo.
@@ -395,10 +402,10 @@ const DashboardViewCard: React.FC<Props> = ({
     previewRef.current?.reload();
   }, [output.workspace_id, instance]);
 
-  // In Terminal view a soft webview reload is invisible (the terminal is what you're looking at), so the refresh button always hard-reloads there.
+  // In Logs view a soft webview reload is invisible (the log feed is what you're looking at), so the refresh button always hard-reloads there.
   const handleRefresh = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (activeView === 'terminal' && output.workspace_id) {
+    if (activeView === 'logs' && output.workspace_id) {
       void handleHardReload(e);
       return;
     }
@@ -558,7 +565,8 @@ const DashboardViewCard: React.FC<Props> = ({
                 {([
                   { view: 'preview' as const, labelKey: 'dashboard.viewCard.preview', Icon: VisibilityRoundedIcon },
                   { view: 'code' as const, labelKey: 'dashboard.viewCard.code', Icon: CodeRoundedIcon },
-                  { view: 'terminal' as const, labelKey: 'dashboard.viewCard.terminal', Icon: TerminalRoundedIcon },
+                  { view: 'logs' as const, labelKey: 'dashboard.viewCard.logs', Icon: TerminalRoundedIcon },
+                  { view: 'shell' as const, labelKey: 'dashboard.viewCard.shell', Icon: KeyboardCommandKeyRoundedIcon },
                   { view: 'history' as const, labelKey: 'dashboard.viewCard.history', Icon: HistoryRoundedIcon },
                 ]).map(({ view, labelKey, Icon }) => (
                   <Tooltip key={view} title={t(labelKey)} placement="top">
@@ -585,7 +593,7 @@ const DashboardViewCard: React.FC<Props> = ({
             </Box>
 
             <Tooltip
-              title={activeView === 'terminal' ? t('dashboard.viewCard.hardReloadHint') : t('dashboard.viewCard.reloadHint')}
+              title={activeView === 'logs' ? t('dashboard.viewCard.hardReloadHint') : t('dashboard.viewCard.reloadHint')}
               placement="top"
             >
               <IconButton
@@ -659,9 +667,9 @@ const DashboardViewCard: React.FC<Props> = ({
           onRuntimeLog={handleRuntimeLog}
         />
         {/* Code/Terminal overlay the always-mounted preview instead of replacing it: unmounting the webview kills the app's live state and forces a reload on switch-back. */}
-        {output.workspace_id && activeView !== 'preview' && (
+        {output.workspace_id && activeView !== 'preview' && activeView !== 'shell' && (
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 13, bgcolor: c.bg.surface }}>
-            {activeView === 'terminal' ? (
+            {activeView === 'logs' ? (
               <TerminalPanel lines={terminalLines} />
             ) : activeView === 'history' ? (
               <Box sx={{ height: '100%', overflow: 'auto' }}>
@@ -674,6 +682,20 @@ const DashboardViewCard: React.FC<Props> = ({
             ) : (
               <AppCodePanel workspaceId={output.workspace_id} onFileSaved={() => previewRef.current?.reload()} />
             )}
+          </Box>
+        )}
+        {/* Shell sits outside the overlay switch and stays mounted once opened: re-initializing xterm and re-fitting on every tab switch is visibly jarring, even though the PTY itself survives server-side. */}
+        {output.workspace_id && shellOpened && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 13,
+              bgcolor: c.bg.surface,
+              visibility: activeView === 'shell' ? 'visible' : 'hidden',
+            }}
+          >
+            <ShellPanel workspaceId={output.workspace_id} instance={instance} active={activeView === 'shell'} />
           </Box>
         )}
         <BuildingOverlay show={showBuildingOverlay && activeView === 'preview'} />
