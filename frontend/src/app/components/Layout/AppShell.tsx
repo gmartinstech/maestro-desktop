@@ -94,6 +94,7 @@ const AppShell: React.FC = () => {
     };
   }, []);
 
+  const fullscreenCardId = useAppSelector((s) => s.tempState.fullscreenCardId);
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
   // "Connected" = the user's OWN model (key/sub/custom), NOT a non-empty /models list.
   // Subscriptions alone was a false negative for anyone whose only provider is a custom one: Maestro
@@ -431,7 +432,7 @@ const AppShell: React.FC = () => {
           </span>
         </Tooltip>
 
-        <DynamicIsland />
+        {!fullscreenCardId && <DynamicIsland />}
 
         <Box sx={{ flex: 1 }} />
       </Box>
