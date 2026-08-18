@@ -25,15 +25,15 @@ the Workflows cards are untouched.
     React/DOM tree, inside the canvas' pan/zoom-transformed content layer. Reparenting was
     the first design (see "Rejected: portal" below) and was rejected once review + research
     confirmed it reloads the live app.
-  - Instead, the card measures the canvas **viewport** element's own
-    `getBoundingClientRect()` (the element that already accounts for the sidebar width,
-    insets, and any visible banners — everything the OS-window-relative first attempt got
-    wrong, see "Rejected: window-relative sizing" below) and computes a canvas-space rect
-    plus an inverse `scale(1 / zoom)` on its own root box such that, after the ambient canvas
-    transform (`translate(panX, panY) scale(zoom)`, `transformOrigin: '0 0'`, applied by the
-    canvas content layer) is applied, the card visually fills that viewport rect exactly,
-    with its contents rendered at native (unscaled) size. Recomputed on window resize and
-    whenever `panX`/`panY`/`zoom` change.
+  - Instead, the card measures the canvas **viewport** element itself (the element that
+    already accounts for the sidebar width, insets, and any visible banners — everything the
+    OS-window-relative first attempt got wrong, see "Rejected: window-relative sizing" below)
+    via a `ResizeObserver` (not a window `resize` listener — a sidebar drag or a banner
+    collapsing changes the viewport's rect without ever resizing the window) and computes a
+    canvas-space rect plus an inverse `scale(1 / zoom)` on its own root box such that, after
+    the ambient canvas transform (`translate(panX, panY) scale(zoom)`, `transformOrigin: '0
+    0'`, applied by the canvas content layer) is applied, the card visually fills that
+    viewport's rect exactly, with its contents rendered at native (unscaled) size.
   - The floating `DashboardHeader` overlay (rendered above the canvas viewport by
     `DashboardCanvas`) is hidden while any card is fullscreen, so it can't visually cover the
     top of the fullscreen card.
@@ -97,12 +97,12 @@ shared state:
   inverse-transform sizing against the measured viewport rect, toolbar button, Escape
   handler.
 - `frontend/src/app/pages/Dashboard/hooks/state/useDashboardController.ts` — new
-  `getViewportRect` callback, mirroring the existing `getCanvasState` pattern.
-- `frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx` — thread `getViewportRect`
+  `getViewportEl` callback, mirroring the existing `getCanvasState` pattern.
+- `frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx` — thread `getViewportEl`
   through to `DashboardCardLayer`; hide the floating `DashboardHeader` overlay while any card
   is fullscreen.
 - `frontend/src/app/pages/Dashboard/canvas/DashboardCardLayer.tsx` — thread
-  `getViewportRect` through to `DashboardViewCard`.
+  `getViewportEl` through to `DashboardViewCard`.
 - `frontend/src/shared/state/tempStateSlice.ts` — new field + actions.
 - `frontend/src/app/components/Layout/AppShell.tsx` — conditionally render `DynamicIsland`.
 - `frontend/src/shared/i18n/en.json`, `pt-BR.json` — new tooltip strings
