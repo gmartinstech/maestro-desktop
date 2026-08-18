@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useAppDispatch } from '@/shared/hooks';
+import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import {
   saveLayout,
   type CardPosition,
@@ -39,6 +39,8 @@ export function useLayoutSave({
   captureNow,
 }: UseLayoutSaveArgs) {
   const dispatch = useAppDispatch();
+  // Read directly rather than threaded as a prop: this is the only save call site sourced from useDashboardController, keeping the elements plumbing out of the rest of that hook chain for this task.
+  const elements = useAppSelector((state) => state.dashboardLayout.elements);
   const skipInitialSave = useRef(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<Parameters<typeof saveLayout>[0] | null>(null);
@@ -50,7 +52,7 @@ export function useLayoutSave({
       skipInitialSave.current = false;
       return;
     }
-    const payload = { dashboardId, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, expandedSessionIds };
+    const payload = { dashboardId, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, elements, expandedSessionIds };
     pendingSaveRef.current = payload;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
@@ -59,7 +61,7 @@ export function useLayoutSave({
       saveTimerRef.current = null;
       captureNow();
     }, 500);
-  }, [isActive, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, expandedSessionIds, layoutInitialized, dashboardId, dispatch, captureNow]);
+  }, [isActive, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, elements, expandedSessionIds, layoutInitialized, dashboardId, dispatch, captureNow]);
 
   useEffect(() => {
     return () => {

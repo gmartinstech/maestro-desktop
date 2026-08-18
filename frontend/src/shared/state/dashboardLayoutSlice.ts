@@ -31,7 +31,7 @@ export const WORKFLOW_CARD_GAP = 140;
 const GRID_ORIGIN = { x: 40, y: 100 };
 const GRID_COLS_FALLBACK = 4;
 
-export type CardType = 'agent' | 'view' | 'browser' | 'note' | 'workflow' | 'workflows-hub' | 'workflows-monitor';
+export type CardType = 'agent' | 'view' | 'browser' | 'note' | 'workflow' | 'workflows-hub' | 'workflows-monitor' | 'element';
 
 export interface CardPosition {
   session_id: string;
@@ -119,12 +119,36 @@ export interface NotePosition {
 export const DEFAULT_NOTE_W = 240;
 export const DEFAULT_NOTE_H = 200;
 
+export type ElementKind = 'image' | 'svg' | 'file';
+
+// A lightweight canvas element (image / svg / dropped file). Deliberately primitives only:
+// the whole layout is one JSON blob PUT on a 500ms debounce, so content bytes live as files
+// in the dashboard assets dir (later task) and are referenced by asset_id, never inlined here.
+export interface ElementPosition {
+  element_id: string;
+  kind: ElementKind;
+  asset_id: string;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zOrder: number;
+  created_by_session_id?: string | null;
+}
+
+export const DEFAULT_ELEMENT_W = 320;
+export const DEFAULT_ELEMENT_H = 240;
+export const MIN_ELEMENT_W = 160;
+export const MIN_ELEMENT_H = 120;
+
 // One entry in the Ctrl/Cmd+Shift+T "reopen last closed" stack: a full snapshot for browser/view/workflow/note/tab, just the session id for an agent (its session is brought back via resumeSession).
 export type ClosedCard =
   | { uid: string; kind: 'browser'; closedAt: number; card: BrowserCardPosition }
   | { uid: string; kind: 'view'; closedAt: number; card: ViewCardPosition }
   | { uid: string; kind: 'workflow'; closedAt: number; card: WorkflowCardPosition }
   | { uid: string; kind: 'note'; closedAt: number; note: NotePosition }
+  | { uid: string; kind: 'element'; closedAt: number; element: ElementPosition }
   | { uid: string; kind: 'tab'; closedAt: number; browserId: string; index: number; tab: BrowserTab }
   | { uid: string; kind: 'agent'; closedAt: number; sessionId: string; position: CardPosition | null };
 
@@ -139,6 +163,7 @@ export interface DashboardLayoutState {
   workflowCards: Record<string, WorkflowCardPosition>;
   workflowsHub: WorkflowsHubPosition | null;
   notes: Record<string, NotePosition>;
+  elements: Record<string, ElementPosition>;
   closedCardPositions: Record<string, CardPosition>;
   /** Session-global LIFO undo stack for Ctrl/Cmd+Shift+T; survives dashboard switches (resetLayout leaves it alone). */
   recentlyClosed: ClosedCard[];
@@ -153,6 +178,7 @@ export interface DashboardLayoutState {
   // Set when a view card is opened from outside the canvas (sidebar app click / toolbar picker) so the dashboard fits+highlights it on arrival; holds the card key.
   pendingFocusViewCardId: string | null;
   pendingFocusNoteId: string | null;
+  pendingFocusElementId: string | null;
   /** Transient: snapshot stand-ins for off-screen webviews; never rides the layout PUT. */
   suspendedBrowserCards: Record<string, { dataUrl: string; capturedAt: number }>;
   /** Transient: spawned cards that are about to be removed; surfaces the fade + Keep pill. */
@@ -189,6 +215,7 @@ const initialState: DashboardLayoutState = {
   workflowCards: {},
   workflowsHub: null,
   notes: {},
+  elements: {},
   closedCardPositions: {},
   recentlyClosed: [],
   glowingBrowserCards: {},
@@ -200,6 +227,7 @@ const initialState: DashboardLayoutState = {
   pendingFocusBrowserId: null,
   pendingFocusViewCardId: null,
   pendingFocusNoteId: null,
+  pendingFocusElementId: null,
   suspendedBrowserCards: {},
   endingBrowserCards: {},
   activeViewCardId: null,
@@ -219,6 +247,7 @@ interface LayoutPayload {
   workflowCards: Record<string, WorkflowCardPosition>;
   workflowsHub: WorkflowsHubPosition | null;
   notes: Record<string, NotePosition>;
+  elements: Record<string, ElementPosition>;
   expandedSessionIds: string[];
 }
 
@@ -254,6 +283,7 @@ export const fetchLayout = createAsyncThunk(
       workflowCards: (layout.workflow_cards ?? {}) as Record<string, WorkflowCardPosition>,
       workflowsHub: (layout.workflows_hub ?? null) as WorkflowsHubPosition | null,
       notes: (layout.notes ?? {}) as Record<string, NotePosition>,
+      elements: (layout.elements ?? {}) as Record<string, ElementPosition>,
       expandedSessionIds: (layout.expanded_session_ids ?? []) as string[],
     } satisfies LayoutPayload;
   },
@@ -277,6 +307,7 @@ export const saveLayout = createAsyncThunk(
           workflow_cards: payload.workflowCards,
           workflows_hub: payload.workflowsHub,
           notes: payload.notes,
+          elements: payload.elements,
           expanded_session_ids: payload.expandedSessionIds,
         },
       }),
@@ -1564,6 +1595,7 @@ const dashboardLayoutSlice = createSlice({
       state.workflowCards = {};
       state.workflowsHub = null;
       state.notes = {};
+      state.elements = {};
       state.closedCardPositions = {};
       state.glowingBrowserCards = {};
       state.glowingAgentCards = {};
@@ -1606,6 +1638,7 @@ const dashboardLayoutSlice = createSlice({
           state.workflowCards = action.payload.workflowCards || {};
           state.workflowsHub = action.payload.workflowsHub || null;
           state.notes = action.payload.notes || {};
+          state.elements = action.payload.elements || {};
         } else {
           const occupied = collectOccupiedRects(state, action.payload.expandedSessionIds);
           addMissingCards(state.cards, action.payload.cards, occupied);
@@ -1617,6 +1650,7 @@ const dashboardLayoutSlice = createSlice({
           addMissingCards(state.workflowCards, action.payload.workflowCards || {}, occupied);
           if (!state.workflowsHub && action.payload.workflowsHub) state.workflowsHub = action.payload.workflowsHub;
           addMissingCards(state.notes, action.payload.notes || {}, occupied);
+          addMissingCards(state.elements, action.payload.elements || {}, occupied);
         }
         state.persistedExpandedSessionIds = action.payload.expandedSessionIds;
 
@@ -1640,6 +1674,10 @@ const dashboardLayoutSlice = createSlice({
         for (const n of Object.values(state.notes)) {
           if (!n.zOrder) n.zOrder = 0;
           if (n.zOrder > maxZ) maxZ = n.zOrder;
+        }
+        for (const e of Object.values(state.elements)) {
+          if (!e.zOrder) e.zOrder = 0;
+          if (e.zOrder > maxZ) maxZ = e.zOrder;
         }
         state.nextZOrder = maxZ + 1;
       })
