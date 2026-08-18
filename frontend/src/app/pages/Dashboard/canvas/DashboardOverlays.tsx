@@ -1,7 +1,6 @@
 import React, { type RefObject } from 'react';
 import Box from '@mui/material/Box';
 import DashboardToolbar from '../DashboardToolbar';
-import CanvasControls from '../controls/CanvasControls';
 import CardSearchPalette from '../controls/CardSearchPalette';
 import DirectionHints from '../controls/DirectionHints';
 import WorkflowRunningToast from '@/app/pages/Workflows/WorkflowRunningToast';
@@ -12,9 +11,6 @@ import type {
   CardPosition,
   ViewCardPosition,
   BrowserCardPosition,
-  WorkflowCardPosition,
-  WorkflowsHubPosition,
-  ElementPosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { useCanvasControls } from '../hooks/interaction/useCanvasControls';
 
@@ -29,9 +25,6 @@ interface DashboardOverlaysProps {
   cards: Record<string, CardPosition>;
   viewCards: Record<string, ViewCardPosition>;
   browserCards: Record<string, BrowserCardPosition>;
-  workflowCards: Record<string, WorkflowCardPosition>;
-  workflowsHub: WorkflowsHubPosition | null;
-  elements: Record<string, ElementPosition>;
   focusedCardId: string | null;
   shakeDirection: Direction | null;
   neighborDirections: NeighborDirections;
@@ -48,8 +41,6 @@ interface DashboardOverlaysProps {
   onAddNote: () => void;
   onAddElement: () => void;
   onNewAgentBounceEnd: () => void;
-  onFitToView: () => void;
-  onTidy: () => void;
   onSearchPaletteClose: () => void;
   toolbarPrefill?: string;
   toolbarPrefillMode?: string;
@@ -62,9 +53,6 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
   cards,
   viewCards,
   browserCards,
-  workflowCards,
-  workflowsHub,
-  elements,
   focusedCardId,
   shakeDirection,
   neighborDirections,
@@ -81,8 +69,6 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
   onAddNote,
   onAddElement,
   onNewAgentBounceEnd,
-  onFitToView,
-  onTidy,
   onSearchPaletteClose,
   toolbarPrefill,
   toolbarPrefillMode,
@@ -120,29 +106,6 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
           shakeDirection={shakeDirection}
         />
       )}
-
-      {/* Floating zoom controls + minimap */}
-      <Box sx={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10 }}>
-        <CanvasControls
-          zoom={canvas.zoom}
-          actions={canvas.actions}
-          onFitToView={onFitToView}
-          onTidy={onTidy}
-          minimapProps={{
-            panX: canvas.panX,
-            panY: canvas.panY,
-            zoom: canvas.zoom,
-            viewportRef: canvas.viewportRef,
-            cards,
-            viewCards,
-            browserCards,
-            workflowCards,
-            workflowsHub,
-            elements,
-          }}
-          onMinimapPan={(px, py) => canvas.actions.setState({ panX: px, panY: py, zoom: canvas.zoom })}
-        />
-      </Box>
 
       {/* Card search palette (Cmd+F) */}
       <CardSearchPalette

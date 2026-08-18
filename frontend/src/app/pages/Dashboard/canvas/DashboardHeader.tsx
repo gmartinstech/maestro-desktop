@@ -1,19 +1,30 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import InputBase from '@mui/material/InputBase';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import LanguageIcon from '@mui/icons-material/Language';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import { Settings as LucideSettings, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
+import { shallowEqual } from 'react-redux';
 import DashboardGlyph from './DashboardGlyph';
 import ShareButton from '@/app/components/share/ShareButton';
+import CanvasControls from '../controls/CanvasControls';
+import type { MinimapProps } from '../controls/Minimap';
 import type { AgentSession } from '@/shared/state/agentsSlice';
 import { saveLayout, viewCardKey } from '@/shared/state/dashboardLayoutSlice';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition, NotePosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
 import type { CanvasActions } from '../hooks/interaction/useCanvasControls';
+import { fetchDashboards, createDashboard, renameDashboard } from '@/shared/state/dashboardsSlice';
+import { openSettingsModal } from '@/shared/state/settingsSlice';
+import { byPreviewRecency } from '@/shared/previewOrder';
 import { useTranslation } from 'react-i18next';
 import { friendlyStatusLabel } from '@/shared/statusLabel';
 
@@ -31,6 +42,11 @@ interface DashboardHeaderProps {
   dashboardId: string | undefined;
   canvasActions: CanvasActions;
   onHighlightCard?: (cardId: string) => void;
+  zoom: number;
+  onFitToView: () => void;
+  onTidy: () => void;
+  minimapProps: Omit<MinimapProps, 'onPan'>;
+  onMinimapPan: (panX: number, panY: number) => void;
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -56,14 +72,64 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   dashboardId,
   canvasActions,
   onHighlightCard,
+  zoom,
+  onFitToView,
+  onTidy,
+  minimapProps,
+  onMinimapPan,
 }) => {
   const c = useClaudeTokens();
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   // Flushed alongside the other collections on Share export; not threaded as a prop since this is the only place in this component that needs it.
   const elements = useAppSelector((state) => state.dashboardLayout.elements);
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [renamingDashboardId, setRenamingDashboardId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const updateStatus = useAppSelector((state) => state.update.status);
+  const showUpdateDot = updateStatus === 'available' || updateStatus === 'downloaded';
+
+  // shallowEqual on top-level Immer dicts: nested mutations bump the dict reference on every rename/output bump despite identical structure.
+  const dashboardItems = useAppSelector((state) => state.dashboards.items, shallowEqual);
+  const dashboardList = React.useMemo(
+    () => Object.values(dashboardItems).sort(byPreviewRecency),
+    [dashboardItems],
+  );
+
+  useEffect(() => {
+    dispatch(fetchDashboards());
+  }, [dispatch]);
+
+  const handleDashboardItemClick = useCallback((id: string) => {
+    if (renamingDashboardId === id) return;
+    navigate(`/dashboard/${id}`);
+    setExpanded(false);
+  }, [renamingDashboardId, navigate]);
+
+  const handleStartDashboardRename = useCallback((id: string, currentName: string) => {
+    setRenamingDashboardId(id);
+    setRenameValue(currentName);
+  }, []);
+
+  const handleDashboardRenameSubmit = useCallback((id: string) => {
+    const trimmed = renameValue.trim();
+    const previousName = dashboardItems[id]?.name;
+    if (trimmed && trimmed !== previousName) {
+      dispatch(renameDashboard({ id, name: trimmed, previousName }));
+    }
+    setRenamingDashboardId(null);
+  }, [renameValue, dashboardItems, dispatch]);
+
+  const handleCreateDashboard = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const result = await dispatch(createDashboard('Untitled Dashboard'));
+    if (createDashboard.fulfilled.match(result)) {
+      navigate(`/dashboard/${result.payload.id}`);
+      setExpanded(false);
+    }
+  }, [dispatch, navigate]);
 
   const agentItems = Object.values(cards)
     .map((card) => {
@@ -92,7 +158,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     };
   });
 
-  const hasItems = agentItems.length > 0 || viewItems.length > 0 || browserItems.length > 0;
+  // The dashboard switcher is always in the dropdown now, so the title stays clickable even on an empty canvas.
+  const canOpen = true;
 
   useEffect(() => {
     if (!expanded) return;
@@ -118,10 +185,11 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   );
 
   const toggle = useCallback(() => {
-    if (hasItems) setExpanded((v) => !v);
-  }, [hasItems]);
+    if (canOpen) setExpanded((v) => !v);
+  }, [canOpen]);
 
   return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: '100%' }}>
     <Box ref={containerRef} sx={{ position: 'relative', display: 'inline-flex', flexDirection: 'column' }}>
       <Box
         onClick={toggle}
@@ -136,10 +204,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           borderRadius: '6px',
           py: 0.5,
           px: 0.75,
-          cursor: hasItems ? 'pointer' : 'default',
+          cursor: canOpen ? 'pointer' : 'default',
           userSelect: 'none',
           transition: 'background-color 0.12s ease',
-          '&:hover': hasItems ? { bgcolor: `${c.bg.surface}99` } : {},
+          '&:hover': canOpen ? { bgcolor: `${c.bg.surface}99` } : {},
         }}
       >
         <Box sx={{ display: 'flex', flexShrink: 0 }}>
@@ -157,17 +225,15 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         >
           {dashboardName || t('dashboard.defaultName')}
         </Typography>
-        {hasItems && (
-          <KeyboardArrowDownIcon
-            sx={{
-              fontSize: 18,
-              color: c.text.tertiary,
-              transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
-              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              ml: 0.25,
-            }}
-          />
-        )}
+        <KeyboardArrowDownIcon
+          sx={{
+            fontSize: 18,
+            color: c.text.tertiary,
+            transition: 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            ml: 0.25,
+          }}
+        />
         {dashboardId && (
           <Box sx={{ ml: 0.25, display: 'flex' }}>
             <ShareButton
@@ -184,7 +250,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </Box>
 
       {/* Dropdown overlay */}
-      {hasItems && (
+      {canOpen && (
         <Box
           sx={{
             position: 'absolute',
@@ -193,7 +259,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             zIndex: 100,
             minWidth: 280,
             maxWidth: 360,
-            maxHeight: expanded ? 400 : 0,
+            maxHeight: expanded ? 460 : 0,
             overflow: 'hidden',
             transition: 'max-height 0.25s ease-in-out',
           }}
@@ -207,9 +273,86 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               boxShadow: c.shadow.md,
               py: 0.75,
               overflowY: 'auto',
-              maxHeight: 380,
+              maxHeight: 440,
             }}
           >
+            <CategoryGroup icon={<GridViewRoundedIcon />} label={t('appShell.dashboards')} count={dashboardList.length} c={c}>
+              {dashboardList.map((entry) => {
+                const isActive = entry.id === dashboardId;
+                const isRenaming = renamingDashboardId === entry.id;
+                return (
+                  <Box
+                    key={entry.id}
+                    onClick={() => handleDashboardItemClick(entry.id)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      px: 1.5,
+                      pl: 3.25,
+                      py: isRenaming ? 0.25 : 0.4,
+                      mx: 0.5,
+                      cursor: isRenaming ? 'default' : 'pointer',
+                      borderRadius: 0.5,
+                      bgcolor: isActive ? `${c.accent.primary}18` : 'transparent',
+                      '&:hover': { bgcolor: isActive ? `${c.accent.primary}22` : c.bg.secondary },
+                      transition: 'background-color 0.1s',
+                    }}
+                  >
+                    {isRenaming ? (
+                      <InputBase
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => handleDashboardRenameSubmit(entry.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleDashboardRenameSubmit(entry.id);
+                          if (e.key === 'Escape') setRenamingDashboardId(null);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onFocus={(e) => e.target.select()}
+                        sx={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: '0.8rem',
+                          color: c.text.primary,
+                          py: 0,
+                          px: 0.5,
+                          borderRadius: 0.75,
+                          border: `1px solid ${c.accent.primary}80`,
+                          bgcolor: c.bg.page,
+                          '& input': { padding: '1px 0' },
+                        }}
+                      />
+                    ) : (
+                      <Typography
+                        noWrap
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          handleStartDashboardRename(entry.id, entry.name);
+                        }}
+                        sx={{
+                          fontSize: '0.8rem',
+                          color: isActive ? c.text.primary : c.text.secondary,
+                          fontWeight: isActive ? 600 : 400,
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        {entry.name}
+                      </Typography>
+                    )}
+                  </Box>
+                );
+              })}
+              <ItemRow onClick={handleCreateDashboard} c={c}>
+                <Plus size={14} style={{ flexShrink: 0 }} />
+                <Typography sx={{ fontSize: '0.8rem', color: c.text.secondary }}>
+                  {t('appShell.newDashboard')}
+                </Typography>
+              </ItemRow>
+            </CategoryGroup>
+
             {agentItems.length > 0 && (
               <CategoryGroup icon={<SmartToyOutlinedIcon />} label={t('dashboard.header.agents')} count={agentItems.length} c={c}>
                 {agentItems.map((item) => (
@@ -278,6 +421,48 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </Box>
         </Box>
       )}
+    </Box>
+
+    <Box sx={{ flex: 1 }} />
+
+    <CanvasControls
+      zoom={zoom}
+      actions={canvasActions}
+      onFitToView={onFitToView}
+      onTidy={onTidy}
+      minimapProps={minimapProps}
+      onMinimapPan={onMinimapPan}
+    />
+
+    <Tooltip title={t('common.settings')}>
+      <IconButton
+        size="small"
+        onClick={() => dispatch(openSettingsModal())}
+        sx={{
+          color: c.text.tertiary,
+          p: 0.5,
+          borderRadius: 1,
+          position: 'relative',
+          '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
+        }}
+      >
+        <LucideSettings size={17} />
+        {showUpdateDot && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 2,
+              right: 2,
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              bgcolor: c.accent.primary,
+              border: `1.5px solid ${c.bg.surface}`,
+            }}
+          />
+        )}
+      </IconButton>
+    </Tooltip>
     </Box>
   );
 };

@@ -49,10 +49,14 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.75 }}>
+    <Box sx={{ position: 'relative', display: 'inline-flex' }}>
       {minimapOpen && (
         <Box
           sx={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            mt: 0.5,
             width: 200,
             height: 140,
             bgcolor: c.bg.surface,
@@ -60,6 +64,7 @@ const CanvasControls: React.FC<Props> = ({ zoom, actions, onFitToView, onTidy, m
             borderRadius: `${c.radius.lg}px`,
             boxShadow: c.shadow.md,
             overflow: 'hidden',
+            zIndex: 100,
           }}
         >
           <Minimap {...minimapProps} onPan={onMinimapPan} />

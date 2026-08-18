@@ -181,7 +181,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
           background: `linear-gradient(to bottom, ${c.bg.page} 60%, transparent)`,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', pointerEvents: 'auto' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', pointerEvents: 'auto' }}>
           <DashboardHeader
             dashboardName={dashboardName}
             sessions={sessions}
@@ -196,6 +196,22 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             dashboardId={dashboardId}
             canvasActions={canvas.actions}
             onHighlightCard={onHighlightCard}
+            zoom={canvas.zoom}
+            onFitToView={onFitToView}
+            onTidy={onTidy}
+            minimapProps={{
+              panX: canvas.panX,
+              panY: canvas.panY,
+              zoom: canvas.zoom,
+              viewportRef: canvas.viewportRef,
+              cards,
+              viewCards,
+              browserCards,
+              workflowCards,
+              workflowsHub,
+              elements,
+            }}
+            onMinimapPan={(px, py) => canvas.actions.setState({ panX: px, panY: py, zoom: canvas.zoom })}
           />
         </Box>
       </Box>
@@ -296,9 +312,6 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
         cards={cards}
         viewCards={viewCards}
         browserCards={browserCards}
-        workflowCards={workflowCards}
-        workflowsHub={workflowsHub}
-        elements={elements}
         focusedCardId={focusedCardId}
         shakeDirection={shakeDirection}
         neighborDirections={neighborDirections}
@@ -315,8 +328,6 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
         onAddNote={onAddNote}
         onAddElement={onAddElement}
         onNewAgentBounceEnd={onNewAgentBounceEnd}
-        onFitToView={onFitToView}
-        onTidy={onTidy}
         onSearchPaletteClose={onSearchPaletteClose}
         toolbarPrefill={toolbarPrefill}
         toolbarPrefillMode={toolbarPrefillMode}
