@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import html
 import logging
 import os
@@ -325,6 +326,93 @@ async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str, instan
         pass
     finally:
         unsubscribe()
+
+
+def p_terminal_cwd(workspace_id: str) -> str:
+    """Resolve the directory the shell opens in: the card's workspace, falling back to home if it has vanished."""
+    from backend.config.paths import OUTPUTS_WORKSPACE_DIR
+    folder = os.path.join(OUTPUTS_WORKSPACE_DIR, workspace_id)
+    return folder if os.path.isdir(folder) else os.path.expanduser("~")
+
+
+@app.websocket("/ws/terminal/{workspace_id}")
+async def websocket_terminal(websocket: WebSocket, workspace_id: str, instance: int = 1):
+    """Bidirectional PTY channel for the app card's Shell tab. Unlike the runtime-logs
+    socket this one reads: term:input carries keystrokes and term:resize carries the
+    viewport. Frames are base64 because PTY output is raw bytes and a UTF-8 sequence
+    can straddle a read boundary. No seq_log or gap detection here on purpose — a
+    terminal's reconnect contract is just "hand me the current scrollback"."""
+    if not p_ws_auth_ok(websocket):
+        return
+    await websocket.accept()
+    from backend.apps.terminal.manager import manager as terminal_manager
+    session = await terminal_manager.attach(workspace_id, instance, p_terminal_cwd(workspace_id))
+    # Same bridge the runtime-logs route uses: subscribe() is a sync callback but the sender must await, so chunks land in a queue. subscribe replays synchronously, priming the queue before the send loop starts.
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def p_on_chunk(chunk: bytes) -> None:
+        try:
+            queue.put_nowait(chunk)
+        except asyncio.QueueFull:
+            pass
+
+    unsubscribe = session.subscribe(p_on_chunk)
+
+    async def p_send_loop() -> None:
+        while True:
+            chunk = await queue.get()
+            if not chunk:
+                await websocket.send_text(json.dumps({
+                    "event": "term:exit",
+                    "data": {"code": session.exit_code if session.exit_code is not None else 0},
+                }))
+                return
+            await websocket.send_text(json.dumps({
+                "event": "term:output",
+                "data": {"data": base64.b64encode(chunk).decode("ascii")},
+            }))
+
+    async def p_recv_loop() -> None:
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                # A malformed frame is the client's problem; dropping it must not take down the shell.
+                continue
+            event = msg.get("event")
+            data = msg.get("data") or {}
+            if event == "term:input":
+                try:
+                    session.write(base64.b64decode(data.get("data") or ""))
+                except Exception:
+                    continue
+            elif event == "term:resize":
+                try:
+                    session.resize(int(data.get("cols") or 80), int(data.get("rows") or 24))
+                except Exception:
+                    continue
+
+    sender = asyncio.create_task(p_send_loop())
+    receiver = asyncio.create_task(p_recv_loop())
+    try:
+        await websocket.send_text(json.dumps({
+            "event": "term:status",
+            "data": {"running": session.running, "shell": session.shell, "cwd": session.cwd},
+        }))
+        done, pending = await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        logger.exception("terminal ws: failed for %s/%s", workspace_id, instance)
+    finally:
+        sender.cancel()
+        receiver.cancel()
+        unsubscribe()
+        # Detach, never stop: the shell must outlive the socket so a tab switch or renderer reload resumes the same session.
+        await terminal_manager.detach(workspace_id, instance)
 
 
 @app.websocket("/ws/dashboard")
