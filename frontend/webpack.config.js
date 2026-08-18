@@ -32,6 +32,11 @@ module.exports = (env, argv) => {
           }
         },
         {
+          // Plain CSS had no loader until xterm.js arrived with a stylesheet the terminal cannot render correctly without.
+          test: /\.css$/,
+          use: ['style-loader', 'css-loader']
+        },
+        {
           test: /\.module\.(scss|sass)$/,
           use: [
             'style-loader',
