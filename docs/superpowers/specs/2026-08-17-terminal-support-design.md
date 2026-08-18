@@ -335,3 +335,34 @@ Deliberately excluded from this cut, each a separate ticket if wanted:
 | xterm.js bundle size on an installer that was deliberately trimmed | `@xterm/xterm` + fit addon is roughly 250 KB minified, against a 389 MB installer — measured in the packaging spike alongside `pywinpty` |
 | Unauthenticated localhost WebSocket exposing a shell | `p_ws_auth_ok` before `accept()`, with an explicit refusal test |
 | Renaming `terminal` → `logs` silently breaks a persisted `activeView` | The value is component-local `useState`, not persisted layout — verified; no migration needed |
+
+## Spike result (Task 1) — PASSED
+
+`pywinpty==3.0.5` installs and loads cleanly from the vendored
+`electron/python-env` (CPython 3.13.2 x86_64). A real ConPTY spawn of
+`cmd.exe /c echo` returned
+`'\x1b[1t\x1b[c\x1b[?1004h\x1b[?9001h\x1b[?7l\x1b[?7hmaestro-spike-ok\r\n'` — note
+the ANSI preamble, which is the concrete justification for the raw byte-chunk
+buffer and base64 transport rather than `AppRuntime`'s line buffering. The
+`ctypes`/ConPTY fallback is therefore not needed.
+
+Version 3.0.5 was used instead of the 2.0.14 named in the plan: it is current and
+publishes a `cp313-win_amd64` wheel matching the vendored interpreter exactly.
+
+Three findings that bind the implementation:
+
+1. **`requirements.txt` is shared with the macOS DMG build**, so the dependency
+   carries a `; sys_platform == "win32"` marker, and `requirements.lock` must be
+   regenerated with **`--universal`**. The existing lock is universal (it carries
+   `jeepney` / `secretstorage` / `uvloop` under platform markers); recompiling
+   without the flag silently resolves Windows-only and drops the POSIX
+   dependencies. The command recorded in the lock header omits `--universal` and
+   is wrong.
+2. **`PtyProcess.spawn` resolves `argv[0]` through `shutil.which` against the
+   env's PATH** and raises `FileNotFoundError` for a bare name it cannot find.
+   Shell resolution must therefore yield an absolute path, and
+   `build_terminal_env()` must keep `PATH` — unlike `executor.py`'s sandbox env,
+   which strips it.
+3. **The pywinpty 3.x API matches the design**: `spawn(argv, cwd, env,
+   dimensions=(rows, cols))`, `read(size=1024)` returning `str`, `write(s)`,
+   `setwinsize(rows, cols)`, `terminate(force)`, and an `exitstatus` attribute.
