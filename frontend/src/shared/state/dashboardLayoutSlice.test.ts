@@ -91,3 +91,70 @@ describe('elements collection', () => {
     expect(state.nextZOrder).toBe(8);
   });
 });
+
+import reducerEl, {
+  addElement, setElementPosition, setElementSize, removeElement, bringToFront, addNote as addNoteEl,
+} from '@/shared/state/dashboardLayoutSlice';
+
+describe('element reducers', () => {
+  it('addElement creates a card with the default size and a title', () => {
+    const state = reducerEl(undefined, addElement({ kind: 'image', title: 'Diagram', expandedSessionIds: [] }));
+    const els = Object.values(state.elements);
+    expect(els).toHaveLength(1);
+    expect(els[0].kind).toBe('image');
+    expect(els[0].title).toBe('Diagram');
+    expect(els[0].width).toBe(320);
+    expect(els[0].height).toBe(240);
+    expect(state.pendingFocusElementId).toBe(els[0].element_id);
+  });
+
+  it('a second element does not land on top of the first', () => {
+    const one = reducerEl(undefined, addElement({ kind: 'image', title: 'A', expandedSessionIds: [] }));
+    const two = reducerEl(one, addElement({ kind: 'image', title: 'B', expandedSessionIds: [] }));
+    const [a, b] = Object.values(two.elements);
+    const overlaps = a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    expect(overlaps).toBe(false);
+  });
+
+  it('an element does not land on top of an existing note', () => {
+    const withNote = reducerEl(undefined, addNoteEl({ expandedSessionIds: [] }));
+    const n = Object.values(withNote.notes)[0];
+    const withEl = reducerEl(withNote, addElement({ kind: 'image', title: 'A', expandedSessionIds: [] }));
+    const e = Object.values(withEl.elements)[0];
+    const overlaps = n.x < e.x + e.width && n.x + n.width > e.x && n.y < e.y + e.height && n.y + n.height > e.y;
+    expect(overlaps).toBe(false);
+  });
+
+  it('setElementPosition moves it', () => {
+    const s0 = reducerEl(undefined, addElement({ kind: 'image', title: 'A', expandedSessionIds: [] }));
+    const id = Object.values(s0.elements)[0].element_id;
+    const s1 = reducerEl(s0, setElementPosition({ elementId: id, x: 42, y: 84 }));
+    expect(s1.elements[id].x).toBe(42);
+    expect(s1.elements[id].y).toBe(84);
+  });
+
+  it('setElementSize clamps to the minimum', () => {
+    const s0 = reducerEl(undefined, addElement({ kind: 'image', title: 'A', expandedSessionIds: [] }));
+    const id = Object.values(s0.elements)[0].element_id;
+    const s1 = reducerEl(s0, setElementSize({ elementId: id, width: 10, height: 10 }));
+    expect(s1.elements[id].width).toBe(160);
+    expect(s1.elements[id].height).toBe(120);
+  });
+
+  it('removeElement deletes it', () => {
+    const s0 = reducerEl(undefined, addElement({ kind: 'image', title: 'A', expandedSessionIds: [] }));
+    const id = Object.values(s0.elements)[0].element_id;
+    const s1 = reducerEl(s0, removeElement({ elementId: id }));
+    expect(s1.elements[id]).toBeUndefined();
+  });
+
+  it('bringToFront raises an element above every other card', () => {
+    const s0 = reducerEl(undefined, addNoteEl({ expandedSessionIds: [] }));
+    const s1 = reducerEl(s0, addElement({ kind: 'image', title: 'A', expandedSessionIds: [] }));
+    const noteId = Object.values(s1.notes)[0].note_id;
+    const elId = Object.values(s1.elements)[0].element_id;
+    const s2 = reducerEl(s1, bringToFront({ id: noteId, type: 'note' }));
+    const s3 = reducerEl(s2, bringToFront({ id: elId, type: 'element' }));
+    expect(s3.elements[elId].zOrder).toBeGreaterThan(s3.notes[noteId].zOrder);
+  });
+});

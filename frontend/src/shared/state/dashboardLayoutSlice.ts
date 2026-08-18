@@ -362,6 +362,10 @@ function collectOccupiedRects(
     if (exclude?.type === 'note' && exclude.id === n.note_id) continue;
     rects.push({ x: n.x, y: n.y, w: n.width, h: n.height });
   }
+  for (const e of Object.values(state.elements)) {
+    if (exclude?.type === 'element' && exclude.id === e.element_id) continue;
+    rects.push({ x: e.x, y: e.y, w: e.width, h: e.height });
+  }
   return rects;
 }
 
@@ -625,6 +629,7 @@ const dashboardLayoutSlice = createSlice({
       for (const c of Object.values(state.browserCards)) tally(c.zOrder);
       for (const c of Object.values(state.workflowCards)) tally(c.zOrder);
       for (const n of Object.values(state.notes)) tally(n.zOrder);
+      for (const e of Object.values(state.elements)) tally(e.zOrder);
       if (state.workflowsHub) tally(state.workflowsHub.zOrder);
       if (state.workflowsMonitorCard) tally(state.workflowsMonitorCard.zOrder);
       if (type === 'agent') currentZ = state.cards[id]?.zOrder ?? 0;
@@ -633,6 +638,7 @@ const dashboardLayoutSlice = createSlice({
       else if (type === 'workflow') currentZ = state.workflowCards[id]?.zOrder ?? 0;
       else if (type === 'workflows-hub') currentZ = state.workflowsHub?.zOrder ?? 0;
       else if (type === 'workflows-monitor') currentZ = state.workflowsMonitorCard?.zOrder ?? 0;
+      else if (type === 'element') currentZ = state.elements[id]?.zOrder ?? 0;
       else currentZ = state.browserCards[id]?.zOrder ?? 0;
       if (currentZ >= maxZ) return;  // Already on top: no-op.
 
@@ -653,6 +659,9 @@ const dashboardLayoutSlice = createSlice({
         if (state.workflowsHub) state.workflowsHub.zOrder = z;
       } else if (type === 'workflows-monitor') {
         if (state.workflowsMonitorCard) state.workflowsMonitorCard.zOrder = z;
+      } else if (type === 'element') {
+        const el = state.elements[id];
+        if (el) el.zOrder = z;
       } else {
         const card = state.browserCards[id];
         if (card) card.zOrder = z;
@@ -1457,6 +1466,58 @@ const dashboardLayoutSlice = createSlice({
       state.pendingFocusNoteId = null;
     },
 
+    addElement(
+      state,
+      action: PayloadAction<{
+        kind: ElementKind;
+        title: string;
+        expandedSessionIds: string[];
+        x?: number;
+        y?: number;
+      }>,
+    ) {
+      const { kind, title, expandedSessionIds, x, y } = action.payload;
+      const element_id = `el-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const occupied = collectOccupiedRects(state, expandedSessionIds);
+      const spot = typeof x === 'number' && typeof y === 'number'
+        ? { x, y }
+        : findOpenGridCell(occupied, DEFAULT_ELEMENT_W, DEFAULT_ELEMENT_H);
+      state.elements[element_id] = {
+        element_id,
+        kind,
+        asset_id: '',
+        title,
+        x: spot.x,
+        y: spot.y,
+        width: DEFAULT_ELEMENT_W,
+        height: DEFAULT_ELEMENT_H,
+        zOrder: state.nextZOrder++,
+        created_by_session_id: null,
+      };
+      state.pendingFocusElementId = element_id;
+    },
+
+    setElementPosition(state, action: PayloadAction<{ elementId: string; x: number; y: number }>) {
+      const el = state.elements[action.payload.elementId];
+      if (!el) return;
+      el.x = action.payload.x;
+      el.y = action.payload.y;
+    },
+
+    setElementSize(state, action: PayloadAction<{ elementId: string; width: number; height: number }>) {
+      const el = state.elements[action.payload.elementId];
+      if (!el) return;
+      el.width = Math.max(MIN_ELEMENT_W, action.payload.width);
+      el.height = Math.max(MIN_ELEMENT_H, action.payload.height);
+    },
+
+    removeElement(state, action: PayloadAction<{ elementId: string }>) {
+      delete state.elements[action.payload.elementId];
+      if (state.pendingFocusElementId === action.payload.elementId) {
+        state.pendingFocusElementId = null;
+      }
+    },
+
     // Snapshot a card onto the reopen stack RIGHT BEFORE it's closed (the data must still be in state). Dispatch only from genuine user closes, not programmatic teardown.
     recordClosedCard(
       state,
@@ -1474,6 +1535,8 @@ const dashboardLayoutSlice = createSlice({
         entry = { uid, kind, closedAt, card: { ...state.workflowCards[id] } };
       } else if (kind === 'note' && state.notes[id]) {
         entry = { uid, kind, closedAt, note: { ...state.notes[id] } };
+      } else if (kind === 'element' && state.elements[id]) {
+        entry = { uid, kind, closedAt, element: { ...state.elements[id] } };
       } else if (kind === 'agent') {
         entry = { uid, kind, closedAt, sessionId: id, position: state.cards[id] ? { ...state.cards[id] } : null };
       } else if (kind === 'tab' && browserId && state.browserCards[browserId]) {
@@ -1502,6 +1565,9 @@ const dashboardLayoutSlice = createSlice({
         state.workflowCards[entry.card.workflow_id] = { ...entry.card, zOrder };
       } else if (entry.kind === 'note') {
         state.notes[entry.note.note_id] = { ...entry.note, zOrder };
+      } else if (entry.kind === 'element') {
+        state.elements[entry.element.element_id] = { ...entry.element, zOrder };
+        state.pendingFocusElementId = entry.element.element_id;
       } else if (entry.kind === 'tab') {
         const card = state.browserCards[entry.browserId];
         if (card) {
@@ -1795,6 +1861,10 @@ export const {
   setNoteColor,
   removeNote,
   clearPendingFocusNoteId,
+  addElement,
+  setElementPosition,
+  setElementSize,
+  removeElement,
   recordClosedCard,
   restoreClosedCard,
   popClosedCard,
