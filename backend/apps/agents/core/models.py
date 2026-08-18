@@ -123,6 +123,8 @@ class AgentSession(BaseModel):
     tool_latencies: dict[str, dict] = Field(default_factory=dict)
     browser_domains: list[str] = Field(default_factory=list)
     messages: list[Message] = Field(default_factory=list)
+    # Derived cache: msg.id -> index in `messages`, maintained by upsert_message() using a validate-then-fallback pattern (mirrors ThinkingState.msg_index in thinking.py) — never trusted blindly, so it doesn't need to be kept in sync by the ~35 other call sites that mutate `messages` directly elsewhere in the codebase; a stale/missing entry just costs one linear scan to self-heal. The practical speedup is narrow — it only pays off when a message id upsert_message already indexed comes back a second time (the stop/race replay case), not the routine per-turn hot path, which always upserts a fresh uuid4 id and always misses. Excluded from serialization since it's a rebuildable cache, not real session state — including it in model_dump()/disk saves/the WS payload would leak an implementation detail into persisted session files for no benefit.
+    message_index: dict[str, int] = Field(default_factory=dict, exclude=True)
     pending_approvals: list[ApprovalRequest] = Field(default_factory=list)
     branches: dict[str, "MessageBranch"] = Field(default_factory=lambda: {"main": MessageBranch(id="main")})
     active_branch_id: str = "main"
