@@ -34,7 +34,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     dashboardName, sessions, expandedSessionIds, cards, viewCards, browserCards, keepAliveBrowserCards,
     workflowCards, workflowItems, workflowOpenCards, workflowsHub,
     pendingFocusWorkflowId, pendingFocusWorkflowsHub,
-    notes, pendingFocusNoteId, layoutInitialized, persistedExpandedSessionIds,
+    notes, pendingFocusNoteId, elements, layoutInitialized, persistedExpandedSessionIds,
     zoomSensitivity, newAgentShortcut, browserHomepage, expandNewChats,
     autoRevealSubAgents, outputs, outputsLoaded, glowingAgentCards, glowingBrowserCards,
   } = useDashboardSelectors(dashboardId);
@@ -77,6 +77,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     notes,
     workflowCards,
     workflowsHub,
+    elements,
   );
   const {
     toolbarRef, toolbarOpen, setToolbarOpen, searchPaletteOpen, setSearchPaletteOpen,
@@ -317,7 +318,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
 
   return {
     c, dashboardId, dashboardName, canvas, selection, sessions, sessionList,
-    cards, viewCards, browserCards, keepAliveBrowserCards, notes, outputs, glowingAgentCards,
+    cards, viewCards, browserCards, keepAliveBrowserCards, notes, elements, outputs, glowingAgentCards,
     workflowCards, workflowsHub,
     expandedSessionIds, tethers, highlightedCardId, autoFocusSessionId,
     focusedCardId, pendingFocusNoteId, multiDragDelta, shakeDirection,

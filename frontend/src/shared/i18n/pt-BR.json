@@ -1106,6 +1106,9 @@
     "noteCard": {
       "placeholder": "Escreva uma nota…"
     },
+    "element": {
+      "noAsset": "Nenhum {{kind}} ainda"
+    },
     "findBar": {
       "placeholder": "Buscar na página"
     },

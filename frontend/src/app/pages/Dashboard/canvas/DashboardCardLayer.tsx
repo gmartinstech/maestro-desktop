@@ -4,6 +4,7 @@ import AgentCard from '../cards/AgentCard';
 import DashboardViewCard from '../cards/DashboardViewCard';
 import BrowserCard from '../cards/BrowserCard';
 import NoteCard from '../cards/NoteCard';
+import ElementCard from '../cards/ElementCard';
 import WorkflowsAppCard from '@/app/pages/Workflows/app/WorkflowsAppCard';
 import RunMonitor from '@/app/pages/Workflows/app/RunMonitor';
 import {
@@ -16,6 +17,7 @@ import {
   type NotePosition,
   type WorkflowCardPosition,
   type WorkflowsHubPosition,
+  type ElementPosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import { useAppSelector, useAppDispatch } from '@/shared/hooks';
 import { closeWorkflowMonitor } from '@/shared/state/dashboardLayoutSlice';
@@ -34,6 +36,7 @@ interface DashboardCardLayerProps {
   browserCards: Record<string, BrowserCardPosition>;
   keepAliveBrowserCards: Record<string, BrowserCardPosition>;
   notes: Record<string, NotePosition>;
+  elements: Record<string, ElementPosition>;
   workflowCards: Record<string, WorkflowCardPosition>;
   workflowsHub: WorkflowsHubPosition | null;
   outputs: Record<string, Output>;
@@ -71,6 +74,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
   browserCards,
   keepAliveBrowserCards,
   notes,
+  elements,
   workflowCards,
   workflowsHub,
   outputs,
@@ -268,6 +272,29 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
           isHighlighted={highlightedCardId === n.note_id}
           multiDragDelta={multiDragDelta}
           autoFocus={pendingFocusNoteId === n.note_id}
+          onCardSelect={onCardSelect}
+          onDragStart={onDragStart}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onBringToFront={onBringToFront}
+        />
+      ))}
+      {Object.values(elements).map((el) => (
+        <ElementCard
+          key={`element-${el.element_id}`}
+          elementId={el.element_id}
+          kind={el.kind}
+          title={el.title}
+          cardX={el.x}
+          cardY={el.y}
+          cardWidth={el.width}
+          cardHeight={el.height}
+          cardZOrder={el.zOrder ?? 0}
+          cmdHeld={cmdHeld}
+          getCanvasState={getCanvasState}
+          isSelected={selection.isSelected(el.element_id)}
+          isHighlighted={highlightedCardId === el.element_id}
+          multiDragDelta={selection.isSelected(el.element_id) ? multiDragDelta : null}
           onCardSelect={onCardSelect}
           onDragStart={onDragStart}
           onDragMove={onDragMove}

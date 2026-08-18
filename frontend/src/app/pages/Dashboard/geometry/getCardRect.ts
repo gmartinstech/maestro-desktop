@@ -29,6 +29,10 @@ export function getCardRect(id: string, type: CardType):
     const hub = layoutState.workflowsHub;
     if (!hub) return undefined;
     return { x: hub.x, y: hub.y, width: hub.width, height: hub.height };
+  } else if (type === 'element') {
+    const el = layoutState.elements[id];
+    if (!el) return undefined;
+    return { x: el.x, y: el.y, width: el.width, height: el.height };
   }
   return undefined;
 }

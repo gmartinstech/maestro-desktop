@@ -1106,6 +1106,9 @@
     "noteCard": {
       "placeholder": "Type a note…"
     },
+    "element": {
+      "noAsset": "No {{kind}} yet"
+    },
     "findBar": {
       "placeholder": "Find in page"
     },

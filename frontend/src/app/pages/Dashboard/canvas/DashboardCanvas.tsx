@@ -14,6 +14,7 @@ import type {
   NotePosition,
   WorkflowCardPosition,
   WorkflowsHubPosition,
+  ElementPosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
 import type { CardType, useDashboardSelection } from '../hooks/state/useDashboardSelection';
@@ -41,6 +42,7 @@ interface DashboardCanvasProps {
   browserCards: Record<string, BrowserCardPosition>;
   keepAliveBrowserCards: Record<string, BrowserCardPosition>;
   notes: Record<string, NotePosition>;
+  elements: Record<string, ElementPosition>;
   workflowCards: Record<string, WorkflowCardPosition>;
   workflowsHub: WorkflowsHubPosition | null;
   outputs: Record<string, Output>;
@@ -104,6 +106,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   browserCards,
   keepAliveBrowserCards,
   notes,
+  elements,
   workflowCards,
   workflowsHub,
   outputs,
@@ -247,6 +250,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
               browserCards={browserCards}
               keepAliveBrowserCards={keepAliveBrowserCards}
               notes={notes}
+              elements={elements}
               workflowCards={workflowCards}
               workflowsHub={workflowsHub}
               outputs={outputs}

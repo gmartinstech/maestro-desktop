@@ -35,6 +35,7 @@ export function useDashboardSelectors(dashboardId: string) {
   const workflowOpenCards = useAppSelector((state) => state.workflows.openCards);
   const notes = useAppSelector((state) => state.dashboardLayout.notes);
   const pendingFocusNoteId = useAppSelector((state) => state.dashboardLayout.pendingFocusNoteId);
+  const elements = useAppSelector((state) => state.dashboardLayout.elements);
   const layoutInitialized = useAppSelector((state) => state.dashboardLayout.initialized);
   const persistedExpandedSessionIds = useAppSelector((state) => state.dashboardLayout.persistedExpandedSessionIds);
   const zoomSensitivity = useAppSelector((state) => state.settings.data.zoom_sensitivity);
@@ -63,6 +64,7 @@ export function useDashboardSelectors(dashboardId: string) {
     pendingFocusWorkflowsHub,
     notes,
     pendingFocusNoteId,
+    elements,
     layoutInitialized,
     persistedExpandedSessionIds,
     zoomSensitivity,
