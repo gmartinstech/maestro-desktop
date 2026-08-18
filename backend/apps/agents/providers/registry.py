@@ -9,6 +9,7 @@ importers keep their single entry point.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, TYPE_CHECKING
 
 from backend.apps.agents.providers.openrouter import (
@@ -197,23 +198,40 @@ def get_api_type(short_name: str) -> str:
     return (entry or {}).get("api", "anthropic")
 
 
-def p_antigravity_connected() -> bool:
+# Short TTL cache for antigravity_connected(): the underlying httpx.get is synchronous (this resolver is itself sync, called eagerly at the top of every Gemini turn) and can block the event loop for up to 2s if 9Router is slow to answer. Caching avoids re-paying that cost on every turn of a multi-turn session; TTL is short enough that a user connecting/disconnecting Antigravity mid-session is picked up quickly. Public (not p_-prefixed): the test suite reads/writes this cache state directly to exercise real TTL hit/expiry behavior.
+ANTIGRAVITY_CHECK_TTL = 5.0
+antigravity_last_checked: float = 0.0
+antigravity_last_result: bool = False
+
+
+def antigravity_connected() -> bool:
     """True if a live Antigravity OAuth lane exists in 9Router. Synchronous
-    probe (this resolver is sync) with a tight timeout; any hiccup reads as
-    'no' so a slow/absent 9Router never blocks model resolution for long."""
+    probe (this resolver is sync) with a tight timeout and a short TTL cache;
+    any hiccup reads as 'no' so a slow/absent 9Router never blocks model
+    resolution for long, and repeated calls within the TTL window don't
+    re-pay the network round-trip on every turn of a session."""
+    global antigravity_last_checked, antigravity_last_result
+    now = time.monotonic()
+    if now - antigravity_last_checked < ANTIGRAVITY_CHECK_TTL:
+        return antigravity_last_result
     try:
         import httpx as p_httpx
         from backend.apps.nine_router.process import cli_auth_headers
         r = p_httpx.get("http://localhost:20128/api/providers", timeout=2.0, headers=cli_auth_headers())
+        antigravity_last_checked = now
         if r.status_code != 200:
+            antigravity_last_result = False
             return False
         data = r.json()
         conns = data.get("connections", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-        return any(
+        antigravity_last_result = any(
             isinstance(c, dict) and c.get("provider") == "antigravity" and c.get("isActive")
             for c in conns
         )
+        return antigravity_last_result
     except Exception:
+        antigravity_last_checked = now
+        antigravity_last_result = False
         return False
 
 
@@ -244,7 +262,7 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
         if isinstance(rid, str) and rid.startswith("gc/"):
             suffix = rid[len("gc/"):]
             ag_suffix = P_ANTIGRAVITY_MAP.get(suffix)
-            if ag_suffix and p_antigravity_connected():
+            if ag_suffix and antigravity_connected():
                 return "ag/" + ag_suffix
             if getattr(settings, "google_api_key", None):
                 return "gemini/" + suffix
