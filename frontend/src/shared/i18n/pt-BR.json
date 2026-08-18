@@ -1088,6 +1088,8 @@
       "hardReloadHint": "Recarregar do zero (reinicia o runtime e recarrega o app)",
       "reloadHint": "Recarregar a prévia; clique com o botão direito para recarregar do zero",
       "openAnotherWindow": "Abrir em outra janela",
+      "enterFullscreen": "Entrar em tela cheia",
+      "exitFullscreen": "Sair da tela cheia",
       "showToolbar": "Mostrar a barra de ferramentas",
       "hideToolbar": "Ocultar a barra de ferramentas",
       "removeFromDashboard": "Remover do painel",

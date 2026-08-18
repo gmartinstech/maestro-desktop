@@ -17,8 +17,11 @@ import KeyboardCommandKeyRoundedIcon from '@mui/icons-material/KeyboardCommandKe
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import AddIcon from '@mui/icons-material/Add';
 import KeyboardArrowUpRounded from '@mui/icons-material/KeyboardArrowUpRounded';
+import FullscreenRoundedIcon from '@mui/icons-material/FullscreenRounded';
+import FullscreenExitRoundedIcon from '@mui/icons-material/FullscreenExitRounded';
 import { Output, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { setViewCardPosition, setViewCardSize, setActiveViewCardId, recordClosedCard, addViewCard } from '@/shared/state/dashboardLayoutSlice';
+import { setFullscreenCardId, clearFullscreenCardId } from '@/shared/state/tempStateSlice';
 import { removeViewCardCleanly } from '@/shared/viewTeardown';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE, getAuthToken } from '@/shared/config';
@@ -89,6 +92,8 @@ interface Props {
   cardZOrder?: number;
   onDoubleClick?: (id: string, type: 'agent' | 'view' | 'browser') => void;
   onBringToFront?: (id: string, type: 'agent' | 'view' | 'browser') => void;
+  // On-demand getter (see ElementCard's getCanvasState for the same pattern) for the canvas viewport element, so this card can measure and ResizeObserver it while entering fullscreen.
+  getViewportEl: () => HTMLDivElement | null;
 }
 
 // The app card's loading state while its runtime spins up. One soft pulse, calm copy, and an honest hint only after 9s, a freshly-imported app installs its deps on first open, which is the slow case worth explaining instead of leaving the user staring at a dead screen.
@@ -130,7 +135,7 @@ const BootingBody: React.FC = () => {
 const DashboardViewCard: React.FC<Props> = ({
   output, cardKey: cardKeyProp, instance = 1, cardX, cardY, cardWidth, cardHeight, zoom = 1, panX = 0, panY = 0, cmdHeld = false,
   isSelected = false, isHighlighted = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
-  cardZOrder = 0, onDoubleClick, onBringToFront,
+  cardZOrder = 0, onDoubleClick, onBringToFront, getViewportEl,
 }) => {
   const cardKey = cardKeyProp ?? output.id;
   const c = useClaudeTokens();
@@ -168,6 +173,21 @@ const DashboardViewCard: React.FC<Props> = ({
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [headerPeek, setHeaderPeek] = useState(false);
   const showControls = !headerCollapsed || headerPeek;
+  // Local-only, like headerCollapsed: resets on reload/dashboard switch, never persisted to dashboard layout.
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    dispatch(setFullscreenCardId(cardKey));
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      dispatch(clearFullscreenCardId(cardKey));
+    };
+  }, [isFullscreen, dispatch, cardKey]);
+
   useEffect(() => {
     if (activeView === 'shell') setShellOpened(true);
   }, [activeView]);
@@ -377,6 +397,14 @@ const DashboardViewCard: React.FC<Props> = ({
     void removeViewCardCleanly(cardKey, dispatch);
   };
 
+  const handleToggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFullscreen((v) => {
+      if (!v) setHeaderCollapsed(false);
+      return !v;
+    });
+  };
+
   // Spawn ANOTHER independent instance of this app (own runtime + ports); the reducer picks the next #N and the lifecycle hook fits + highlights it.
   const handleOpenAnother = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -419,6 +447,28 @@ const DashboardViewCard: React.FC<Props> = ({
   const displayW = localResize?.w ?? cardWidth;
   const displayH = localResize?.h ?? cardHeight;
   const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
+  // Only orders this card among canvas siblings — the transform on the canvas content layer creates its own stacking context, so this can never out-rank chrome OUTSIDE that layer (e.g. DashboardCanvas's floating header, handled separately via fullscreenCardId).
+  const FULLSCREEN_Z_INDEX = 999998;
+  // Viewport's own layout rect (sidebar width, insets, banners already resolved by CSS), re-measured via ResizeObserver on the real element (not a window 'resize' listener, so a sidebar drag or banner Collapse still re-measures it) rather than on a re-render this component wouldn't otherwise get.
+  const [viewportRect, setViewportRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const target = getViewportEl();
+    if (!target) return undefined;
+    // ResizeObserver fires once immediately on observe(), so no separate initial measure() call is needed.
+    const observer = new ResizeObserver(() => setViewportRect(target.getBoundingClientRect()));
+    observer.observe(target);
+    return () => {
+      observer.disconnect();
+      setViewportRect(null);
+    };
+  }, [isFullscreen, getViewportEl]);
+  // Never reparented — reparenting a live <webview>/<iframe> reloads it. Instead, sized in canvas-space so the ambient transform (translate(panX,panY) scale(zoom)) lands it exactly over the viewport's rect.
+  // Falls back to the card's normal display rect before the first measurement lands.
+  const fsLeft = viewportRect ? -panX / zoom : displayX;
+  const fsTop = viewportRect ? -panY / zoom : displayY;
+  const fsWidth = viewportRect ? viewportRect.width : displayW;
+  const fsHeight = viewportRect ? viewportRect.height : displayH;
 
   return (
     <Box
@@ -439,11 +489,14 @@ const DashboardViewCard: React.FC<Props> = ({
         // contain + willChange: own compositor layer so paint stays scoped (see AgentCard for full rationale).
         contain: 'layout style',
         willChange: 'transform',
-        left: displayX,
-        top: displayY,
-        width: displayW,
-        height: displayH,
-        borderRadius: `${c.radius.lg}px`,
+        left: isFullscreen ? fsLeft : displayX,
+        top: isFullscreen ? fsTop : displayY,
+        width: isFullscreen ? fsWidth : displayW,
+        height: isFullscreen ? fsHeight : displayH,
+        // Cancels the ambient canvas zoom (transformOrigin '0 0' matches the canvas content layer's own origin) so header text, buttons, and the app inside render at native size instead of being visually scaled by the canvas zoom level.
+        transform: isFullscreen ? `scale(${1 / zoom})` : 'none',
+        transformOrigin: '0 0',
+        borderRadius: isFullscreen ? 0 : `${c.radius.lg}px`,
         border: isHighlighted
           ? `2px solid ${c.accent.primary}`
           : interactive
@@ -460,7 +513,7 @@ const DashboardViewCard: React.FC<Props> = ({
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        zIndex: (isDragging || isResizing) ? 999999 : cardZOrder,
+        zIndex: isFullscreen ? FULLSCREEN_Z_INDEX : (isDragging || isResizing) ? 999999 : cardZOrder,
         transition: noTransition ? 'none' : 'box-shadow 0.2s',
         '&:hover .resize-handle': { opacity: 1 },
         ...(isHighlighted && {
@@ -501,9 +554,9 @@ const DashboardViewCard: React.FC<Props> = ({
 
       {/* Header */}
       <Box
-        onPointerDown={handleDragPointerDown}
-        onPointerMove={handleDragPointerMove}
-        onPointerUp={handleDragPointerUp}
+        onPointerDown={isFullscreen ? undefined : handleDragPointerDown}
+        onPointerMove={isFullscreen ? undefined : handleDragPointerMove}
+        onPointerUp={isFullscreen ? undefined : handleDragPointerUp}
         onPointerEnter={() => { if (headerCollapsed) setHeaderPeek(true); }}
         onPointerLeave={() => setHeaderPeek(false)}
         sx={{
@@ -521,7 +574,7 @@ const DashboardViewCard: React.FC<Props> = ({
           py: 0.75,
           bgcolor: c.bg.secondary,
           borderBottom: `1px solid ${c.border.subtle}`,
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: isFullscreen ? 'default' : (isDragging ? 'grabbing' : 'grab'),
           flexShrink: 0,
           minHeight: 36,
           userSelect: 'none',
@@ -627,16 +680,29 @@ const DashboardViewCard: React.FC<Props> = ({
           </>
         )}
 
-        <Tooltip title={headerCollapsed ? t('dashboard.viewCard.showToolbar') : t('dashboard.viewCard.hideToolbar')} placement="top">
+        <Tooltip title={isFullscreen ? t('dashboard.viewCard.exitFullscreen') : t('dashboard.viewCard.enterFullscreen')} placement="top">
           <IconButton
             size="small"
-            onClick={(e) => { e.stopPropagation(); setHeaderPeek(false); setHeaderCollapsed((v) => !v); }}
+            onClick={handleToggleFullscreen}
             onPointerDown={(e) => e.stopPropagation()}
             sx={{ color: c.text.ghost, p: 0.5, '&:hover': { color: c.text.primary } }}
           >
-            <KeyboardArrowUpRounded sx={{ fontSize: 18, transition: 'transform 0.15s', transform: headerCollapsed ? 'rotate(180deg)' : 'none' }} />
+            {isFullscreen ? <FullscreenExitRoundedIcon sx={{ fontSize: 16 }} /> : <FullscreenRoundedIcon sx={{ fontSize: 16 }} />}
           </IconButton>
         </Tooltip>
+
+        {!isFullscreen && (
+          <Tooltip title={headerCollapsed ? t('dashboard.viewCard.showToolbar') : t('dashboard.viewCard.hideToolbar')} placement="top">
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); setHeaderPeek(false); setHeaderCollapsed((v) => !v); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              sx={{ color: c.text.ghost, p: 0.5, '&:hover': { color: c.text.primary } }}
+            >
+              <KeyboardArrowUpRounded sx={{ fontSize: 18, transition: 'transform 0.15s', transform: headerCollapsed ? 'rotate(180deg)' : 'none' }} />
+            </IconButton>
+          </Tooltip>
+        )}
 
         <Tooltip title={t('dashboard.viewCard.removeFromDashboard')} placement="top">
           <IconButton
@@ -702,7 +768,7 @@ const DashboardViewCard: React.FC<Props> = ({
       </Box>
 
       {/* Resize handles */}
-      {HANDLE_DEFS.map(({ dir, sx }) => (
+      {!isFullscreen && HANDLE_DEFS.map(({ dir, sx }) => (
         <Box
           key={dir}
           className="resize-handle"

@@ -45,6 +45,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
   const workflowsMonitorIdRaw = useAppSelector((s) => s.dashboardLayout.workflowsMonitorId);
   const monitorActive = !!workflowsMonitorIdRaw && !!workflowItems[workflowsMonitorIdRaw];
   const workflowsMonitorId = monitorActive ? workflowsMonitorIdRaw : null;
+  const fullscreenCardId = useAppSelector((s) => s.tempState.fullscreenCardId);
   const workflowsMonitorCard = useAppSelector((s) =>
     (monitorActive ? s.dashboardLayout.workflowsMonitorCard : null));
   const monitorIsLive = useAppSelector((s) =>
@@ -99,6 +100,9 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
   canvasStateRef.current = { panX: canvas.panX, panY: canvas.panY, zoom: canvas.zoom };
   // Stable getter, AgentCards read pan/zoom on demand during drag math.
   const getCanvasState = useCallback(() => canvasStateRef.current, []);
+
+  // Stable getter so a fullscreen card can size itself against the canvas viewport's real DOM element (sidebar width, insets, banners already resolved) instead of the OS window. Returns the element (not just its rect) so callers can also ResizeObserver it.
+  const getViewportEl = useCallback(() => canvas.viewportRef.current, [canvas.viewportRef]);
 
   const {
     multiDragDelta,
@@ -324,7 +328,8 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     expandedSessionIds, tethers, highlightedCardId, autoFocusSessionId,
     focusedCardId, pendingFocusNoteId, multiDragDelta, shakeDirection,
     neighborDirections, toolbarOpen, searchPaletteOpen, newAgentBounce,
-    toolbarRef, spawnOriginsRef, revealSpawnedRef, measuredHeightsRef, getCanvasState,
+    toolbarRef, spawnOriginsRef, revealSpawnedRef, measuredHeightsRef, getCanvasState, getViewportEl,
+    fullscreenCardId,
     toolbarPrefill,
     toolbarPrefillMode,
     onStarter: handleStarter,

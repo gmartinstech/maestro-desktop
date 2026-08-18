@@ -64,6 +64,8 @@ interface DashboardCanvasProps {
   revealSpawnedRef: RefObject<Set<string>>;
   measuredHeightsRef: RefObject<Record<string, number>>;
   getCanvasState: () => { panX: number; panY: number; zoom: number };
+  getViewportEl: () => HTMLDivElement | null;
+  fullscreenCardId: string | null;
   onViewportMouseDown: (e: React.MouseEvent) => void;
   onViewportMouseMove: (e: React.MouseEvent) => void;
   onViewportMouseUp: (e: React.MouseEvent) => void;
@@ -129,6 +131,8 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   revealSpawnedRef,
   measuredHeightsRef,
   getCanvasState,
+  getViewportEl,
+  fullscreenCardId,
   onViewportMouseDown,
   onViewportMouseMove,
   onViewportMouseUp,
@@ -166,7 +170,8 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   return (
     <>
     <Box sx={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
-      {/* Floating header overlay */}
+      {/* Floating header overlay; hidden while any card is fullscreen so it can't paint over the top of it. */}
+      {!fullscreenCardId && (
       <Box
         sx={{
           position: 'absolute',
@@ -215,6 +220,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
           />
         </Box>
       </Box>
+      )}
 
       {/* Canvas viewport */}
       <Box
@@ -289,6 +295,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
               revealSpawnedRef={revealSpawnedRef}
               measuredHeightsRef={measuredHeightsRef}
               getCanvasState={getCanvasState}
+              getViewportEl={getViewportEl}
               onCardSelect={onCardSelect}
               onDragStart={onDragStart}
               onDragMove={onDragMove}

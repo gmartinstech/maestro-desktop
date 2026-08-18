@@ -57,6 +57,7 @@ interface DashboardCardLayerProps {
   revealSpawnedRef: RefObject<Set<string>>;
   measuredHeightsRef: RefObject<Record<string, number>>;
   getCanvasState: () => { panX: number; panY: number; zoom: number };
+  getViewportEl: () => HTMLDivElement | null;
   onCardSelect: (id: string, type: CardType, shiftKey: boolean) => void;
   onDragStart: (id: string, type: CardType) => void;
   onDragMove: (dx: number, dy: number, mouseX?: number, mouseY?: number) => void;
@@ -95,6 +96,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
   revealSpawnedRef,
   measuredHeightsRef,
   getCanvasState,
+  getViewportEl,
   onCardSelect,
   onDragStart,
   onDragMove,
@@ -216,6 +218,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
             isSelected={selection.isSelected(cardKey)}
             isHighlighted={highlightedCardId === cardKey}
             multiDragDelta={multiDragDelta}
+            getViewportEl={getViewportEl}
             onCardSelect={onCardSelect}
             onDragStart={onDragStart}
             onDragMove={onDragMove}
