@@ -4,12 +4,14 @@ interface TempState {
   pendingBrowserUrl: string | null;
   pendingFocusAgentId: string | null;
   lastDashboardId: string | null;
+  fullscreenCardId: string | null;
 }
 
 const initialState: TempState = {
   pendingBrowserUrl: null,
   pendingFocusAgentId: null,
   lastDashboardId: null,
+  fullscreenCardId: null,
 };
 
 const tempStateSlice = createSlice({
@@ -31,6 +33,12 @@ const tempStateSlice = createSlice({
     clearPendingFocusAgentId(state) {
       state.pendingFocusAgentId = null;
     },
+    setFullscreenCardId(state, action: PayloadAction<string>) {
+      state.fullscreenCardId = action.payload;
+    },
+    clearFullscreenCardId(state, action: PayloadAction<string>) {
+      if (state.fullscreenCardId === action.payload) state.fullscreenCardId = null;
+    },
   },
 });
 
@@ -40,6 +48,8 @@ export const {
   setLastDashboardId,
   setPendingFocusAgentId,
   clearPendingFocusAgentId,
+  setFullscreenCardId,
+  clearFullscreenCardId,
 } = tempStateSlice.actions;
 
 export default tempStateSlice.reducer;
