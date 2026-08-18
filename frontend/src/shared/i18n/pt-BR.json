@@ -650,7 +650,7 @@
       "placeholder": {
         "agentWorkingDisabled": "Agente está trabalhando...",
         "autoRun": "Descreva quais dados gerar…",
-        "default": "Pergunte qualquer coisa, @ para contexto, / para comandos",
+        "default": "@ para contexto, / para comandos",
         "queued": "{{count}} na fila, digite outro ou aguarde…",
         "runningWillQueue": "Agente está trabalhando, mensagens serão enfileiradas…"
       },
