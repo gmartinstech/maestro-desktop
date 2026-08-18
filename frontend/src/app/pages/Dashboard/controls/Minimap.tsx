@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useMemo } from 'react';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import type { CardPosition, ViewCardPosition, BrowserCardPosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
+import type { CardPosition, ViewCardPosition, BrowserCardPosition, WorkflowCardPosition, WorkflowsHubPosition, ElementPosition } from '@/shared/state/dashboardLayoutSlice';
 
 const MINIMAP_W = 200;
 const MINIMAP_H = 140;
@@ -16,6 +16,7 @@ export interface MinimapProps {
   browserCards: Record<string, BrowserCardPosition>;
   workflowCards: Record<string, WorkflowCardPosition>;
   workflowsHub: WorkflowsHubPosition | null;
+  elements: Record<string, ElementPosition>;
   onPan: (panX: number, panY: number) => void;
 }
 
@@ -24,12 +25,12 @@ interface CardRect {
   y: number;
   width: number;
   height: number;
-  type: 'agent' | 'view' | 'browser' | 'workflow' | 'workflows-hub';
+  type: 'agent' | 'view' | 'browser' | 'workflow' | 'workflows-hub' | 'element';
 }
 
 const Minimap: React.FC<MinimapProps> = ({
   panX, panY, zoom, viewportRef,
-  cards, viewCards, browserCards, workflowCards, workflowsHub,
+  cards, viewCards, browserCards, workflowCards, workflowsHub, elements,
   onPan,
 }) => {
   const c = useClaudeTokens();
@@ -59,8 +60,11 @@ const Minimap: React.FC<MinimapProps> = ({
         type: 'workflows-hub',
       });
     }
+    for (const ec of Object.values(elements)) {
+      result.push({ x: ec.x, y: ec.y, width: ec.width, height: ec.height, type: 'element' });
+    }
     return result;
-  }, [cards, viewCards, browserCards, workflowCards, workflowsHub]);
+  }, [cards, viewCards, browserCards, workflowCards, workflowsHub, elements]);
 
   const layout = useMemo(() => {
     const vp = viewportRef.current;
@@ -149,6 +153,7 @@ const Minimap: React.FC<MinimapProps> = ({
       case 'browser': return c.status.success;
       case 'workflow': return c.status.warning;
       case 'workflows-hub': return c.status.warning;
+      case 'element': return c.status.error;
     }
   };
 

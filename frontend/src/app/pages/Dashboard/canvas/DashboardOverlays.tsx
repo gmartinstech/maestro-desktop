@@ -14,6 +14,7 @@ import type {
   BrowserCardPosition,
   WorkflowCardPosition,
   WorkflowsHubPosition,
+  ElementPosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { useCanvasControls } from '../hooks/interaction/useCanvasControls';
 
@@ -30,6 +31,7 @@ interface DashboardOverlaysProps {
   browserCards: Record<string, BrowserCardPosition>;
   workflowCards: Record<string, WorkflowCardPosition>;
   workflowsHub: WorkflowsHubPosition | null;
+  elements: Record<string, ElementPosition>;
   focusedCardId: string | null;
   shakeDirection: Direction | null;
   neighborDirections: NeighborDirections;
@@ -62,6 +64,7 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
   browserCards,
   workflowCards,
   workflowsHub,
+  elements,
   focusedCardId,
   shakeDirection,
   neighborDirections,
@@ -135,6 +138,7 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
             browserCards,
             workflowCards,
             workflowsHub,
+            elements,
           }}
           onMinimapPan={(px, py) => canvas.actions.setState({ panX: px, panY: py, zoom: canvas.zoom })}
         />

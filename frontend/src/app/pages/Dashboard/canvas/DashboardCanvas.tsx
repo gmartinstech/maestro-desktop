@@ -298,6 +298,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
         browserCards={browserCards}
         workflowCards={workflowCards}
         workflowsHub={workflowsHub}
+        elements={elements}
         focusedCardId={focusedCardId}
         shakeDirection={shakeDirection}
         neighborDirections={neighborDirections}

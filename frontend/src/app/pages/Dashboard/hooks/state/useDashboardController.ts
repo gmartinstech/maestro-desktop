@@ -64,8 +64,8 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
   }, [workflowsMonitorId, workflowsMonitorRunId, monitorRuns, allRuns]);
 
   const contentBounds = useMemo(
-    () => computeContentBounds(cards, viewCards, browserCards, workflowCards, workflowsHub),
-    [cards, viewCards, browserCards, workflowCards, workflowsHub],
+    () => computeContentBounds(cards, viewCards, browserCards, workflowCards, workflowsHub, elements),
+    [cards, viewCards, browserCards, workflowCards, workflowsHub, elements],
   );
 
   const canvas = useCanvasControls(zoomSensitivity, contentBounds, isActive);
