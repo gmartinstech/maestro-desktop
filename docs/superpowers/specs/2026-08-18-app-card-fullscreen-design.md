@@ -4,8 +4,11 @@
 
 Add a fullscreen toggle to app windows on the Dashboard canvas (`DashboardViewCard`, the
 card that hosts a running app's preview/code/logs/shell/history). While fullscreen, the
-card fills the window's content area and the top nav (`DynamicIsland`) is hidden, so the
-app gets maximum uninterrupted space.
+card fills the dashboard canvas' content area and the top nav (`DynamicIsland`) is hidden,
+so the app gets maximum uninterrupted space. "Fills the canvas area" — not the literal OS
+window edges — because the window edges are unreachable without reparenting the card (see
+"Rejected" sections below); the canvas area is everything below/beside the app's own
+titlebar, sidebar, and any banners.
 
 Scope: only `DashboardViewCard`. `BrowserCard`, `AgentCard`, `NoteCard`, `ElementCard`, and
 the Workflows cards are untouched.
@@ -22,12 +25,15 @@ the Workflows cards are untouched.
     React/DOM tree, inside the canvas' pan/zoom-transformed content layer. Reparenting was
     the first design (see "Rejected: portal" below) and was rejected once review + research
     confirmed it reloads the live app.
-  - Instead, the card computes a canvas-space rect and an inverse `scale(1 / zoom)` on its
-    own root box such that, after the ambient canvas transform (`translate(panX, panY)
-    scale(zoom)`, `transformOrigin: '0 0'`, applied by the canvas content layer) is applied,
-    the card visually fills the screen from `(0, 38)` (38px = AppShell's `TITLEBAR_HEIGHT`)
-    to `(window.innerWidth, window.innerHeight)`, with its contents rendered at native
-    (unscaled) size. Recomputed on window resize and whenever `panX`/`panY`/`zoom` change.
+  - Instead, the card measures the canvas **viewport** element's own
+    `getBoundingClientRect()` (the element that already accounts for the sidebar width,
+    insets, and any visible banners — everything the OS-window-relative first attempt got
+    wrong, see "Rejected: window-relative sizing" below) and computes a canvas-space rect
+    plus an inverse `scale(1 / zoom)` on its own root box such that, after the ambient canvas
+    transform (`translate(panX, panY) scale(zoom)`, `transformOrigin: '0 0'`, applied by the
+    canvas content layer) is applied, the card visually fills that viewport rect exactly,
+    with its contents rendered at native (unscaled) size. Recomputed on window resize and
+    whenever `panX`/`panY`/`zoom` change.
   - The floating `DashboardHeader` overlay (rendered above the canvas viewport by
     `DashboardCanvas`) is hidden while any card is fullscreen, so it can't visually cover the
     top of the fullscreen card.
@@ -55,6 +61,20 @@ unconditionally re-navigates it. Both paths would defeat the feature's purpose, 
 approach was dropped in favor of the inverse-transform approach above, which never moves the
 node.
 
+### Rejected: window-relative sizing
+
+A second attempt kept the card in place (no portal) but sized it against
+`window.innerWidth`/`window.innerHeight` with a hardcoded 38px titlebar offset. Review found
+this wrong: the canvas' actual containing chain (`AppShell`) includes a resizable sidebar
+(0–400px, in normal flow), a 6px inset margin, a 14px border radius, optional warning/update
+banners in normal flow above the content area, and three ancestors with `overflow: hidden`
+(the content panel, the canvas root, and the canvas viewport) — none of which a
+window-relative calculation accounts for or can escape without reintroducing the
+portal/reparent problem. The card would render offset and clipped whenever the sidebar was
+open or a banner was visible. Replaced with the viewport-rect approach above, which measures
+the actual space already reserved for dashboard content instead of assuming it starts at the
+window's edges.
+
 ## Hiding the nav island
 
 `DynamicIsland` renders inside `AppShell`'s persistent titlebar row, outside the routed
@@ -74,11 +94,17 @@ shared state:
 ## Files touched
 
 - `frontend/src/app/pages/Dashboard/cards/DashboardViewCard.tsx` — fullscreen state,
-  inverse-transform sizing, toolbar button, Escape handler.
+  inverse-transform sizing against the measured viewport rect, toolbar button, Escape
+  handler.
+- `frontend/src/app/pages/Dashboard/hooks/state/useDashboardController.ts` — new
+  `getViewportRect` callback, mirroring the existing `getCanvasState` pattern.
+- `frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx` — thread `getViewportRect`
+  through to `DashboardCardLayer`; hide the floating `DashboardHeader` overlay while any card
+  is fullscreen.
+- `frontend/src/app/pages/Dashboard/canvas/DashboardCardLayer.tsx` — thread
+  `getViewportRect` through to `DashboardViewCard`.
 - `frontend/src/shared/state/tempStateSlice.ts` — new field + actions.
 - `frontend/src/app/components/Layout/AppShell.tsx` — conditionally render `DynamicIsland`.
-- `frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx` — hide the floating
-  `DashboardHeader` overlay while any card is fullscreen.
 - `frontend/src/shared/i18n/en.json`, `pt-BR.json` — new tooltip strings
   (`dashboard.viewCard.enterFullscreen`, `dashboard.viewCard.exitFullscreen`).
 

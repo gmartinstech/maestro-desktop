@@ -4,7 +4,7 @@
 
 **Goal:** Add a fullscreen toggle to app windows (`DashboardViewCard`) on the Dashboard canvas that fills the window's content area and hides the top nav island while active.
 
-**Architecture:** A local `isFullscreen` boolean in `DashboardViewCard` controls sizing only — the card's DOM node is never reparented (an earlier portal-based design was rejected: reparenting a live `<webview>`/`<iframe>` reloads it). Instead, while fullscreen, the card computes a canvas-space rect and an inverse `scale(1/zoom)` so the ambient canvas pan/zoom transform lands it exactly over the window content area. A new `fullscreenCardId` field in the existing `tempStateSlice` (Redux), scoped so only the owning card can clear it, signals `AppShell` to hide `DynamicIsland` and `DashboardCanvas` to hide its floating header while any card is fullscreen. Escape key and a toolbar button both exit.
+**Architecture:** A local `isFullscreen` boolean in `DashboardViewCard` controls sizing only — the card's DOM node is never reparented (an earlier portal-based design was rejected: reparenting a live `<webview>`/`<iframe>` reloads it). While fullscreen, the card measures the canvas viewport element's own `getBoundingClientRect()` (threaded down via a new `getViewportRect` callback, mirroring the existing `getCanvasState` pattern) and computes a canvas-space rect plus an inverse `scale(1/zoom)` so the ambient canvas pan/zoom transform lands it exactly over that viewport's own layout area — not the OS window, which is unreachable from inside the canvas' nested, inset, `overflow: hidden`, sidebar-adjacent containers without reintroducing the reparenting problem. A new `fullscreenCardId` field in the existing `tempStateSlice` (Redux), scoped so only the owning card can clear it, signals `AppShell` to hide `DynamicIsland` and `DashboardCanvas` to hide its floating header while any card is fullscreen. Escape key and a toolbar button both exit.
 
 **Tech Stack:** React 18, MUI (`Box`, `IconButton`, `Tooltip`), Redux Toolkit (`tempStateSlice`), Vitest for the reducer test.
 
@@ -413,57 +413,85 @@ git commit -m "feat(dashboard): wire fullscreen toggle button into app card tool
 
 ---
 
-### Task 5: Size the card to fill the window when fullscreen, without reparenting it
+### Task 5 (revision 2): Size the card to fill the canvas viewport when fullscreen, without reparenting it
 
-**Superseded design note:** an earlier version of this task portaled the card into
-`document.body` with `position: fixed`. Code review plus research into
-`electron/electron#9529` (and related issues) established that moving a `<webview>`'s DOM
-node to a new parent tears down and reloads its guest page, even via a non-destructive React
-portal — the browser-process guestview attachment is driven by the custom element's native
-DOM connect/disconnect lifecycle, not by React's reconciliation. The `<iframe>` path (srcdoc
-apps) has the same failure by the HTML spec: moving an iframe always re-navigates it. Both
-would silently reload the user's live app every time they toggle fullscreen. This replacement
-task keeps the card's DOM node exactly where it already is — inside the canvas' zoomed/panned
-content layer — and instead counter-transforms it so it visually fills the screen.
-
-If a prior run of this plan already applied the portal version (commit message "feat(dashboard): portal app card fullscreen over the whole window"), first revert its content changes in `DashboardViewCard.tsx` back to pre-portal (position/left/top/width/height/zIndex all unconditional, single `return (<Box ...>...</Box>);` with no `cardTree` variable and no `createPortal(...)` call) before applying this task — do not layer this task on top of the reverted-away code. Do NOT `git revert` the commit (that would also revert the fullscreen-state groundwork in later diffs if any landed on top); instead hand-edit the file back to the pre-portal shape for just the `sx` block and the return statement, matching the "before" snippets shown in Step 2 and Step 3 below.
+**Design history:** revision 1 portaled the card into `document.body` with `position:
+fixed`, which reloads a live `<webview>`/`<iframe>` on reparent (see the design spec's
+"Rejected: portal-based fullscreen" section). Revision 1.5 kept the card in place but sized
+it against `window.innerWidth/innerHeight`, which turned out wrong too: the card's actual
+containing chain (`AppShell.tsx`) includes a resizable sidebar (0–400px, in normal flow), a
+6px inset margin, a 14px border radius, up to two banners in normal flow above the content
+area, and **three ancestors with `overflow: hidden`** (`AppShell.tsx:1100`,
+`DashboardCanvas.tsx:168` and `:212`) — none of which a window-relative calculation accounts
+for, and none of which are escapable without reintroducing the portal/reparent problem. This
+revision (2) sizes the card against the canvas **viewport element's own
+`getBoundingClientRect()`** instead of the window, so it fills exactly the space already
+reserved for dashboard content — inside the app's chrome, not past it. This is the direct
+replacement for the whole of the old Task 5; if a prior run applied either earlier revision,
+this task's diffs supersede those changes (see "If resuming" below).
 
 **Files:**
+- Modify: `frontend/src/app/pages/Dashboard/hooks/state/useDashboardController.ts`
+- Modify: `frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx`
+- Modify: `frontend/src/app/pages/Dashboard/canvas/DashboardCardLayer.tsx`
 - Modify: `frontend/src/app/pages/Dashboard/cards/DashboardViewCard.tsx`
+
+**If resuming:** check `git log --oneline -- frontend/src/app/pages/Dashboard/cards/DashboardViewCard.tsx` for a commit titled "feat(dashboard): size app card to fill window on fullscreen via inverse zoom transform" (revision 1.5) or "feat(dashboard): portal app card fullscreen over the whole window" (revision 1). If either exists, read the current file state and reconcile it to the target state shown in this task's steps — the constants/state this task introduces (`getViewportRect`, `fsLeft`/`fsTop`/`fsWidth`/`fsHeight`) replace `viewportSize`/`window.innerWidth`/`window.innerHeight`-based ones from revision 1.5 entirely; there should be no `viewportSize` state and no `window.addEventListener('resize', ...)` left after this task (window resize is superseded by measuring the viewport element directly, which naturally reflects any layout change on the next render triggered by pan/zoom/selection state — see Step 2's `ResizeObserver` for why an explicit resize listener is still needed, just on the right element).
 
 ### Background: the math
 
-The canvas' content layer (`frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx`)
-wraps all cards in a `<div>` with `transform: translate(panX, panY) scale(zoom)` and
-`transformOrigin: '0 0'`. For a point at canvas-space coordinate `(x, y)` inside that div, its
-on-screen position is `(panX + x * zoom, panY + y * zoom)`.
+The canvas' content layer (`DashboardCanvas.tsx`) wraps all cards in a `<div ref={canvas.contentRef}>` with `transform: translate(panX, panY) scale(zoom)` and `transformOrigin: '0 0'`. That div is a descendant of the canvas **viewport** element (`<Box ref={canvas.viewportRef} sx={{ position: 'absolute', inset: 0, overflow: 'hidden', ... }}>`), which is the actual space reserved for dashboard content — sized by ordinary CSS layout (flex/inset), not by the pan/zoom transform.
 
-`DashboardViewCard` already receives `zoom`, `panX`, `panY` as props (used elsewhere for drag
-math). To make the card visually occupy the screen rect from `(0, TOP)` to
-`(window.innerWidth, window.innerHeight)` (where `TOP = 38`, matching AppShell's
-`TITLEBAR_HEIGHT`) while staying inside that transformed div:
+For a point at canvas-space coordinate `(x, y)` inside the transformed div, its position relative to the viewport element's own top-left corner is `(panX + x * zoom, panY + y * zoom)` (the transform's `translate`/`scale` apply relative to the content div's own containing block, which is the viewport). To make the card visually occupy the FULL viewport element — from its own `(0, 0)` to `(viewportRect.width, viewportRect.height)` — while staying inside the transformed div:
 
-- `fsLeft = -panX / zoom` (canvas-space left, so `panX + fsLeft * zoom = 0`)
-- `fsTop = (TOP - panY) / zoom` (so `panY + fsTop * zoom = TOP`)
-- `fsWidth = window.innerWidth * zoom` (canvas-space width — see below for why this is
-  pre-multiplied by `zoom` rather than divided)
-- `fsHeight = (window.innerHeight - TOP) * zoom`
+- `fsLeft = -panX / zoom`
+- `fsTop = -panY / zoom`
+- `fsWidth = viewportRect.width` (canvas units — see Task 5 revision 1.5's background section, still accurate: the card's own inverse `scale(1/zoom)` cancels the ambient `zoom`, so declared width/height equal the desired on-screen size directly, no extra multiplication)
+- `fsHeight = viewportRect.height`
 
-The card itself will also carry `transform: scale(1 / zoom)` (see Step 2) so its own contents
-(text, buttons, the webview/iframe) render at native size instead of visually shrunk or
-enlarged by the ambient canvas zoom. CSS transforms on nested elements compose
-multiplicatively as painted: the ambient transform scales the card's box by `zoom`, then the
-card's own `scale(1/zoom)` scales its rendered content by `1/zoom`, and `zoom * (1/zoom) = 1`.
-Layout size (what `width`/`height` declare) is unaffected by either `transform` — only paint
-is. So the box's *declared* `width`/`height` should equal the desired on-screen size directly,
-with no extra multiplication by `zoom`: `fsWidth = window.innerWidth`,
-`fsHeight = window.innerHeight - TOP` (both already in canvas units, since a `transform` never
-changes what value `width`/`height` need to be for a given rendered size once the two scale
-factors cancel). Verify this holds empirically in Step 6 rather than trusting the algebra
-alone — check the rendered `getBoundingClientRect()` of the fullscreen card matches the
-window's inner size regardless of what zoom level was active when fullscreen was entered.
+No `TITLEBAR_HEIGHT`/`38` constant is needed in this revision — the viewport element's rect already starts below all the app chrome (titlebar, sidebar row, banners), since `viewportRef` is already positioned in the layout that accounts for all of that.
 
-- [ ] **Step 1: Compute fullscreen-aware position/size/scale constants**
+- [ ] **Step 1: Expose a `getViewportRect` getter from the dashboard controller**
+
+Open `frontend/src/app/pages/Dashboard/hooks/state/useDashboardController.ts`. Find:
+
+```typescript
+  const canvasStateRef = useRef({ panX: canvas.panX, panY: canvas.panY, zoom: canvas.zoom });
+  canvasStateRef.current = { panX: canvas.panX, panY: canvas.panY, zoom: canvas.zoom };
+  // Stable getter, AgentCards read pan/zoom on demand during drag math.
+  const getCanvasState = useCallback(() => canvasStateRef.current, []);
+```
+
+Add immediately after it:
+
+```typescript
+  // Stable getter so a fullscreen card can size itself against the canvas viewport's real layout rect (sidebar width, insets, banners already resolved) instead of the OS window.
+  const getViewportRect = useCallback(() => canvas.viewportRef.current?.getBoundingClientRect() ?? null, [canvas.viewportRef]);
+```
+
+Find where `getCanvasState` is included in this hook's returned object (search for `getCanvasState,` inside a `return { ... }` block near the end of the file) and add `getViewportRect,` alongside it in the same object.
+
+- [ ] **Step 2: Thread `getViewportRect` through `DashboardCanvas` to `DashboardCardLayer`**
+
+In `frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx`, find the `DashboardCanvasProps` interface's `getCanvasState` field:
+
+```typescript
+  getCanvasState: () => { panX: number; panY: number; zoom: number };
+```
+
+Add immediately after it:
+
+```typescript
+  getViewportRect: () => DOMRect | null;
+```
+
+Find where `getCanvasState` is destructured from props (in the component's parameter list) and add `getViewportRect,` alongside it. Find where `getCanvasState={getCanvasState}` is passed to `<DashboardCardLayer ... />` and add `getViewportRect={getViewportRect}` alongside it.
+
+In `frontend/src/app/pages/Dashboard/canvas/DashboardCardLayer.tsx`, make the same three changes: add `getViewportRect: () => DOMRect | null;` to `DashboardCardLayerProps` next to the existing `getCanvasState` field, destructure `getViewportRect` from props next to `getCanvasState`, and pass `getViewportRect={getViewportRect}` to the `<DashboardViewCard ... />` element (search for `<DashboardViewCard` — it currently does NOT receive `getCanvasState` either; add both as new props to this one call site, since `ElementCard` is the only current consumer of `getCanvasState` and `DashboardViewCard` needs its own).
+
+- [ ] **Step 3: Consume `getViewportRect` in `DashboardViewCard` and recompute on layout changes**
+
+In `frontend/src/app/pages/Dashboard/cards/DashboardViewCard.tsx`, add `getViewportRect: () => DOMRect | null;` to the component's `Props` interface (near the other function-typed props like `onCardSelect`), and destructure `getViewportRect` from the component's props (in its parameter list, alongside `output`, `cardKey: cardKeyProp`, etc.).
 
 Find the existing computed layout block (search for `const noTransition =`):
 
@@ -487,42 +515,26 @@ Replace with:
   const displayW = localResize?.w ?? cardWidth;
   const displayH = localResize?.h ?? cardHeight;
   const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
-  // Matches AppShell's TITLEBAR_HEIGHT (frontend/src/app/components/Layout/AppShell.tsx) so fullscreen starts right below the OS titlebar row.
-  const FULLSCREEN_TOP_OFFSET = 38;
   const FULLSCREEN_Z_INDEX = 999998;
-  // Window size, recomputed on resize below. Kept in state (not read live in sx) so the card re-renders when the OS window is resized while fullscreen.
-  const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+  // Viewport's own layout rect (sidebar width, insets, banners already resolved by CSS) — re-measured on mount-while-fullscreen and on window resize, since the viewport's on-screen size can change independent of any React re-render this component would otherwise get.
+  const [viewportRect, setViewportRect] = useState<DOMRect | null>(null);
   useEffect(() => {
     if (!isFullscreen) return;
-    const onResize = () => setViewportSize({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [isFullscreen]);
-  // Card stays in the canvas' zoomed/panned tree (never reparented — reparenting a live <webview>/<iframe> reloads it). Instead it's sized in canvas-space so the ambient transform (translate(panX,panY) scale(zoom)) lands it exactly over the window, then its own inverse scale(1/zoom) undoes the zoom for its own content.
-  const fsLeft = -panX / zoom;
-  const fsTop = (FULLSCREEN_TOP_OFFSET - panY) / zoom;
-  const fsWidth = viewportSize.w;
-  const fsHeight = viewportSize.h - FULLSCREEN_TOP_OFFSET;
+    const measure = () => setViewportRect(getViewportRect());
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [isFullscreen, getViewportRect]);
+  // Card stays in the canvas' zoomed/panned tree (never reparented — reparenting a live <webview>/<iframe> reloads it). Sized in canvas-space so the ambient transform (translate(panX,panY) scale(zoom)) lands it exactly over the viewport element's own rect, then its own inverse scale(1/zoom) undoes the zoom for its own content. Falls back to the card's normal display rect if the viewport hasn't been measured yet (first fullscreen frame).
+  const fsLeft = viewportRect ? -panX / zoom : displayX;
+  const fsTop = viewportRect ? -panY / zoom : displayY;
+  const fsWidth = viewportRect ? viewportRect.width : displayW;
+  const fsHeight = viewportRect ? viewportRect.height : displayH;
 ```
 
-- [ ] **Step 2: Branch the root `Box`'s positioning `sx`**
+- [ ] **Step 4: Branch the root `Box`'s positioning `sx`**
 
-Find the root `Box`'s `sx` prop. The current `sx` starts:
-
-```typescript
-      sx={{
-        position: 'absolute',
-        // contain + willChange: own compositor layer so paint stays scoped (see AgentCard for full rationale).
-        contain: 'layout style',
-        willChange: 'transform',
-        left: displayX,
-        top: displayY,
-        width: displayW,
-        height: displayH,
-        borderRadius: `${c.radius.lg}px`,
-```
-
-Replace those specific lines (`position` through `borderRadius`) with:
+Find the root `Box`'s `sx` prop. If a prior revision's changes are present (`isFullscreen ? fsLeft : displayX` etc. already exist, possibly referencing a now-removed `FULLSCREEN_TOP_OFFSET`), reconcile to exactly this shape — the field names (`fsLeft`/`fsTop`/`fsWidth`/`fsHeight`) are unchanged from revision 1.5, only their computation (Step 3 above) changed, so this `sx` block should already match or need only the `FULLSCREEN_TOP_OFFSET` reference removed if it lingered. The target `sx` (from a clean pre-fullscreen baseline) is:
 
 ```typescript
       sx={{
@@ -540,68 +552,38 @@ Replace those specific lines (`position` through `borderRadius`) with:
         borderRadius: isFullscreen ? 0 : `${c.radius.lg}px`,
 ```
 
-Leave the rest of the `sx` object (border, bgcolor, boxShadow, overflow, display,
-flexDirection, transition, hover rules, highlight animation) unchanged, except the `zIndex`
-line. Find:
-
-```typescript
-        zIndex: (isDragging || isResizing) ? 999999 : cardZOrder,
-```
-
-Replace with:
+Leave the rest of the `sx` object (border, bgcolor, boxShadow, overflow, display, flexDirection, transition, hover rules, highlight animation) unchanged, except `zIndex`:
 
 ```typescript
         zIndex: isFullscreen ? FULLSCREEN_Z_INDEX : (isDragging || isResizing) ? 999999 : cardZOrder,
 ```
 
-(`999999` is still used elsewhere in this same `sx` object for the drag/resize case, so
-`FULLSCREEN_Z_INDEX = 999998` intentionally sits just under it — fullscreen and
-drag/resize-in-progress can't both be true for the same card at once in practice, since drag
-is disabled while fullscreen, but keeping fullscreen slightly below that value avoids the two
-constants colliding if that ever changes.)
+- [ ] **Step 5: Confirm no `createPortal`, no `cardTree` split, single return statement**
 
-- [ ] **Step 3: Confirm the return statement is unchanged (no portal, no `cardTree` split)**
+The component must have exactly one `return (<Box ...> ... </Box>);` for its main JSX. If any prior revision left a `cardTree` variable or a `createPortal(...)` call for the fullscreen path, remove it, collapsing back to a single unconditional return. The unrelated, pre-existing `createPortal` usage for the reload-menu popover elsewhere in this file must remain untouched.
 
-The component should still have exactly one `return (<Box ...> ... </Box>);` — the same
-shape it had before Task 5 was ever attempted. If a previous attempt introduced `const
-cardTree = (...)` and `return isFullscreen ? createPortal(cardTree, document.body) :
-cardTree;`, revert that back to a single unconditional `return (<Box ...>...</Box>);` as part
-of this task (see the superseded-design note above this task).
-
-- [ ] **Step 4: `createPortal` import**
-
-This task does not use `createPortal` for the fullscreen path. `createPortal` may still be
-imported and used elsewhere in this file for the unrelated reload-menu popover — leave that
-usage and its import alone; do not remove it.
-
-- [ ] **Step 5: Typecheck**
+- [ ] **Step 6: Typecheck**
 
 Run: `cd frontend && npx tsc --noEmit`
-Expected: no new errors.
+Expected: no new errors. Pay attention to `useDashboardController.ts`'s return type/interface if one is explicitly declared (vs. inferred) — `getViewportRect` needs to be included there too if so; search for how `getCanvasState`'s type is threaded and mirror it exactly.
 
-- [ ] **Step 6: Manual math sanity check**
+- [ ] **Step 7: Manual math sanity check**
 
-This step exists because the sizing math above is easy to get subtly wrong (double-applying
-`zoom`). After implementing, temporarily run the dev app (see `docs/HANDOFF.md`), open a
-dashboard with an app card at a non-1.0 zoom level (zoom in or out on the canvas first), then
-toggle that card's fullscreen button. In the browser/Electron devtools console, run:
+If you can run the dev app (see `docs/HANDOFF.md`), open a dashboard with an app card, zoom the canvas to something other than 100%, toggle fullscreen, and in devtools:
 
 ```js
-document.querySelector('[data-select-type="view-card"]').getBoundingClientRect()
+const card = document.querySelector('[data-select-type="view-card"]').getBoundingClientRect();
+const viewport = document.querySelector('[data-select-type="view-card"]').closest('[style*="overflow"]')?.getBoundingClientRect();
+console.log(card, viewport);
 ```
 
-Expected: `x` ≈ 0, `y` ≈ 38, `width` ≈ `window.innerWidth`, `height` ≈
-`window.innerHeight - 38`, regardless of what the canvas zoom level was when you entered
-fullscreen. If the numbers are off by a factor matching the zoom level (e.g. width is `zoom`
-times too large or too small), the `fsWidth`/`fsHeight`/`transform: scale(...)` combination
-has a sign or multiplication error — re-derive from the "Background: the math" section above
-rather than guessing.
+Expected: `card.x/y/width/height` closely match the viewport's own rect (not `window.innerWidth`/`innerHeight`). If you cannot stand up a live app card in this environment, skip this and note it — Task 7 covers manual smoke testing.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add frontend/src/app/pages/Dashboard/cards/DashboardViewCard.tsx
-git commit -m "feat(dashboard): size app card to fill window on fullscreen via inverse zoom transform"
+git add frontend/src/app/pages/Dashboard/hooks/state/useDashboardController.ts frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx frontend/src/app/pages/Dashboard/canvas/DashboardCardLayer.tsx frontend/src/app/pages/Dashboard/cards/DashboardViewCard.tsx
+git commit -m "feat(dashboard): size app card to fill the canvas viewport on fullscreen"
 ```
 
 ---
@@ -611,8 +593,8 @@ git commit -m "feat(dashboard): size app card to fill window on fullscreen via i
 **Context:** `DashboardCanvas.tsx` renders a floating `DashboardHeader` overlay positioned
 above the canvas viewport (`position: absolute, top: 0, zIndex: 10`). Since the fullscreen
 card (Task 5) stays inside the canvas viewport rather than escaping to `document.body`, this
-floating header would otherwise paint over the top ~38-48px of the fullscreen card. Hide it
-whenever any card is fullscreen, using the same `fullscreenCardId` Redux flag from Task 1/2.
+floating header would otherwise paint over the top of the fullscreen card. Hide it whenever
+any card is fullscreen, using the same `fullscreenCardId` Redux flag from Task 1/2.
 
 **Files:**
 - Modify: `frontend/src/app/pages/Dashboard/canvas/DashboardCanvas.tsx`
@@ -621,7 +603,7 @@ whenever any card is fullscreen, using the same `fullscreenCardId` Redux flag fr
 
 `DashboardCanvas.tsx` is currently a pure presentational component (all props, no direct
 `useAppSelector` calls) — this is a deliberate, minimal exception to that pattern since
-threading one boolean through `useDashboardController` (`frontend/src/app/pages/Dashboard/hooks/state/useDashboardController.ts`) and every intermediate prop would be
+threading one boolean through `useDashboardController` and every intermediate prop would be
 disproportionate for a single visibility flag. Add near the top of the component body (find
 where the component's props are destructured, e.g. a line starting `}) => {`):
 
@@ -790,7 +772,7 @@ git commit -m "fix: address issues found in fullscreen smoke test"
 
 ## Self-Review Notes
 
-- **Spec coverage:** toolbar button ✓ (Task 4), fullscreen sizing covering window content area without reparenting ✓ (Task 5), floating dashboard header hidden ✓ (Task 5b), nav island hidden via Redux flag ✓ (Tasks 1-2), Escape + button exit ✓ (Task 3 Step 4, Task 4 Step 4), no persistence to dashboard layout ✓ (plain `useState`, Task 3 Step 3), drag/resize disabled while fullscreen ✓ (Task 4 Steps 1-2), i18n strings ✓ (Task 6), webview/iframe not remounted ✓ (Task 5 never reparents the DOM node — sizing/scale only).
-- **Type consistency:** `setFullscreenCardId`/`clearFullscreenCardId` names match between Task 1 (slice) and Task 3 (usage), with `clearFullscreenCardId` scoped to take the owning card's id (fixed post-Task-3-review to avoid one card's cleanup clobbering another's active fullscreen slot). `isFullscreen`/`handleToggleFullscreen` names match between Tasks 3, 4, and 5. Task 5's `viewportSize`/`fsLeft`/`fsTop`/`fsWidth`/`fsHeight` are local to `DashboardViewCard` and don't leak into other tasks' code.
-- **Design revision:** Task 5 was rewritten mid-execution after code review + research showed the original `createPortal` design would reload the app inside the card on every fullscreen toggle (see the design spec's "Rejected: portal-based fullscreen" section and Task 5's superseded-design note). Task 5b was added to address a consequence of keeping the card in the canvas tree (the floating header would otherwise cover it).
+- **Spec coverage:** toolbar button ✓ (Task 4), fullscreen sizing covering the canvas viewport area without reparenting ✓ (Task 5 revision 2), floating dashboard header hidden ✓ (Task 5b), nav island hidden via Redux flag ✓ (Tasks 1-2), Escape + button exit ✓ (Task 3 Step 4, Task 4 Step 4), no persistence to dashboard layout ✓ (plain `useState`, Task 3 Step 3), drag/resize disabled while fullscreen ✓ (Task 4 Steps 1-2), i18n strings ✓ (Task 6), webview/iframe not remounted ✓ (Task 5 never reparents the DOM node — sizing/scale only).
+- **Type consistency:** `setFullscreenCardId`/`clearFullscreenCardId` names match between Task 1 (slice) and Task 3 (usage), with `clearFullscreenCardId` scoped to take the owning card's id (fixed post-Task-3-review to avoid one card's cleanup clobbering another's active fullscreen slot). `isFullscreen`/`handleToggleFullscreen` names match between Tasks 3, 4, and 5. Task 5's `getViewportRect`/`viewportRect`/`fsLeft`/`fsTop`/`fsWidth`/`fsHeight` follow the existing `getCanvasState` threading pattern (`useDashboardController` → `DashboardCanvas` → `DashboardCardLayer` → the card) rather than introducing a new one.
+- **Design revision history:** Task 5 went through two rewrites during execution. Revision 1 (`createPortal` into `document.body`) was rejected after code review + research showed reparenting a live `<webview>`/`<iframe>` reloads it (see the design spec's "Rejected: portal-based fullscreen" section). Revision 1.5 (window-relative sizing, no reparent) was itself rejected after a second review pass found the card's actual containing chain — a resizable sidebar, insets, banners, and three `overflow: hidden` ancestors — makes window-relative math wrong and clips the result regardless. Revision 2 (this plan's current Task 5) sizes against the canvas viewport element's own measured rect instead, which is reachable without reparenting and isn't clipped since it fills exactly the space the viewport already occupies. Task 5b was added to address a consequence of keeping the card in the canvas tree (the floating header would otherwise cover it).
 - **Out of scope confirmed:** no changes to `BrowserCard`, `AgentCard`, `NoteCard`, or OS-level Fullscreen API, per the approved spec.
