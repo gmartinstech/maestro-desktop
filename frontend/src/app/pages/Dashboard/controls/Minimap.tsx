@@ -153,7 +153,7 @@ const Minimap: React.FC<MinimapProps> = ({
       case 'browser': return c.status.success;
       case 'workflow': return c.status.warning;
       case 'workflows-hub': return c.status.warning;
-      case 'element': return c.status.error;
+      case 'element': return c.brand.gold;
     }
   };
 

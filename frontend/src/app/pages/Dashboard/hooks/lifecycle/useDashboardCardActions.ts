@@ -16,6 +16,8 @@ import {
   DEFAULT_BROWSER_CARD_H,
   DEFAULT_NOTE_W,
   DEFAULT_NOTE_H,
+  DEFAULT_ELEMENT_W,
+  DEFAULT_ELEMENT_H,
   EXPANDED_CARD_MIN_H,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { CardType, useDashboardSelection } from '../state/useDashboardSelection';
@@ -96,8 +98,19 @@ export function useDashboardCardActions({
   }, [dispatch, expandedSessionIds, getSpawnPlacement, canvasActions, handleHighlightCard]);
 
   const handleAddElement = useCallback(() => {
-    dispatch(addElement({ kind: 'image', title: 'Untitled', expandedSessionIds }));
-  }, [dispatch, expandedSessionIds]);
+    const prevIds = new Set(Object.keys(store.getState().dashboardLayout.elements));
+    const pos = getSpawnPlacement(DEFAULT_ELEMENT_W, DEFAULT_ELEMENT_H);
+    dispatch(addElement({ kind: 'image', title: 'Untitled', expandedSessionIds, x: pos.x, y: pos.y }));
+    setTimeout(() => {
+      const allElements = store.getState().dashboardLayout.elements;
+      const newId = Object.keys(allElements).find((id) => !prevIds.has(id));
+      if (newId) {
+        const el = allElements[newId];
+        canvasActions.fitToCards([{ x: el.x, y: el.y, width: el.width, height: el.height }], 1.15, true, undefined, true);
+        handleHighlightCard(newId);
+      }
+    }, 200);
+  }, [dispatch, expandedSessionIds, getSpawnPlacement, canvasActions, handleHighlightCard]);
 
   // Auto-clear pendingFocusNoteId after the note has had a chance to mount + autofocus.
   useEffect(() => {

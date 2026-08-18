@@ -93,7 +93,7 @@ describe('elements collection', () => {
 });
 
 import reducerEl, {
-  addElement, setElementPosition, setElementSize, removeElement, bringToFront, addNote as addNoteEl,
+  addElement, setElementPosition, setElementSize, removeElement, bringToFront, addNote as addNoteEl, moveCards,
 } from '@/shared/state/dashboardLayoutSlice';
 
 describe('element reducers', () => {
@@ -156,5 +156,13 @@ describe('element reducers', () => {
     const s2 = reducerEl(s1, bringToFront({ id: noteId, type: 'note' }));
     const s3 = reducerEl(s2, bringToFront({ id: elId, type: 'element' }));
     expect(s3.elements[elId].zOrder).toBeGreaterThan(s3.notes[noteId].zOrder);
+  });
+
+  it('moveCards commits a delta to an element in a multi-drag selection', () => {
+    const s0 = reducerEl(undefined, addElement({ kind: 'image', title: 'A', expandedSessionIds: [] }));
+    const el = Object.values(s0.elements)[0];
+    const s1 = reducerEl(s0, moveCards({ items: [{ id: el.element_id, type: 'element' }], dx: 15, dy: -7 }));
+    expect(s1.elements[el.element_id].x).toBe(el.x + 15);
+    expect(s1.elements[el.element_id].y).toBe(el.y - 7);
   });
 });

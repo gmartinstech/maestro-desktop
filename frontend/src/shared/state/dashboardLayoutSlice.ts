@@ -1397,6 +1397,12 @@ const dashboardLayoutSlice = createSlice({
             state.workflowsHub.x += dx;
             state.workflowsHub.y += dy;
           }
+        } else if (item.type === 'element') {
+          const el = state.elements[item.id];
+          if (el) {
+            el.x += dx;
+            el.y += dy;
+          }
         } else {
           const card = state.browserCards[item.id];
           if (card) {
@@ -1669,6 +1675,7 @@ const dashboardLayoutSlice = createSlice({
       state.nextZOrder = 1;
       state.initialized = false;
       state.pendingFocusNoteId = null;
+      state.pendingFocusElementId = null;
       state.suspendedBrowserCards = keptSuspended;
       state.endingBrowserCards = {};
       state.pendingFocusWorkflowId = null;

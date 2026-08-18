@@ -2,7 +2,7 @@ import { useEffect, type Dispatch, type SetStateAction } from 'react';
 import { report } from '@/shared/serviceClient';
 import { useAppDispatch } from '@/shared/hooks';
 import { closeSession, toggleExpandSession } from '@/shared/state/agentsSlice';
-import { removeNote, removeWorkflowCard, closeWorkflowsHub, recordClosedCard, reopenLastClosed } from '@/shared/state/dashboardLayoutSlice';
+import { removeNote, removeWorkflowCard, closeWorkflowsHub, recordClosedCard, reopenLastClosed, removeElement } from '@/shared/state/dashboardLayoutSlice';
 import { closeWorkflowCard } from '@/shared/state/workflowsSlice';
 import { removeBrowserCardCleanly } from '@/shared/browserTeardown';
 import { removeViewCardCleanly } from '@/shared/viewTeardown';
@@ -95,6 +95,9 @@ export function useDashboardShortcuts({
           dispatch(closeWorkflowCard(id));
         } else if (type === 'workflows-hub') {
           dispatch(closeWorkflowsHub());
+        } else if (type === 'element') {
+          dispatch(recordClosedCard({ kind: 'element', id }));
+          dispatch(removeElement({ elementId: id }));
         }
       }
       // Tear view cards down ONE AT A TIME (each quiesces its GPU surface first); ripping several large app webviews out in one frame is what piles up "non-existent mailbox" errors and kills the GPU process.
