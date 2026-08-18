@@ -4,9 +4,13 @@ category: Templates
 
 # DashboardScreen
 
-Reference layout for an overview route: KPI row over a recent-activity table, inside the full desktop frame. Copy it as a starting point rather than importing it into the app.
+The app's real home screen: a pan/zoom canvas holding `AgentCard`, `BrowserCard`, `ViewCard`
+and `NoteCard` over a dotted grid, framed by the desktop shell — not a KPI/stats page. This is
+a reference layout to copy from; edit the individual canvas card components (in the Canvas
+group) for the pieces you actually want to change. `empty` swaps the cards for the app's real
+first-run state (`CanvasEmptyState`).
 
 ```tsx
 <DashboardScreen />
-<DashboardScreen title="Analytics" stats={myStats} runs={myRuns} activeNav="analytics" />
+<DashboardScreen dashboardName="New dashboard" empty />
 ```

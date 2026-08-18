@@ -1,104 +1,36 @@
-import type { ReactNode } from 'react';
 import { AppShell } from './AppShell';
 import { TitleBar } from './TitleBar';
 import { Sidebar, SidebarItem, SidebarSection } from './Sidebar';
-import { PageHeader } from './PageHeader';
 import { MaestroLogo } from './MaestroLogo';
-import { StatCard } from './StatCard';
-import { Card } from './Card';
-import { Grid, Stack } from './Stack';
-import { Button } from './Button';
 import { IconButton } from './IconButton';
-import { Badge } from './Badge';
 import { Icon } from './Icon';
-import { Table, type TableColumn } from './Table';
-
-export interface DashboardStat {
-  label: string;
-  value: string;
-  delta?: string;
-  trend?: 'up' | 'down' | 'flat';
-}
-
-export interface DashboardRun {
-  agent: string;
-  workflow: string;
-  status: 'running' | 'done' | 'failed';
-  duration: string;
-}
+import { CanvasDock, CanvasZoomControls } from './canvas/CanvasDock';
+import { CanvasEmptyState } from './canvas/CanvasEmptyState';
+import { AgentCard } from './canvas/AgentCard';
+import { BrowserCard } from './canvas/BrowserCard';
+import { NoteCard } from './canvas/NoteCard';
 
 export interface DashboardScreenProps {
-  title?: string;
-  subtitle?: string;
-  /** The KPI row. Four reads best; more wrap awkwardly. */
-  stats?: DashboardStat[];
-  /** Recent activity table. */
-  runs?: DashboardRun[];
-  /** Which nav row is lit. */
-  activeNav?: string;
+  dashboardName?: string;
   platform?: 'win' | 'mac';
-  /** Extra content dropped under the activity table. */
-  children?: ReactNode;
+  zoom?: number;
+  /** Renders the canvas empty state (the app's real first-run screen) instead of cards. */
+  empty?: boolean;
 }
 
-const DEFAULT_STATS: DashboardStat[] = [
-  { label: 'Active agents', value: '7', delta: '+2 today', trend: 'up' },
-  { label: 'Runs (24h)', value: '184', delta: '+12.4%', trend: 'up' },
-  { label: 'Avg duration', value: '48s', delta: '-6.1%', trend: 'up' },
-  { label: 'Failures', value: '3', delta: '+1', trend: 'down' },
-];
-
-const DEFAULT_RUNS: DashboardRun[] = [
-  { agent: 'Release Notes', workflow: 'summarise-commits', status: 'running', duration: '00:41' },
-  { agent: 'Backlog Triage', workflow: 'label-issues', status: 'done', duration: '01:12' },
-  { agent: 'Doc Sweep', workflow: 'link-check', status: 'done', duration: '00:26' },
-  { agent: 'Nightly Build', workflow: 'verify-windows', status: 'failed', duration: '04:03' },
-];
-
-const STATUS_TONE = { running: 'info', done: 'success', failed: 'error' } as const;
-
-const NAV = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' as const },
-  { id: 'agents', label: 'Agents', icon: 'agent' as const, count: 7 },
-  { id: 'workflows', label: 'Workflows', icon: 'workflow' as const },
-  { id: 'analytics', label: 'Analytics', icon: 'chart' as const },
-];
-
-const APPS = [
-  { id: 'commands', label: 'Commands', icon: 'terminal' as const },
-  { id: 'skills', label: 'Skills', icon: 'sparkle' as const },
-  { id: 'tools', label: 'Tools', icon: 'tool' as const },
-];
+const RECENT_DASHBOARDS = ['Windows build', 'Release triage'];
 
 /**
- * Reference layout for the Dashboard route: KPI row above a recent-activity table,
- * inside the full desktop frame. Copy it as the starting point for any overview screen.
+ * The app's actual home screen: a pan/zoom canvas holding absolutely-positioned agent,
+ * browser, app and note cards over a dotted grid — not a KPI/stats page. Ported from
+ * DashboardCanvas.tsx. This is the reference layout for the Dashboard route; the card
+ * components it composes (AgentCard, BrowserCard, ViewCard, NoteCard) live in ./canvas
+ * and are the pieces meant to be edited individually.
  */
-export function DashboardScreen({
-  title = 'Dashboard',
-  subtitle = 'Everything your agents did today, in one place.',
-  stats = DEFAULT_STATS,
-  runs = DEFAULT_RUNS,
-  activeNav = 'dashboard',
-  platform = 'win',
-  children,
-}: DashboardScreenProps) {
-  const columns: TableColumn<DashboardRun>[] = [
-    { key: 'agent', header: 'Agent', render: (r) => <span className="mds-table__name">{r.agent}</span> },
-    { key: 'workflow', header: 'Workflow', render: (r) => <span className="mds-mono">{r.workflow}</span> },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (r) => (
-        <Badge tone={STATUS_TONE[r.status]} dot>
-          {r.status}
-        </Badge>
-      ),
-    },
-    { key: 'duration', header: 'Duration', numeric: true, render: (r) => r.duration },
-  ];
+export function DashboardScreen({ dashboardName = 'Windows build', platform = 'win', zoom = 100, empty = false }: DashboardScreenProps) {
   return (
     <AppShell
+      flush
       titleBar={
         <TitleBar
           platform={platform}
@@ -110,63 +42,60 @@ export function DashboardScreen({
               <IconButton icon={<Icon name="arrowRight" />} label="Forward" size="sm" />
             </>
           }
-          actions={
-            <>
-              <IconButton icon={<Icon name="search" />} label="Search" size="sm" />
-              <IconButton icon={<Icon name="bell" />} label="Notifications" size="sm" dot />
-            </>
-          }
         />
       }
       sidebar={
-        <Sidebar
-          footer={<SidebarItem label="Settings" icon={<Icon name="settings" />} />}
-        >
-          {NAV.map((n) => (
-            <SidebarItem
-              key={n.id}
-              label={n.label}
-              icon={<Icon name={n.icon} />}
-              count={n.count}
-              active={n.id === activeNav}
-            />
-          ))}
-          <SidebarSection label="Apps">
-            {APPS.map((a) => (
-              <SidebarItem
-                key={a.id}
-                label={a.label}
-                icon={<Icon name={a.icon} />}
-                active={a.id === activeNav}
-              />
+        <Sidebar footer={<SidebarItem label="Settings" icon={<Icon name="settings" />} />}>
+          <SidebarSection label="Dashboards" expanded>
+            <SidebarItem label="Dashboards" icon={<Icon name="dashboard" />} />
+            {RECENT_DASHBOARDS.map((d) => (
+              <SidebarItem key={d} label={d} icon={<Icon name="dashboard" />} active={d === dashboardName} />
             ))}
           </SidebarSection>
+          <SidebarItem label="Apps" icon={<Icon name="grid" />} />
         </Sidebar>
       }
     >
-      <PageHeader
-        title={title}
-        subtitle={subtitle}
-        actions={
-          <>
-            <Button variant="secondary" icon={<Icon name="refresh" />}>
-              Refresh
-            </Button>
-            <Button icon={<Icon name="plus" />}>New agent</Button>
-          </>
-        }
-      />
-      <Stack gap={5}>
-        <Grid columns={4}>
-          {stats.map((s) => (
-            <StatCard key={s.label} label={s.label} value={s.value} delta={s.delta} trend={s.trend} />
-          ))}
-        </Grid>
-        <Card title="Recent runs" subtitle="Last 24 hours" padding="flush">
-          <Table columns={columns} rows={runs} rowKey={(r) => r.agent} />
-        </Card>
-        {children}
-      </Stack>
+      <div className="mds-canvas">
+        <div className="mds-canvas__dots" />
+        <div className="mds-canvas__header-fade">
+          <span className="mds-canvas__title-pill">{dashboardName}</span>
+        </div>
+        <div className="mds-canvas__viewport">
+          {empty ? (
+            <CanvasEmptyState />
+          ) : (
+            <>
+              <AgentCard
+                x={24}
+                y={90}
+                width={360}
+                title="Release Notes"
+                status="running"
+                model="Claude Opus 5"
+                elapsed="00:41"
+                cost="$0.02"
+                hasMemory
+                preview="Reading electron/main.js…"
+                selected
+              />
+              <BrowserCard
+                x={410}
+                y={90}
+                width={340}
+                height={230}
+                tabs={[{ title: 'GitHub · maestro-desktop', active: true }, { title: 'New tab' }]}
+                url="github.com/…/pull/12"
+                agentActive
+              />
+              <AgentCard x={24} y={320} width={360} title="Backlog Triage" status="waiting on approval" approval={{ tool: 'label_issues', summary: 'Apply 12 labels across the open backlog.' }} />
+              <NoteCard x={410} y={340} width={200} height={160} text="Ping Gabriel once the signature check is verified." color="yellow" />
+            </>
+          )}
+        </div>
+        <CanvasDock />
+        <CanvasZoomControls zoom={zoom} />
+      </div>
     </AppShell>
   );
 }
