@@ -407,7 +407,7 @@ async def clear_session(session_id: str):
 async def subscriptions_status():
     """Check if 9Router is running and list connected providers."""
     from backend.apps.nine_router import is_running, get_providers, get_models
-    if not is_running():
+    if not await is_running():
         return {"running": False, "providers": [], "models": []}
     connections = await get_providers()
     models = await get_models()
@@ -423,9 +423,9 @@ async def subscriptions_connect(body: dict):
     if not provider:
         raise HTTPException(status_code=400, detail="provider required")
 
-    if not is_running():
+    if not await is_running():
         await ensure_running()
-        if not is_running():
+        if not await is_running():
             raise HTTPException(status_code=503, detail="9Router not available. Please install Node.js.")
 
     # Reconnecting gemini-cli must wipe antigravity; registry prefers AG and a stale AG token would 400 after gemini-cli refreshes.
@@ -518,7 +518,7 @@ async def subscriptions_health():
     so the frontend can retry once instead of reading 'all healthy' off a cold boot."""
     from backend.apps.nine_router import is_running, get_providers
     from backend.apps.nine_router.subscription_health import probe_subscription_health
-    if not is_running():
+    if not await is_running():
         return {"dead": [], "skipped": True}
     try:
         connections = await get_providers()
@@ -533,7 +533,7 @@ async def subscriptions_health():
 async def subscriptions_models():
     """List all models available through connected subscriptions."""
     from backend.apps.nine_router import is_running, get_models
-    if not is_running():
+    if not await is_running():
         return {"models": []}
     models = await get_models()
     return {"models": models}
@@ -570,7 +570,7 @@ async def probe_model(body: dict):
         )
 
         if resolved_is_9router:
-            if not p_9r_running():
+            if not await p_9r_running():
                 return {"ok": True, "skipped": True}
             client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
         elif route == "api" and api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
@@ -578,7 +578,7 @@ async def probe_model(body: dict):
         elif api_type == "anthropic" and getattr(settings, "anthropic_api_key", None):
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         else:
-            if not p_9r_running():
+            if not await p_9r_running():
                 return {"ok": True, "skipped": True}
             client = anthropic.AsyncAnthropic(api_key="9router", base_url="http://localhost:20128")
 
@@ -615,7 +615,7 @@ async def list_models():
     from backend.apps.settings.settings import load_settings
 
     settings = load_settings()
-    nine_router_up = p_9r_running()
+    nine_router_up = await p_9r_running()
 
     connected: set[str] = set()
     if nine_router_up:

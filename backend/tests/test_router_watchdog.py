@@ -5,7 +5,7 @@ evidence so a zero-config user never boots a router with nothing to route."""
 import asyncio
 import json
 import os
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -26,7 +26,7 @@ def test_watchdog_revives_then_backs_off():
             ensures.append(1)
 
         real_sleep = asyncio.sleep
-        with patch.object(proc, "is_running", return_value=False), \
+        with patch.object(proc, "is_running", new=AsyncMock(return_value=False)), \
              patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc.asyncio, "sleep", fake_sleep):
             task = asyncio.get_running_loop().create_task(proc.watchdog_loop())
@@ -58,7 +58,7 @@ def test_watchdog_single_false_negative_never_revives():
         async def fake_ensure():
             ensures.append(1)
 
-        def flaky_is_running():
+        async def flaky_is_running():
             # First probe of each pulse fails (busy-router false negative); the confirm succeeds.
             probes.append(1)
             return len(probes) % 2 == 0
@@ -130,6 +130,43 @@ def test_death_watcher_revives_instantly_and_guards_loops():
     asyncio.run(run())
 
 
+def test_death_watch_invalidates_full_cache_not_just_positive_ok():
+    async def run():
+        async def fake_ensure():
+            pass
+
+        class FakeProc:
+            def __init__(self):
+                self.dead = False
+            def wait(self):
+                while not self.dead:
+                    pass
+            def poll(self):
+                return 1 if self.dead else None
+
+        # Simulate a probe that succeeded moments ago (well inside both the positive AND the
+        # short outcome-cache TTL), the realistic state right before a sudden crash.
+        now = proc.time.monotonic()
+        proc.p_is_running_last_ok = now
+        proc.p_is_running_last_checked = now
+        proc.p_is_running_last_result = True
+        fp = FakeProc()
+        proc.recent_death_monos.clear()
+        with patch.object(proc, "ensure_running", fake_ensure), \
+             patch.object(proc, "p_process", fp):
+            task = asyncio.get_running_loop().create_task(proc.death_watch(fp))
+            fp.dead = True
+            await task
+        # The crash must wipe the WHOLE outcome cache, not just p_is_running_last_ok, or a caller
+        # inside the 1s outcome-cache window right after death_watch reads back the stale True.
+        with patch.object(proc, "p_tcp_port_open", return_value=False) as mock_probe:
+            result = await proc.is_running()
+        assert result is False, "a cached pre-crash True must never survive an instant revive"
+        assert mock_probe.call_count == 1, "the cache wipe must force a real re-probe"
+
+    asyncio.run(run())
+
+
 def test_watchdog_healthy_router_never_spawns():
     async def run():
         sleeps: list = []
@@ -143,7 +180,7 @@ def test_watchdog_healthy_router_never_spawns():
             ensures.append(1)
 
         real_sleep = asyncio.sleep
-        with patch.object(proc, "is_running", return_value=True), \
+        with patch.object(proc, "is_running", new=AsyncMock(return_value=True)), \
              patch.object(proc, "ensure_running", fake_ensure), \
              patch.object(proc.asyncio, "sleep", fake_sleep):
             task = asyncio.get_running_loop().create_task(proc.watchdog_loop())
@@ -194,7 +231,7 @@ def test_detection_revival_gated_on_evidence():
             ensures.append(1)
 
         import backend.apps.nine_router as nr_pkg
-        with patch.object(nr_pkg, "is_running", return_value=False), \
+        with patch.object(nr_pkg, "is_running", new=AsyncMock(return_value=False)), \
              patch.object(nr_pkg, "ensure_running", fake_ensure), \
              patch.object(proc, "has_persisted_connections", return_value=False):
             # Zero-config: no keys, no proxy mode, no persisted connections -> no revival attempt.

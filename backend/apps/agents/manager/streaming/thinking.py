@@ -45,7 +45,7 @@ async def emit_consolidated_thinking(thinking: ThinkingState, turn: TurnState, s
                 get_latest_reasoning_tokens,
                 is_running as nine_router_running,
             )
-            if nine_router_running():
+            if await nine_router_running():
                 rt = await get_latest_reasoning_tokens(model_hint=session.model)
                 if rt and rt > 0:
                     upstream_reasoning_tokens = rt
@@ -78,7 +78,7 @@ async def emit_consolidated_thinking(thinking: ThinkingState, turn: TurnState, s
                 get_latest_reasoning_tokens,
                 is_running as nine_router_running,
             )
-            if nine_router_running():
+            if await nine_router_running():
                 rt = await get_latest_reasoning_tokens(model_hint=session.model)
                 if rt and rt > 0:
                     turn_tokens = rt

@@ -128,8 +128,9 @@ def test_loop_builds_pinned_anthropic_api_route_env(monkeypatch):
 def test_loop_builds_9router_default_env(monkeypatch):
     # A subscription-route Claude model (cc/ -> 9Router) with no direct key and no Pro falls to the 9Router default lane. Pin that it routes through 9Router on localhost:20128.
     from backend.apps.settings.models import AppSettings
+    from unittest.mock import AsyncMock
     import backend.apps.nine_router as nr
-    monkeypatch.setattr(nr, "is_running", lambda: True, raising=True)
+    monkeypatch.setattr(nr, "is_running", AsyncMock(return_value=True), raising=True)
     settings = AppSettings(connection_mode="own_key")  # no keys at all
     env = p_capture_env(monkeypatch, settings, "anthropic", "cc/claude-sonnet-4-6", None)
     assert env["ANTHROPIC_API_KEY"] == "9router"
@@ -150,8 +151,9 @@ def test_loop_builds_direct_gemini_key_env(monkeypatch):
 def test_loop_builds_openrouter_env(monkeypatch):
     # OpenRouter: routes through 9Router (must be up). Pin the 9Router base + that subagent ids fall back to OR's resold Claude when the user has no Anthropic key.
     from backend.apps.settings.models import AppSettings
+    from unittest.mock import AsyncMock
     import backend.apps.nine_router as nr
-    monkeypatch.setattr(nr, "is_running", lambda: True, raising=True)
+    monkeypatch.setattr(nr, "is_running", AsyncMock(return_value=True), raising=True)
     settings = AppSettings(openrouter_api_key="or-key-test")
     env = p_capture_env(monkeypatch, settings, "openrouter", "openrouter/anthropic/claude-sonnet-4.5", None)
     assert env["ANTHROPIC_API_KEY"] == "9router"

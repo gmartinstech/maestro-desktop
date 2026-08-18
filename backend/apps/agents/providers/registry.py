@@ -274,7 +274,7 @@ async def resolve_aux_model(
 
     base_url = "http://localhost:20128"
     connected: set[str] = set()
-    if p_9r_running():
+    if await p_9r_running():
         try:
             connections = await p_9r_providers()
             connected = {c.get("provider") for c in connections if c.get("isActive")}
@@ -298,7 +298,7 @@ async def resolve_aux_model(
     if getattr(settings, "anthropic_api_key", None):
         return (bare, None)
 
-    if not p_9r_running():
+    if not await p_9r_running():
         raise ValueError(
             "No AI provider configured for auxiliary LLM call. "
             "Set an Anthropic API key or connect a subscription."
