@@ -68,7 +68,11 @@ packaging risk as `node-pty`, merely cheaper to resolve.
 
 **Therefore step one of implementation is a packaging spike**, before any
 feature code: add `pywinpty`, build the Windows installer, and confirm the
-extension loads from the vendored runtime. If it does not, fall back to driving
+extension loads from the vendored runtime. Note the dependency path has a trap —
+`scripts/build-python-env-win.ps1` installs from `backend/requirements.lock`,
+the hash-locked output of `uv pip compile`, *not* from `requirements.txt`. A dep
+added to `requirements.txt` without regenerating the lock will pass every local
+test and be silently missing from the shipped app. If it does not, fall back to driving
 ConPTY directly through `ctypes` against `kernel32`
 (`CreatePseudoConsole` / `ResizePseudoConsole` / `ClosePseudoConsole` plus
 anonymous pipes), which has no dependency at all at the cost of roughly 150
@@ -292,10 +296,23 @@ pre-existing failures, 1745 passing — the suite must not regress past that):
 - A Windows-only real-ConPTY smoke test: spawn, `echo maestro`, assert the
   bytes come back, assert the process tree is gone after `kill_all()`.
 
-Frontend (vitest): `useTerminalSocket` frame encode/decode and reconnect;
-`ShellPanel` render smoke with a stubbed socket.
+Frontend: **there is no vitest or jest in this repo.** Tests are Node's built-in
+runner over plain `.ts` files (`node --test frontend/src/shared/foo.test.ts`),
+relying on Node's native type-stripping — which means a test may only import
+modules that are non-JSX and dependency-free. React components and hooks are
+therefore untestable with the current tooling, and no component test exists in
+the repository.
 
-`npm run verify` green is the merge gate.
+The design accommodates this rather than fighting it: all frame encoding and
+decoding lives in a plain, dependency-free `terminalFrames.ts` that `node --test`
+can cover directly, leaving `useTerminalSocket.ts` and `ShellPanel.tsx` as thin
+untested shells over tested logic. Introducing a component-test stack is out of
+scope for this cut.
+
+`npm run verify` green is the merge gate. It runs lint → typecheck → webpack
+build → golden e2e → backend pytest, then three hard-failing checks:
+`check-callhome.mjs`, `check-fork-drift.mjs`, and `check-i18n-parity.mjs`. That
+last one makes the en/pt-BR key parity in §5 a build failure, not a convention.
 
 ## 8. Out of scope
 
