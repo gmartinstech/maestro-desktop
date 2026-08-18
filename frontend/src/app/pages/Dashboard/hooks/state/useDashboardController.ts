@@ -268,6 +268,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     handleAddView,
     handleAddBrowser,
     handleAddNote,
+    handleAddElement,
     handleHistoryResume,
     handleFitToView,
     handleTidy,
@@ -347,6 +348,7 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     onHistoryResume: handleHistoryResume,
     onAddBrowser: handleAddBrowser,
     onAddNote: handleAddNote,
+    onAddElement: handleAddElement,
     onNewAgentBounceEnd: () => {
       bounceDismissedRef.current = true;
       setNewAgentBounce(false);

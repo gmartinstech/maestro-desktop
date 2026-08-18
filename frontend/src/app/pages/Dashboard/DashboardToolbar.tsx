@@ -22,6 +22,7 @@ const popIn = (i: number) => ({
 });
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import LanguageIcon from '@mui/icons-material/Language';
@@ -60,6 +61,7 @@ interface Props {
   onHistoryResume: (sessionId: string) => void;
   onAddBrowser: () => void;
   onAddNote: () => void;
+  onAddElement: () => void;
   dashboardId?: string;
   newAgentBounce?: boolean;
   onNewAgentBounceEnd?: () => void;
@@ -110,7 +112,7 @@ function formatRelativeTime(dateStr: string | null): string {
 }
 
 const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
-  ({ inputOpen, onNewAgent, onCancel, onSend, onAddView, onHistoryResume, onAddBrowser, onAddNote, dashboardId, newAgentBounce, onNewAgentBounceEnd, prefillPrompt, prefillMode }, ref) => {
+  ({ inputOpen, onNewAgent, onCancel, onSend, onAddView, onHistoryResume, onAddBrowser, onAddNote, onAddElement, dashboardId, newAgentBounce, onNewAgentBounceEnd, prefillPrompt, prefillMode }, ref) => {
     const { t } = useTranslation();
     const c = useClaudeTokens();
     const dispatch = useAppDispatch();
@@ -804,6 +806,41 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.addElement')}</Box>
+                  <Box sx={{ opacity: 0.6, fontSize: '0.7rem', mt: '1px' }}>{t('dashboard.toolbar.addElementSub')}</Box>
+                </Box>
+              }
+            >
+              <Box
+                role="button"
+                aria-label={t('dashboard.toolbar.addElement')}
+                tabIndex={0}
+                onClick={onAddElement}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: BTN,
+                  height: BTN,
+                  borderRadius: `${c.radius.md}px`,
+                  color: c.text.tertiary,
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s, background-color 0.15s',
+                  '&:hover': { opacity: 1, bgcolor: c.bg.secondary, color: c.accent.primary },
+                  ...popIn(5),
+                }}
+              >
+                <ImageOutlinedIcon sx={{ fontSize: 22 }} />
+              </Box>
+            </WarmTooltip>
+
+            <WarmTooltip
+              tokens={c}
+              placement="top"
+              arrow
+              enterDelay={200}
+              title={
+                <Box sx={{ textAlign: 'center' }}>
                   <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.history')}  ⌘O</Box>
                 </Box>
               }
@@ -824,7 +861,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                   cursor: 'pointer',
                   transition: 'opacity 0.15s, background-color 0.15s',
                   '&:hover': { opacity: 1, bgcolor: c.bg.secondary, color: c.accent.primary },
-                  ...popIn(5),
+                  ...popIn(6),
                 }}
               >
                 <HistoryRoundedIcon sx={{ fontSize: 22 }} />

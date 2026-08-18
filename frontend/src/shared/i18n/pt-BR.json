@@ -969,6 +969,8 @@
       "workflowsSub": "Agendamentos e calendário",
       "addNote": "Adicionar nota",
       "addNoteSub": "Nota adesiva no canvas",
+      "addElement": "Adicionar elemento",
+      "addElementSub": "Imagem, diagrama ou arquivo",
       "history": "Histórico",
       "searchAppsPlaceholder": "Buscar apps...",
       "noAppsYet": "Nenhum app criado ainda",

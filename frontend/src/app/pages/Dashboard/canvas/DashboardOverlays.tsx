@@ -44,6 +44,7 @@ interface DashboardOverlaysProps {
   onHistoryResume: (sessionId: string) => void;
   onAddBrowser: () => void;
   onAddNote: () => void;
+  onAddElement: () => void;
   onNewAgentBounceEnd: () => void;
   onFitToView: () => void;
   onTidy: () => void;
@@ -75,6 +76,7 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
   onHistoryResume,
   onAddBrowser,
   onAddNote,
+  onAddElement,
   onNewAgentBounceEnd,
   onFitToView,
   onTidy,
@@ -96,6 +98,7 @@ const DashboardOverlays: React.FC<DashboardOverlaysProps> = ({
           onHistoryResume={onHistoryResume}
           onAddBrowser={onAddBrowser}
           onAddNote={onAddNote}
+          onAddElement={onAddElement}
           dashboardId={dashboardId}
           newAgentBounce={newAgentBounce}
           onNewAgentBounceEnd={onNewAgentBounceEnd}

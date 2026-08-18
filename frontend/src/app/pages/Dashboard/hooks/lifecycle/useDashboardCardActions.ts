@@ -8,6 +8,7 @@ import {
   addViewCard,
   addBrowserCard,
   addNote,
+  addElement,
   clearPendingFocusNoteId,
   DEFAULT_VIEW_CARD_W,
   DEFAULT_VIEW_CARD_H,
@@ -94,6 +95,10 @@ export function useDashboardCardActions({
     }, 200);
   }, [dispatch, expandedSessionIds, getSpawnPlacement, canvasActions, handleHighlightCard]);
 
+  const handleAddElement = useCallback(() => {
+    dispatch(addElement({ kind: 'image', title: 'Untitled', expandedSessionIds }));
+  }, [dispatch, expandedSessionIds]);
+
   // Auto-clear pendingFocusNoteId after the note has had a chance to mount + autofocus.
   useEffect(() => {
     if (!pendingFocusNoteId) return;
@@ -158,6 +163,7 @@ export function useDashboardCardActions({
     handleAddView,
     handleAddBrowser,
     handleAddNote,
+    handleAddElement,
     handleHistoryResume,
     handleFitToView,
     handleTidy,

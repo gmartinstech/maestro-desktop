@@ -87,6 +87,7 @@ interface DashboardCanvasProps {
   onHistoryResume: (sessionId: string) => void;
   onAddBrowser: () => void;
   onAddNote: () => void;
+  onAddElement: () => void;
   onNewAgentBounceEnd: () => void;
   onFitToView: () => void;
   onTidy: () => void;
@@ -151,6 +152,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   onHistoryResume,
   onAddBrowser,
   onAddNote,
+  onAddElement,
   onNewAgentBounceEnd,
   onFitToView,
   onTidy,
@@ -310,6 +312,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
         onHistoryResume={onHistoryResume}
         onAddBrowser={onAddBrowser}
         onAddNote={onAddNote}
+        onAddElement={onAddElement}
         onNewAgentBounceEnd={onNewAgentBounceEnd}
         onFitToView={onFitToView}
         onTidy={onTidy}

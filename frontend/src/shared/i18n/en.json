@@ -969,6 +969,8 @@
       "workflowsSub": "Schedule and calendar",
       "addNote": "Add note",
       "addNoteSub": "Sticky note on the canvas",
+      "addElement": "Add element",
+      "addElementSub": "Image, diagram or file",
       "history": "History",
       "searchAppsPlaceholder": "Search apps...",
       "noAppsYet": "No apps created yet",
