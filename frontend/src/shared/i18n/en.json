@@ -1082,7 +1082,8 @@
       "building": "Building…",
       "preview": "Preview",
       "code": "Code",
-      "terminal": "Terminal",
+      "logs": "Logs",
+      "shell": "Shell",
       "history": "History",
       "hardReloadHint": "Hard reload (restart runtime + reload app)",
       "reloadHint": "Reload preview; right-click for Hard Reload",
@@ -2024,6 +2025,10 @@
     },
     "terminal": {
       "waitingForOutput": "Waiting for output... backend stdout/stderr and the running app's console.log will show here."
+    },
+    "shell": {
+      "exited": "Shell exited with code {{code}}",
+      "connecting": "Starting shell…"
     }
   }
 }

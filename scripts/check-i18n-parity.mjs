@@ -28,7 +28,7 @@ const IDENTICAL_BY_DESIGN = new Set([
   'agentChat.errors.tooManyAppsHaiku.windowClause',
   'agentChat.contextDrawer.tokensUsage',
   'dashboard.toolbar.workflows',
-  'dashboard.viewCard.terminal',
+  'dashboard.viewCard.logs',
   'tools.customToolDevInfo.status',
   'tools.section.categories.skills',
   'tools.registryServer.endpoint',
