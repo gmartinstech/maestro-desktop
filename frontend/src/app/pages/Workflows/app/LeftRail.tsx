@@ -63,7 +63,7 @@ const LeftRail: React.FC<{ nav: AppNav }> = ({ nav }) => {
             placeholder={t('workflows.leftRail.searchPlaceholder')}
             style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 12.5, color: WC.ink }}
           />
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, opacity: 0.6 }}>⌘K</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, opacity: 0.6 }}>Ctrl+K</span>
         </div>
       </div>
 

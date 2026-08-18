@@ -667,7 +667,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.addApp')}  ⌘M</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.addApp')}  Ctrl+M</Box>
                 </Box>
               }
             >
@@ -701,7 +701,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.browser')}  ⌘N</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.browser')}  Ctrl+N</Box>
                 </Box>
               }
             >
@@ -841,7 +841,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               enterDelay={200}
               title={
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.history')}  ⌘O</Box>
+                  <Box sx={{ fontWeight: 600 }}>{t('dashboard.toolbar.history')}  Ctrl+O</Box>
                 </Box>
               }
             >
