@@ -681,7 +681,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     zoomIn, zoomOut, resetZoom, fitToView, fitToCards, animateTo, cancelAnimation, setState,
   }), [zoomIn, zoomOut, resetZoom, fitToView, fitToCards, animateTo, cancelAnimation]);
 
-  return {
+  return useMemo(() => ({
     ...state,
     isPanning,
     spaceHeld,
@@ -690,7 +690,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     contentRef,
     handlers,
     actions,
-  } as const;
+  } as const), [state, isPanning, spaceHeld, cmdHeld, viewportRef, contentRef, handlers, actions]);
 }
 
 export type CanvasActions = ReturnType<typeof useCanvasControls>['actions'];

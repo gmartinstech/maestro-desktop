@@ -362,4 +362,4 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
   );
 };
 
-export default DashboardCardLayer;
+export default React.memo(DashboardCardLayer);
