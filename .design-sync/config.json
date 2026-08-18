@@ -25,6 +25,12 @@
     "Sidebar": { "cardMode": "column" },
     "TitleBar": { "cardMode": "column" },
     "CommandPalette": { "cardMode": "column" },
-    "Modal": { "cardMode": "column" }
+    "Modal": { "cardMode": "column" },
+    "AgentCard": { "cardMode": "column" },
+    "BrowserCard": { "cardMode": "column" },
+    "ViewCard": { "cardMode": "column" },
+    "NoteCard": { "cardMode": "column" },
+    "CanvasDock": { "cardMode": "column" },
+    "CanvasEmptyState": { "cardMode": "column" }
   }
 }

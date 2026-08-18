@@ -101,7 +101,26 @@ export { ChatMessage, Composer } from './components/ChatMessage';
 export type { ChatMessageProps, ComposerProps } from './components/ChatMessage';
 
 export { DashboardScreen } from './components/DashboardScreen';
-export type { DashboardScreenProps, DashboardStat, DashboardRun } from './components/DashboardScreen';
+export type { DashboardScreenProps } from './components/DashboardScreen';
+
+export { AgentCard } from './components/canvas/AgentCard';
+export type { AgentCardProps, AgentApproval } from './components/canvas/AgentCard';
+
+export { BrowserCard } from './components/canvas/BrowserCard';
+export type { BrowserCardProps, BrowserTab } from './components/canvas/BrowserCard';
+
+export { ViewCard } from './components/canvas/ViewCard';
+export type { ViewCardProps, ViewCardTab } from './components/canvas/ViewCard';
+
+export { NoteCard } from './components/canvas/NoteCard';
+export type { NoteCardProps, NoteColor } from './components/canvas/NoteCard';
+
+export { CanvasCardFrame } from './components/canvas/CanvasCardFrame';
+export type { CanvasCardFrameProps } from './components/canvas/CanvasCardFrame';
+
+export { CanvasDock, CanvasZoomControls } from './components/canvas/CanvasDock';
+
+export { CanvasEmptyState } from './components/canvas/CanvasEmptyState';
 
 export { SettingsScreen } from './components/SettingsScreen';
 export type { SettingsScreenProps } from './components/SettingsScreen';
