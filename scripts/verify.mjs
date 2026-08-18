@@ -29,6 +29,7 @@ function packagedAppStatus() {
 
 const steps = [
   ['lint',      'cd frontend && npm run lint'],
+  ['frontend-test', 'cd frontend && npm test'],
   ['typecheck', 'cd frontend && npx tsc --noEmit'],
   ['build',     'cd frontend && npm run build'],
   ['golden',    'npm run e2e:golden', packagedAppStatus],
