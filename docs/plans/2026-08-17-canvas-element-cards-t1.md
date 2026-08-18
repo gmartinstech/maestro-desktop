@@ -61,6 +61,8 @@ So T1 ships the card **skeleton**: the collection, persistence, chrome, drag/res
 
 There is no frontend unit-test runner in this repo — `npm run verify` runs frontend lint + build, Playwright golden e2e against a *packaged* app, and backend pytest. TDD is mandatory for every following task, so the harness comes first. This task is complete when a test of **existing** behaviour passes; it adds no product code.
 
+**Why not extend the existing precedent?** `frontend/src/shared/i18n/languageSync.test.ts` uses Node's built-in runner (`node --test`, no dependency) with a relative `./languageSync.ts` import. That works there because `languageSync.ts` imports nothing aliased. It cannot reach the layout slice: `dashboardLayoutSlice.ts` imports `@/shared/config` and `@/shared/lastDashboardId`, and `node --test` has no way to resolve `@/` without a custom loader. Vitest resolves it with one alias line. Leave `languageSync.test.ts` on `node --test` — the new `vitest.config.ts` `include` glob (`src/**/*.test.ts`) will also pick it up, so confirm it still passes under Vitest in Step 5; if it does not, narrow the glob rather than rewriting that file.
+
 **Files:**
 - Modify: `frontend/package.json`
 - Create: `frontend/vitest.config.ts`
