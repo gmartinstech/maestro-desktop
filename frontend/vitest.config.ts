@@ -20,6 +20,7 @@ export default defineConfig({
       'src/shared/browserSettle.test.ts',
       'src/shared/captureWithTimeout.test.ts',
       'src/shared/interactiveRanking.test.ts',
+      'src/shared/terminalFrames.test.ts',
     ],
   },
 });
