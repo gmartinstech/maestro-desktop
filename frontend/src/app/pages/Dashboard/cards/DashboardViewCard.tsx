@@ -173,6 +173,8 @@ const DashboardViewCard: React.FC<Props> = ({
   const [activeView, setActiveView] = useState<AppCardView>('preview');
   // Latches on first visit so a shell is never spawned for a card the user never opened it on, but survives every tab switch after.
   const [shellOpened, setShellOpened] = useState(false);
+  // The interactive shell is a developer affordance; without dev mode the tab does not exist at all.
+  const devMode = useAppSelector((s) => s.settings.data.dev_mode);
   const hasWorkspace = !!output.workspace_id;
   // Chevron rolls the whole header away so an immersive app fills the card; hovering the top edge peeks it back.
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
@@ -196,6 +198,9 @@ const DashboardViewCard: React.FC<Props> = ({
   useEffect(() => {
     if (activeView === 'shell') setShellOpened(true);
   }, [activeView]);
+  useEffect(() => {
+    if (!devMode && activeView === 'shell') setActiveView('preview');
+  }, [devMode, activeView]);
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const terminalLineIdRef = useRef(0);
   // Fed by the runtime logs WS (which replays its ring buffer on connect); frontend console lines arrive on the same socket via the console-log beacon echo.
@@ -624,7 +629,7 @@ const DashboardViewCard: React.FC<Props> = ({
                   { view: 'preview' as const, labelKey: 'dashboard.viewCard.preview', Icon: VisibilityRoundedIcon },
                   { view: 'code' as const, labelKey: 'dashboard.viewCard.code', Icon: CodeRoundedIcon },
                   { view: 'logs' as const, labelKey: 'dashboard.viewCard.logs', Icon: TerminalRoundedIcon },
-                  { view: 'shell' as const, labelKey: 'dashboard.viewCard.shell', Icon: KeyboardCommandKeyRoundedIcon },
+                  ...(devMode ? [{ view: 'shell' as const, labelKey: 'dashboard.viewCard.shell', Icon: KeyboardCommandKeyRoundedIcon }] : []),
                   { view: 'history' as const, labelKey: 'dashboard.viewCard.history', Icon: HistoryRoundedIcon },
                 ]).map(({ view, labelKey, Icon }) => (
                   <Tooltip key={view} title={t(labelKey)} placement="top">
@@ -760,7 +765,7 @@ const DashboardViewCard: React.FC<Props> = ({
           </Box>
         )}
         {/* Shell sits outside the overlay switch and stays mounted once opened: re-initializing xterm and re-fitting on every tab switch is visibly jarring, even though the PTY itself survives server-side. */}
-        {output.workspace_id && shellOpened && (
+        {output.workspace_id && shellOpened && devMode && (
           <Box
             sx={{
               position: 'absolute',
