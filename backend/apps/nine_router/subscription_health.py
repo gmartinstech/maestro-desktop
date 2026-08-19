@@ -88,7 +88,7 @@ async def probe_subscription_health(connections: List[Dict]) -> List[Dict[str, s
     """Probe each active subscription connection with a 1-token turn; returns [{provider, label}]
     for the definitively auth-dead ones. Cached for 5 minutes; concurrent callers share one run."""
     global p_cached_result, p_cached_at
-    if not health_probe_enabled() or not is_running():
+    if not health_probe_enabled() or not await is_running():
         return []
     async with p_probe_lock:
         if p_cached_result is not None and time.monotonic() - p_cached_at < P_CACHE_TTL_S:

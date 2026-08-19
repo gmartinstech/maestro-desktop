@@ -200,7 +200,7 @@ async def p_refresh_9r_connected() -> set[str]:
         return P_NINE_ROUTER_CONNECTED
     try:
         from backend.apps.nine_router import is_running as p_9r_running, get_providers as p_9r_providers
-        if not p_9r_running():
+        if not await p_9r_running():
             P_NINE_ROUTER_CONNECTED = set()
         else:
             conns = await p_9r_providers()

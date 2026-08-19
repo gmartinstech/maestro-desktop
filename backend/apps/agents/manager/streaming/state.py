@@ -25,6 +25,8 @@ class ThinkingState(BaseModel):
     thought_signature: Optional[str] = None
     # Background ticker handle; re-emits the pill every 1s so the elapsed counter keeps moving.
     ticker_task: Optional[InstanceOf[asyncio.Task]] = None
+    # Cached index of the thinking message in session.messages once known, so repeated emits (the 1s ticker, every AssistantMessage chunk) don't re-scan the full list by id on every call.
+    msg_index: Optional[int] = None
 
 
 class TurnState(BaseModel):
@@ -56,3 +58,6 @@ class TurnState(BaseModel):
     baseline_captured: bool = False
     # CLI compact_boundary events seen this turn; one plus a ProcessError = the autocompact-thrash death the context-pressure valve retries.
     compact_boundaries: int = 0
+    # Cached list of this turn's child-session ids (sub-agent forks), refreshed at most once per second — the 1s ticker already re-emits at that cadence, so this eliminates redundant full-dict scans within a tick's own multiple call bursts without ever being more than one tick stale.
+    child_session_ids: Optional[List[str]] = None
+    child_session_ids_cached_at: float = 0.0

@@ -157,11 +157,11 @@ def test_resolved_model_routes_through_the_9router_custom_node(no_env_token, mon
 def test_list_models_offers_provedor_ia_first(no_env_token, monkeypatch):
     monkeypatch.setenv(PROVEDOR_IA_TOKEN_ENV, P_FAKE_TOKEN)
     import asyncio
-    from unittest.mock import patch
+    from unittest.mock import patch, AsyncMock
     from backend.apps.agents.agents import list_models
     cfg = apply_maestro_defaults(AppSettings())
     with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
-         patch("backend.apps.nine_router.is_running", return_value=False):
+         patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         groups = asyncio.run(list_models())["models"]
     assert list(groups)[0] == MAESTRO_NAME
     rows = groups[MAESTRO_NAME]

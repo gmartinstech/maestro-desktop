@@ -410,7 +410,7 @@ async def test_resolve_aux_model_gemini_subscription_returns_preview_suffix():
     from backend.apps.agents.providers import registry
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
-    with patch("backend.apps.nine_router.is_running", return_value=True), \
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[{"provider": "gemini-cli", "isActive": True}])):
         model_id, base = await registry.resolve_aux_model(settings, primary_api="gemini-cli")
@@ -425,7 +425,7 @@ async def test_resolve_aux_model_gemini_api_key_returns_preview_suffix():
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
     settings.google_api_key = "fake-key-123"
-    with patch("backend.apps.nine_router.is_running", return_value=False):
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         model_id, base = await registry.resolve_aux_model(settings, primary_api="gemini-cli")
         assert model_id == "gemini-3.1-flash-lite-preview", \
             f"Gemini API-key aux must use the -preview suffix; got {model_id}"
@@ -437,7 +437,7 @@ async def test_resolve_aux_model_codex_subscription():
     from backend.apps.agents.providers import registry
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
-    with patch("backend.apps.nine_router.is_running", return_value=True), \
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[{"provider": "codex", "isActive": True}])):
         model_id, base = await registry.resolve_aux_model(settings, primary_api="codex")
@@ -450,7 +450,7 @@ async def test_resolve_aux_model_raises_when_nothing_available():
     from backend.apps.agents.providers import registry
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
-    with patch("backend.apps.nine_router.is_running", return_value=False):
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         with pytest.raises(ValueError, match="No AI provider"):
             await registry.resolve_aux_model(settings)
 
@@ -463,7 +463,7 @@ async def test_resolve_aux_model_openrouter_only_fallback():
     from backend.apps.agents.providers import registry
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()  # no anthropic_api_key, no Pro
-    with patch("backend.apps.nine_router.is_running", return_value=True), \
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[{"provider": "openrouter", "isActive": True}])):
         model_id, base = await registry.resolve_aux_model(settings, preferred_tier="haiku")
@@ -478,7 +478,7 @@ async def test_resolve_aux_model_openrouter_primary_prefers_or():
     from backend.apps.agents.providers import registry
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
-    with patch("backend.apps.nine_router.is_running", return_value=True), \
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[
                    {"provider": "openrouter", "isActive": True},
@@ -496,7 +496,7 @@ async def test_resolve_aux_model_openrouter_priority_after_subs():
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
     # Both Codex and OR connected, Codex (free via sub) should win.
-    with patch("backend.apps.nine_router.is_running", return_value=True), \
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[
                    {"provider": "codex", "isActive": True},
@@ -538,15 +538,15 @@ def test_resolve_sdk_gemini_prefers_antigravity_over_api_key():
     from backend.apps.settings.models import AppSettings
     s = AppSettings()
     s.google_api_key = "ai-studio-key"
-    with patch.object(registry, "p_antigravity_connected", return_value=True):
+    with patch.object(registry, "antigravity_connected", return_value=True):
         # flash-lite IS AG-serveable -> AG wins over the key (probe retargeted after gemini-3-flash was removed)
         assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s) == "ag/gemini-3-flash"
-    with patch.object(registry, "p_antigravity_connected", return_value=False):
+    with patch.object(registry, "antigravity_connected", return_value=False):
         # AG not connected -> key
         assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s) == "gemini/gemini-3.1-flash-lite-preview"
     # No key, no AG -> gc/ subscription lane untouched
     s2 = AppSettings()
-    with patch.object(registry, "p_antigravity_connected", return_value=False):
+    with patch.object(registry, "antigravity_connected", return_value=False):
         assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s2) == "gc/gemini-3.1-flash-lite-preview"
 
 
@@ -1131,7 +1131,7 @@ async def test_aux_failover_anthropic_to_codex():
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
     settings.anthropic_api_key = "sk-test-fake"  # provides anthropic fallback
-    with patch("backend.apps.nine_router.is_running", return_value=True), \
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          patch("backend.apps.nine_router.get_providers",
                new=AsyncMock(return_value=[])):  # nothing connected
         # primary_api=codex but codex not connected → cascade to anthropic
@@ -1147,7 +1147,7 @@ async def test_aux_returns_haiku_by_default():
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
     settings.anthropic_api_key = "sk-test-fake"
-    with patch("backend.apps.nine_router.is_running", return_value=False):
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         model_id, base = await registry.resolve_aux_model(settings, preferred_tier="haiku")
         assert "haiku" in model_id
         assert base is None
@@ -1159,7 +1159,7 @@ async def test_aux_returns_sonnet_when_preferred_tier_set():
     from backend.apps.settings.models import AppSettings
     settings = AppSettings()
     settings.anthropic_api_key = "sk-test-fake"
-    with patch("backend.apps.nine_router.is_running", return_value=False):
+    with patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         model_id, base = await registry.resolve_aux_model(settings, preferred_tier="sonnet")
         assert "sonnet" in model_id
 
@@ -2463,7 +2463,7 @@ def test_list_models_includes_complete_custom_providers_excludes_incomplete():
     ])
 
     with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
-         patch("backend.apps.nine_router.is_running", return_value=False):
+         patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         result = asyncio.run(list_models())
 
     groups = result["models"]
@@ -2492,7 +2492,7 @@ def test_list_models_custom_provider_model_with_only_value_fills_label():
         ),
     ])
     with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
-         patch("backend.apps.nine_router.is_running", return_value=False):
+         patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         result = asyncio.run(list_models())
 
     assert "Bare" in result["models"]
@@ -2515,7 +2515,7 @@ def test_list_models_custom_provider_id_field_alias_for_value():
         ),
     ])
     with patch("backend.apps.settings.settings.load_settings", return_value=cfg), \
-         patch("backend.apps.nine_router.is_running", return_value=False):
+         patch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         result = asyncio.run(list_models())
 
     assert "IdProvider" in result["models"]
@@ -2677,7 +2677,7 @@ def test_sync_custom_providers_silently_noop_when_9router_down():
     from backend.apps.nine_router import sync_custom_providers
     from backend.apps.settings.models import CustomProvider
 
-    with upatch("backend.apps.nine_router.is_running", return_value=False):
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=False)):
         # Should not raise even with malformed/empty input.
         asyncio.run(sync_custom_providers([]))
         asyncio.run(sync_custom_providers([
@@ -2692,7 +2692,7 @@ def test_sync_custom_providers_creates_node_and_connection_for_new_provider():
     from backend.apps.settings.models import CustomProvider
 
     MockClient, state = p_make_mock_9router()
-    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([
@@ -2724,7 +2724,7 @@ def test_sync_custom_providers_appends_v1_when_baseurl_has_no_path():
     from backend.apps.settings.models import CustomProvider
 
     MockClient, state = p_make_mock_9router()
-    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([
@@ -2768,7 +2768,7 @@ def test_sync_custom_providers_updates_existing_node_in_place():
         },
     ]
     MockClient, state = p_make_mock_9router(existing_nodes, existing_conns)
-    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return(existing_conns)):
         asyncio.run(sync_custom_providers([
@@ -2821,7 +2821,7 @@ def test_sync_custom_providers_deletes_orphaned_managed_nodes():
         },
     ]
     MockClient, state = p_make_mock_9router(existing_nodes, [])
-    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers(
@@ -2845,7 +2845,7 @@ def test_sync_custom_providers_skips_incomplete_entries():
     from backend.apps.settings.models import CustomProvider
 
     MockClient, state = p_make_mock_9router()
-    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([
@@ -2867,7 +2867,7 @@ def test_sync_custom_providers_handles_node_post_failure_without_crashing():
     from backend.apps.settings.models import CustomProvider
 
     MockClient, state = p_make_mock_9router(fail_endpoints={"POST:provider-nodes"})
-    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         # Should NOT raise.
@@ -2886,7 +2886,7 @@ def test_sync_custom_providers_three_distinct_providers_create_three_nodes():
     from backend.apps.settings.models import CustomProvider
 
     MockClient, state = p_make_mock_9router()
-    with upatch("backend.apps.nine_router.is_running", return_value=True), \
+    with upatch("backend.apps.nine_router.is_running", new=AsyncMock(return_value=True)), \
          upatch("backend.apps.nine_router.httpx.AsyncClient", MockClient), \
          upatch("backend.apps.nine_router.get_providers", new=lambda: p_async_return([])):
         asyncio.run(sync_custom_providers([

@@ -5,6 +5,7 @@ subscription lanes, and results are cached so a double boot-fetch can't double-s
 import asyncio
 import json
 from typing import Dict, List, Optional
+from unittest.mock import AsyncMock
 
 import backend.apps.nine_router.subscription_health as sh
 
@@ -67,7 +68,7 @@ CONNS = [
 
 def test_probe_reports_only_definitive_death_and_caches(monkeypatch):
     counter = [0]
-    monkeypatch.setattr(sh, "is_running", lambda: True)
+    monkeypatch.setattr(sh, "is_running", AsyncMock(return_value=True))
     monkeypatch.setattr(sh.httpx, "AsyncClient", lambda **kw: FakeClient(counter, **kw))
     monkeypatch.setattr(sh, "p_cached_result", None)
     monkeypatch.setattr(sh, "p_cached_at", 0.0)
@@ -81,8 +82,8 @@ def test_probe_reports_only_definitive_death_and_caches(monkeypatch):
 
 
 def test_probe_disabled_or_router_down(monkeypatch):
-    monkeypatch.setattr(sh, "is_running", lambda: False)
+    monkeypatch.setattr(sh, "is_running", AsyncMock(return_value=False))
     assert asyncio.run(sh.probe_subscription_health(CONNS)) == []
-    monkeypatch.setattr(sh, "is_running", lambda: True)
+    monkeypatch.setattr(sh, "is_running", AsyncMock(return_value=True))
     monkeypatch.setenv("MAESTRO_BOOT_HEALTH", "0")
     assert asyncio.run(sh.probe_subscription_health(CONNS)) == []
