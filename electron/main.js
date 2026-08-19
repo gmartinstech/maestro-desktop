@@ -2076,16 +2076,17 @@ app.whenReady().then(async () => {
       });
     }
     // Start the embedded frontend HTTP server before createWindow so loadURL has a real port. Only relevant in packaged mode; in dev, frontend lives on webpack-dev-server :3000.
-    if (!isDev) {
-      try {
-        await startFrontendServer();
-      } catch (err) {
-        console.error('[boot] frontend server failed to start, falling back to file://:', err && err.message);
-      }
-    }
+    // Cache-clear is independent of the frontend server (different subsystems: an HTTP
+    // server we own vs. Chromium's session cache), so run them concurrently — both just
+    // need to finish before createWindow() loads the URL.
     emitSplashStatus(t('appShell.splash.almostReady'));
-    // Must run before createWindow loads the URL, or the renderer fetches the stale bundle first.
-    await clearStaleFrontendCache();
+    if (!isDev) {
+      const frontendServerPromise = startFrontendServer().catch((err) => {
+        console.error('[boot] frontend server failed to start, falling back to file://:', err && err.message);
+      });
+      // Must run before createWindow loads the URL, or the renderer fetches the stale bundle first.
+      await Promise.all([frontendServerPromise, clearStaleFrontendCache()]);
+    }
     createWindow();
     if (!isDev) {
       setupAutoUpdater();
@@ -2899,9 +2900,17 @@ ipcMain.handle = (channel, handler) => {
 
 ipcMain.handle('get-backend-port', () => backendPort);
 // Sync mirrors so preload.js can expose window.maestro synchronously (no await), closing the race where React renders before the async exposure resolves and window.maestro is briefly undefined. backendPort is assigned in app.whenReady before any BrowserWindow is created, so it is always set by the time preload runs.
+// get-backend-port-sync stays registered on its own (in addition to being folded into get-preload-bootstrap-sync below)
+// because preload.js also calls it standalone from getBackendPortLive() to re-query the live port after initial preload.
 ipcMain.on('get-backend-port-sync', (event) => { event.returnValue = backendPort; });
-ipcMain.on('get-webview-preload-path-sync', (event) => {
-  event.returnValue = `file://${path.join(__dirname, 'webview-preload.js')}`;
+// get-preload-bootstrap-sync coalesces the two calls preload.js used to make (get-backend-port-sync and
+// get-webview-preload-path-sync) into a single synchronous round-trip during preload, before any paint.
+// get-webview-preload-path-sync itself was removed since preload.js was its only caller.
+ipcMain.on('get-preload-bootstrap-sync', (event) => {
+  event.returnValue = {
+    port: backendPort,
+    webviewPreloadPath: `file://${path.join(__dirname, 'webview-preload.js')}`,
+  };
 });
 ipcMain.handle('get-auth-token', async () => {
   // Wait for backend if it's still cold-starting; this is the lazy-backend gate that lets the window open while Python is warming up.
