@@ -344,4 +344,4 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   );
 };
 
-export default DashboardCanvas;
+export default React.memo(DashboardCanvas);

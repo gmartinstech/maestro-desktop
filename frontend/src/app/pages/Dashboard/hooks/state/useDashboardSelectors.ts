@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { shallowEqual } from 'react-redux';
 import { useAppSelector } from '@/shared/hooks';
 
 // All of the dashboard's Redux reads in one place. Keeps Dashboard.tsx a thin composition layer instead of a 25-line selector wall.
@@ -6,7 +7,7 @@ export function useDashboardSelectors(dashboardId: string) {
   const dashboardName = useAppSelector((state) =>
     dashboardId ? state.dashboards.items[dashboardId]?.name : undefined,
   );
-  const sessions = useAppSelector((state) => state.agents.sessions);
+  const sessions = useAppSelector((state) => state.agents.sessions, shallowEqual);
   const expandedSessionIds = useAppSelector((state) => state.agents.expandedSessionIds);
   const cards = useAppSelector((state) => state.dashboardLayout.cards);
   const viewCards = useAppSelector((state) => state.dashboardLayout.viewCards);

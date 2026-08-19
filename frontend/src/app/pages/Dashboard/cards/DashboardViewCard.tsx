@@ -6,6 +6,7 @@ import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+import CircularProgress from '@mui/material/CircularProgress';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import CloseIcon from '@mui/icons-material/Close';
@@ -27,10 +28,8 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ViewPreview, { ViewPreviewHandle } from '@/app/pages/Views/ViewPreview';
-import TerminalPanel, { TerminalLine } from '@/app/pages/Views/TerminalPanel';
-import AppCodePanel from '@/app/pages/Views/AppCodePanel';
+import type { TerminalLine } from '@/app/pages/Views/TerminalPanel';
 import HistoryPanel from '@/app/pages/Views/HistoryPanel';
-import { ShellPanel } from '@/app/pages/Views/ShellPanel';
 import ShareButton from '@/app/components/share/ShareButton';
 import { getDefault } from '@/shared/inputSchemaDefaults';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
@@ -42,6 +41,12 @@ import {
 import { postAppConsoleLine, terminalLineFromStream } from '@/shared/appTerminal';
 
 type AppCardView = 'preview' | 'code' | 'logs' | 'shell' | 'history';
+
+// Lazy: each pulls in a heavy dep (CodeMirror language packs, xterm) only worth downloading once its tab is opened.
+const TerminalPanel = React.lazy(() => import('@/app/pages/Views/TerminalPanel'));
+const AppCodePanel = React.lazy(() => import('@/app/pages/Views/AppCodePanel'));
+const ShellPanel = React.lazy(() => import('@/app/pages/Views/ShellPanel').then((m) => ({ default: m.ShellPanel })));
+const LAZY_PANEL_FALLBACK = <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress size={24} /></Box>;
 
 const TERMINAL_BUFFER_CAP = 5000;
 
@@ -736,7 +741,9 @@ const DashboardViewCard: React.FC<Props> = ({
         {output.workspace_id && activeView !== 'preview' && activeView !== 'shell' && (
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 13, bgcolor: c.bg.surface }}>
             {activeView === 'logs' ? (
-              <TerminalPanel lines={terminalLines} />
+              <React.Suspense fallback={LAZY_PANEL_FALLBACK}>
+                <TerminalPanel lines={terminalLines} />
+              </React.Suspense>
             ) : activeView === 'history' ? (
               <Box sx={{ height: '100%', overflow: 'auto' }}>
                 <HistoryPanel
@@ -746,7 +753,9 @@ const DashboardViewCard: React.FC<Props> = ({
                 />
               </Box>
             ) : (
-              <AppCodePanel workspaceId={output.workspace_id} onFileSaved={() => previewRef.current?.reload()} />
+              <React.Suspense fallback={LAZY_PANEL_FALLBACK}>
+                <AppCodePanel workspaceId={output.workspace_id} onFileSaved={() => previewRef.current?.reload()} />
+              </React.Suspense>
             )}
           </Box>
         )}
@@ -761,7 +770,9 @@ const DashboardViewCard: React.FC<Props> = ({
               visibility: activeView === 'shell' ? 'visible' : 'hidden',
             }}
           >
-            <ShellPanel workspaceId={output.workspace_id} instance={instance} active={activeView === 'shell'} />
+            <React.Suspense fallback={LAZY_PANEL_FALLBACK}>
+              <ShellPanel workspaceId={output.workspace_id} instance={instance} active={activeView === 'shell'} />
+            </React.Suspense>
           </Box>
         )}
         <BuildingOverlay show={showBuildingOverlay && activeView === 'preview'} />
