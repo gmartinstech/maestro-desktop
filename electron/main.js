@@ -2079,15 +2079,13 @@ app.whenReady().then(async () => {
     // Cache-clear is independent of the frontend server (different subsystems: an HTTP
     // server we own vs. Chromium's session cache), so run them concurrently — both just
     // need to finish before createWindow() loads the URL.
+    emitSplashStatus(t('appShell.splash.almostReady'));
     if (!isDev) {
       const frontendServerPromise = startFrontendServer().catch((err) => {
         console.error('[boot] frontend server failed to start, falling back to file://:', err && err.message);
       });
-      emitSplashStatus(t('appShell.splash.almostReady'));
       // Must run before createWindow loads the URL, or the renderer fetches the stale bundle first.
       await Promise.all([frontendServerPromise, clearStaleFrontendCache()]);
-    } else {
-      emitSplashStatus(t('appShell.splash.almostReady'));
     }
     createWindow();
     if (!isDev) {
