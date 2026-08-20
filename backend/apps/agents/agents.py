@@ -558,7 +558,7 @@ async def probe_model(body: dict):
         settings = load_settings()
         api_type = get_api_type(short_name)
         resolved = resolve_model_id_for_sdk(short_name, settings)
-        entry = find_builtin_model(short_name) or {}
+        entry = find_builtin_model(short_name, settings) or {}
         route = entry.get("route")
 
         import anthropic
