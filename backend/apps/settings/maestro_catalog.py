@@ -103,6 +103,7 @@ def parse_catalog(payload: object) -> Optional[List[MaestroModel]]:
             label=p_label_for(model_id),
             context_window=P_DEFAULT_CONTEXT_WINDOW,
             max_completion_tokens=P_DEFAULT_MAX_COMPLETION_TOKENS,
+            reasoning=True,
         )
         for model_id in sorted(ids, key=p_sort_key)
     ]

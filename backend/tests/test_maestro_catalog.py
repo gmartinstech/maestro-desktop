@@ -74,6 +74,13 @@ def test_an_unknown_model_is_offered_with_a_prettified_label():
     assert rows[1].max_completion_tokens == 4_096
 
 
+def test_parsed_rows_are_presumptively_reasoning_capable():
+    """Anything served off this Ollama-backed gateway is presumptively reasoning-capable."""
+    rows = parse_catalog(P_LIVE_PAYLOAD)
+    assert rows is not None
+    assert all(m.reasoning is True for m in rows)
+
+
 def test_unknown_models_sort_alphabetically_after_the_known_ones():
     rows = parse_catalog({"data": [{"id": "zeta"}, {"id": "maestro-code"}, {"id": "alpha"}]})
     assert rows is not None

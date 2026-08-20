@@ -35,18 +35,19 @@ class MaestroModel(BaseModel):
     label: str
     context_window: int
     max_completion_tokens: int
+    reasoning: bool = True
 
 
 # Straight from the vendor installers (launch.ps1?pi and ?chatgpt): 128k context and 4096 max output each. The set mirrors the gateway's own `allow` list; a mask missing here is simply unreachable from the picker.
 MAESTRO_MODELS: List[MaestroModel] = [
     MaestroModel(value="maestro-fast", label="Maestro Fast",
-                    context_window=128_000, max_completion_tokens=4_096),
+                    context_window=128_000, max_completion_tokens=4_096, reasoning=True),
     MaestroModel(value="maestro", label="Maestro",
-                    context_window=128_000, max_completion_tokens=4_096),
+                    context_window=128_000, max_completion_tokens=4_096, reasoning=True),
     MaestroModel(value="maestro-ultra", label="Maestro Ultra",
-                    context_window=128_000, max_completion_tokens=4_096),
+                    context_window=128_000, max_completion_tokens=4_096, reasoning=True),
     MaestroModel(value="maestro-code", label="Maestro Code",
-                    context_window=128_000, max_completion_tokens=4_096),
+                    context_window=128_000, max_completion_tokens=4_096, reasoning=True),
 ]
 
 # maestro-fast, not maestro: measured straight against the gateway with an identical trivial prompt,
