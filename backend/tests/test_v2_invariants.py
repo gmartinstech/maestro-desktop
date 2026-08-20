@@ -2230,6 +2230,63 @@ def test_custom_provider_value_synthesises_route_api_entry():
     assert entry.get("route") == "api"
     assert entry.get("model_id") == "cp-ollama-cloud/gpt-oss:120b"
     assert entry.get("router_model_id") == "cp-ollama-cloud/gpt-oss:120b"
+    assert entry.get("reasoning") is False
+
+
+def test_custom_provider_value_defaults_reasoning_false_without_settings():
+    """Every existing call site but list_models omits settings; behavior must not change for them."""
+    from backend.apps.agents.providers.registry import find_builtin_model
+    entry = find_builtin_model("custom/maestro/maestro-fast")
+    assert entry is not None
+    assert entry.get("reasoning") is False
+
+
+def test_custom_provider_value_reads_reasoning_from_matching_settings_row():
+    """When settings is passed, the real `reasoning` flag on the matching cp.models row wins."""
+    from backend.apps.agents.providers.registry import find_builtin_model
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    s = AppSettings(custom_providers=[
+        CustomProvider(
+            name="Maestro", base_url="https://llm.martinstech.net/v1", api_key="x",
+            models=[{"value": "maestro-fast", "label": "Maestro Fast", "reasoning": True}],
+        ),
+    ])
+    entry = find_builtin_model("custom/maestro/maestro-fast", s)
+    assert entry is not None
+    assert entry.get("reasoning") is True
+
+
+def test_custom_provider_value_reasoning_false_when_row_omits_the_flag():
+    from backend.apps.agents.providers.registry import find_builtin_model
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    s = AppSettings(custom_providers=[
+        CustomProvider(
+            name="Ollama Cloud", base_url="https://ollama.com/v1", api_key="x",
+            models=[{"value": "gpt-oss:120b", "label": "gpt-oss:120b"}],
+        ),
+    ])
+    entry = find_builtin_model("custom/ollama-cloud/gpt-oss:120b", s)
+    assert entry is not None
+    assert entry.get("reasoning") is False
+
+
+def test_custom_provider_value_reasoning_ignores_other_providers_models():
+    """A same-named model on a different provider must not leak its reasoning flag across slugs."""
+    from backend.apps.agents.providers.registry import find_builtin_model
+    from backend.apps.settings.models import AppSettings, CustomProvider
+    s = AppSettings(custom_providers=[
+        CustomProvider(
+            name="Maestro", base_url="https://llm.martinstech.net/v1", api_key="x",
+            models=[{"value": "shared-name", "label": "Shared", "reasoning": True}],
+        ),
+        CustomProvider(
+            name="Other", base_url="https://other.example/v1", api_key="y",
+            models=[{"value": "shared-name", "label": "Shared"}],
+        ),
+    ])
+    entry = find_builtin_model("custom/other/shared-name", s)
+    assert entry is not None
+    assert entry.get("reasoning") is False
 
 
 def test_custom_provider_value_resolve_model_id_returns_cp_prefix():

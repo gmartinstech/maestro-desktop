@@ -150,13 +150,16 @@ def find_custom_provider_for_value(settings, value: str):
     return None
 
 
-def find_builtin_model(short_name: str) -> dict | None:
+def find_builtin_model(short_name: str, settings: AppSettings | None = None) -> dict | None:
     """Look up a model entry by its short `value`.
 
     OpenRouter entries (prefixed `or:<vendor>/<model>`) and custom-provider
     entries (prefixed `custom/<slug>/<model_id>`) aren't in BUILTIN_MODELS ,
     they're synthesised on demand so the rest of the routing code can treat
-    them like BUILTIN_MODELS entries."""
+    them like BUILTIN_MODELS entries. `settings`, when passed, resolves the
+    real `reasoning` flag for a custom-provider entry off its `cp.models` row;
+    without it (every call site but list_models) reasoning stays False, matching
+    prior behavior."""
     for models in BUILTIN_MODELS.values():
         for m in models:
             if m.get("value") == short_name:
@@ -180,6 +183,15 @@ def find_builtin_model(short_name: str) -> dict | None:
         if slug and bare_model:
             # Routing string `cp-<slug>/<model>` matches the prefix we use when sync_custom_providers registers the provider node.
             routed = f"cp-{slug}/{bare_model}"
+            reasoning = False
+            for cp in getattr(settings, "custom_providers", None) or []:
+                if custom_provider_slug_for_lookup(getattr(cp, "name", "")) != slug:
+                    continue
+                for m in (getattr(cp, "models", None) or []):
+                    if m.get("value") == bare_model or m.get("id") == bare_model:
+                        reasoning = bool(m.get("reasoning", False))
+                        break
+                break
             return {
                 "value": short_name,
                 "label": bare_model,
@@ -188,7 +200,7 @@ def find_builtin_model(short_name: str) -> dict | None:
                 "router_model_id": routed,
                 "api": "custom",
                 "route": "api",
-                "reasoning": False,
+                "reasoning": reasoning,
             }
     return None
 

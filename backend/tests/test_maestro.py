@@ -53,6 +53,7 @@ def test_contract_matches_the_vendor_installers():
     for m in MAESTRO_MODELS:
         assert m.context_window == 128_000
         assert m.max_completion_tokens == 4_096
+        assert m.reasoning is True
     assert MAESTRO_DEFAULT_PROXY_URL == "https://llm.martinstech.net/v1"
 
 
