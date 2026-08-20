@@ -191,9 +191,11 @@ def inject_thinking_options(options_kwargs: Dict, session: AgentSession, prompt:
                     options_kwargs["thinking"] = {"type": "disabled"}
             elif level in ("low", "medium", "high"):
                 options_kwargs["effort"] = level
-        elif api_type in ("openai", "codex"):
-            # GPT-5 + Codex take reasoning_effort; 9Router carries the Anthropic-shaped `effort`.
-            if level in ("low", "medium", "high"):
+        elif api_type in ("openai", "codex", "custom"):
+            # GPT-5 + Codex + custom (Maestro gateway) take reasoning_effort; 9Router carries the Anthropic-shaped `effort`.
+            if level == "off":
+                options_kwargs["effort"] = "none"
+            elif level in ("low", "medium", "high"):
                 options_kwargs["effort"] = level
     except Exception as e:
         logger.debug(f"thinking_level param injection skipped: {e}")
