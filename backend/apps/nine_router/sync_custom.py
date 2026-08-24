@@ -28,7 +28,7 @@ NINE_ROUTER_CUSTOM_NAME_SUFFIX = " (Maestro-managed)"
 async def sync_openai_compat_node(api_key: str | None) -> None:
     """Create / update / delete the openai-compatible node + connection
     pair we use to ferry OpenAI requests through openai-passthrough."""
-    if not nr().is_running():
+    if not await nr().is_running():
         return
     import os as p_os
     port = p_os.environ.get("MAESTRO_PORT", "8324")
@@ -161,7 +161,7 @@ async def sync_custom_providers(providers: list) -> None:
     no longer in `providers` is deleted (which cascades to its connection).
     Silent no-op when 9Router isn't running.
     """
-    if not nr().is_running():
+    if not await nr().is_running():
         return
 
     try:

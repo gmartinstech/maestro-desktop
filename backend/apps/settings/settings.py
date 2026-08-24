@@ -63,7 +63,7 @@ async def settings_lifespan():
                 except Exception as e:
                     logger.warning(f"9Router lifespan boot failed: {e}")
             # Reconcile, don't just add: pass the key OR None so a cleared/never-set key also REMOVES the managed connection 9Router persists across restarts. The old add-only guards left a zombie managed key alive after disconnect, which kept routing to it (the "still defaults to gemini") and blocked the free trial from arming. Only acts when 9Router is already up (_sync no-ops if not).
-            if p_9r_running():
+            if await p_9r_running():
                 await sync_gemini_api_key(getattr(s, "google_api_key", None) or None)
                 await sync_openai_api_key(getattr(s, "openai_api_key", None) or None)
                 await sync_openrouter_api_key(getattr(s, "openrouter_api_key", None) or None)
@@ -269,7 +269,7 @@ async def apply_settings_update(body: AppSettings, protect_fields: set[str] | No
                     sync_openrouter_api_key,
                     sync_custom_providers,
                 )
-                if need_boot and not p_9r_running():
+                if need_boot and not await p_9r_running():
                     await p_9r_ensure()
                 if do_google:
                     await sync_gemini_api_key(google_key or None)

@@ -6,6 +6,7 @@ import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+import CircularProgress from '@mui/material/CircularProgress';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import CloseIcon from '@mui/icons-material/Close';
@@ -27,10 +28,8 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import ViewPreview, { ViewPreviewHandle } from '@/app/pages/Views/ViewPreview';
-import TerminalPanel, { TerminalLine } from '@/app/pages/Views/TerminalPanel';
-import AppCodePanel from '@/app/pages/Views/AppCodePanel';
+import type { TerminalLine } from '@/app/pages/Views/TerminalPanel';
 import HistoryPanel from '@/app/pages/Views/HistoryPanel';
-import { ShellPanel } from '@/app/pages/Views/ShellPanel';
 import ShareButton from '@/app/components/share/ShareButton';
 import { getDefault } from '@/shared/inputSchemaDefaults';
 import { useOverlayScrollPassthrough } from '../hooks/interaction/useOverlayScrollPassthrough';
@@ -42,6 +41,12 @@ import {
 import { postAppConsoleLine, terminalLineFromStream } from '@/shared/appTerminal';
 
 type AppCardView = 'preview' | 'code' | 'logs' | 'shell' | 'history';
+
+// Lazy: each pulls in a heavy dep (CodeMirror language packs, xterm) only worth downloading once its tab is opened.
+const TerminalPanel = React.lazy(() => import('@/app/pages/Views/TerminalPanel'));
+const AppCodePanel = React.lazy(() => import('@/app/pages/Views/AppCodePanel'));
+const ShellPanel = React.lazy(() => import('@/app/pages/Views/ShellPanel').then((m) => ({ default: m.ShellPanel })));
+const LAZY_PANEL_FALLBACK = <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress size={24} /></Box>;
 
 const TERMINAL_BUFFER_CAP = 5000;
 
@@ -168,6 +173,8 @@ const DashboardViewCard: React.FC<Props> = ({
   const [activeView, setActiveView] = useState<AppCardView>('preview');
   // Latches on first visit so a shell is never spawned for a card the user never opened it on, but survives every tab switch after.
   const [shellOpened, setShellOpened] = useState(false);
+  // The interactive shell is a developer affordance; without dev mode the tab does not exist at all.
+  const devMode = useAppSelector((s) => s.settings.data.dev_mode);
   const hasWorkspace = !!output.workspace_id;
   // Chevron rolls the whole header away so an immersive app fills the card; hovering the top edge peeks it back.
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
@@ -191,6 +198,9 @@ const DashboardViewCard: React.FC<Props> = ({
   useEffect(() => {
     if (activeView === 'shell') setShellOpened(true);
   }, [activeView]);
+  useEffect(() => {
+    if (!devMode && activeView === 'shell') setActiveView('preview');
+  }, [devMode, activeView]);
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const terminalLineIdRef = useRef(0);
   // Fed by the runtime logs WS (which replays its ring buffer on connect); frontend console lines arrive on the same socket via the console-log beacon echo.
@@ -619,7 +629,7 @@ const DashboardViewCard: React.FC<Props> = ({
                   { view: 'preview' as const, labelKey: 'dashboard.viewCard.preview', Icon: VisibilityRoundedIcon },
                   { view: 'code' as const, labelKey: 'dashboard.viewCard.code', Icon: CodeRoundedIcon },
                   { view: 'logs' as const, labelKey: 'dashboard.viewCard.logs', Icon: TerminalRoundedIcon },
-                  { view: 'shell' as const, labelKey: 'dashboard.viewCard.shell', Icon: KeyboardCommandKeyRoundedIcon },
+                  ...(devMode ? [{ view: 'shell' as const, labelKey: 'dashboard.viewCard.shell', Icon: KeyboardCommandKeyRoundedIcon }] : []),
                   { view: 'history' as const, labelKey: 'dashboard.viewCard.history', Icon: HistoryRoundedIcon },
                 ]).map(({ view, labelKey, Icon }) => (
                   <Tooltip key={view} title={t(labelKey)} placement="top">
@@ -736,7 +746,9 @@ const DashboardViewCard: React.FC<Props> = ({
         {output.workspace_id && activeView !== 'preview' && activeView !== 'shell' && (
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 13, bgcolor: c.bg.surface }}>
             {activeView === 'logs' ? (
-              <TerminalPanel lines={terminalLines} />
+              <React.Suspense fallback={LAZY_PANEL_FALLBACK}>
+                <TerminalPanel lines={terminalLines} />
+              </React.Suspense>
             ) : activeView === 'history' ? (
               <Box sx={{ height: '100%', overflow: 'auto' }}>
                 <HistoryPanel
@@ -746,12 +758,14 @@ const DashboardViewCard: React.FC<Props> = ({
                 />
               </Box>
             ) : (
-              <AppCodePanel workspaceId={output.workspace_id} onFileSaved={() => previewRef.current?.reload()} />
+              <React.Suspense fallback={LAZY_PANEL_FALLBACK}>
+                <AppCodePanel workspaceId={output.workspace_id} onFileSaved={() => previewRef.current?.reload()} />
+              </React.Suspense>
             )}
           </Box>
         )}
         {/* Shell sits outside the overlay switch and stays mounted once opened: re-initializing xterm and re-fitting on every tab switch is visibly jarring, even though the PTY itself survives server-side. */}
-        {output.workspace_id && shellOpened && (
+        {output.workspace_id && shellOpened && devMode && (
           <Box
             sx={{
               position: 'absolute',
@@ -761,7 +775,9 @@ const DashboardViewCard: React.FC<Props> = ({
               visibility: activeView === 'shell' ? 'visible' : 'hidden',
             }}
           >
-            <ShellPanel workspaceId={output.workspace_id} instance={instance} active={activeView === 'shell'} />
+            <React.Suspense fallback={LAZY_PANEL_FALLBACK}>
+              <ShellPanel workspaceId={output.workspace_id} instance={instance} active={activeView === 'shell'} />
+            </React.Suspense>
           </Box>
         )}
         <BuildingOverlay show={showBuildingOverlay && activeView === 'preview'} />

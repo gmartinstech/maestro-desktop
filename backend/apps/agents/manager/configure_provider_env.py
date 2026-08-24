@@ -25,7 +25,7 @@ async def router_available(global_settings: AppSettings) -> bool:
     booting a router with nothing to route."""
     from backend.apps.nine_router import ensure_running as p_ensure, is_running as p_running
     from backend.apps.nine_router.process import has_persisted_connections
-    if p_running():
+    if await p_running():
         return True
     p_evidence = any([
         getattr(global_settings, "anthropic_api_key", None),
@@ -39,7 +39,7 @@ async def router_available(global_settings: AppSettings) -> bool:
         return False
     logger.info("[MCP-DEBUG] 9Router down at provider detection; reviving before concluding")
     await p_ensure()
-    return p_running()
+    return await p_running()
 
 
 @typechecked
@@ -89,10 +89,10 @@ async def configure_provider_env(
         p_guard_pi(session.model, global_settings)
         # User OpenAI-compatible endpoint (Ollama/Together/LM Studio) via 9Router's synced provider node.
         from backend.apps.nine_router import ensure_running as p_9r_ensure_c
-        if not nine_router_running():
+        if not await nine_router_running():
             logger.info(f"[MCP-DEBUG] custom provider selected but 9Router not running; waiting for startup")
             await p_9r_ensure_c()
-            if not nine_router_running():
+            if not await nine_router_running():
                 raise ValueError(
                     "9Router could not start. Custom OpenAI-compatible "
                     "providers need 9Router to translate the Anthropic "
@@ -134,11 +134,11 @@ async def configure_provider_env(
         logger.info(f"[MCP-DEBUG] Using direct Google API key (route=api) for {session.model} via local proxy")
     elif api_type == "openrouter" and getattr(global_settings, "openrouter_api_key", None):
         # OpenRouter via 9Router; with no Anthropic key/sub, fall back to OR's resold Claude for subagents (incl. WebSearch delegation) so they stay on the same OR billing.
-        if not nine_router_running():
+        if not await nine_router_running():
             from backend.apps.nine_router import ensure_running as nine_router_ensure
             logger.info(f"[MCP-DEBUG] OpenRouter selected but 9Router not running; waiting for startup")
             await nine_router_ensure()
-            if not nine_router_running():
+            if not await nine_router_running():
                 raise ValueError(
                     "9Router could not start. OpenRouter routing requires "
                     "Node.js, install it and restart the app, or pick a "

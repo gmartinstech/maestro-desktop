@@ -67,8 +67,31 @@ p_start_lock: "asyncio.Lock | None" = None
 P_IS_RUNNING_TTL = 10.0
 p_is_running_last_ok: float = 0.0
 
+# Short TTL cache for the last is_running() outcome (either way), far shorter than the positive TTL: a router that's genuinely down (crashed) must be re-detected quickly by ensure_running(), but a router that's merely slow to answer the HTTP confirm (busy streaming inference) shouldn't force every caller in this 1s window to re-pay the full up-to-2s synchronous timeout.
+P_IS_RUNNING_NEGATIVE_TTL = 1.0
+p_is_running_last_checked: float = 0.0
+p_is_running_last_result: bool = False
 
-def is_running() -> bool:
+
+def p_invalidate_is_running_cache() -> None:
+    """Reset every is_running() cache slot together so the very next call is forced to re-probe; a partial reset (e.g. only p_is_running_last_ok) leaves the outcome cache able to replay a stale True through the 1s window right after a detected crash."""
+    global p_is_running_last_ok, p_is_running_last_checked, p_is_running_last_result
+    p_is_running_last_ok = 0.0
+    p_is_running_last_checked = 0.0
+    p_is_running_last_result = False
+
+
+def p_tcp_port_open() -> bool:
+    """Cheap synchronous TCP connect probe to 9Router's port, no HTTP confirm. Used by is_running()
+    and by cli_auth_token(), which is itself sync and can't await the full async is_running()."""
+    try:
+        with socket.create_connection(("127.0.0.1", NINE_ROUTER_PORT), timeout=0.3):
+            return True
+    except OSError:
+        return False
+
+
+async def is_running() -> bool:
     """Check if 9Router is running.
 
     Fast-fail when down. is_running() is called ~5x on the cold boot path (the
@@ -80,23 +103,31 @@ def is_running() -> bool:
     socket.create_connection here). Fix: probe 127.0.0.1 with a 0.3s TCP timeout
     first; a down 9Router is detected in <~0.3s instead of ~7s. Only when the
     port is open do we do the HTTP confirm. 9Router binds 0.0.0.0 (the warm app
-    reaches it via 127.0.0.1 today), so this changes timing, not reachability."""
-    global p_is_running_last_ok
+    reaches it via 127.0.0.1 today), so this changes timing, not reachability.
+    The HTTP confirm itself runs in a thread so a slow-to-answer router never
+    blocks the event loop for other sessions' concurrent WS/HTTP traffic."""
+    global p_is_running_last_ok, p_is_running_last_checked, p_is_running_last_result
     now = time.monotonic()
     if now - p_is_running_last_ok < P_IS_RUNNING_TTL:
         return True
-    try:
-        with socket.create_connection(("127.0.0.1", NINE_ROUTER_PORT), timeout=0.3):
-            pass
-    except OSError:
+    if now - p_is_running_last_checked < P_IS_RUNNING_NEGATIVE_TTL:
+        return p_is_running_last_result
+    if not p_tcp_port_open():
+        p_is_running_last_checked = now
+        p_is_running_last_result = False
         return False
     try:
-        r = httpx.get(f"http://127.0.0.1:{NINE_ROUTER_PORT}/v1/models", timeout=2.0)
+        r = await asyncio.to_thread(httpx.get, f"http://127.0.0.1:{NINE_ROUTER_PORT}/v1/models", timeout=2.0)
+        p_is_running_last_checked = now
         if r.status_code == 200:
             p_is_running_last_ok = now
+            p_is_running_last_result = True
             return True
+        p_is_running_last_result = False
         return False
     except Exception:
+        p_is_running_last_checked = now
+        p_is_running_last_result = False
         return False
 
 
@@ -266,7 +297,7 @@ def cli_auth_token() -> str | None:
     global p_cli_token_cache
     if p_cli_token_cache:
         return p_cli_token_cache
-    if not is_running():
+    if not p_tcp_port_open():
         return None
     try:
         data_dir = p_nine_router_data_dir()
@@ -491,7 +522,7 @@ async def ensure_running():
     async with p_start_lock:
         await p_ensure_running_impl()
     # Arm both healers the moment the router becomes a live dependency; users who never route through it never spawn them.
-    if is_running():
+    if await is_running():
         start_watchdog()
         start_death_watcher()
 
@@ -520,25 +551,24 @@ watchdog_task: "asyncio.Task | None" = None
 
 async def watchdog_loop() -> None:
     """Backstop healer for routers we DIDN'T spawn (adopted port-holders have no handle for the
-    death-watcher). Two-strike confirmation before reviving: the sync is_running probe can
+    death-watcher). Two-strike confirmation before reviving: the is_running probe can
     false-negative while a busy router streams, and acting on one bad probe would rotate a LIVE
     router's request log and burn a duplicate spawn attempt."""
     failures = 0
-    p_loop = asyncio.get_running_loop()
     while True:
         await asyncio.sleep(WATCHDOG_BACKOFF_SECONDS if failures >= 3 else WATCHDOG_INTERVAL_SECONDS)
         try:
-            # is_running()'s HTTP confirm is SYNC and can stall 2s while the router is busy streaming; a periodic pulse must never block the event loop, so probe from a thread.
-            if await p_loop.run_in_executor(None, is_running):
+            # is_running() already offloads its HTTP confirm to a thread internally, so a periodic pulse never blocks the event loop.
+            if await is_running():
                 failures = 0
                 continue
             await asyncio.sleep(2)
-            if await p_loop.run_in_executor(None, is_running):
+            if await is_running():
                 failures = 0
                 continue
             logger.warning("9Router watchdog: router is down (confirmed twice); reviving")
             await ensure_running()
-            if is_running():
+            if await is_running():
                 failures = 0
                 logger.info("9Router watchdog: revived")
             else:
@@ -558,7 +588,6 @@ recent_death_monos: "list[float]" = []
 
 
 async def death_watch(proc_handle: "subprocess.Popen[Any]") -> None:
-    global p_is_running_last_ok
     loop = asyncio.get_running_loop()
     try:
         await loop.run_in_executor(None, proc_handle.wait)
@@ -576,7 +605,7 @@ async def death_watch(proc_handle: "subprocess.Popen[Any]") -> None:
         logger.warning("9Router died 3x in 60s; leaving revival to the backed-off watchdog")
         return
     logger.warning("9Router process died; instant revive")
-    p_is_running_last_ok = 0.0
+    p_invalidate_is_running_cache()
     await ensure_running()
 
 
@@ -606,12 +635,12 @@ def start_watchdog() -> None:
 
 async def p_ensure_running_impl():
     """Start 9Router if not already running."""
-    global p_process, p_is_running_last_ok
+    global p_process
     p_is_packaged = os.environ.get("MAESTRO_PACKAGED") == "1"
     # Before the is_running() early-return, so an adopted router's dir gets tightened too, and before any spawn so 9Router writes its credentials into an already-locked dir.
     secure_data_dir()
 
-    if is_running():
+    if await is_running():
         # In dev mode, kill stale standalone servers (from previous builds) so we can start `next dev` which always uses latest source code
         if not p_is_packaged:
             # But never kill the instance WE already started: a second ensure call (another sub-app's lifespan races settings') would pkill our fresh next-server, leaving a dead window the boot key-sync fails into, so the cp-openai node never registers and gpt-5.* own-key dies.
@@ -627,8 +656,8 @@ async def p_ensure_running_impl():
                 if result.stdout.strip():
                     logger.info("Dev mode: killing stale standalone 9Router to use next dev instead")
                     p_sp.run(["pkill", "-f", "next-server"], timeout=5)
-                    # The port is about to go dead; drop the positive-cache so the start-loop below actually re-probes instead of trusting the killed server's stale "ready".
-                    p_is_running_last_ok = 0.0
+                    # The port is about to go dead; drop the whole cache so the start-loop below actually re-probes instead of trusting the killed server's stale "ready".
+                    p_invalidate_is_running_cache()
                     await asyncio.sleep(2)
                 else:
                     logger.info("9Router already running on port %d", NINE_ROUTER_PORT)
@@ -708,7 +737,7 @@ async def p_ensure_running_impl():
         timeout = 20 if p_is_packaged else 30
         for _ in range(timeout * 2):
             await asyncio.sleep(0.5)
-            if is_running():
+            if await is_running():
                 logger.info("9Router started successfully")
                 return
         # Verify-at-boot: it never answered. Report with the captured tail + the exit code (non-None = it crashed; None = wedged or just slow).
@@ -779,7 +808,7 @@ async def get_latest_reasoning_tokens(model_hint: str | None = None) -> int | No
     tokens in its API response; so callers get None and should fall
     back to the heuristic.
     """
-    if not is_running():
+    if not await is_running():
         return None
     try:
         async with httpx.AsyncClient(timeout=2.0, headers=cli_auth_headers()) as client:

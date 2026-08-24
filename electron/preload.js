@@ -15,8 +15,9 @@ try {
 } catch (e) { console.log('[diag][preload] e2e-flag setup failed:', e && e.message); }
 
 // Synchronous exposure. The previous async IIFE (await ipcRenderer.invoke) raced React mount: any code reading window.maestro during the gap (BrowserCard's Electron-detection falling back to iframe mode, AgentChat's auth-token call throwing) saw undefined. sendSync blocks the renderer for one IPC round-trip during preload before any user-visible paint, so window.maestro is guaranteed to exist before the first frontend bundle evaluates.
-const port = ipcRenderer.sendSync('get-backend-port-sync');
-const webviewPreloadPath = ipcRenderer.sendSync('get-webview-preload-path-sync');
+// Coalesced into a single round-trip: this used to be two separate sendSync calls (get-backend-port-sync,
+// get-webview-preload-path-sync); get-preload-bootstrap-sync returns both values from one main-process handler.
+const { port, webviewPreloadPath } = ipcRenderer.sendSync('get-preload-bootstrap-sync');
 
 contextBridge.exposeInMainWorld('__MAESTRO_PORT__', port);
 

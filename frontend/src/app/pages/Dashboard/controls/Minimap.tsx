@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback, useMemo, useState, useEffect } from 'react';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition, WorkflowCardPosition, WorkflowsHubPosition, ElementPosition } from '@/shared/state/dashboardLayoutSlice';
 
@@ -66,16 +66,33 @@ const Minimap: React.FC<MinimapProps> = ({
     return result;
   }, [cards, viewCards, browserCards, workflowCards, workflowsHub, elements]);
 
+  const [throttled, setThrottled] = useState({ panX, panY, zoom });
+  const lastUpdateRef = useRef(0);
+  useEffect(() => {
+    const now = performance.now();
+    const MIN_INTERVAL_MS = 66; // ~15fps is plenty for a secondary viewport indicator
+    if (now - lastUpdateRef.current >= MIN_INTERVAL_MS) {
+      lastUpdateRef.current = now;
+      setThrottled({ panX, panY, zoom });
+    } else {
+      const timeout = setTimeout(() => {
+        lastUpdateRef.current = performance.now();
+        setThrottled({ panX, panY, zoom });
+      }, MIN_INTERVAL_MS - (now - lastUpdateRef.current));
+      return () => clearTimeout(timeout);
+    }
+  }, [panX, panY, zoom]);
+
   const layout = useMemo(() => {
     const vp = viewportRef.current;
     const vpW = vp ? vp.clientWidth : 1200;
     const vpH = vp ? vp.clientHeight : 800;
 
     const vpRect = {
-      x: -panX / zoom,
-      y: -panY / zoom,
-      width: vpW / zoom,
-      height: vpH / zoom,
+      x: -throttled.panX / throttled.zoom,
+      y: -throttled.panY / throttled.zoom,
+      width: vpW / throttled.zoom,
+      height: vpH / throttled.zoom,
     };
 
     if (allCards.length === 0) {
@@ -112,7 +129,7 @@ const Minimap: React.FC<MinimapProps> = ({
       offsetY: (MINIMAP_H - contentH * scale) / 2 - minY * scale,
       vpRect,
     };
-  }, [allCards, panX, panY, zoom, viewportRef]);
+  }, [allCards, throttled.panX, throttled.panY, throttled.zoom, viewportRef]);
 
   const minimapToCanvas = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -192,4 +209,4 @@ const Minimap: React.FC<MinimapProps> = ({
   );
 };
 
-export default Minimap;
+export default React.memo(Minimap);

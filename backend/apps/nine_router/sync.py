@@ -53,7 +53,7 @@ async def p_sync_apikey_provider(
     label: str,
 ) -> None:
     """Create/update/delete an Maestro-managed apikey connection. Silent if 9Router is down."""
-    if not nr().is_running():
+    if not await nr().is_running():
         return
 
     existing = await find_keyed_connection(provider, name)

@@ -79,7 +79,7 @@ class FakeNr:
 
         self.httpx = P_Httpx()
 
-    def is_running(self) -> bool:
+    async def is_running(self) -> bool:
         return True
 
 
