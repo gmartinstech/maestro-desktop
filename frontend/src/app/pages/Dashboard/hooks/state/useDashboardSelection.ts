@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, RefObject } from 'react';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition, NotePosition, WorkflowCardPosition, WorkflowsHubPosition, ElementPosition } from '@/shared/state/dashboardLayoutSlice';
 import { viewCardKey } from '@/shared/state/dashboardLayoutSlice';
+import { computeMarqueeSelection } from './computeMarqueeSelection';
 
 export type { CardType } from '@/shared/state/dashboardLayoutSlice';
 import type { CardType } from '@/shared/state/dashboardLayoutSlice';
@@ -25,18 +26,6 @@ interface ScreenToCanvas {
 }
 
 const DRAG_THRESHOLD = 4;
-
-function rectsIntersect(
-  a: { x: number; y: number; width: number; height: number },
-  b: { x: number; y: number; width: number; height: number },
-): boolean {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
-  );
-}
 
 export function useDashboardSelection(
   canvas: ScreenToCanvas,
@@ -116,115 +105,19 @@ export function useDashboardSelection(
     return Array.from(selectedIds.entries()).map(([id, type]) => ({ id, type }));
   }, [selectedIds]);
 
-  const computeMarqueeSelection = useCallback(
-    (rect: MarqueeRect, shiftKey: boolean) => {
-      const intersecting = new Map<string, CardType>();
-
-      for (const card of Object.values(cards)) {
-        if (
-          rectsIntersect(rect, {
-            x: card.x,
-            y: card.y,
-            width: card.width,
-            height: card.height,
-          })
-        ) {
-          intersecting.set(card.session_id, 'agent');
-        }
-      }
-
-      for (const vc of Object.values(viewCards)) {
-        if (
-          rectsIntersect(rect, {
-            x: vc.x,
-            y: vc.y,
-            width: vc.width,
-            height: vc.height,
-          })
-        ) {
-          intersecting.set(viewCardKey(vc.output_id, vc.instance), 'view');
-        }
-      }
-
-      for (const bc of Object.values(browserCards)) {
-        if (
-          rectsIntersect(rect, {
-            x: bc.x,
-            y: bc.y,
-            width: bc.width,
-            height: bc.height,
-          })
-        ) {
-          intersecting.set(bc.browser_id, 'browser');
-        }
-      }
-
-      for (const n of Object.values(notes)) {
-        if (
-          rectsIntersect(rect, {
-            x: n.x,
-            y: n.y,
-            width: n.width,
-            height: n.height,
-          })
-        ) {
-          intersecting.set(n.note_id, 'note');
-        }
-      }
-
-      for (const wc of Object.values(workflowCards)) {
-        if (
-          rectsIntersect(rect, {
-            x: wc.x,
-            y: wc.y,
-            width: wc.width,
-            height: wc.height,
-          })
-        ) {
-          intersecting.set(wc.workflow_id, 'workflow');
-        }
-      }
-
-      if (
-        workflowsHub &&
-        rectsIntersect(rect, {
-          x: workflowsHub.x,
-          y: workflowsHub.y,
-          width: workflowsHub.width,
-          height: workflowsHub.height,
-        })
-      ) {
-        intersecting.set('workflows-hub', 'workflows-hub');
-      }
-
-      for (const el of Object.values(elements)) {
-        if (
-          rectsIntersect(rect, {
-            x: el.x,
-            y: el.y,
-            width: el.width,
-            height: el.height,
-          })
-        ) {
-          intersecting.set(el.element_id, 'element');
-        }
-      }
-
-      if (shiftKey) {
-        const base = selectionBeforeMarqueeRef.current;
-        const next = new Map(base);
-        for (const [id, type] of intersecting) {
-          if (next.has(id)) {
-            next.delete(id);
-          } else {
-            next.set(id, type);
-          }
-        }
-        return next;
-      }
-
-      return intersecting;
-    },
+  const computeMarquee = useCallback(
+    (rect: MarqueeRect, shiftKey: boolean) => computeMarqueeSelection(
+      rect,
+      shiftKey,
+      selectionBeforeMarqueeRef.current,
+      cards,
+      viewCards,
+      browserCards,
+      notes,
+      workflowCards,
+      workflowsHub,
+      elements,
+    ),
     [cards, viewCards, browserCards, notes, workflowCards, workflowsHub, elements],
   );
 
@@ -269,9 +162,9 @@ export function useDashboardSelection(
       };
 
       setMarquee(rect);
-      setSelectedIds(computeMarqueeSelection(rect, shiftHeldRef.current));
+      setSelectedIds(computeMarquee(rect, shiftHeldRef.current));
     },
-    [screenToCanvas, computeMarqueeSelection],
+    [screenToCanvas, computeMarquee],
   );
 
   const handleCanvasMouseUp = useCallback(

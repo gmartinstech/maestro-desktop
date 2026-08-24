@@ -21,7 +21,7 @@ import {
   EXPANDED_CARD_MIN_H,
 } from '@/shared/state/dashboardLayoutSlice';
 import type { CardType, useDashboardSelection } from '../state/useDashboardSelection';
-import type { CanvasActions } from '../interaction/useCanvasControls';
+import type { CanvasActions } from '../interaction/pointer/useCanvasControls';
 import { useSpawnPlacement } from './useSpawnPlacement';
 
 type Selection = ReturnType<typeof useDashboardSelection>;

@@ -6,9 +6,10 @@ from backend.apps.swarm.entities.modes import ModeExportable
 from backend.apps.swarm.entities.SessionExportable import SessionExportable
 from backend.apps.swarm.entities.skills import SkillExportable
 from backend.apps.swarm.entities.workflows import WorkflowExportable
+from backend.apps.swarm.exportable import Exportable
 from backend.apps.swarm.models import EntityType
 
-REGISTRY: dict[EntityType, type] = {
+REGISTRY: dict[EntityType, type[Exportable]] = {
     EntityType.skill: SkillExportable,
     EntityType.app: AppExportable,
     EntityType.workflow: WorkflowExportable,
@@ -28,5 +29,5 @@ IMPORT_ORDER = [
 ]
 
 
-def get_exportable(etype: EntityType) -> type | None:
+def get_exportable(etype: EntityType) -> type[Exportable] | None:
     return REGISTRY.get(etype)

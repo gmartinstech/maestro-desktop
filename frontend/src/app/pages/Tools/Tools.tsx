@@ -36,7 +36,7 @@ import ToolSection from './cards/ToolSection';
 import BrowserPermissionCard from './cards/BrowserPermissionCard';
 import RegistryBrowserDialog from './dialogs/RegistryBrowserDialog';
 import ToolDialogs from './dialogs/ToolDialogs';
-import CustomToolCard from './cards/CustomToolCard';
+import CustomToolCard from './cards/custom/CustomToolCard';
 import IntegrationGalleryCard from './cards/IntegrationGalleryCard';
 import { useToolsActions } from './hooks/useToolsActions';
 import { useBuiltinSections } from './hooks/useBuiltinSections';

@@ -729,7 +729,7 @@ def render_route_hint(skill: dict, task: str, score: float) -> tuple[str, list[t
     from backend.apps.agents.browser import browser_batch_replay
     _, values = template_task(task)
     # first_unsafe_step is the batching boundary (it stops at composer typing too); the IRREVERSIBLE flag goes only on genuinely outward-facing clicks
-    unsafe_i, p_why = first_unsafe_step(steps)
+    unsafe_i, _ = first_unsafe_step(steps)
     lines = []
     for i, s in enumerate(steps):
         mark = ""

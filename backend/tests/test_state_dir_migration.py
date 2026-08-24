@@ -83,5 +83,5 @@ def test_terminal_log_path_migrates_for_an_existing_workspace(tmp_path, monkeypa
     from backend.apps.outputs import runtime as p_runtime
     p_write(str(tmp_path / LEGACY_STATE_DIR_NAME / "terminal.log"), "previous run")
     rt = p_runtime.AppRuntime(workspace_id="ws-1", workspace_path=str(tmp_path))
-    assert rt.p_terminal_log_path == str(tmp_path / STATE_DIR_NAME / "terminal.log")
-    assert p_read(rt.p_terminal_log_path) == "previous run"
+    assert rt.terminal_log_path == str(tmp_path / STATE_DIR_NAME / "terminal.log")
+    assert p_read(rt.terminal_log_path) == "previous run"
