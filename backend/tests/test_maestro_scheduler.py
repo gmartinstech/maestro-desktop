@@ -148,7 +148,7 @@ async def test_the_refresh_writes_only_the_token_and_never_reverts_a_concurrent_
     import backend.apps.settings.store as store_mod
     monkeypatch.setattr(store_mod, "load_settings", lambda: AppSettings(provedor_ia_token=None))
 
-    async def p_stop_after_one(_seconds):
+    async def p_stop_after_one(_):
         raise asyncio.CancelledError
 
     monkeypatch.setattr(mod.asyncio, "sleep", p_stop_after_one)

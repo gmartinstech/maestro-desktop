@@ -166,14 +166,14 @@ def windows_acl_command(path: str) -> list[str]:
     """
     return [
         "icacls", path, "/inheritance:r",
-        "/grant:r", f"{p_current_user_principal()}:(OI)(CI)F",
+        "/grant:r", f"{current_user_principal()}:(OI)(CI)F",
         "/grant:r", "*S-1-5-18:(OI)(CI)F",
         "/grant:r", "*S-1-5-32-544:(OI)(CI)F",
         "/T", "/C", "/Q",
     ]
 
 
-def p_current_user_principal() -> str:
+def current_user_principal() -> str:
     """An icacls principal for the current user that actually resolves.
 
     getpass.getuser() returns a BARE name, which icacls fails to resolve on a domain-joined host
@@ -194,7 +194,7 @@ def p_current_user_principal() -> str:
     return f"{domain}\\{user}" if domain else user
 
 
-def p_harden_windows_acl(path: str) -> None:
+def harden_windows_acl(path: str) -> None:
     """Best-effort, once per process: os.chmod is a no-op for access control on Windows (it only
     flips the read-only bit, which would actively break 9Router's writes), so the only real
     mechanism is an ACL edit via icacls. Failure is non-fatal and never logged with any file
@@ -272,7 +272,7 @@ def secure_data_dir(data_dir: str | None = None) -> str:
         elif os.name != "nt" and stat.S_IMODE(os.stat(path).st_mode) != DATA_DIR_MODE:
             os.chmod(path, DATA_DIR_MODE)
         if os.name == "nt":
-            p_harden_windows_acl(path)
+            harden_windows_acl(path)
             return path
         for rel in CREDENTIAL_RELPATHS:
             p_file = os.path.join(path, rel)

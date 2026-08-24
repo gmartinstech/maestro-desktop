@@ -119,7 +119,7 @@ class AppRuntime:
         self.log_buffer: deque[LogLine] = deque(maxlen=LOG_BUFFER_LINES)
         # On-disk tee of the ring buffer so the App Builder agent can inspect terminal output itself (Read/grep); reset on every start(). Secondary instances get a suffixed file so they don't clobber the primary's.
         log_name = "terminal.log" if self.instance <= 1 else f"terminal-{self.instance}.log"
-        self.p_terminal_log_path = state_dir(workspace_path, log_name)
+        self.terminal_log_path = state_dir(workspace_path, log_name)
         self.p_terminal_log_bytes = 0
         self.p_subscribers: set[LogSubscriber] = set()
         # Recent build/runtime errors scraped from stderr; drained by the agent's post-tool hook after Write/Edit so the agent sees vite/babel/uvicorn errors in its next turn and can self-fix instead of leaving the user with a red iframe overlay.
@@ -528,8 +528,8 @@ class AppRuntime:
 
     def p_reset_terminal_log(self) -> None:
         try:
-            os.makedirs(os.path.dirname(self.p_terminal_log_path), exist_ok=True)
-            with open(self.p_terminal_log_path, "w", encoding="utf-8") as f:
+            os.makedirs(os.path.dirname(self.terminal_log_path), exist_ok=True)
+            with open(self.terminal_log_path, "w", encoding="utf-8") as f:
                 f.write("# App terminal output (backend stdout/stderr, runtime events, frontend console). Reset on every app start.\n")
             self.p_terminal_log_bytes = 0
         except Exception:
@@ -542,12 +542,12 @@ class AppRuntime:
             rendered = f"{prefix} {line.text}\n"
             if self.p_terminal_log_bytes > TERMINAL_LOG_MAX_BYTES:
                 # Rewrite from the ring buffer so the file self-heals to the last LOG_BUFFER_LINES lines instead of growing unbounded.
-                with open(self.p_terminal_log_path, "w", encoding="utf-8") as f:
+                with open(self.terminal_log_path, "w", encoding="utf-8") as f:
                     for old in list(self.log_buffer):
                         f.write(f"{TERMINAL_LOG_PREFIXES.get(old.stream, f'[{old.stream}]')} {old.text}\n")
-                self.p_terminal_log_bytes = os.path.getsize(self.p_terminal_log_path)
+                self.p_terminal_log_bytes = os.path.getsize(self.terminal_log_path)
                 return
-            with open(self.p_terminal_log_path, "a", encoding="utf-8") as f:
+            with open(self.terminal_log_path, "a", encoding="utf-8") as f:
                 f.write(rendered)
             self.p_terminal_log_bytes += len(rendered.encode("utf-8", errors="replace"))
         except Exception:

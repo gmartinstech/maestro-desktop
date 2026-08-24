@@ -25,7 +25,7 @@ import {
 } from '@/shared/state/dashboardLayoutSlice';
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
 import type { ContextPath } from '@/app/components/editor/DirectoryBrowser';
-import type { CanvasActions } from '../interaction/useCanvasControls';
+import type { CanvasActions } from '../interaction/pointer/useCanvasControls';
 import type { useDashboardSelection } from '../state/useDashboardSelection';
 import { useSpawnPlacement } from './useSpawnPlacement';
 

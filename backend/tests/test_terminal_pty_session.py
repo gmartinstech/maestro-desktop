@@ -136,7 +136,7 @@ async def test_eof_broadcasts_the_empty_chunk_that_signals_exit(tmp_path):
     session.subscribe(got.append)
     await session.start()
     await asyncio.sleep(0.05)
-    fake.p_gate.set()
+    fake.kill()
     await asyncio.sleep(0.05)
     assert got[-1] == b""
     assert session.running is False

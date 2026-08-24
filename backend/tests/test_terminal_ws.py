@@ -25,6 +25,11 @@ class p_StubSession:
         callback(b"replayed")
         return lambda: None
 
+    def emit(self, data: bytes) -> None:
+        """Simulate a live PTY chunk arriving after the initial subscribe() replay."""
+        if self.p_callback:
+            self.p_callback(data)
+
     def write(self, data):
         self.written.append(data)
 
@@ -118,7 +123,7 @@ def test_live_output_streams_after_connect(monkeypatch, p_stub):
     with client.websocket_connect("/ws/terminal/ws1") as ws:
         json.loads(ws.receive_text())
         json.loads(ws.receive_text())
-        p_stub.p_callback(b"\x1b[31mred\x1b[0m")
+        p_stub.emit(b"\x1b[31mred\x1b[0m")
         out = json.loads(ws.receive_text())
         assert out["event"] == "term:output"
         assert base64.b64decode(out["data"]["data"]) == b"\x1b[31mred\x1b[0m"

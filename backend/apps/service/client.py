@@ -34,13 +34,6 @@ from backend.apps.service.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-P_PATH_BY_KIND = {
-    "state": "/api/service/state",
-    "session": "/api/service/sync",
-    "diagnostic": "/api/service/diagnostics",
-    "event": "/api/service/event",
-}
-
 P_TIMEOUT_SECONDS = 5.0
 P_MAX_INFLIGHT = 16
 

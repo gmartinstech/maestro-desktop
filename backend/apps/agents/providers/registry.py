@@ -141,7 +141,7 @@ def find_custom_provider_for_value(settings, value: str):
     if not isinstance(value, str) or not value.startswith(CUSTOM_VALUE_PREFIX):
         return None
     rest = value[len(CUSTOM_VALUE_PREFIX):]
-    slug, p_sep, p_bare = rest.partition("/")
+    slug, _, _ = rest.partition("/")
     if not slug:
         return None
     for cp in getattr(settings, "custom_providers", None) or []:
@@ -179,7 +179,7 @@ def find_builtin_model(short_name: str, settings: AppSettings | None = None) -> 
             }
     if isinstance(short_name, str) and short_name.startswith(CUSTOM_VALUE_PREFIX):
         rest = short_name[len(CUSTOM_VALUE_PREFIX):]
-        slug, p_sep, bare_model = rest.partition("/")
+        slug, _, bare_model = rest.partition("/")
         if slug and bare_model:
             # Routing string `cp-<slug>/<model>` matches the prefix we use when sync_custom_providers registers the provider node.
             routed = f"cp-{slug}/{bare_model}"
@@ -363,7 +363,7 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
         bare_model = model
         if isinstance(model, str) and model.startswith(CUSTOM_VALUE_PREFIX):
             rest = model[len(CUSTOM_VALUE_PREFIX):]
-            p_slug, p_sep, bare_model = rest.partition("/")
+            _, _, bare_model = rest.partition("/")
         for cp in getattr(settings, "custom_providers", []):
             for m in (getattr(cp, "models", None) or []):
                 if m.get("value") == bare_model or m.get("id") == bare_model:

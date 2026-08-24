@@ -10,7 +10,7 @@ import FitScreenIcon from '@mui/icons-material/FitScreen';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import MapIcon from '@mui/icons-material/Map';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import type { CanvasActions } from '../hooks/interaction/useCanvasControls';
+import type { CanvasActions } from '../hooks/interaction/pointer/useCanvasControls';
 import Minimap from './Minimap';
 import type { MinimapProps } from './Minimap';
 

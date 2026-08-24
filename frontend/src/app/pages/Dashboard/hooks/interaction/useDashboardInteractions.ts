@@ -4,7 +4,7 @@ import { useAppDispatch } from '@/shared/hooks';
 import { collapseSession, expandSession } from '@/shared/state/agentsSlice';
 import { bringToFront } from '@/shared/state/dashboardLayoutSlice';
 import type { CardType, useDashboardSelection } from '../state/useDashboardSelection';
-import type { useCanvasControls } from './useCanvasControls';
+import type { useCanvasControls } from './pointer/useCanvasControls';
 
 type Selection = ReturnType<typeof useDashboardSelection>;
 type Canvas = ReturnType<typeof useCanvasControls>;
