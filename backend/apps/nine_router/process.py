@@ -68,7 +68,7 @@ P_IS_RUNNING_TTL = 10.0
 p_is_running_last_ok: float = 0.0
 
 # Short TTL cache for the last is_running() outcome (either way), far shorter than the positive TTL: a router that's genuinely down (crashed) must be re-detected quickly by ensure_running(), but a router that's merely slow to answer the HTTP confirm (busy streaming inference) shouldn't force every caller in this 1s window to re-pay the full up-to-2s synchronous timeout.
-P_IS_RUNNING_NEGATIVE_TTL = 1.0
+IS_RUNNING_NEGATIVE_TTL = 1.0
 p_is_running_last_checked: float = 0.0
 p_is_running_last_result: bool = False
 
@@ -110,7 +110,7 @@ async def is_running() -> bool:
     now = time.monotonic()
     if now - p_is_running_last_ok < P_IS_RUNNING_TTL:
         return True
-    if now - p_is_running_last_checked < P_IS_RUNNING_NEGATIVE_TTL:
+    if now - p_is_running_last_checked < IS_RUNNING_NEGATIVE_TTL:
         return p_is_running_last_result
     if not p_tcp_port_open():
         p_is_running_last_checked = now
