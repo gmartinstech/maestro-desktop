@@ -21,7 +21,7 @@ import type { AgentSession } from '@/shared/state/agentsSlice';
 import { saveLayout, viewCardKey } from '@/shared/state/dashboardLayoutSlice';
 import type { CardPosition, ViewCardPosition, BrowserCardPosition, NotePosition, WorkflowCardPosition, WorkflowsHubPosition } from '@/shared/state/dashboardLayoutSlice';
 import type { Output } from '@/shared/state/outputsSlice';
-import type { CanvasActions } from '../hooks/interaction/useCanvasControls';
+import type { CanvasActions } from '../hooks/interaction/pointer/useCanvasControls';
 import { fetchDashboards, createDashboard, renameDashboard } from '@/shared/state/dashboardsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { byPreviewRecency } from '@/shared/previewOrder';
@@ -193,6 +193,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     <Box ref={containerRef} sx={{ position: 'relative', display: 'inline-flex', flexDirection: 'column' }}>
       <Box
         onClick={toggle}
+        data-testid="dashboard-header-toggle"
         sx={{
           display: 'flex',
           alignItems: 'center',
@@ -284,6 +285,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                   <Box
                     key={entry.id}
                     onClick={() => handleDashboardItemClick(entry.id)}
+                    data-testid="dashboard-header-item"
+                    data-dashboard-id={entry.id}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
@@ -438,6 +441,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <IconButton
         size="small"
         onClick={() => dispatch(openSettingsModal())}
+        data-testid="dashboard-header-settings-button"
         sx={{
           color: c.text.tertiary,
           p: 0.5,
