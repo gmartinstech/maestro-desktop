@@ -58,26 +58,35 @@ test.describe('deep interactive coverage', () => {
     noNewCrashes('home render');
   });
 
-  test('onboarding panel opens on Continue', async ({}, info) => {
-    await safeClick(page.getByText(/^Continue/), 'Continue');
+  // The Settings gear button lives in DashboardHeader now, which AppShell only
+  // mounts (DashboardHost) once a dashboard is active, unlike the old sidebar
+  // Settings entry which was reachable from every route. So this must run
+  // AFTER a dashboard is active; hence "Dashboard canvas opens" runs first.
+  test('Dashboard canvas opens', async ({}, info) => {
+    // DashboardSelection auto-creates a dashboard and navigates into it on first
+    // boot when none exist, so this is usually already true; fall back to its
+    // "New dashboard" button for whatever state isn't.
+    if (!/\/dashboard\//.test(page.url())) {
+      await expect.poll(() => page.url(), { timeout: 8000 }).toMatch(/\/dashboard\//).catch(() => {});
+    }
+    if (!/\/dashboard\//.test(page.url())) {
+      await safeClick(page.getByRole('button', { name: 'New dashboard' }) as any, 'New dashboard (DashboardSelection)');
+      await expect.poll(() => page.url(), { timeout: 8000 }).toMatch(/\/dashboard\//);
+    }
     await page.waitForTimeout(2000);
-    await page.screenshot({ path: info.outputPath('onboarding-step1.png') });
-    noNewCrashes('onboarding step 1 mount');
-  });
-
-  test('roadmap (See all todos) renders all 8 steps', async ({}, info) => {
-    await safeClick(page.getByText('See all todos'), 'See all todos');
-    await page.waitForTimeout(1500);
-    await page.screenshot({ path: info.outputPath('onboarding-roadmap.png') });
-    noNewCrashes('onboarding roadmap mount');
-    await page.keyboard.press('Escape').catch(() => {});
-    await page.waitForTimeout(500);
+    // Synchronization barrier: DashboardHeader (and its Settings button, used by
+    // the next tests) only mounts once the canvas has actually rendered.
+    await expect(page.locator('[data-testid="dashboard-header-settings-button"]'), 'dashboard header never mounted').toBeVisible({ timeout: 10_000 });
+    await page.screenshot({ path: info.outputPath('dashboard-canvas.png') });
+    noNewCrashes('dashboard canvas open');
   });
 
   test('Settings opens and every tab renders', async ({}, info) => {
-    await safeClick(page.getByText('Settings', { exact: true }), 'Settings nav');
+    await safeClick(page.locator('[data-testid="dashboard-header-settings-button"]') as any, 'Settings button (dashboard header)');
     await page.waitForTimeout(1500);
-    for (const tab of ['General', 'Models', 'Usage', 'Commands']) {
+    // Skills/Tools moved here from the old sidebar Customization section
+    // (Settings.tsx TAB_VALUES); this is now the full live tab list.
+    for (const tab of ['General', 'Models', 'Skills', 'Tools', 'Commands', 'Usage']) {
       const t = page.getByRole('tab', { name: tab }).first();
       if (await t.count()) {
         await t.click({ timeout: 3000 }).catch(() => {});
@@ -86,12 +95,12 @@ test.describe('deep interactive coverage', () => {
         noNewCrashes(`Settings ${tab} tab`);
       }
     }
-    await page.getByText('Close', { exact: true }).first().click({ timeout: 2000 }).catch(() => page.keyboard.press('Escape'));
+    await page.locator('[data-testid="settings-close-button"]').first().click({ timeout: 2000 }).catch(() => page.keyboard.press('Escape'));
     await page.waitForTimeout(700);
   });
 
   test('Settings toggles flip + revert (effect verified)', async ({}, info) => {
-    await safeClick(page.getByText('Settings', { exact: true }), 'Settings nav for toggles');
+    await safeClick(page.locator('[data-testid="dashboard-header-settings-button"]') as any, 'Settings button for toggles');
     await page.waitForTimeout(1500);
     const toggles = page.locator('input[type="checkbox"], [role="switch"]');
     const n = Math.min(await toggles.count(), 5);
@@ -107,55 +116,26 @@ test.describe('deep interactive coverage', () => {
       noNewCrashes(`toggle ${i} flip+revert`);
     }
     await page.screenshot({ path: info.outputPath('settings-toggles.png') });
-    await page.getByText('Close', { exact: true }).first().click({ timeout: 2000 }).catch(() => page.keyboard.press('Escape'));
+    await page.locator('[data-testid="settings-close-button"]').first().click({ timeout: 2000 }).catch(() => page.keyboard.press('Escape'));
     await page.waitForTimeout(700);
   });
 
-  test('Customization: Skills / Actions / Modes render', async ({}, info) => {
-    for (const screen of ['Skills', 'Actions', 'Modes']) {
-      await safeClick(page.getByText(screen, { exact: true }), screen);
+  // Skills/Tools (ex-Customization) now live inside the Settings modal, not a
+  // standalone sidebar panel; Actions and Modes have no living UI destination
+  // at all (Main.tsx only routes "/", "/dashboard/:id", "/analytics"), so this
+  // only covers what still exists.
+  test('Settings: Skills / Tools tabs render', async ({}, info) => {
+    await safeClick(page.locator('[data-testid="dashboard-header-settings-button"]') as any, 'Settings button for Skills/Tools');
+    await page.waitForTimeout(1500);
+    for (const tab of ['Skills', 'Tools']) {
+      const t = page.getByRole('tab', { name: tab }).first();
+      await safeClick(t as any, `Settings tab ${tab}`);
       await page.waitForTimeout(1500);
-      await page.screenshot({ path: info.outputPath(`${screen.toLowerCase()}.png`) });
-      noNewCrashes(screen);
+      await page.screenshot({ path: info.outputPath(`${tab.toLowerCase()}.png`) });
+      noNewCrashes(tab);
     }
-  });
-
-  test('Modes editor (RichPromptEditor) opens without TSF crash', async ({}, info) => {
-    await safeClick(page.getByText('Modes', { exact: true }), 'Modes');
-    await page.waitForTimeout(1200);
-    // Modes list may be empty on a brand-new profile; this branch is the one
-    // legitimate optional in this spec. If a row exists, we drive it strictly.
-    const editIcons = page.locator('[aria-label="Edit"], [aria-label*="edit mode" i]');
-    if (await editIcons.count()) {
-      await editIcons.first().click({ timeout: 3000 });
-      await page.waitForTimeout(2000);
-      await page.screenshot({ path: info.outputPath('mode-editor.png') });
-      noNewCrashes('RichPromptEditor mount');
-      await page.keyboard.press('Escape').catch(() => {});
-      await page.waitForTimeout(600);
-    } else {
-      test.info().annotations.push({ type: 'skip', description: 'Modes: no existing modes on clean profile, edit path unreachable' });
-    }
-  });
-
-  test('Dashboard canvas opens', async ({}, info) => {
-    // A clean CI profile has no "Getting Started" (or any) dashboard, so open an
-    // existing one if present, else create one via the sidebar "+" so the canvas
-    // actually mounts instead of failing on a missing seed dashboard.
-    const seed = page.getByText('Getting Started', { exact: true });
-    if (await seed.count()) {
-      await seed.first().click({ timeout: 5000 });
-    } else {
-      const toggle = page.locator('[data-onboarding="sidebar-toggle"]');
-      if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click({ timeout: 5000 }).catch(() => {});
-      await page.locator('[data-onboarding="sidebar-dashboards"]').click({ timeout: 5000 }).catch(() => {});
-      const createBtn = page.locator('[data-onboarding="sidebar-dashboards"] button').first();
-      if (await createBtn.count()) await createBtn.click({ timeout: 5000 }).catch(() => {});
-      await expect.poll(() => page.url(), { timeout: 8000 }).toMatch(/\/dashboard\//);
-    }
-    await page.waitForTimeout(2000);
-    await page.screenshot({ path: info.outputPath('dashboard-canvas.png') });
-    noNewCrashes('dashboard canvas open');
+    await page.locator('[data-testid="settings-close-button"]').first().click({ timeout: 2000 }).catch(() => page.keyboard.press('Escape'));
+    await page.waitForTimeout(700);
   });
 
   test('New Agent compose box opens (EditorSurface contentEditable mount)', async ({}, info) => {
