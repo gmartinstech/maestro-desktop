@@ -26,7 +26,7 @@ async def test_is_running_caches_negative_result_briefly():
 @pytest.mark.asyncio
 async def test_is_running_negative_cache_expires():
     process.p_is_running_last_ok = 0.0
-    process.p_is_running_last_checked = time.monotonic() - process.P_IS_RUNNING_NEGATIVE_TTL - 0.1
+    process.p_is_running_last_checked = time.monotonic() - process.IS_RUNNING_NEGATIVE_TTL - 0.1
     process.p_is_running_last_result = False
     with patch.object(process, "p_tcp_port_open", return_value=False) as mock_probe:
         result = await process.is_running()
