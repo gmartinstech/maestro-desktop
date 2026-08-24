@@ -21,14 +21,13 @@ param(
     [switch]$Sign,
     [switch]$DevSign,
     [switch]$Publish,
-    # Fast CI gate path: build only the unpacked win-unpacked\ dir (no NSIS
+    # Fast CI gate path: build only the unpacked win-unpacked\ dir (no
     # installer, no LZMA compression of the ~1GB tree - the slowest packaging
     # phase). verify-all + Playwright drive the unpacked Maestro Studio.exe directly.
     [switch]$DirOnly,
-    # Phase 7 A/B: build a Squirrel.Windows installer instead of the default
-    # NSIS one, from the SAME staged tree / SAME commit. Opt-in only; NSIS stays
-    # the default and shipped target until Squirrel is proven faster AND its
-    # rollback works on real Win 10/11 machines. EXPERIMENTAL / unverified in CI.
+    # electron/package.json's build.win.target is already squirrel (the Phase 7
+    # A/B won; NSIS is retired), so this is now a no-op kept only so existing
+    # -Squirrel callers (release-windows.yml) don't need editing.
     [switch]$Squirrel
 )
 

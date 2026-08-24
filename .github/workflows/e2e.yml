@@ -1,16 +1,20 @@
 name: E2E (packaged app, Windows)
 
-# Fast-feedback packaged-app gate, Windows-only. Split into parallel jobs so the
-# push wall-clock stays well under ~10 min:
+# Packaged-app gate, Windows-only. Split into parallel jobs:
 #   gate        - cheap pure-node selftests (no build): mutation gate + preflight
-#                 Layers 1-5. Fails the "tests that test the tests" fast.
+#                 Layers 1-5. Fails the "tests that test the tests" fast. Runs on
+#                 every PR for fast feedback.
 #   verify      - build the UNPACKED app (electron-builder --dir, which skips the
 #                 slow ~2min NSIS LZMA compression) and run the deterministic
 #                 verify-all gate against win-unpacked\Maestro Studio.exe.
 #   playwright  - build the unpacked app and run the renderer-level Playwright e2e.
-#   installer   - full NSIS build + destructive install->verify->uninstall. The
-#                 heaviest leg, so it runs only on PR-to-main / dispatch (NOT on
-#                 routine pushes); release-windows.yml covers it on v* tags.
+#   installer   - full Squirrel build + destructive install->verify->uninstall.
+# verify/playwright/installer are the expensive legs (10-45 min each on Windows
+# runners) and only run once code actually lands on main (push) or on manual
+# dispatch - not on every PR iteration. gate still runs on PRs so a bad diff
+# fails fast without spending the heavy runner time; a merge that trips
+# verify/playwright/installer needs a fix-forward follow-up rather than being
+# caught pre-merge - accepted tradeoff for not burning 30-90 CI-minutes per PR push.
 # verify + playwright run concurrently; both reuse cached heavy build inputs
 # (bundled Python env, uv, MCP bundles, npm) so warm builds are fast - the build
 # script skips any input already on disk.
@@ -22,7 +26,7 @@ name: E2E (packaged app, Windows)
 
 on:
   push:
-    branches: [eric/lock]
+    branches: [main]
     paths: &build-paths
       - 'electron/**'
       - 'frontend/**'
@@ -79,8 +83,9 @@ jobs:
           MAESTRO_TEST_APPDATA=readonly node scripts/ci/verify-preflight.js
           MAESTRO_TEST_LANG=de-DE node scripts/ci/verify-preflight.js
 
-  # Build the unpacked app + run the deterministic gate.
+  # Build the unpacked app + run the deterministic gate. Push-to-main/dispatch only (see header).
   verify:
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -118,7 +123,9 @@ jobs:
         run: node scripts/ci/verify-all.js
 
   # Build the unpacked app + run the Playwright renderer suite, concurrently with verify.
+  # Push-to-main/dispatch only (see header).
   playwright:
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -185,10 +192,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # Heaviest leg: full NSIS installer + destructive install->verify->uninstall on
-  # a clean runner. Skip on routine pushes; run on PRs into main + manual dispatch.
+  # Heaviest leg: full Squirrel installer + destructive install->verify->uninstall
+  # on a clean runner. Push-to-main/dispatch only (see header).
   installer:
-    if: github.event_name != 'push'
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -218,7 +225,7 @@ jobs:
         with:
           path: backend/mcp-bundles
           key: mcpbundles-win-${{ hashFiles('scripts/build-app-win.ps1') }}
-      - name: Build packaged app (full NSIS installer)
+      - name: Build packaged app (full Squirrel installer)
         shell: pwsh
         run: pwsh -NoProfile -File scripts/build-app-win.ps1
       - name: Installer cycle (clean runner)
