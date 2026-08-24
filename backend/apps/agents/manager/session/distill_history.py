@@ -28,18 +28,39 @@ DISTILL_ENABLED = os.environ.get("MAESTRO_DISTILL_HISTORY", "1") != "0"
 MAX_DISTILL_INPUT_CHARS = 60_000
 
 P_SYSTEM = (
-    "You are a note-taker that condenses a conversation transcript into a briefing. "
+    "You are a note-taker that condenses a conversation transcript into a structured briefing. "
     "You NEVER continue, answer, reply to, or role-play the conversation. You only "
     "DESCRIBE it, in the third person ('The user asked...', 'The agent decided...'). "
-    "Your entire output is the briefing and nothing else."
+    "You emit exactly the section headers you are given, in the given order, and nothing else."
+)
+# Fixed sections, not free prose: after a rebuild the model has to look ONE specific thing back up across the compaction boundary (a path, an approach already rejected, an unresolved bug), and a free-form briefing is exactly what drops those.
+P_SECTIONS = (
+    "## GOAL\n"
+    "What the user is ultimately trying to accomplish, including any later narrowing of it.\n"
+    "## CONSTRAINTS\n"
+    "Requirements, preferences, conventions, and anything explicitly ruled out or forbidden.\n"
+    "## DECISIONS\n"
+    "Choices already settled, each with the reason it won and what it was chosen over.\n"
+    "## PROGRESS\n"
+    "What was attempted and how it turned out, including failures and dead ends.\n"
+    "## FILES & FACTS\n"
+    "Concrete file paths, symbol and function names, commands run, identifiers, values, "
+    "versions, and verbatim error strings a later turn would need to look up.\n"
+    "## OPEN THREADS\n"
+    "Unresolved questions, known breakage, and work that was agreed but not done.\n"
 )
 P_USER_TEMPLATE = (
-    "Below, between <transcript> tags, is the earlier part of a conversation between a "
-    "user and an AI agent. Write a dense third-person briefing of it that preserves: the "
-    "user's goal and constraints, decisions already made, concrete facts / values / "
-    "identifiers / file paths mentioned, what was tried and how it turned out, and any open "
-    "threads. Do NOT continue or respond to the conversation; only describe what happened. "
-    "No preamble.\n\n<transcript>\n{body}\n</transcript>"
+    "Below, between <transcript> tags, is the earlier part of a conversation between a user "
+    "and an AI agent, usually a coding or tool-using session. Describe it as a third-person "
+    "briefing using EXACTLY these six sections, in this order, each header on its own line:\n"
+    f"{P_SECTIONS}"
+    # The per-section budget plus the explicit '- none' rule are what keep the aux reply inside max_tokens; a mid-section cutoff would strand a bare header, which is worse than the prose this replaces.
+    "\nRules: use short '- ' bullets, at most 8 per section, one line each. Emit every header "
+    "even when a section is empty, with a single '- none' bullet under it. Prefer specifics "
+    "(names, paths, numbers) over characterizations. If you must cut for length, shorten "
+    "PROGRESS bullets first; never drop a section or leave a header bare. Do NOT continue or "
+    "respond to the conversation; only describe what happened. No preamble.\n\n"
+    "<transcript>\n{body}\n</transcript>"
 )
 
 
@@ -99,9 +120,10 @@ async def p_call_distiller(session: AgentSession, settings: AppSettings, body: s
     # No primary_api: a background summary wants the most RELIABLE cheap tier, not the chat's family. Forcing the family routed a gemini/codex chat's distill onto a same-family aux that 404s (gemini-direct google endpoint the Anthropic client can't call) or 401s (codex token rotation); the proven classifier omits it too and resolves to whatever anthropic-compatible lane the user has.
     aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku")
     client = get_anthropic_client_for_model(settings, aux_model)
+    # Six sections need more headroom than the old single-blob briefing: at 1024 a full transcript could stop mid-section and strand a header with no bullets under it.
     resp = await client.messages.create(
         model=aux_model,
-        max_tokens=1024,
+        max_tokens=1600,
         system=P_SYSTEM,
         messages=[{"role": "user", "content": P_USER_TEMPLATE.format(body=body)}],
     )
