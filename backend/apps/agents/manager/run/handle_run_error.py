@@ -121,7 +121,7 @@ async def handle_run_error(e: Exception, session: AgentSession, session_id: str,
         )
         error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
         session.messages.append(error_msg)
-        await ws_manager.send_to_session(session_id, "agent:out_of_credits", {
+        await ws_manager.send_to_session(session_id, "agent:out_of_tokens", {
             "session_id": session_id,
             "message": friendly_msg,
             "reset_hint": p_reset_hint,

@@ -1,6 +1,8 @@
 """Drive handle_run_error's out-of-credits branch. The is_out_of_tokens / extract_reset_hint
 helpers were built but never wired in, so a provider credit/quota error fell through to the
-raw-error blob; this pins the friendly card + agent:out_of_credits event (and the reset hint)."""
+raw-error blob; this pins the friendly card + agent:out_of_tokens event (and the reset hint).
+Event name matches the frontend's `case 'agent:out_of_tokens':` in WebSocketManager.ts, see
+test_ws_event_contract.py for the drift-detection test that caught the prior mismatched name."""
 
 import asyncio
 
@@ -27,7 +29,7 @@ def test_out_of_credits_shows_friendly_card_not_raw_error(monkeypatch):
         monkeypatch, Exception("Your credit balance is too low to run this request")
     )
     assert session.status == "error"
-    assert "agent:out_of_credits" in [e for e, _ in events]
+    assert "agent:out_of_tokens" in [e for e, _ in events]
     sys_msgs = [m for m in session.messages if m.role == "system"]
     assert sys_msgs, "expected a system card"
     assert "out of credits or over your usage limit" in sys_msgs[-1].content
@@ -38,6 +40,6 @@ def test_out_of_credits_carries_the_provider_reset_hint(monkeypatch):
     _, events = p_drive_error(
         monkeypatch, Exception("insufficient_quota; resets at 7:42 AM")
     )
-    payload = next(d for e, d in events if e == "agent:out_of_credits")
+    payload = next(d for e, d in events if e == "agent:out_of_tokens")
     assert payload["reset_hint"] == "at 7:42 AM"
     assert "resets at 7:42 AM" in payload["message"]
