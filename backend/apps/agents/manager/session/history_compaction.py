@@ -23,6 +23,11 @@ SESSION_RECAP_CLOSE = "</maestro_session_recap>"
 RECAP_TOOL_INPUT_CAP = 200
 RECAP_TOOL_RESULT_CAP = 500
 
+# chars/4 is the house heuristic, but dense JSON/code tokenizes nearer 3.5 chars/token, and this estimate gates a hard guard that evicts MCPs. Round the measurement up rather than risk letting a real overflow through.
+HISTORY_TOKEN_SAFETY_MARGIN = 1.15
+# distill_history caps its aux call at max_tokens=1024; until a summary is actually cached we must reserve that whole budget, since the next rebuild will prepend one.
+DISTILLED_SUMMARY_BUDGET_TOKENS = 1_100
+
 
 @typechecked
 def wrap_platform_note(body: str) -> str:
@@ -151,34 +156,35 @@ def build_history_prefix(messages, cutoff_msg_id: Optional[str] = None) -> str:
 
 
 @typechecked
+def p_distilled_summary_tokens(session, cutoff_msg_id: Optional[str]) -> int:
+    """Token cost of the distilled-summary block RunOptions prepends whenever a cutoff exists.
+    Measures the cached summary when it is still keyed to this cutoff, otherwise reserves the
+    distiller's full max_tokens budget because the next rebuild will generate a fresh one."""
+    if not cutoff_msg_id:
+        return 0
+    cached = getattr(session, "compacted_summary", None)
+    if cached and getattr(session, "compacted_summary_through", None) == cutoff_msg_id:
+        # The real block also carries a short "Summary of earlier conversation" label; the safety margin absorbs those few dozen chars.
+        return int(len(wrap_platform_note(cached)) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+    return DISTILLED_SUMMARY_BUDGET_TOKENS
+
+
+@typechecked
 def estimate_post_compact_input(session) -> int:
-    """Return a conservative token estimate after compaction trims history."""
+    """Return a conservative token estimate after compaction trims history.
+
+    Measures the string `build_history_prefix` actually ships rather than raw message content.
+    Summing untrimmed content was a ~50x overestimate on tool-heavy sessions (every tool result
+    is clamped to RECAP_TOOL_RESULT_CAP before it reaches the model), and because this number is
+    written to session.tokens["input"] it drove the context meter, the compaction trigger, and
+    the pre-send guard that LRU-evicts the user's active MCP servers on phantom overflow.
+    """
     try:
-        messages = get_branch_messages(session)
         cutoff_msg_id = getattr(session, "compacted_through_msg_id", None)
-        if cutoff_msg_id:
-            skip_idx = next(
-                (i for i, m in enumerate(messages) if m.id == cutoff_msg_id),
-                -1,
-            )
-            if skip_idx >= 0:
-                messages = messages[skip_idx + 1:]
-        surviving_chars = 0
-        for message in messages:
-            if getattr(message, "hidden", False):
-                continue
-            content = getattr(message, "content", "")
-            if isinstance(content, str):
-                serialized = content
-            else:
-                try:
-                    serialized = json.dumps(content, ensure_ascii=False)
-                except Exception:
-                    serialized = str(content)
-            surviving_chars += len(serialized)
+        history = build_history_prefix(get_branch_messages(session), cutoff_msg_id=cutoff_msg_id)
+        history_tokens = int(len(history) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
         framework_overhead = int(getattr(session, "framework_overhead_tokens", 0) or 0)
-        summary_overhead = 200 if cutoff_msg_id else 0
-        return max(0, framework_overhead + summary_overhead + (surviving_chars // 4))
+        return max(0, framework_overhead + p_distilled_summary_tokens(session, cutoff_msg_id) + history_tokens)
     except Exception:
         logger.debug("post-compact token estimate failed", exc_info=True)
         return max(0, int(getattr(session, "framework_overhead_tokens", 0) or 0))
