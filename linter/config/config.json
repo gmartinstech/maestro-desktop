@@ -172,7 +172,7 @@
     ],
     "no-nested-imports": [],
     "import-cycles": [],
-    "vulture": ["backend/tests/*"],
+    "vulture": ["backend/tests/*", "backend/apps/*/tests/*"],
     "endpoints": [],
     "classes": [],
     "no-underscore-names": [
