@@ -19,6 +19,8 @@ import pytest
 from backend.apps.agents.core.models import AgentSession, Message
 from backend.apps.agents.manager.session.history_compaction import (
     HISTORY_TOKEN_SAFETY_MARGIN,
+    SESSION_RECAP_CLOSE,
+    SESSION_RECAP_OPEN,
     build_history_prefix,
     distilled_summary_budget_tokens,
     estimate_post_compact_input,
@@ -243,3 +245,91 @@ def test_post_compact_estimate_applies_only_to_a_rebuild() -> None:
     assert post_compact_estimate_applies(s) is False, "resumed: history ships from the CLI transcript"
     s.needs_fresh_session = True
     assert post_compact_estimate_applies(s) is True, "/compact drops the resume and rebuilds"
+
+
+# --- ordering: the recap that ships must be built from the cutoff the estimate measured ---
+# RunOptions injected build_history_prefix BEFORE pre_send_context_guard, so on the fresh-rebuild path maybe_compact advanced compacted_through_msg_id in between and the turn shipped a PRE-compaction recap while the estimate described the POST-compaction one.
+# That gap landed in session.tokens["input"], which drives the meter, the next turn's trigger ratio and the hard guard that LRU-evicts MCP servers, and it erred UNDER: the direction that lets a real overflow through.
+
+
+async def p_build_options(session: AgentSession, monkeypatch) -> str:
+    """Drive the real RunOptions.build_agent_options and return the prompt text it would send.
+
+    Only the steps that touch disk, the network or a CLI are stubbed; the compaction-vs-recap
+    ordering under test is the untouched production path.
+    """
+    from backend.apps.agents.agent_manager import AgentManager
+    from backend.apps.agents.manager.run import RunOptions as p_run_options
+    from backend.apps.agents.manager.run import run_options_helpers
+    from backend.apps.agents.manager.session import distill_history
+
+    async def p_fake_send(session_id, event, payload):
+        return None
+
+    async def p_no_mcp_servers(allowed_tools, active_mcps):
+        return {}
+
+    async def p_no_provider_env(*args, **kwargs):
+        return None
+
+    async def p_no_distill(sess, settings):
+        return ""
+
+    # ws_manager is a module-level singleton, so patching the instance covers RunOptions too.
+    monkeypatch.setattr(run_options_helpers.ws_manager, "send_to_session", p_fake_send)
+    # Empty tool registry also makes the active_mcps reconciliation drop the session's MCPs; harmless here, the recap ordering does not read them.
+    monkeypatch.setattr(p_run_options, "load_all_tools", lambda: [])
+    monkeypatch.setattr(p_run_options, "configure_provider_env", p_no_provider_env)
+    # build_agent_options imports the distiller inside the function, so it has to be patched on its own module.
+    monkeypatch.setattr(distill_history, "distilled_history_summary", p_no_distill)
+    manager = AgentManager()
+    monkeypatch.setattr(manager, "build_mcp_servers", p_no_mcp_servers)
+    p_prompt_content = (await manager.build_agent_options(
+        session, session.id, "next question", "next question", {},
+        None, None, None, False, "sonnet", "anthropic",
+    ))[2]
+    # build_agent_options passes prompt_content straight through, so a str in is a str out.
+    assert isinstance(p_prompt_content, str)
+    return p_prompt_content
+
+
+def p_injected_recap(prompt_content: str) -> str:
+    """The recap as it actually left the builder, cut back out of the prompt by its own sentinels."""
+    p_open = prompt_content.index(SESSION_RECAP_OPEN)
+    p_close = prompt_content.index(SESSION_RECAP_CLOSE) + len(SESSION_RECAP_CLOSE)
+    return prompt_content[p_open:p_close]
+
+
+@pytest.mark.asyncio
+async def test_estimate_measures_the_recap_that_was_actually_injected(monkeypatch) -> None:
+    """The regression: pre-fix the estimate measured a recap ~4,100 tokens smaller than the one sent."""
+    s = p_over_cap_session(sdk_session_id=None)
+
+    prompt_content = await p_build_options(s, monkeypatch)
+
+    assert s.compacted_through_msg_id, "probe is pointless unless compaction fired on this very turn"
+    injected = p_injected_recap(prompt_content)
+    # Ground truth is the shipped recap itself, never a literal, so this cannot rot the way the estimator it guards did.
+    injected_tokens = int(len(injected) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+    # The recap is the only part of the estimate this ordering can get wrong, so compare it alone; framework overhead is 30K of constant that would hide a 4K miss inside a whole-number bound.
+    charged = s.tokens["input"] - s.framework_overhead_tokens - distilled_summary_budget_tokens()
+    assert charged >= injected_tokens, (
+        f"estimate charged {charged} tokens for a recap that shipped {injected_tokens}; "
+        "under-reporting is the direction that lets a real overflow past the MCP-eviction guard"
+    )
+    assert charged == injected_tokens
+
+
+@pytest.mark.asyncio
+async def test_injected_recap_uses_the_cutoff_compaction_just_settled(monkeypatch) -> None:
+    """Same ordering seen from the send side: compaction must actually trim this turn, not the next one."""
+    s = p_over_cap_session(sdk_session_id=None)
+    p_full_history = build_history_prefix(get_branch_messages(s), cutoff_msg_id=None)
+
+    prompt_content = await p_build_options(s, monkeypatch)
+
+    injected = p_injected_recap(prompt_content)
+    assert injected == build_history_prefix(
+        get_branch_messages(s), cutoff_msg_id=s.compacted_through_msg_id
+    )
+    assert len(injected) < len(p_full_history), "the pre-compaction history shipped despite the mark"
