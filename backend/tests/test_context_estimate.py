@@ -333,3 +333,14 @@ async def test_injected_recap_uses_the_cutoff_compaction_just_settled(monkeypatc
         get_branch_messages(s), cutoff_msg_id=s.compacted_through_msg_id
     )
     assert len(injected) < len(p_full_history), "the pre-compaction history shipped despite the mark"
+
+
+@pytest.mark.asyncio
+async def test_resumed_session_injects_no_recap_across_the_reordered_guard(monkeypatch) -> None:
+    """Moving the guard between them turned the rebuild elif into its own if, so the two branches are no longer exclusive by syntax; pin that they still are."""
+    s = p_over_cap_session(sdk_session_id="sdk-abc")
+
+    prompt_content = await p_build_options(s, monkeypatch)
+
+    assert SESSION_RECAP_OPEN not in prompt_content, "a resumed turn ships history from the CLI transcript, never a recap"
+    assert s.tokens["input"] == 185_000, "and it keeps its real measurement, so the hard guard still sees the truth"
