@@ -23,6 +23,9 @@ SESSION_RECAP_CLOSE = "</maestro_session_recap>"
 RECAP_TOOL_INPUT_CAP = 200
 RECAP_TOOL_RESULT_CAP = 500
 
+# chars/4 is the house heuristic, but dense JSON/code tokenizes nearer 3.5 chars/token, and this estimate gates a hard guard that evicts MCPs. Round the measurement up rather than risk letting a real overflow through.
+HISTORY_TOKEN_SAFETY_MARGIN = 1.15
+
 
 @typechecked
 def wrap_platform_note(body: str) -> str:
@@ -151,34 +154,65 @@ def build_history_prefix(messages, cutoff_msg_id: Optional[str] = None) -> str:
 
 
 @typechecked
+def distilled_summary_budget_tokens() -> int:
+    """Tokens to reserve for a distilled summary that does not exist yet.
+
+    Derived from the distiller's own cap rather than hand-copied: a literal here that silently
+    stops matching distill_history is the same class of drift that made this module's estimate
+    run 50x high. The margin on top is the platform-note fence RunOptions wraps the summary in,
+    measured from wrap_platform_note itself so it cannot drift either; the one-line "Summary of
+    earlier conversation" label rides on HISTORY_TOKEN_SAFETY_MARGIN, as it does for a cached
+    summary below. Imported inside the function because distill_history imports THIS module at
+    load time, so a top-level import would be a cycle.
+    """
+    from backend.apps.agents.manager.session.distill_history import DISTILL_MAX_TOKENS
+    return DISTILL_MAX_TOKENS + int(len(wrap_platform_note("")) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+
+
+@typechecked
+def p_distilled_summary_tokens(session, cutoff_msg_id: Optional[str]) -> int:
+    """Token cost of the distilled-summary block RunOptions prepends whenever a cutoff exists.
+    Measures the cached summary when it is still keyed to this cutoff, otherwise reserves the
+    distiller's full max_tokens budget because the next rebuild will generate a fresh one."""
+    if not cutoff_msg_id:
+        return 0
+    cached = getattr(session, "compacted_summary", None)
+    if cached and getattr(session, "compacted_summary_through", None) == cutoff_msg_id:
+        # The real block also carries a short "Summary of earlier conversation" label; the safety margin absorbs those few dozen chars.
+        return int(len(wrap_platform_note(cached)) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+    return distilled_summary_budget_tokens()
+
+
+@typechecked
+def post_compact_estimate_applies(session) -> bool:
+    """True only when the next send will REBUILD history from local messages.
+
+    estimate_post_compact_input measures build_history_prefix, and RunOptions injects that recap
+    only on the no-resume path. On a resumed session maybe_compact merely MARKS a boundary:
+    nothing is trimmed this turn and history still ships from the Claude CLI's own transcript, so
+    the estimate describes a hypothetical future rebuild, not the upcoming send. Applying it there
+    would report a context drop that has not happened and, worse, disarm the pre-send hard guard
+    that LRU-evicts MCP servers, since that guard reads the same session.tokens["input"].
+    """
+    return not getattr(session, "sdk_session_id", None) or bool(getattr(session, "needs_fresh_session", False))
+
+
+@typechecked
 def estimate_post_compact_input(session) -> int:
-    """Return a conservative token estimate after compaction trims history."""
+    """Return a conservative token estimate after compaction trims history.
+
+    Measures the string `build_history_prefix` actually ships rather than raw message content.
+    Summing untrimmed content was a ~50x overestimate on tool-heavy sessions (every tool result
+    is clamped to RECAP_TOOL_RESULT_CAP before it reaches the model), and because this number is
+    written to session.tokens["input"] it drove the context meter, the compaction trigger, and
+    the pre-send guard that LRU-evicts the user's active MCP servers on phantom overflow.
+    """
     try:
-        messages = get_branch_messages(session)
         cutoff_msg_id = getattr(session, "compacted_through_msg_id", None)
-        if cutoff_msg_id:
-            skip_idx = next(
-                (i for i, m in enumerate(messages) if m.id == cutoff_msg_id),
-                -1,
-            )
-            if skip_idx >= 0:
-                messages = messages[skip_idx + 1:]
-        surviving_chars = 0
-        for message in messages:
-            if getattr(message, "hidden", False):
-                continue
-            content = getattr(message, "content", "")
-            if isinstance(content, str):
-                serialized = content
-            else:
-                try:
-                    serialized = json.dumps(content, ensure_ascii=False)
-                except Exception:
-                    serialized = str(content)
-            surviving_chars += len(serialized)
+        history = build_history_prefix(get_branch_messages(session), cutoff_msg_id=cutoff_msg_id)
+        history_tokens = int(len(history) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
         framework_overhead = int(getattr(session, "framework_overhead_tokens", 0) or 0)
-        summary_overhead = 200 if cutoff_msg_id else 0
-        return max(0, framework_overhead + summary_overhead + (surviving_chars // 4))
+        return max(0, framework_overhead + p_distilled_summary_tokens(session, cutoff_msg_id) + history_tokens)
     except Exception:
         logger.debug("post-compact token estimate failed", exc_info=True)
         return max(0, int(getattr(session, "framework_overhead_tokens", 0) or 0))
