@@ -14,7 +14,8 @@ Fork of openswarm-ai/openswarm. Electron + React/TS (frontend/) + FastAPI/Python
 - MAESTRO_MOCK_AGENT=1 makes an agent turn stream a deterministic synthetic reply with no key,
   CLI or network. It is for the packaged app and the golden e2e smoke. Do NOT set it for the
   backend suite: those tests drive the real loop, and the mock starves the WS assertions.
-  Run backend tests with the flag UNSET (baseline: 6 pre-existing failures, 1745 passing).
+  Run backend tests with the flag UNSET (baseline as of 2026-08-24: 6 pre-existing failures,
+  1938 passing, 8 skipped — the 6 are exactly the set scripts/verify.mjs deselects by name).
 
 ## Where things live
 - Providers/registry: backend/apps/agents/providers/registry.py
