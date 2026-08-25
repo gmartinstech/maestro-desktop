@@ -25,6 +25,8 @@ from backend.apps.agents.manager.session.history_compaction import (
 logger = logging.getLogger(__name__)
 
 DISTILL_ENABLED = os.environ.get("MAESTRO_DISTILL_HISTORY", "1") != "0"
+# Named because history_compaction has to RESERVE this budget in its pre-send estimate before any summary exists; a hand-copied literal over there is exactly the drift that produced the 50x estimate bug.
+DISTILL_MAX_TOKENS = 1024
 MAX_DISTILL_INPUT_CHARS = 60_000
 
 P_SYSTEM = (
@@ -101,7 +103,7 @@ async def p_call_distiller(session: AgentSession, settings: AppSettings, body: s
     client = get_anthropic_client_for_model(settings, aux_model)
     resp = await client.messages.create(
         model=aux_model,
-        max_tokens=1024,
+        max_tokens=DISTILL_MAX_TOKENS,
         system=P_SYSTEM,
         messages=[{"role": "user", "content": P_USER_TEMPLATE.format(body=body)}],
     )

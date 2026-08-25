@@ -8,7 +8,11 @@ from typeguard import typechecked
 
 from backend.apps.agents.core.models import AgentSession, Message
 from backend.apps.agents.core.ws_manager import ws_manager
-from backend.apps.agents.manager.session.history_compaction import estimate_post_compact_input, wrap_platform_note
+from backend.apps.agents.manager.session.history_compaction import (
+    estimate_post_compact_input,
+    post_compact_estimate_applies,
+    wrap_platform_note,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +22,18 @@ logger = logging.getLogger(__name__)
 async def pre_send_context_guard(manager, session: AgentSession, session_id: str) -> None:
     try:
         if manager.maybe_compact(session):
-            new_input = estimate_post_compact_input(session)
+            # Only trust the post-compact estimate when the recap it measures will actually ship. maybe_compact on a RESUMED session just marks a boundary: nothing is trimmed this turn, history keeps coming from the CLI transcript, so overwriting here would show the user a drop that never happened AND hand the hard guard below a number far under the real usage, letting a genuine overflow past the MCP eviction it exists to trigger.
+            new_input = (
+                estimate_post_compact_input(session)
+                if post_compact_estimate_applies(session)
+                else int(session.tokens.get("input", 0) or 0)
+            )
             await ws_manager.send_to_session(session_id, "agent:context_status", {
                 "session_id": session_id,
                 "reason": "compacted",
                 "compacted_through_msg_id": session.compacted_through_msg_id,
             })
+            # Emitted even when the number is unchanged: the frontend's recordCompaction reducer zeroes its whole context meter on the "compacted" status above, so staying silent would leave the UI reading 0 until the turn ends.
             await manager.emit_context_update(
                 session_id,
                 session,
