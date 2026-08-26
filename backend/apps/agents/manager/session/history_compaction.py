@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from typeguard import typechecked
 import os
 import re
@@ -233,6 +233,13 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
     never honors caller-supplied paths (defense against path
     traversal). The inline replacement keeps the first 4KB so the
     model retains some signal about what was returned.
+
+    A tool_result content dict keeps its shape: only its "text" is
+    spilled and replaced, so tool_name/elapsed_ms/sub_session_id
+    survive the spill and the retained head is readable tool output
+    rather than the escaped JSON of the whole envelope. The trip-wire
+    still measures the full serialized envelope, so the threshold does
+    not move.
     """
     if not isinstance(content, str):
         try:
@@ -243,6 +250,13 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
         serialized = content
     if len(serialized.encode("utf-8")) <= max_bytes:
         return content, None
+    # The oversized part of a result envelope is always its text; spilling that alone keeps the .txt blob readable for the Read the note points the agent at.
+    spilled_text: Optional[str] = None
+    if isinstance(content, dict):
+        raw_text = content.get("text")
+        if isinstance(raw_text, str):
+            spilled_text = raw_text
+    body = spilled_text if spilled_text is not None else serialized
     blobs_dir = os.path.join(SESSIONS_DIR, session_id, "blobs")
     os.makedirs(blobs_dir, exist_ok=True)
     # Sanitize msg_id (it's UUID hex, but be defensive).
@@ -250,14 +264,18 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
     blob_path = os.path.join(blobs_dir, f"{safe_msg_id}.txt")
     try:
         with open(blob_path, "w", encoding="utf-8") as f:
-            f.write(serialized)
+            f.write(body)
     except Exception as e:
         logger.warning(f"Failed to spill tool result to {blob_path}: {e}")
         return content, None
-    head = strip_forged_sentinels(serialized[:4_000])
+    head = strip_forged_sentinels(body[:4_000])
     note = wrap_platform_note(
-        f"Output truncated by Maestro. Full output ({len(serialized)} chars) saved to "
+        f"Output truncated by Maestro. Full output ({len(body)} chars) saved to "
         f"{blob_path}. Ask the user or run a follow-up tool call if you need the rest."
     )
     replacement = f"{head}\n\n{note}"
+    if spilled_text is not None and isinstance(content, dict):
+        truncated: Dict[str, object] = {str(k): v for k, v in content.items()}
+        truncated["text"] = replacement
+        return truncated, blob_path
     return replacement, blob_path
