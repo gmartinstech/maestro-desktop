@@ -18,6 +18,7 @@ import pytest
 
 from backend.apps.agents.core.models import AgentSession, Message
 from backend.apps.agents.manager.session.history_compaction import (
+    DISTILL_SUMMARY_CHARS_PER_TOKEN,
     HISTORY_TOKEN_SAFETY_MARGIN,
     SESSION_RECAP_CLOSE,
     SESSION_RECAP_OPEN,
@@ -106,24 +107,55 @@ def test_estimate_reserves_the_distiller_budget_when_the_cached_summary_is_stale
     assert estimate_post_compact_input(s) == distilled_summary_budget_tokens() + p_history_tokens(s)
 
 
+def p_fence_tokens() -> int:
+    """House-unit cost of the empty platform-note wrapper alone."""
+    return int(len(wrap_platform_note("")) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+
+
+def p_cap_filling_summary_tokens(max_tokens: int, chars_per_token: float) -> int:
+    """What p_distilled_summary_tokens charges once a cap-filling summary is cached and measured directly."""
+    return int(len(wrap_platform_note("x" * int(max_tokens * chars_per_token))) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+
+
 def test_distiller_budget_is_derived_from_the_distillers_own_cap() -> None:
     """The reserve must FOLLOW distill_history's max_tokens, not re-state it.
 
     A literal copied across files is what produced the 50x estimate this module already had to
     fix, so the coupling is asserted rather than trusted: raising the distiller's cap has to move
-    the reserve by the same amount, with only the fixed platform-note fence between them.
+    the reserve with it, with only the fixed platform-note fence outside the scaling part.
     """
     from backend.apps.agents.manager.session import distill_history
 
-    fence_tokens = distilled_summary_budget_tokens() - distill_history.DISTILL_MAX_TOKENS
-    assert 0 < fence_tokens < 200, f"reserve is {fence_tokens} tokens off the distiller cap, which is not a fence-sized margin"
     p_original = distill_history.DISTILL_MAX_TOKENS
+    base = distilled_summary_budget_tokens()
     try:
-        # distill-structured-checkpoint raises this to 1600 for its six-section summary; the reserve must follow with no edit here.
-        distill_history.DISTILL_MAX_TOKENS = 1600
-        assert distilled_summary_budget_tokens() == 1600 + fence_tokens
+        # Doubling the distiller's cap must double the body half of the reserve with no edit here.
+        distill_history.DISTILL_MAX_TOKENS = p_original * 2
+        doubled = distilled_summary_budget_tokens()
     finally:
         distill_history.DISTILL_MAX_TOKENS = p_original
+    body_tokens = p_cap_filling_summary_tokens(p_original, DISTILL_SUMMARY_CHARS_PER_TOKEN) - p_fence_tokens()
+    assert abs((doubled - base) - body_tokens) <= 2, f"reserve moved {doubled - base} when the distiller cap moved {p_original}, so it is not tracking it"
+    fence_tokens = base - body_tokens
+    assert 0 < fence_tokens < 200, f"reserve is {fence_tokens} tokens off a cap-filling body, which is not a fence-sized margin"
+
+
+@pytest.mark.parametrize("chars_per_token", [3.5, 4.0, 4.5])
+def test_reserve_covers_a_summary_that_actually_fills_the_distiller_cap(chars_per_token: float) -> None:
+    """The reserve stands in for a block later measured in this module's chars/4 house unit.
+
+    DISTILL_MAX_TOKENS counts model OUTPUT tokens, so adding it raw compared two different units:
+    at 1600 output tokens the reserve was 1646 while the same summary measures 1656/1886/2116
+    house-tokens at 3.5/4.0/4.5 chars per token. That is a 10-470 token UNDER-reserve for exactly
+    one turn -- self-correcting once the summary is cached, but under-reserving is the unsafe
+    direction, because this figure feeds pre_send_context_guard, which LRU-evicts the user's
+    active MCP servers. Whatever a real summary's density turns out to be, the reserve must
+    cover it.
+    """
+    from backend.apps.agents.manager.session import distill_history
+
+    measured = p_cap_filling_summary_tokens(distill_history.DISTILL_MAX_TOKENS, chars_per_token)
+    assert distilled_summary_budget_tokens() >= measured, f"reserve {distilled_summary_budget_tokens()} under-covers a cap-filling summary measured at {measured} ({chars_per_token} chars/token)"
 
 
 # --- scoping: the estimate only describes a send that actually REBUILDS history ---

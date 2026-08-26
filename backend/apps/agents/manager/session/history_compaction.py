@@ -25,6 +25,8 @@ RECAP_TOOL_RESULT_CAP = 500
 
 # chars/4 is the house heuristic, but dense JSON/code tokenizes nearer 3.5 chars/token, and this estimate gates a hard guard that evicts MCPs. Round the measurement up rather than risk letting a real overflow through.
 HISTORY_TOKEN_SAFETY_MARGIN = 1.15
+# The distiller's cap counts MODEL OUTPUT tokens, so reserving it needs a chars-per-token rate to reach the chars/4 house unit everything else here is measured in. 4.5 is the loose-prose ceiling: real briefings carry paths and identifiers and run denser, and over-reserving is the safe side of a guard that evicts MCPs.
+DISTILL_SUMMARY_CHARS_PER_TOKEN = 4.5
 
 
 @typechecked
@@ -159,14 +161,18 @@ def distilled_summary_budget_tokens() -> int:
 
     Derived from the distiller's own cap rather than hand-copied: a literal here that silently
     stops matching distill_history is the same class of drift that made this module's estimate
-    run 50x high. The margin on top is the platform-note fence RunOptions wraps the summary in,
-    measured from wrap_platform_note itself so it cannot drift either; the one-line "Summary of
-    earlier conversation" label rides on HISTORY_TOKEN_SAFETY_MARGIN, as it does for a cached
-    summary below. Imported inside the function because distill_history imports THIS module at
-    load time, so a top-level import would be a cycle.
+    run 50x high. That cap is in MODEL OUTPUT tokens, so it is turned back into chars and run
+    through the same chars/4 x safety-margin formula the cached branch below uses; added raw it
+    was a different unit from the block it stands in for and reserved 10-470 tokens short of a
+    summary that actually fills the cap. The fence is the platform-note wrapper RunOptions puts
+    around the summary, measured from wrap_platform_note itself so it cannot drift either; the
+    one-line "Summary of earlier conversation" label rides on HISTORY_TOKEN_SAFETY_MARGIN, as it
+    does for a cached summary below. Imported inside the function because distill_history imports
+    THIS module at load time, so a top-level import would be a cycle.
     """
     from backend.apps.agents.manager.session.distill_history import DISTILL_MAX_TOKENS
-    return DISTILL_MAX_TOKENS + int(len(wrap_platform_note("")) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+    summary_chars = len(wrap_platform_note("")) + DISTILL_MAX_TOKENS * DISTILL_SUMMARY_CHARS_PER_TOKEN
+    return int(summary_chars / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
 
 
 @typechecked
