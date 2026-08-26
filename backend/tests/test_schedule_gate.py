@@ -19,6 +19,13 @@ def test_schedule_commit_tools_force_ask_even_when_always_allow():
         assert policy == "ask", f"{tool} must force an approval, not silently always_allow"
 
 
+def test_remote_trigger_forces_ask_even_when_always_allow():
+    # RemoteTrigger is the CLI's own scheduler (create/update/run routines through the claude.ai API): unattended recurring execution, so it goes through ApprovalBar like the native schedule tools
+    for action in ("create", "update", "run", "list"):
+        policy, _ = path_gate.maybe_override_policy("always_allow", "RemoteTrigger", {"action": action})
+        assert policy == "ask", f"RemoteTrigger {action} must force an approval, not silently always_allow"
+
+
 def test_claude_internal_cron_tools_denied():
     for tool in ("CronCreate", "CronList", "CronDelete"):
         policy, _ = path_gate.maybe_override_policy("always_allow", tool, {})
