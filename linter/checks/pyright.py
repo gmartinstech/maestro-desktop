@@ -20,7 +20,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import CheckError, is_excepted, is_lintignored
+from . import CheckError, is_excepted, is_lintignored, venv_tool
 
 # Cold first run downloads the pinned node binary (pip wrapper) and warms the
 # import graph; keep this generous so a slow first pass doesn't time out and
@@ -36,11 +36,11 @@ def run_pyright(
     ignores: dict[Path, set[str]] | None = None,
 ) -> list[str]:
     """Run pyright on the Python backend and return existence errors."""
-    pyright_bin = root / "backend" / ".venv" / "bin" / "pyright"
-    if not pyright_bin.exists():
+    pyright_bin = venv_tool(root, "pyright")
+    if pyright_bin is None:
         found = shutil.which("pyright")
         if not found:
-            raise CheckError("pyright executable not found in backend/.venv/bin or PATH")
+            raise CheckError("pyright executable not found in backend/.venv (bin or Scripts) or PATH")
         pyright_bin = Path(found)
 
     config = root / _CONFIG_REL

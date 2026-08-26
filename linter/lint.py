@@ -29,7 +29,7 @@ CONFIG_FILE = SCRIPT_DIR / "config" / "config.json"
 
 
 def load_config() -> dict[str, Any]:
-    with open(CONFIG_FILE) as f:
+    with open(CONFIG_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 

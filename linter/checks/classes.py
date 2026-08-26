@@ -45,7 +45,7 @@ def run_class_check(
         if ignores and is_lintignored(pyfile, root, "classes", ignores):
             continue
         try:
-            source = pyfile.read_text()
+            source = pyfile.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=rel)
         except (OSError, SyntaxError):
             continue

@@ -122,7 +122,7 @@ def run_endpoint_check(
     for py in backend_dir.rglob("*.py"):
         if ".venv" in py.parts:
             continue
-        for m in _SUBAPP_RE.finditer(py.read_text(errors="ignore")):
+        for m in _SUBAPP_RE.finditer(py.read_text(encoding="utf-8", errors="ignore")):
             var_to_name[m.group(1)] = m.group(2)
 
     routes: list[tuple[str, str, str, int, str]] = []
@@ -130,7 +130,7 @@ def run_endpoint_check(
     for py in backend_dir.rglob("*.py"):
         if ".venv" in py.parts:
             continue
-        text = py.read_text(errors="ignore")
+        text = py.read_text(encoding="utf-8", errors="ignore")
         lines = text.splitlines()
         rel = str(py.relative_to(root))
 
@@ -155,13 +155,13 @@ def run_endpoint_check(
     frontend_files: list[tuple[str, str]] = []
     for ext in ("*.ts", "*.tsx"):
         for f in frontend_dir.rglob(ext):
-            frontend_files.append((str(f.relative_to(root)), f.read_text(errors="ignore")))
+            frontend_files.append((str(f.relative_to(root)), f.read_text(encoding="utf-8", errors="ignore")))
 
     backend_files: list[tuple[str, str]] = []
     for py in backend_dir.rglob("*.py"):
         if ".venv" in py.parts:
             continue
-        backend_files.append((str(py.relative_to(root)), py.read_text(errors="ignore")))
+        backend_files.append((str(py.relative_to(root)), py.read_text(encoding="utf-8", errors="ignore")))
 
     resolved_vars = _resolve_frontend_vars(frontend_files)
 
