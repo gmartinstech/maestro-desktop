@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from typeguard import typechecked
 import os
 import re
@@ -25,6 +25,8 @@ RECAP_TOOL_RESULT_CAP = 500
 
 # chars/4 is the house heuristic, but dense JSON/code tokenizes nearer 3.5 chars/token, and this estimate gates a hard guard that evicts MCPs. Round the measurement up rather than risk letting a real overflow through.
 HISTORY_TOKEN_SAFETY_MARGIN = 1.15
+# The distiller's cap counts MODEL OUTPUT tokens, so reserving it needs a chars-per-token rate to reach the chars/4 house unit everything else here is measured in. 4.5 is the loose-prose ceiling: real briefings carry paths and identifiers and run denser, and over-reserving is the safe side of a guard that evicts MCPs.
+DISTILL_SUMMARY_CHARS_PER_TOKEN = 4.5
 
 
 @typechecked
@@ -159,14 +161,18 @@ def distilled_summary_budget_tokens() -> int:
 
     Derived from the distiller's own cap rather than hand-copied: a literal here that silently
     stops matching distill_history is the same class of drift that made this module's estimate
-    run 50x high. The margin on top is the platform-note fence RunOptions wraps the summary in,
-    measured from wrap_platform_note itself so it cannot drift either; the one-line "Summary of
-    earlier conversation" label rides on HISTORY_TOKEN_SAFETY_MARGIN, as it does for a cached
-    summary below. Imported inside the function because distill_history imports THIS module at
-    load time, so a top-level import would be a cycle.
+    run 50x high. That cap is in MODEL OUTPUT tokens, so it is turned back into chars and run
+    through the same chars/4 x safety-margin formula the cached branch below uses; added raw it
+    was a different unit from the block it stands in for and reserved 10-470 tokens short of a
+    summary that actually fills the cap. The fence is the platform-note wrapper RunOptions puts
+    around the summary, measured from wrap_platform_note itself so it cannot drift either; the
+    one-line "Summary of earlier conversation" label rides on HISTORY_TOKEN_SAFETY_MARGIN, as it
+    does for a cached summary below. Imported inside the function because distill_history imports
+    THIS module at load time, so a top-level import would be a cycle.
     """
     from backend.apps.agents.manager.session.distill_history import DISTILL_MAX_TOKENS
-    return DISTILL_MAX_TOKENS + int(len(wrap_platform_note("")) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+    summary_chars = len(wrap_platform_note("")) + DISTILL_MAX_TOKENS * DISTILL_SUMMARY_CHARS_PER_TOKEN
+    return int(summary_chars / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
 
 
 @typechecked
@@ -227,6 +233,13 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
     never honors caller-supplied paths (defense against path
     traversal). The inline replacement keeps the first 4KB so the
     model retains some signal about what was returned.
+
+    A tool_result content dict keeps its shape: only its "text" is
+    spilled and replaced, so tool_name/elapsed_ms/sub_session_id
+    survive the spill and the retained head is readable tool output
+    rather than the escaped JSON of the whole envelope. The trip-wire
+    still measures the full serialized envelope, so the threshold does
+    not move.
     """
     if not isinstance(content, str):
         try:
@@ -237,6 +250,13 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
         serialized = content
     if len(serialized.encode("utf-8")) <= max_bytes:
         return content, None
+    # The oversized part of a result envelope is always its text; spilling that alone keeps the .txt blob readable for the Read the note points the agent at.
+    spilled_text: Optional[str] = None
+    if isinstance(content, dict):
+        raw_text = content.get("text")
+        if isinstance(raw_text, str):
+            spilled_text = raw_text
+    body = spilled_text if spilled_text is not None else serialized
     blobs_dir = os.path.join(SESSIONS_DIR, session_id, "blobs")
     os.makedirs(blobs_dir, exist_ok=True)
     # Sanitize msg_id (it's UUID hex, but be defensive).
@@ -244,14 +264,18 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
     blob_path = os.path.join(blobs_dir, f"{safe_msg_id}.txt")
     try:
         with open(blob_path, "w", encoding="utf-8") as f:
-            f.write(serialized)
+            f.write(body)
     except Exception as e:
         logger.warning(f"Failed to spill tool result to {blob_path}: {e}")
         return content, None
-    head = strip_forged_sentinels(serialized[:4_000])
+    head = strip_forged_sentinels(body[:4_000])
     note = wrap_platform_note(
-        f"Output truncated by Maestro. Full output ({len(serialized)} chars) saved to "
+        f"Output truncated by Maestro. Full output ({len(body)} chars) saved to "
         f"{blob_path}. Ask the user or run a follow-up tool call if you need the rest."
     )
     replacement = f"{head}\n\n{note}"
+    if spilled_text is not None and isinstance(content, dict):
+        truncated: Dict[str, object] = {str(k): v for k, v in content.items()}
+        truncated["text"] = replacement
+        return truncated, blob_path
     return replacement, blob_path

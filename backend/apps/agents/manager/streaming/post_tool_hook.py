@@ -133,7 +133,7 @@ async def post_tool_hook(ctx: HookContext, input_data: dict, tool_use_id, contex
         if notes:
             content = f"{content}\n\n" + wrap_platform_note("\n\n".join(notes))
 
-    result_payload = {"text": content}
+    result_payload: Dict[str, object] = {"text": content}
     hook_tool_name = input_data.get("tool_name", "")
     if hook_tool_name:
         result_payload["tool_name"] = hook_tool_name
@@ -210,7 +210,7 @@ async def post_tool_hook(ctx: HookContext, input_data: dict, tool_use_id, contex
         )
         if blob_path:
             result_msg.content = truncated_content
-            logger.info(f"Spilled tool result {result_msg.id} ({len(blob_path)} chars) to {blob_path}")
+            logger.info(f"Spilled tool result {result_msg.id} ({len(content)} chars) to {blob_path}")
     except Exception:
         logger.exception("Tool result truncation failed; keeping inline body")
     session.messages.append(result_msg)

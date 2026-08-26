@@ -3,6 +3,8 @@ mocks claude_agent_sdk.query, so it never fires the SDK's PostToolUse hooks; thi
 behavior directly: a tool result becomes a tool_result message, and an Agent tool spawns a
 sub-session into the manager's LIVE registry (the InstanceOf[dict] sharing, the subtle bit)."""
 
+import time
+
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 
@@ -10,6 +12,13 @@ from backend.apps.agents.core.models import AgentSession
 from backend.apps.agents.manager.streaming.HookContext import HookContext
 from backend.apps.agents.manager.streaming import post_tool_hook as tool_result_hook
 from backend.apps.agents.manager import view_builder_state
+from backend.apps.agents.manager.session import history_compaction
+from backend.apps.agents.manager.session.history_compaction import (
+    PLATFORM_NOTE_CLOSE,
+    PLATFORM_NOTE_OPEN,
+    RECAP_TOOL_RESULT_CAP,
+    recap_tool_result_line,
+)
 
 
 def p_ctx(registry: dict) -> HookContext:
@@ -153,3 +162,80 @@ async def test_write_outside_any_app_workspace_adds_no_note():
     body = await p_write(ctx, p_app_manager(), file_path="/some/other/repo/main.py")
     assert "Build server reported" not in body
     assert "The app's console logged" not in body
+
+
+# --- oversized results spill to a blob, and the message left behind keeps its shape ---
+
+
+async def p_oversized_result(ctx, tmp_path, text: str, tool_name: str = "Bash"):
+    """Drive the real hook with a tool_response past the 50KB spill threshold.
+
+    truncate_large_tool_result used to json.dumps the whole text/tool_name/elapsed_ms envelope
+    and hand back a bare string, so a spilled result lost tool_name and elapsed_ms and the
+    retained 4KB "signal" head was the escaped JSON of the envelope, not the tool's output.
+    """
+    ctx.tool_start_times["tu1"] = time.time() - 0.05
+    with patch.object(tool_result_hook.ws_manager, "send_to_session", new=AsyncMock()), \
+         patch.object(history_compaction, "SESSIONS_DIR", str(tmp_path)):
+        await tool_result_hook.post_tool_hook(
+            ctx, {"tool_name": tool_name, "tool_response": text, "tool_input": {"command": "cat big"}}, "tu1", None
+        )
+    return ctx.session.messages[-1]
+
+
+@pytest.mark.asyncio
+async def test_spilled_tool_result_keeps_its_envelope_fields(tmp_path):
+    ctx = p_ctx({})
+    msg = await p_oversized_result(ctx, tmp_path, "MEGA" * 20_000)
+    assert isinstance(msg.content, dict), "a spilled result must stay the same shape as every other tool_result"
+    assert msg.content["tool_name"] == "Bash"
+    assert isinstance(msg.content["elapsed_ms"], int), "per-tool latency must survive the spill"
+
+
+@pytest.mark.asyncio
+async def test_spilled_tool_result_head_is_readable_tool_output(tmp_path):
+    """The head exists to preserve signal; spent on JSON escaping it preserved almost none."""
+    ctx = p_ctx({})
+    msg = await p_oversized_result(ctx, tmp_path, "line one\n" + "MEGA" * 20_000)
+    body = msg.content["text"]
+    assert body.startswith("line one\n"), f"head is not the tool's own output: {body[:60]!r}"
+    assert not body.lstrip().startswith("{"), "head is still the escaped JSON envelope"
+
+
+@pytest.mark.asyncio
+async def test_spilled_tool_result_still_points_at_a_readable_blob(tmp_path):
+    """The platform note naming the blob is the ONLY way the dropped body is recoverable."""
+    ctx = p_ctx({})
+    full = "line one\n" + "MEGA" * 20_000
+    msg = await p_oversized_result(ctx, tmp_path, full)
+    blob = tmp_path / ctx.session_id / "blobs" / f"{msg.id}.txt"
+    assert blob.exists(), "the spilled body was not written where the note says it is"
+    assert blob.read_text(encoding="utf-8") == full, "the blob must be the tool's text, not a JSON envelope the agent has to unwrap"
+    body = msg.content["text"]
+    assert str(blob) in body
+    assert PLATFORM_NOTE_OPEN in body and PLATFORM_NOTE_CLOSE in body
+
+
+@pytest.mark.asyncio
+async def test_spilled_tool_result_is_still_clipped_by_the_recap_cap(tmp_path):
+    """The context estimator measures recap_tool_result_line, which clips to 500 chars whatever
+    the shape is -- so this fix must not move what estimate_post_compact_input charges."""
+    ctx = p_ctx({})
+    msg = await p_oversized_result(ctx, tmp_path, "MEGA" * 20_000)
+    line = recap_tool_result_line(msg.content)
+    assert len(line) <= RECAP_TOOL_RESULT_CAP + len("Tool result (Bash): ") + len("...")
+    assert line.startswith("Tool result (Bash): ")
+
+
+@pytest.mark.asyncio
+async def test_result_under_the_threshold_is_left_alone(tmp_path):
+    ctx = p_ctx({})
+    ctx.tool_start_times["tu1"] = time.time() - 0.05
+    with patch.object(tool_result_hook.ws_manager, "send_to_session", new=AsyncMock()), \
+         patch.object(history_compaction, "SESSIONS_DIR", str(tmp_path)):
+        await tool_result_hook.post_tool_hook(
+            ctx, {"tool_name": "Bash", "tool_response": "small output", "tool_input": {"command": "ls"}}, "tu1", None
+        )
+    msg = ctx.session.messages[-1]
+    assert msg.content["text"] == "small output"
+    assert not (tmp_path / ctx.session_id).exists(), "nothing under the threshold may touch disk"
