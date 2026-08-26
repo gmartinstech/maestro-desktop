@@ -18,7 +18,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import CheckError, is_excepted, is_lintignored
+from . import CheckError, is_excepted, is_lintignored, venv_tool
 
 # Generous because the first run after a window reload races the editor's
 # startup load with a cold ruff cache; a tight limit there is exactly what made
@@ -40,11 +40,11 @@ def run_ruff(
     ignores: dict[Path, set[str]] | None = None,
 ) -> list[str]:
     """Run ruff on the Python backend and return errors."""
-    ruff_bin = root / "backend" / ".venv" / "bin" / "ruff"
-    if not ruff_bin.exists():
+    ruff_bin = venv_tool(root, "ruff")
+    if ruff_bin is None:
         found = shutil.which("ruff")
         if not found:
-            raise CheckError("ruff executable not found in backend/.venv/bin or PATH")
+            raise CheckError("ruff executable not found in backend/.venv (bin or Scripts) or PATH")
         ruff_bin = Path(found)
 
     targets = ["backend"]

@@ -140,7 +140,7 @@ def run_underscore_check(
         if ignores and is_lintignored(pyfile, root, RULE, ignores):
             continue
         try:
-            tree = ast.parse(pyfile.read_text(), filename=rel)
+            tree = ast.parse(pyfile.read_text(encoding="utf-8"), filename=rel)
         except (OSError, SyntaxError):
             continue
         errors.extend(_check_tree(tree, rel))

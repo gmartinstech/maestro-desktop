@@ -22,6 +22,22 @@ class CheckError(Exception):
         self.reason = reason
 
 
+def venv_tool(root: Path, name: str) -> Path | None:
+    """Locate *name* in backend/.venv, honouring the per-platform layout.
+
+    POSIX venvs put executables in ``bin``, Windows venvs in ``Scripts`` with an
+    ``.exe`` suffix; hardcoding ``bin`` silently disabled ruff and pyright on
+    Windows, so both layouts are probed and ``None`` means "fall back to PATH".
+    """
+    venv = root / "backend" / ".venv"
+    for subdir in ("bin", "Scripts"):
+        for filename in (name, f"{name}.exe"):
+            candidate = venv / subdir / filename
+            if candidate.exists():
+                return candidate
+    return None
+
+
 def _matches_any(text: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(text, p) for p in patterns)
 

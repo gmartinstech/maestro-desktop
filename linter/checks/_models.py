@@ -38,7 +38,7 @@ def _fields_in_file_cached(filepath: str, _mtime: float) -> frozenset[str]:
     after it is edited instead of returning a stale set from an earlier version.
     """
     try:
-        tree = ast.parse(Path(filepath).read_text())
+        tree = ast.parse(Path(filepath).read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return frozenset()
     names: set[str] = set()

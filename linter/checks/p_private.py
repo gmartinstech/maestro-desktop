@@ -219,7 +219,7 @@ def run_p_private_check(
             continue
         rel = str(pyfile.relative_to(root))
         try:
-            source = pyfile.read_text()
+            source = pyfile.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=rel)
         except (OSError, SyntaxError):
             continue

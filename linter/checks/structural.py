@@ -37,7 +37,7 @@ def check_file_lines(
     filepath: Path, root: Path, max_lines: int,
 ) -> tuple[str, int] | None:
     try:
-        count = len(filepath.read_text(errors="ignore").splitlines())
+        count = len(filepath.read_text(encoding="utf-8", errors="ignore").splitlines())
     except OSError:
         return None
     if count >= max_lines:
@@ -78,7 +78,7 @@ def check_nested_imports(filepath: Path, root: Path) -> list[str]:
     if filepath.suffix != ".py":
         return []
     try:
-        source = filepath.read_text(errors="ignore")
+        source = filepath.read_text(encoding="utf-8", errors="ignore")
         tree = ast.parse(source, filename=str(filepath))
     except (OSError, SyntaxError):
         return []

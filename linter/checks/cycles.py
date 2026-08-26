@@ -212,7 +212,7 @@ def run_cycle_check(
     graph: dict[Path, set[Path]] = {}
     for fp in files:
         try:
-            src = fp.read_text(errors="ignore")
+            src = fp.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         if fp.suffix == ".py":
