@@ -254,7 +254,13 @@ class RunOptions(AgentManagerProtocol):
                 options_kwargs["fork_session"] = True
             if session.needs_fork:
                 session.needs_fork = False
-        elif len(session.messages) > 1:
+
+        # Compaction trigger (Phase 2). Driven by live ctx_used ratio rather than turn count, fires when input_tokens/context_window crosses session.compact_threshold_pct (default 0.65). Cheap, programmatic summarization (no aux LLM call) so this adds zero latency on the user's turn.
+        # Runs BEFORE the rebuild below because maybe_compact moves compacted_through_msg_id and the rebuild reads it: with the recap built first, the turn shipped the PRE-compaction history while estimate_post_compact_input measured the POST-compaction one, under-reporting the send by thousands of tokens into the meter, the next turn's trigger ratio, and the hard guard that evicts MCP servers.
+        await pre_send_context_guard(self, session, session_id)
+
+        # No transcript to resume, so replay local history through the prompt, cut at the cutoff compaction just settled. Tests sdk_session_id rather than chaining an elif off the resume branch above: the guard sits between them, so the exclusivity has to be re-stated rather than implied.
+        if not session.sdk_session_id and len(session.messages) > 1:
             history = build_history_prefix(
                 get_branch_messages(session),
                 cutoff_msg_id=session.compacted_through_msg_id,
@@ -271,9 +277,6 @@ class RunOptions(AgentManagerProtocol):
                     prompt_content = history + "\n\n" + prompt_content
                 elif isinstance(prompt_content, list):
                     prompt_content.insert(0, {"type": "text", "text": history})
-
-        # Compaction trigger (Phase 2). Driven by live ctx_used ratio rather than turn count, fires when input_tokens/context_window crosses session.compact_threshold_pct (default 0.65). Cheap, programmatic summarization (no aux LLM call) so this adds zero latency on the user's turn.
-        await pre_send_context_guard(self, session, session_id)
 
         logger.info(f"[MCP-DEBUG] Creating ClaudeAgentOptions short={session.model} resolved={resolved_model} api_type={api_type}")
         options = ClaudeAgentOptions(**options_kwargs)
