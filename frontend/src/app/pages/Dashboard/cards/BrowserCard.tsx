@@ -23,6 +23,8 @@ import AddIcon from '@mui/icons-material/Add';
 import LockIcon from '@mui/icons-material/Lock';
 import SearchIcon from '@mui/icons-material/Search';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import FullscreenRoundedIcon from '@mui/icons-material/FullscreenRounded';
+import FullscreenExitRoundedIcon from '@mui/icons-material/FullscreenExitRounded';
 import RunInDesktopMessage from '@/app/components/RunInDesktopMessage';
 import {
   setBrowserCardPosition,
@@ -40,6 +42,7 @@ import {
   recordClosedCard,
   type BrowserTab,
 } from '@/shared/state/dashboardLayoutSlice';
+import { setFullscreenCardId, clearFullscreenCardId } from '@/shared/state/tempStateSlice';
 import { removeBrowserCardCleanly } from '@/shared/browserTeardown';
 import { createSelector } from '@reduxjs/toolkit';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -174,17 +177,38 @@ interface Props {
   cardZOrder?: number;
   onDoubleClick?: (id: string, type: 'agent' | 'view' | 'browser') => void;
   onBringToFront?: (id: string, type: 'agent' | 'view' | 'browser') => void;
+  // On-demand getter (see DashboardViewCard's fullscreen implementation for the same pattern) for the canvas viewport element, so this card can measure and ResizeObserver it while entering fullscreen.
+  getViewportEl: () => HTMLDivElement | null;
 }
 
 
 const BrowserCard: React.FC<Props> = ({
   browserId, tabs, activeTabId, cardX, cardY, cardWidth, cardHeight, zoom = 1, panX = 0, panY = 0, cmdHeld = false,
   isSelected = false, isHighlighted = false, keepAliveHidden = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
+  getViewportEl,
   cardZOrder = 0, onDoubleClick, onBringToFront,
 }) => {
   const { t } = useTranslation();
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
+  // Local-only, resets on reload/dashboard switch, never persisted to dashboard layout — matches DashboardViewCard's isFullscreen treatment.
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    dispatch(setFullscreenCardId(browserId));
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      dispatch(clearFullscreenCardId(browserId));
+    };
+  }, [isFullscreen, dispatch, browserId]);
+  // A kept-alive card (parked off-screen for another dashboard) can't legitimately be fullscreen on THIS dashboard; without this, switching away while fullscreen leaves the Redux flag latched and the nav chrome hidden on whatever dashboard you land on next.
+  useEffect(() => {
+    if (keepAliveHidden) setIsFullscreen(false);
+  }, [keepAliveHidden]);
   // Read via ref inside the webview-attach effect so a new onDoubleClick identity doesn't re-run that effect (which would re-register the webview).
   const onDoubleClickRef = useRef(onDoubleClick);
   onDoubleClickRef.current = onDoubleClick;
@@ -493,6 +517,11 @@ const BrowserCard: React.FC<Props> = ({
     removeBrowserCardCleanly(browserId, dispatch);
   }, [dispatch, browserId]);
 
+  const handleToggleFullscreen = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFullscreen((v) => !v);
+  }, []);
+
   const handleAddTab = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(addBrowserTab({ browserId, url: browserHomepage }));
@@ -548,7 +577,8 @@ const BrowserCard: React.FC<Props> = ({
         || e.clientX < barRect.left - DETACH_PX || e.clientX > barRect.right + DETACH_PX;
       const backInside = e.clientY >= barRect.top && e.clientY <= barRect.bottom
         && e.clientX >= barRect.left && e.clientX <= barRect.right;
-      if (!drag.detached && outside) drag.detached = true;
+      // Never detach while fullscreen: the drop-point math below assumes the tab bar sits under the ambient canvas transform (translate/scale), which doesn't apply when the card is sized directly to the viewport.
+      if (!drag.detached && outside && !isFullscreen) drag.detached = true;
       else if (drag.detached && backInside) drag.detached = false;
     }
     if (drag.detached) {
@@ -598,7 +628,7 @@ const BrowserCard: React.FC<Props> = ({
         }
       }
     }
-  }, [tabs, browserId, dispatch]);
+  }, [tabs, browserId, dispatch, isFullscreen]);
 
   const handleTabPointerUp = useCallback((e: React.PointerEvent) => {
     const drag = tabDragRef.current;
@@ -783,6 +813,25 @@ const BrowserCard: React.FC<Props> = ({
   const displayW = localResize?.w ?? cardWidth;
   const displayH = localResize?.h ?? cardHeight;
   const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
+  const FULLSCREEN_Z_INDEX = 999998;
+  // Viewport's own layout rect, re-measured via ResizeObserver on the real element (not a window 'resize' listener, so a sidebar drag or banner Collapse still re-measures it).
+  const [viewportRect, setViewportRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const target = getViewportEl();
+    if (!target) return undefined;
+    const observer = new ResizeObserver(() => setViewportRect(target.getBoundingClientRect()));
+    observer.observe(target);
+    return () => {
+      observer.disconnect();
+      setViewportRect(null);
+    };
+  }, [isFullscreen, getViewportEl]);
+  // Never reparented — reparenting a live <webview> reloads it. Sized in canvas-space so the ambient transform (translate(panX,panY) scale(zoom)) lands it exactly over the viewport's rect, then the card's own inverse scale(1/zoom) undoes the zoom for its own content.
+  const fsLeft = viewportRect ? -panX / zoom : displayX;
+  const fsTop = viewportRect ? -panY / zoom : displayY;
+  const fsWidth = viewportRect ? viewportRect.width : displayW;
+  const fsHeight = viewportRect ? viewportRect.height : displayH;
 
   const isSecure = activeUrl.startsWith('https://');
   const isSearch = isGoogleSearch(activeUrl);
@@ -847,18 +896,21 @@ const BrowserCard: React.FC<Props> = ({
         contain: 'layout style',
         // Own compositor layer so hover/paint invalidations stay contained to this card. See AgentCard for full rationale.
         willChange: 'transform',
-        left: keepAliveHidden ? -100000 : displayX,
-        top: displayY,
-        width: displayW,
-        height: displayH,
-        borderRadius: `${c.radius.lg}px`,
+        left: keepAliveHidden ? -100000 : (isFullscreen ? fsLeft : displayX),
+        top: isFullscreen ? fsTop : displayY,
+        width: isFullscreen ? fsWidth : displayW,
+        height: isFullscreen ? fsHeight : displayH,
+        // Cancels the ambient canvas zoom (transformOrigin '0 0' matches the canvas content layer's own origin) so the tab bar, nav bar, and page content render at native size.
+        transform: isFullscreen ? `scale(${1 / zoom})` : 'none',
+        transformOrigin: '0 0',
+        borderRadius: isFullscreen ? 0 : `${c.radius.lg}px`,
         border: agentBorder,
         bgcolor: c.bg.surface,
         boxShadow: agentShadow,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        zIndex: (isDragging || isResizing) ? 999999 : cardZOrder,
+        zIndex: isFullscreen ? FULLSCREEN_Z_INDEX : (isDragging || isResizing) ? 999999 : cardZOrder,
         transition: noTransition ? 'none' : 'box-shadow 0.4s ease, border 0.3s ease',
         '&:hover .resize-handle': { opacity: 1 },
         ...(isHighlighted && {
@@ -887,9 +939,9 @@ const BrowserCard: React.FC<Props> = ({
 
       <Box
         ref={tabBarRef}
-        onPointerDown={handleDragPointerDown}
-        onPointerMove={handleDragPointerMove}
-        onPointerUp={handleDragPointerUp}
+        onPointerDown={isFullscreen ? undefined : handleDragPointerDown}
+        onPointerMove={isFullscreen ? undefined : handleDragPointerMove}
+        onPointerUp={isFullscreen ? undefined : handleDragPointerUp}
         sx={{
           position: 'relative',
           zIndex: 16,
@@ -897,7 +949,7 @@ const BrowserCard: React.FC<Props> = ({
           alignItems: 'stretch',
           bgcolor: agentActive ? `${accentColor}0a` : c.bg.secondary,
           borderBottom: `1px solid ${agentActive ? `${accentColor}30` : c.border.subtle}`,
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: isFullscreen ? 'default' : (isDragging ? 'grabbing' : 'grab'),
           flexShrink: 0,
           minHeight: 34,
           userSelect: 'none',
@@ -1073,6 +1125,17 @@ const BrowserCard: React.FC<Props> = ({
               </Typography>
             </Box>
           )}
+
+          <Tooltip title={isFullscreen ? t('dashboard.browserCard.exitFullscreen') : t('dashboard.browserCard.enterFullscreen')} placement="top">
+            <IconButton
+              size="small"
+              onClick={handleToggleFullscreen}
+              onPointerDown={(e) => e.stopPropagation()}
+              sx={{ color: c.text.ghost, p: 0.4, '&:hover': { color: c.text.primary } }}
+            >
+              {isFullscreen ? <FullscreenExitRoundedIcon sx={{ fontSize: 15 }} /> : <FullscreenRoundedIcon sx={{ fontSize: 15 }} />}
+            </IconButton>
+          </Tooltip>
 
           <Tooltip title={t('dashboard.browserCard.closeBrowser')} placement="top">
             <IconButton
@@ -1566,14 +1629,14 @@ const BrowserCard: React.FC<Props> = ({
         {browserAgentSession && (
           <BrowserAgentOverlay
             session={browserAgentSession}
-            browserWidth={displayW}
-            browserHeight={displayH}
+            browserWidth={isFullscreen ? fsWidth : displayW}
+            browserHeight={isFullscreen ? fsHeight : displayH}
           />
         )}
       </Box>
 
       {/* Resize handles */}
-      {HANDLE_DEFS.map(({ dir, sx }) => (
+      {!isFullscreen && HANDLE_DEFS.map(({ dir, sx }) => (
         <Box
           key={dir}
           className="resize-handle"
