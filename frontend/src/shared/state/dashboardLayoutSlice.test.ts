@@ -166,3 +166,29 @@ describe('element reducers', () => {
     expect(s1.elements[el.element_id].y).toBe(el.y - 7);
   });
 });
+
+import reducerSeed, { seedClosedAgentPosition, reconcileSessions } from '@/shared/state/dashboardLayoutSlice';
+
+describe('seedClosedAgentPosition + reconcileSessions', () => {
+  it('a seeded position is used instead of a fresh grid cell when the session becomes live', () => {
+    const seeded = reducerSeed(undefined, seedClosedAgentPosition({
+      sessionId: 'session-b',
+      position: { session_id: 'session-b', x: 111, y: 222, width: 400, height: 300, zOrder: 9 },
+    }));
+    const state = reducerSeed(seeded, reconcileSessions({ sessionIds: ['session-b'], expandedSessionIds: [] }));
+    expect(state.cards['session-b']).toEqual({ session_id: 'session-b', x: 111, y: 222, width: 400, height: 300, zOrder: 9 });
+    expect(state.closedCardPositions['session-b']).toBeUndefined();
+  });
+
+  it('a session leaving the live set gets its card stashed into closedCardPositions', () => {
+    const withCard = reducerSeed(undefined, seedClosedAgentPosition({
+      sessionId: 'session-a',
+      position: { session_id: 'session-a', x: 1, y: 2, width: 400, height: 300, zOrder: 1 },
+    }));
+    const created = reducerSeed(withCard, reconcileSessions({ sessionIds: ['session-a'], expandedSessionIds: [] }));
+    const evicted = reducerSeed(created, reconcileSessions({ sessionIds: [], expandedSessionIds: [] }));
+    expect(evicted.cards['session-a']).toBeUndefined();
+    expect(evicted.closedCardPositions['session-a']).toEqual({ session_id: 'session-a', x: 1, y: 2, width: 400, height: 300, zOrder: 1 });
+  });
+});
+

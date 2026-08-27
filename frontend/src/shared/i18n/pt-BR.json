@@ -978,6 +978,8 @@
     },
     "browserCard": {
       "newTab": "Nova aba",
+      "enterFullscreen": "Entrar em tela cheia",
+      "exitFullscreen": "Sair da tela cheia",
       "closeBrowser": "Fechar navegador",
       "back": "Voltar",
       "forward": "Avançar",
@@ -1063,6 +1065,13 @@
     },
     "agentCard": {
       "queued": "na fila",
+      "enterFullscreen": "Entrar em tela cheia",
+      "exitFullscreen": "Sair da tela cheia",
+      "openInDrawer": "Abrir na gaveta",
+      "closeDrawer": "Fechar gaveta",
+      "switchChat": "Trocar para uma conversa anterior",
+      "searchChats": "Buscar conversas...",
+      "noOtherChats": "Nenhuma outra conversa neste painel",
       "closeChat": "Fechar conversa",
       "questionPending": "Pergunta pendente",
       "learned": "Aprendeu",
