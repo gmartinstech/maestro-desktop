@@ -176,6 +176,8 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
             sessionId={sid}
             expanded={expandedSessionIds.includes(sid)}
             getCanvasState={getCanvasState}
+            getViewportEl={getViewportEl}
+            dashboardId={dashboardId}
             spawnFrom={origin}
             exitTarget={exitTarget}
             isSelected={isSel}
@@ -245,6 +247,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
           panX={panX}
           panY={panY}
           cmdHeld={cmdHeld}
+          getViewportEl={getViewportEl}
           isSelected={selection.isSelected(bc.browser_id)}
           isHighlighted={highlightedCardId === bc.browser_id}
           multiDragDelta={multiDragDelta}

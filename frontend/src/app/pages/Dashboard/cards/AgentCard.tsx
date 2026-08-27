@@ -13,12 +13,18 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import CloseIcon from '@mui/icons-material/Close';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import FullscreenRoundedIcon from '@mui/icons-material/FullscreenRounded';
+import FullscreenExitRoundedIcon from '@mui/icons-material/FullscreenExitRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import Drawer from '@mui/material/Drawer';
 import { motion } from 'framer-motion';
 import {
   AgentSession,
   handleApproval,
   collapseSession,
+  expandSession,
   closeSession,
+  resumeSession,
   renameSession,
 } from '@/shared/state/agentsSlice';
 import { displayChatTitle, isLegacyAutoName } from '@/shared/state/sessionDisplay';
@@ -31,7 +37,10 @@ import {
   clearGlowingAgentCard,
   removeCard,
   recordClosedCard,
+  seedClosedAgentPosition,
 } from '@/shared/state/dashboardLayoutSlice';
+import AgentCardHistoryMenu from './AgentCardHistoryMenu';
+import { setFullscreenCardId, clearFullscreenCardId, setDrawerCardId, clearDrawerCardId } from '@/shared/state/tempStateSlice';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { QuestionForm } from '@/app/pages/AgentChat/shell/ApprovalBar';
 import AgentChat from '@/app/pages/AgentChat/AgentChat';
@@ -266,6 +275,9 @@ interface OuterProps {
   expanded: boolean;
   // Stable getter, cards read pan/zoom on demand (drag math) instead of receiving them as props. Without this, every wheel/pan tick on the canvas re-rendered every card, even though the canvas root's CSS transform is what actually moves them visually. Cards only need the values inside drag callbacks; making it a ref-backed getter keeps pan/zoom out of memo equality entirely.
   getCanvasState: () => { panX: number; panY: number; zoom: number };
+  // On-demand getter (same rationale as getCanvasState) for the canvas viewport element, used only while this card is fullscreen.
+  getViewportEl: () => HTMLDivElement | null;
+  dashboardId: string;
   spawnFrom?: { x: number; y: number; type?: 'branch' };
   exitTarget?: { x: number; y: number };
   isSelected?: boolean;
@@ -292,6 +304,7 @@ interface Props extends Omit<OuterProps, 'sessionId'> {
   cardHeight: number;
   cardZOrder: number;
   getCanvasState: () => { panX: number; panY: number; zoom: number };
+  getViewportEl: () => HTMLDivElement | null;
 }
 
 const MIN_W = 480;
@@ -306,7 +319,7 @@ const GLOW_FADE_MS = 2500;
 const SNAP_THRESHOLD = 60;
 
 const AgentCard: React.FC<Props> = ({
-  session, expanded, cardX, cardY, cardWidth, cardHeight, getCanvasState, spawnFrom, exitTarget,
+  session, expanded, cardX, cardY, cardWidth, cardHeight, getCanvasState, getViewportEl, dashboardId, spawnFrom, exitTarget,
   isSelected = false, isHighlighted = false, multiDragDelta, onCardSelect, onDragStart, onDragMove, onDragEnd,
   onBranch, onMeasuredHeight, snapColumn, autoFocusInput, cardZOrder = 0, onDoubleClick, onBringToFront,
   shakeDirection,
@@ -314,7 +327,43 @@ const AgentCard: React.FC<Props> = ({
   const c = useClaudeTokens();
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  // Local-only, resets on reload/dashboard switch, never persisted — matches DashboardViewCard's isFullscreen treatment.
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    dispatch(setFullscreenCardId(session.id));
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      dispatch(clearFullscreenCardId(session.id));
+    };
+  }, [isFullscreen, dispatch, session.id]);
   const isDashboardActive = useDashboardActive();
+  // Navigating away from the Dashboard route entirely doesn't unmount this card (Dashboard is CSS-hidden, not removed), so without this a fullscreen card's cleanup never fires and the nav chrome stays hidden on every other route.
+  useEffect(() => {
+    if (!isDashboardActive) setIsFullscreen(false);
+  }, [isDashboardActive]);
+  // Independent of isFullscreen: a drawer coexists with a fullscreen card elsewhere on the canvas. Same local-only, non-persisted treatment.
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+    dispatch(setDrawerCardId(session.id));
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsDrawerOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      dispatch(clearDrawerCardId(session.id));
+    };
+  }, [isDrawerOpen, dispatch, session.id]);
+  // A drawer on a route the user has navigated away from is the same latch risk fullscreen had.
+  useEffect(() => {
+    if (!isDashboardActive) setIsDrawerOpen(false);
+  }, [isDashboardActive]);
   const hasApiKey = !!useAppSelector((s) => s.settings.data.anthropic_api_key);
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
@@ -367,7 +416,7 @@ const AgentCard: React.FC<Props> = ({
     if (s.includes('/')) s = s.split('/').pop() || s;
     return s;
   }, [session.model, modelsByProvider]);
-  const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
+  const scrollOverlayRef = useOverlayScrollPassthrough(isSelected && !isFullscreen);
 
   const suggestionPulseRef = useRef('');
   const readyPulseRef = useRef('');
@@ -406,6 +455,9 @@ const AgentCard: React.FC<Props> = ({
   // Ref so ResizeObserver sees latest value without re-attaching when active flips.
   const isDashboardActiveRef = useRef(isDashboardActive);
   useEffect(() => { isDashboardActiveRef.current = isDashboardActive; }, [isDashboardActive]);
+  // Ref so ResizeObserver sees latest value without re-attaching when fullscreen flips.
+  const isFullscreenRef = useRef(isFullscreen);
+  useEffect(() => { isFullscreenRef.current = isFullscreen; }, [isFullscreen]);
   useEffect(() => {
     const el = cardBoxRef.current;
     if (!el || !onMeasuredHeight) return;
@@ -414,6 +466,8 @@ const AgentCard: React.FC<Props> = ({
     const ro = new ResizeObserver((entries) => {
       // Short-circuit when dashboard is hidden, observer stays attached so the next resize after returning to the dashboard fires correctly.
       if (!isDashboardActiveRef.current) return;
+      // Fullscreen size is a viewport-driven overlay, not this card's real canvas footprint, don't let it clobber the stored measurement.
+      if (isFullscreenRef.current) return;
       // Re-measuring per streamed character mid-pan was forcing Dashboard re-renders via setMeasuredHeightsTick.
       if (isCanvasInteractionActive()) {
         for (const entry of entries) suppressedHeight = entry.contentRect.height;
@@ -425,7 +479,7 @@ const AgentCard: React.FC<Props> = ({
     });
     ro.observe(el);
     const unsub = onCanvasInteractionEnd(() => {
-      if (suppressedHeight != null && isDashboardActiveRef.current) {
+      if (suppressedHeight != null && isDashboardActiveRef.current && !isFullscreenRef.current) {
         onMeasuredHeight(session.id, suppressedHeight);
       }
       suppressedHeight = null;
@@ -500,6 +554,41 @@ const AgentCard: React.FC<Props> = ({
     window.addEventListener('maestro:canvas-pan-changed', onPanChange);
     return () => window.removeEventListener('maestro:canvas-pan-changed', onPanChange);
   }, [isDragging, recomputeDragPos]);
+
+  // Live pan/zoom, subscribed ONLY while fullscreen — this is the one case where AgentCard needs a value that updates on every pan/zoom tick instead of on demand. Kept as a separate, narrowly-scoped subscription (not a permanent live prop) specifically so a non-fullscreen AgentCard never re-renders on pan/zoom, preserving the getCanvasState optimization above for the common case.
+  const [fullscreenCanvasState, setFullscreenCanvasState] = useState<{ panX: number; panY: number; zoom: number } | null>(null);
+  useEffect(() => {
+    if (!isFullscreen) {
+      setFullscreenCanvasState(null);
+      return undefined;
+    }
+    const sync = () => setFullscreenCanvasState(getCanvasState());
+    sync();
+    window.addEventListener('maestro:canvas-pan-changed', sync);
+    return () => window.removeEventListener('maestro:canvas-pan-changed', sync);
+  }, [isFullscreen, getCanvasState]);
+
+  const FULLSCREEN_Z_INDEX = 999998;
+  const [fullscreenViewportRect, setFullscreenViewportRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const target = getViewportEl();
+    if (!target) return undefined;
+    const observer = new ResizeObserver(() => setFullscreenViewportRect(target.getBoundingClientRect()));
+    observer.observe(target);
+    return () => {
+      observer.disconnect();
+      setFullscreenViewportRect(null);
+    };
+  }, [isFullscreen, getViewportEl]);
+
+  const fsZoom = fullscreenCanvasState?.zoom ?? 1;
+  const fsPanX = fullscreenCanvasState?.panX ?? 0;
+  const fsPanY = fullscreenCanvasState?.panY ?? 0;
+  const fsLeft = fullscreenViewportRect ? -fsPanX / fsZoom : cardX;
+  const fsTop = fullscreenViewportRect ? -fsPanY / fsZoom : cardY;
+  const fsWidth = fullscreenViewportRect ? fullscreenViewportRect.width : cardWidth;
+  const fsHeight = fullscreenViewportRect ? fullscreenViewportRect.height : Math.max(EXPANDED_OVERLAY_H, cardHeight);
 
   const handleDragPointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragState.current) return;
@@ -643,6 +732,50 @@ const AgentCard: React.FC<Props> = ({
     }
   };
 
+  // Fullscreen only makes sense on the full chat view, so entering it also expands a collapsed card (expandSession is a no-op if already expanded).
+  const handleToggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isFullscreen) dispatch(expandSession(session.id));
+    setIsFullscreen(!isFullscreen);
+  };
+
+  // Mutually exclusive with fullscreen AND with being expanded on the canvas (a second live AgentChat mount for the same session would open a second, undeduped WebSocket connection) - opening the drawer collapses the canvas card, closing the drawer leaves it collapsed. Only touches THIS card's own local/Redux state.
+  const handleToggleDrawer = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isDrawerOpen) {
+      setIsFullscreen(false);
+      dispatch(collapseSession(session.id));
+    }
+    setIsDrawerOpen(!isDrawerOpen);
+  };
+
+  // Stable reference so AgentCardHistoryMenu's React.memo is effective (a fresh inline arrow here would defeat it on every AgentCard re-render).
+  // Seeds the resumed session's position BEFORE resuming it: reconcileSessions (the sole authority that creates a card for a newly-live session) checks closedCardPositions first, so it lands the new card exactly here instead of racing a manual reassignment against reconcileSessions' own pass (both resumeSession and closeSession are async thunks, so there's no way to synchronously beat reconcile with a direct card-position move).
+  // The menu can't filter out workflow-linked sessions client-side (HistorySession has no workflow_run_id/workflow_edit_id), so this re-checks the SAME admission rule reconcileSessions uses (see useDashboardLifecycle.ts's dashboardSessionIds filter) against the real resumed AgentSession, which does carry those fields. If the resumed session would never get a card, the accidental resume is undone and the current card is left untouched instead of closing it for nothing.
+  const handleSwitchSession = useCallback((newSessionId: string) => {
+    const outgoingSessionId = session.id;
+    dispatch(seedClosedAgentPosition({
+      sessionId: newSessionId,
+      position: { session_id: newSessionId, x: cardX, y: cardY, width: cardWidth, height: cardHeight, zOrder: cardZOrder },
+    }));
+    dispatch(resumeSession({ sessionId: newSessionId })).then((action) => {
+      if (!resumeSession.fulfilled.match(action)) return;
+      const resumed = action.payload;
+      const wouldGetCard = !resumed.workflow_run_id && !resumed.workflow_edit_id
+        && resumed.mode !== 'browser-agent' && resumed.mode !== 'invoked-agent' && resumed.mode !== 'sub-agent';
+      if (!wouldGetCard) {
+        dispatch(closeSession({ sessionId: newSessionId }));
+        return;
+      }
+      if (linkedWorkflowSidecarId) {
+        dispatch(setCardSidecar({ workflowId: linkedWorkflowSidecarId, sessionId: null, kind: null }));
+      }
+      // No removeCard here (unlike handleRemove): resumeSession.fulfilled already added the new session to the live set, so reconcileSessions' live-id-set-changed guard does NOT early-return before closeSession lands - an eager removeCard would leave a gap reconcile fills with a fresh grid cell for the still-live outgoing session, which then gets evicted a beat later. Leaving the old card in place lets closeSession's own eventual reconcile pass evict it once, cleanly, with no resurrection.
+      dispatch(recordClosedCard({ kind: 'agent', id: outgoingSessionId }));
+      dispatch(collapseSession(outgoingSessionId));
+      dispatch(closeSession({ sessionId: outgoingSessionId }));
+    });
+  }, [dispatch, session.id, cardX, cardY, cardWidth, cardHeight, cardZOrder, linkedWorkflowSidecarId]);
 
   // ElapsedTimer owns its own 1Hz tick so AgentCard doesn't re-render every second.
 
@@ -661,7 +794,7 @@ const AgentCard: React.FC<Props> = ({
   const hasPending = session.pending_approvals.length > 0;
   const pendingReq = session.pending_approvals[0];
 
-  const noTransition = isDragging || isResizing || (isSelected && !!multiDragDelta);
+  const noTransition = isDragging || isResizing || isFullscreen || (isSelected && !!multiDragDelta);
 
   const mdDx = (!isDragging && isSelected && multiDragDelta) ? multiDragDelta.dx : 0;
   const mdDy = (!isDragging && isSelected && multiDragDelta) ? multiDragDelta.dy : 0;
@@ -696,13 +829,19 @@ const AgentCard: React.FC<Props> = ({
     <motion.div
       layout={false}
       initial={spawnInitial}
-      animate={{ opacity: 1, scale: 1, left: activeX, top: activeY }}
+      animate={{
+        opacity: 1,
+        scale: isFullscreen ? 1 / fsZoom : 1,
+        left: isFullscreen ? fsLeft : activeX,
+        top: isFullscreen ? fsTop : activeY,
+      }}
       exit={exitAnimation}
-      transition={spawnTransition}
+      transition={isFullscreen ? { duration: 0 } : spawnTransition}
       onPointerDownCapture={() => onBringToFront?.(session.id, 'agent')}
       style={{
         position: 'absolute',
-        zIndex: isDragging || isResizing ? 999999 : cardZOrder,
+        transformOrigin: isFullscreen ? '0 0' : undefined,
+        zIndex: isFullscreen ? FULLSCREEN_Z_INDEX : (isDragging || isResizing ? 999999 : cardZOrder),
       }}
     >
     <Box
@@ -725,8 +864,8 @@ const AgentCard: React.FC<Props> = ({
         contain: 'layout style',
         // Each card gets its own compositor layer; hover-cross used to cost 100-200ms PRESENTATION by re-painting the whole canvas.
         willChange: 'transform',
-        width: localResize ? activeW : Math.max(cardWidth, MIN_W),
-        height: localResize ? activeH : (expanded ? Math.max(EXPANDED_OVERLAY_H, cardHeight) : 'auto'),
+        width: isFullscreen ? fsWidth : (localResize ? activeW : Math.max(cardWidth, MIN_W)),
+        height: isFullscreen ? fsHeight : (localResize ? activeH : (expanded ? Math.max(EXPANDED_OVERLAY_H, cardHeight) : 'auto')),
         bgcolor: c.bg.surface,
         border: isHighlighted
           ? `2px solid ${c.accent.primary}`
@@ -814,7 +953,7 @@ const AgentCard: React.FC<Props> = ({
         }),
       }}
     >
-      {HANDLE_DEFS.map(({ dir, sx }) => (
+      {!isFullscreen && HANDLE_DEFS.map(({ dir, sx }) => (
         <Box
           key={dir}
           onPointerDown={handleResizeDown(dir)}
@@ -833,7 +972,7 @@ const AgentCard: React.FC<Props> = ({
       ))}
 
       {/* Selection overlay , blocks click interaction while selected, enabling drag from anywhere */}
-      {isSelected && (
+      {isSelected && !isFullscreen && (
         <Box
           ref={scrollOverlayRef}
           onPointerDown={handleDragPointerDown}
@@ -855,9 +994,9 @@ const AgentCard: React.FC<Props> = ({
 
       {/* Drag zone: header + metadata , entire region above separator is draggable */}
       <Box
-        onPointerDown={handleDragPointerDown}
-        onPointerMove={handleDragPointerMove}
-        onPointerUp={handleDragPointerUp}
+        onPointerDown={isFullscreen ? undefined : handleDragPointerDown}
+        onPointerMove={isFullscreen ? undefined : handleDragPointerMove}
+        onPointerUp={isFullscreen ? undefined : handleDragPointerUp}
         sx={{
           position: 'relative',
           zIndex: 16,
@@ -866,7 +1005,7 @@ const AgentCard: React.FC<Props> = ({
           px: 2,
           pt: 2,
           pb: 1.5,
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: isFullscreen ? 'default' : (isDragging ? 'grabbing' : 'grab'),
           touchAction: 'none',
           userSelect: 'none',
           flexShrink: 0,
@@ -961,6 +1100,45 @@ const AgentCard: React.FC<Props> = ({
             onPointerDown={(e) => e.stopPropagation()}
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, ml: 0.5 }}
           >
+            {!isDraft && (
+              <Tooltip title={isFullscreen ? t('dashboard.agentCard.exitFullscreen') : t('dashboard.agentCard.enterFullscreen')}>
+                <IconButton
+                  size="small"
+                  onClick={handleToggleFullscreen}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  sx={{
+                    color: c.text.ghost,
+                    p: 0.5,
+                    '&:hover': { color: c.text.primary },
+                  }}
+                >
+                  {isFullscreen ? <FullscreenExitRoundedIcon sx={{ fontSize: 16 }} /> : <FullscreenRoundedIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
+            )}
+            {!isDraft && (
+              <Tooltip title={isDrawerOpen ? t('dashboard.agentCard.closeDrawer') : t('dashboard.agentCard.openInDrawer')}>
+                <IconButton
+                  size="small"
+                  onClick={handleToggleDrawer}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  sx={{
+                    color: isDrawerOpen ? c.accent.primary : c.text.ghost,
+                    p: 0.5,
+                    '&:hover': { color: c.text.primary },
+                  }}
+                >
+                  <OpenInNewRoundedIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            )}
+            {!isDraft && (
+              <AgentCardHistoryMenu
+                dashboardId={dashboardId}
+                currentSessionId={session.id}
+                onSelect={handleSwitchSession}
+              />
+            )}
             <Tooltip title={isDraft ? t('common.remove') : t('dashboard.agentCard.closeChat')}>
               <IconButton
                 size="small"
@@ -1005,7 +1183,7 @@ const AgentCard: React.FC<Props> = ({
         </Box>
       </Box>
 
-      {expanded && (
+      {expanded && !isDrawerOpen && (
         <Box
           onClick={(e) => e.stopPropagation()}
           sx={{
@@ -1031,6 +1209,31 @@ const AgentCard: React.FC<Props> = ({
           />
         </Box>
       )}
+
+      <Drawer
+        anchor="right"
+        open={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        PaperProps={{ sx: { width: 480, bgcolor: c.bg.surface, color: c.text.primary, display: 'flex', flexDirection: 'column' } }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, borderBottom: `1px solid ${c.border.subtle}`, flexShrink: 0 }}>
+          <Typography sx={{ fontSize: '0.9rem', fontWeight: 600, color: c.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {displayChatTitle(session)}
+          </Typography>
+          <IconButton size="small" onClick={() => setIsDrawerOpen(false)} sx={{ color: c.text.tertiary, flexShrink: 0 }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {isDrawerOpen && (
+            <AgentChat
+              key={session.id}
+              sessionId={session.id}
+              embedded
+            />
+          )}
+        </Box>
+      </Drawer>
 
       {!expanded && (
         <>
