@@ -67,10 +67,6 @@ class WorkflowStep(BaseModel):
     enabled: bool = True
 
 
-def _empty_str_default() -> str:
-    return ""
-
-
 class Workflow(BaseModel):
     # validate_assignment is load-bearing for the PATCH /workflows/{id} path (workflows.py:update_workflow setattr's raw dicts from body.model_dump straight onto the cached Workflow). Without coercion the nested schedule/steps/actions/permissions fields become plain dicts in memory, and every downstream call; scheduler tick, executor.execute, subsequent PATCHes; crashes on `.enabled` / `.text`.
     model_config = ConfigDict(validate_assignment=True)

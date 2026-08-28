@@ -33,11 +33,11 @@ MAESTRO_KEYCLOAK_AUTHORIZE_URL = f"{MAESTRO_KEYCLOAK_ISSUER}/protocol/openid-con
 MAESTRO_KEYCLOAK_TOKEN_URL = f"{MAESTRO_KEYCLOAK_ISSUER}/protocol/openid-connect/token"
 # Fixed infrastructure, not a display name: the Keycloak client this app authenticates as. Never renamed alongside the Maestro display-identity rename.
 MAESTRO_KEYCLOAK_CLIENT_ID = "provedor-ia-web"
-# 127.0.0.1 is the primary (9Router's bundled Node subprocess already proxies any hit on
-# this port's /callback to /api/subscriptions/callback); localhost is the registered
-# fallback should a resolver quirk make 127.0.0.1 unreachable in the user's browser.
+# 127.0.0.1 (9Router's bundled Node subprocess already proxies any hit on this
+# port's /callback to /api/subscriptions/callback); Electron's callback watcher
+# (main.js) matches by port + path only, so a localhost vs 127.0.0.1 resolver
+# quirk in the user's browser is already covered without a second constant here.
 MAESTRO_KEYCLOAK_REDIRECT_URI = "http://127.0.0.1:20128/callback"
-MAESTRO_KEYCLOAK_REDIRECT_URI_FALLBACK = "http://localhost:20128/callback"
 MAESTRO_KEYCLOAK_SCOPE = "openid offline_access"
 
 

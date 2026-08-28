@@ -266,15 +266,6 @@ def remove_missed(ids: list[str]) -> None:
         _write_missed()
 
 
-def clear_missed() -> None:
-    if not _cache_loaded:
-        init()
-    with _io_lock:
-        _ensure_dirs()
-        _missed_cache.clear()
-        _write_missed()
-
-
 def update_run(run_id: str, **fields) -> Optional[WorkflowRun]:
     if not _cache_loaded:
         init()

@@ -643,7 +643,7 @@ async def list_models():
         out = []
         for m in models:
             input_cost = output_cost = 0.0
-            for (p_p, p_v), rates in COST_PER_1M_TOKENS.items():
+            for (_, p_v), rates in COST_PER_1M_TOKENS.items():
                 if p_v == m["value"]:
                     input_cost, output_cost = rates
                     break
@@ -733,7 +733,7 @@ async def list_models():
                 if not nine_router_up or api not in connected:
                     continue
             in_cost = out_cost = 0.0
-            for (p_p, p_v), rates in P_CPM.items():
+            for (_, p_v), rates in P_CPM.items():
                 if p_v == m["value"]:
                     in_cost, out_cost = rates
                     break

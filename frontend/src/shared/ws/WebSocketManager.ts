@@ -34,7 +34,7 @@ import { fetchSettings } from '../state/settingsSlice';
 import { startMaestroLogin } from '../state/maestroSlice';
 import { displaySessionName } from '../state/sessionDisplay';
 import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard, upsertWorkflow, removeWorkflow } from '../state/workflowsSlice';
-import { stepsSignature } from '@/app/pages/Workflows/scheduleUtils';
+import { stepsSignature } from '@/app/pages/Workflows/schedule/scheduleUtils';
 import { getAuthToken } from '../config';
 import { notifyAgentCompletion } from '../notifications';
 

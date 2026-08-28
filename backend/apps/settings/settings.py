@@ -370,7 +370,7 @@ async def reset_system_prompt():
 
 
 # A preferences reset (the iOS "Reset All Settings" analogue): everything back to defaults EXCEPT the things a "reset my preferences" click must never silently sever, your connections (server-owned subscription fields AND your pasted provider credentials) and your identity. Hard-erase is the separate flow.
-P_RESET_PRESERVE_FIELDS = SERVER_OWNED_FIELDS + (
+RESET_PRESERVE_FIELDS = SERVER_OWNED_FIELDS + (
     "anthropic_api_key",
     "openai_api_key",
     "google_api_key",
@@ -388,7 +388,7 @@ P_RESET_PRESERVE_FIELDS = SERVER_OWNED_FIELDS + (
 async def reset_to_defaults():
     old = load_settings()
     fresh = AppSettings()
-    for k in P_RESET_PRESERVE_FIELDS:
+    for k in RESET_PRESERVE_FIELDS:
         setattr(fresh, k, getattr(old, k, None))
     await save_settings_async(fresh)
     return {"ok": True, "settings": fresh.model_dump()}
@@ -588,7 +588,7 @@ async def summarize_file(req: p_SummarizeRequest):
         from backend.apps.agents.providers.registry import resolve_aux_model, get_api_type
         from backend.apps.settings.credentials import get_anthropic_client_for_model
         s = load_settings()
-        aux_model, p_base = await resolve_aux_model(
+        aux_model, _ = await resolve_aux_model(
             s,
             preferred_tier="haiku",
             primary_api=get_api_type(req.primary_model) if req.primary_model else None,
@@ -641,7 +641,7 @@ async def summarize_file(req: p_SummarizeRequest):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"summarize failed: {e}")
 
-    base, p_ext = os.path.splitext(src)
+    base, _ = os.path.splitext(src)
     dest = f"{base}.summary.txt"
     counter = 1
     while os.path.exists(dest):

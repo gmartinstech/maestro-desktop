@@ -138,7 +138,7 @@ def test_a_partial_icacls_apply_is_rolled_back_not_left_bricked(tmp_path, monkey
 
     monkeypatch.setattr(proc, "p_windows_acl_hardened", False, raising=False)
     monkeypatch.setattr(proc.subprocess, "run", p_fake_run)
-    proc.p_harden_windows_acl(target)
+    proc.harden_windows_acl(target)
     assert any("/inheritance:e" in c for c in calls), f"no rollback attempted; calls={calls}"
 
 
@@ -149,7 +149,7 @@ def test_the_user_is_granted_by_a_principal_that_resolves(monkeypatch):
         proc.subprocess, "run",
         lambda *a, **k: SimpleNamespace(returncode=0, stdout='"WILEY\\gmartinssi","S-1-5-21-99-1001"\n', stderr=""),
     )
-    assert proc.p_current_user_principal() == "*S-1-5-21-99-1001"
+    assert proc.current_user_principal() == "*S-1-5-21-99-1001"
 
     def p_no_whoami(*a, **k):
         raise OSError("whoami missing")
@@ -157,7 +157,7 @@ def test_the_user_is_granted_by_a_principal_that_resolves(monkeypatch):
     monkeypatch.setattr(proc.subprocess, "run", p_no_whoami)
     monkeypatch.setenv("USERDOMAIN", "WILEY")
     monkeypatch.setenv("USERNAME", "gmartinssi")
-    assert proc.p_current_user_principal() == "WILEY\\gmartinssi", "must qualify with the domain, not pass a bare name"
+    assert proc.current_user_principal() == "WILEY\\gmartinssi", "must qualify with the domain, not pass a bare name"
 
 
 def test_a_bricked_credential_file_under_a_healthy_dir_is_rolled_back(tmp_path, monkeypatch):
@@ -182,6 +182,6 @@ def test_a_bricked_credential_file_under_a_healthy_dir_is_rolled_back(tmp_path, 
 
     monkeypatch.setattr(proc, "p_windows_acl_hardened", False, raising=False)
     monkeypatch.setattr(proc.subprocess, "run", p_fake_run)
-    proc.p_harden_windows_acl(target)
+    proc.harden_windows_acl(target)
     assert any(p_db in c for c in calls), f"db.json was never verified; calls={calls}"
     assert any("/inheritance:e" in c for c in calls), f"no rollback for the bricked file; calls={calls}"

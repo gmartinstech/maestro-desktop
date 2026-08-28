@@ -88,7 +88,7 @@ def p_assemble(root_type: EntityType, root_id: str):
     counts: dict[str, int] = {}
 
     for key in order:
-        etype, p_lid = key
+        etype, _ = key
         inst = nodes[key]
         bid = local_to_bundle[key]
         payloads[bid] = scrub_payload(inst.serialize(ctx))
@@ -299,7 +299,7 @@ def p_read_files(sandbox: str, ref: EntityRef) -> dict[str, bytes]:
     out: dict[str, bytes] = {}
     if not os.path.isdir(base):
         return out
-    for root, p_dirs, fnames in os.walk(base):
+    for root, _, fnames in os.walk(base):
         for fn in fnames:
             full = os.path.join(root, fn)
             with open(full, "rb") as f:

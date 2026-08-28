@@ -59,6 +59,26 @@ get_provider_credentials
 # can't see the read.
 preview_updated_at
 
+# browser_agent.py: session/card fields set in Python, read only by the frontend
+# after WS/model_dump serialization (drives AgentCard's "Learned"/"Remembered" chip
+# and the dashboard's spawned-card keep-open behavior).
+memory_learned
+memory_recalled
+keep_open
+
+# workflows: Workflow/WorkflowRun/AgentSession fields set in Python, read only by
+# the frontend after serialization (drives WorkflowCardLiveViews, RunMonitor, and
+# the AgentCard/AgentChat "Test Agent" run-state UI).
+last_run_at
+last_tool_label
+active_step_idx
+workflow_test_state
+
+# service/analytics/client.py: called via a lazy in-function import from
+# manager/metadata.py (agent:name_updated handler); vulture's whole-project name
+# matching misses it at this corpus size for reasons unclear, confirmed by grep.
+track_agent_title
+
 # prompt/prompt_context.py: called unconditionally from build_prompt_content
 # (prompt/attachments.py), the per-turn prompt builder; vulture misses the
 # cross-module call. resolve_attached_skills next to it isn't flagged only

@@ -10,7 +10,7 @@ import Icon from '@mui/material/Icon';
 import { styled } from '@mui/material/styles';
 import AddRounded from '@mui/icons-material/AddRounded';
 
-import ChatBubbleTeardrop from './ChatBubbleTeardrop';
+import ChatBubbleTeardrop from './controls/ChatBubbleTeardrop';
 
 // Collapsed-row buttons hop up one after another when the toolbar appears.
 const popIn = (i: number) => ({
@@ -30,7 +30,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { motion } from 'framer-motion';
 import ChatInput from '@/app/pages/AgentChat/ChatInput';
 import type { ContextPath } from '@/app/components/editor/DirectoryBrowser';
-import SchedulePopover from '@/app/pages/Workflows/SchedulePopover';
+import SchedulePopover from '@/app/pages/Workflows/schedule/SchedulePopover';
 import { openWorkflowCard, fetchAllRuns, upsertRun } from '@/shared/state/workflowsSlice';
 import { addWorkflowCard, openWorkflowsApp, closeWorkflowsApp } from '@/shared/state/dashboardLayoutSlice';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';

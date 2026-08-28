@@ -176,12 +176,12 @@ def test_list_models_offers_provedor_ia_first(no_env_token, monkeypatch):
 
 def test_token_is_in_every_secret_set():
     from backend.apps.settings.redaction import is_secret_field
-    from backend.apps.settings.settings import P_RESET_PRESERVE_FIELDS
+    from backend.apps.settings.settings import RESET_PRESERVE_FIELDS
     from backend.apps.swarm.redact import is_denied_key
     from backend.apps.agents.session_credential import ALL_API_KEY_FIELDS
     assert is_secret_field(PROVEDOR_IA_TOKEN_FIELD), "agent-facing settings read would leak the token"
     assert is_denied_key(PROVEDOR_IA_TOKEN_FIELD), "a .swarm bundle would carry the token"
-    assert PROVEDOR_IA_TOKEN_FIELD in P_RESET_PRESERVE_FIELDS, "a preferences reset would disconnect the user"
+    assert PROVEDOR_IA_TOKEN_FIELD in RESET_PRESERVE_FIELDS, "a preferences reset would disconnect the user"
     assert PROVEDOR_IA_TOKEN_FIELD in ALL_API_KEY_FIELDS
 
 

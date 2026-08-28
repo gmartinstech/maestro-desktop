@@ -56,16 +56,18 @@ test.describe('combinatorial user flows', () => {
     return el;
   };
   // The bottom dashboard toolbar (New Agent / Add note / Add App / Browser) only
-  // mounts when a dashboard is active; a clean CI profile has none, so create one
-  // via the sidebar "+". Idempotent: returns early if the toolbar is already up.
+  // mounts once a dashboard is active. DashboardSelection auto-creates one and
+  // navigates into it on first boot when none exist, so this is usually already
+  // true by the time a test runs; the header dropdown's "New dashboard" row
+  // (DashboardHeader) is the fallback for wherever it isn't.
   const ensureDashboardActive = async () => {
-    const toggle = page.locator('[data-onboarding="sidebar-toggle"]');
-    if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click({ timeout: 5_000 }).catch(() => {});
-    await clickMust(page.locator('[data-onboarding="sidebar-dashboards"]'), 'sidebar dashboards');
-    if (await page.getByRole('button', { name: 'Add note' }).isVisible().catch(() => false)) return;
-    const createBtn = page.locator('[data-onboarding="sidebar-dashboards"] button').first();
-    if (await createBtn.count()) await createBtn.click({ timeout: 5_000 }).catch(() => {});
-    await expect.poll(() => page.url(), { timeout: 8_000 }).toMatch(/\/dashboard\//);
+    if (!/\/dashboard\//.test(page.url())) {
+      await expect.poll(() => page.url(), { timeout: 10_000 }).toMatch(/\/dashboard\//).catch(() => {});
+    }
+    if (!/\/dashboard\//.test(page.url())) {
+      await clickMust(page.getByRole('button', { name: 'New dashboard' }), 'create dashboard (DashboardSelection)');
+      await expect.poll(() => page.url(), { timeout: 8_000 }).toMatch(/\/dashboard\//);
+    }
     await expect(page.getByRole('button', { name: 'Add note' }), 'dashboard toolbar never mounted').toBeVisible({ timeout: 10_000 });
   };
   const errorsSince = (mark: number) => errors.slice(mark).filter((e) => !CONSOLE_WHITELIST.some((rx) => rx.test(e.text)));
@@ -132,65 +134,63 @@ test.describe('combinatorial user flows', () => {
     assertNoNew(mark, 'home render');
   });
 
-  test('sidebar: every primary nav item navigates to its surface', async () => {
+  // The old collapsible left sidebar (with its Skills/Actions/Modes/Apps nav and
+  // its own Dashboards/Settings entries) was removed; that navigation now lives
+  // in the dashboard-name dropdown in DashboardHeader.tsx plus the Settings modal
+  // opened from its gear icon. There is no standalone Actions or Modes route
+  // anymore (Main.tsx only has "/", "/dashboard/:id", "/analytics"), so this only
+  // covers what still exists: opening the dropdown and switching dashboards.
+  // Settings-tab coverage lives in the dedicated "settings modal" test below.
+  test('dashboard header: dropdown opens, and dashboard switching works', async () => {
     const mark = errors.length;
+    await ensureDashboardActive();
+    const firstUrl = page.url();
+    const firstId = firstUrl.match(/\/dashboard\/([^/?#]+)/)?.[1];
+    expect(firstId, 'no dashboard id found in the URL after ensureDashboardActive').toBeTruthy();
 
-    // Make sure sidebar is expanded so the labels are clickable.
-    const sidebarToggle = page.locator('[data-onboarding="sidebar-toggle"]');
-    if ((await sidebarToggle.getAttribute('aria-expanded')) === 'false') await sidebarToggle.click();
-    await expect(sidebarToggle).toHaveAttribute('aria-expanded', 'true');
+    await clickMust(page.locator('[data-testid="dashboard-header-toggle"]'), 'dashboard header toggle');
+    await clickMust(page.getByText('New dashboard', { exact: true }), 'new dashboard (header dropdown)');
+    await expect.poll(() => page.url(), { timeout: 8_000 }).toMatch(/\/dashboard\//);
+    expect(page.url(), 'creating a dashboard from the header dropdown did not navigate to a new one').not.toBe(firstUrl);
+    assertNoNew(mark, 'header dropdown: create dashboard');
 
-    // Customization expands inline; clicking should reveal Skills/Actions/Modes.
-    const customization = page.locator('[data-onboarding="sidebar-customization"]');
-    await clickMust(customization, 'sidebar customization');
-    await expect(customization).toHaveAttribute('aria-expanded', 'true', { timeout: 5_000 });
-    for (const label of ['Skills', 'Actions', 'Modes']) {
-      const item = page.getByText(label, { exact: true });
-      await clickMust(item, `customization > ${label}`);
-      await expect(page.locator('#root')).toBeVisible();
-      const url = page.url();
-      expect(url, `URL did not change to customization route for ${label}`).toMatch(/customization|skills|actions|modes/i);
-      assertNoNew(mark, `nav ${label}`);
-    }
-
-    // Apps section.
-    await clickMust(page.locator('[data-onboarding="sidebar-apps"]'), 'sidebar apps');
-    await expect.poll(() => page.url(), { timeout: 5_000 }).toMatch(/apps/);
-    assertNoNew(mark, 'nav Apps');
-
-    // Dashboards section. The app uses a HashRouter, so the dashboard root is
-    // ".../index.html#/" (not a /dashboard path); accept the hash root or any
-    // explicit /dashboard route.
-    await clickMust(page.locator('[data-onboarding="sidebar-dashboards"]'), 'sidebar dashboards');
-    await expect.poll(() => page.url(), { timeout: 5_000 }).toMatch(/dashboard|#\/?$/);
-    assertNoNew(mark, 'nav Dashboards');
+    // Switch back to the first dashboard via its row in the dropdown list.
+    await clickMust(page.locator('[data-testid="dashboard-header-toggle"]'), 'dashboard header toggle (reopen)');
+    await clickMust(page.locator(`[data-dashboard-id="${firstId}"]`), 'dashboard list item (switch back to first)');
+    await expect.poll(() => page.url(), { timeout: 8_000 }).toBe(firstUrl);
+    assertNoNew(mark, 'header dropdown: switch back to first dashboard');
   });
 
-  test('settings modal: opens, every tab activates, closes', async ({}, info) => {
+  test('settings modal: opens from the header, every tab activates, closes', async ({}, info) => {
     const mark = errors.length;
-    await clickMust(page.locator('[data-onboarding="sidebar-settings-button"]'), 'sidebar Settings');
+    await ensureDashboardActive();
+    await clickMust(page.locator('[data-testid="dashboard-header-settings-button"]'), 'dashboard header Settings button');
     // Modal title is unique to the open settings dialog.
     await expect(page.getByText('Settings', { exact: true }).first()).toBeVisible();
 
-    for (const tab of ['General', 'Models', 'Usage', 'Commands']) {
+    // Skills/Tools tabs moved here from the old sidebar Customization section
+    // (Settings.tsx TAB_VALUES); this is now the full live tab list.
+    for (const tab of ['General', 'Models', 'Skills', 'Tools', 'Commands', 'Usage']) {
       const tabLoc = page.getByRole('tab', { name: tab });
       await clickMust(tabLoc, `settings tab ${tab}`);
       await expect(tabLoc.first()).toHaveAttribute('aria-selected', 'true');
+      // Skills/Tools are React.lazy + Suspense; let the fallback spinner clear first.
+      await expect(page.locator('.MuiCircularProgress-root')).toHaveCount(0, { timeout: 8_000 }).catch(() => {});
       await page.screenshot({ path: info.outputPath(`settings-${tab.toLowerCase()}.png`) });
       await vis?.snapshotA11y(`settings-${tab.toLowerCase()}`);
       await visualAssert(`settings-${tab.toLowerCase()}`);
       assertNoNew(mark, `settings tab ${tab}`);
     }
 
-    // Close via the dedicated close button (which has a stable data-onboarding hook).
-    await clickMust(page.locator('[data-onboarding="settings-close-button"]'), 'settings close');
+    // Close via the dedicated close button (a stable data-testid hook).
+    await clickMust(page.locator('[data-testid="settings-close-button"]'), 'settings close');
     await expect(page.getByRole('tab', { name: 'General' })).toHaveCount(0, { timeout: 5_000 });
     assertNoNew(mark, 'settings close');
   });
 
   test('settings: theme toggle actually flips and persists', async () => {
     const mark = errors.length;
-    await clickMust(page.locator('[data-onboarding="sidebar-settings-button"]'), 'open settings');
+    await clickMust(page.locator('[data-testid="dashboard-header-settings-button"]'), 'open settings');
     // General is the default tab; assert + force to be safe.
     await clickMust(page.getByRole('tab', { name: 'General' }), 'tab General');
 
@@ -218,13 +218,13 @@ test.describe('combinatorial user flows', () => {
     await clickMust(page.getByRole('button', { name: 'Save' }), 'save theme revert');
     await expect.poll(readMode, { timeout: 5_000 }).toBe(before);
 
-    await clickMust(page.locator('[data-onboarding="settings-close-button"]'), 'close settings');
+    await clickMust(page.locator('[data-testid="settings-close-button"]'), 'close settings');
     assertNoNew(mark, 'theme flip + revert');
   });
 
   test('settings: every Switch on General flips, reverts, and the renderer survives', async () => {
     const mark = errors.length;
-    await clickMust(page.locator('[data-onboarding="sidebar-settings-button"]'), 'open settings');
+    await clickMust(page.locator('[data-testid="dashboard-header-settings-button"]'), 'open settings');
     await clickMust(page.getByRole('tab', { name: 'General' }), 'tab General');
 
     // MUI Switch renders an inner <input type=checkbox>. Limit to inputs that
@@ -245,38 +245,20 @@ test.describe('combinatorial user flows', () => {
       assertNoNew(mark, `switch #${i} flip+revert`);
     }
 
-    await clickMust(page.locator('[data-onboarding="settings-close-button"]'), 'close settings');
+    await clickMust(page.locator('[data-testid="settings-close-button"]'), 'close settings');
     assertNoNew(mark, 'all-switches matrix');
-  });
-
-  test('onboarding: See all todos opens the roadmap, Escape closes it', async () => {
-    const mark = errors.length;
-    // The "See all todos" trigger lives in the onboarding panel, which only shows
-    // while onboarding is active/incomplete. A seeded CI profile has it dismissed,
-    // so the trigger is legitimately absent there; skip rather than fail (this is
-    // a conditional surface, not selector drift). When present, exercise it fully.
-    const roadmapTrigger = page.getByText('See all todos', { exact: true });
-    test.skip((await roadmapTrigger.count()) === 0, 'onboarding panel not shown (dismissed profile); roadmap trigger absent');
-    await clickMust(roadmapTrigger, 'See all todos');
-    // Roadmap modal has a unique aria-label="Close roadmap" close button.
-    await expect(page.locator('[aria-label="Close roadmap"]')).toBeVisible({ timeout: 8_000 });
-    await page.keyboard.press('Escape');
-    await expect(page.locator('[aria-label="Close roadmap"]')).toHaveCount(0, { timeout: 5_000 });
-    assertNoNew(mark, 'roadmap open + escape');
   });
 
   test('dashboard toolbar: New Agent opens compose with contentEditable that accepts typing', async ({}, info) => {
     // Heavy surface: the New-Agent click hard-crashes the renderer (0xC0000005)
-    // under Playwright-controlled Electron 40 on a clean build. Gated behind
-    // MAESTRO_E2E_HEAVY=1; needs a real display / manual confirmation. See
-    // onboarding-completion.spec.ts for the full finding.
+    // under Playwright-controlled Electron 40 on a clean build; needs a real
+    // display / manual confirmation. Gated behind MAESTRO_E2E_HEAVY=1.
     test.skip(process.env.MAESTRO_E2E_HEAVY !== '1', 'heavy surface; set MAESTRO_E2E_HEAVY=1 on a real display');
     const mark = errors.length;
-    // Make sure we're on a dashboard (the toolbar lives there).
-    await clickMust(page.locator('[data-onboarding="sidebar-dashboards"]'), 'sidebar dashboards');
-    await clickMust(page.locator('[data-onboarding="new-agent-button"]'), 'toolbar New Agent');
+    await ensureDashboardActive();
+    await clickMust(page.locator('[data-testid="new-agent-button"]'), 'toolbar New Agent');
 
-    const editor = page.locator('[data-onboarding="chat-input"]');
+    const editor = page.locator('[data-testid="chat-input"]');
     await expect(editor.first(), 'EditorSurface contentEditable did not mount').toBeVisible({ timeout: 10_000 });
     await editor.first().click();
     await page.keyboard.type('hello agent', { delay: 15 });
@@ -292,7 +274,8 @@ test.describe('combinatorial user flows', () => {
     // Electron 40 in automation. Gated behind MAESTRO_E2E_HEAVY=1.
     test.skip(process.env.MAESTRO_E2E_HEAVY !== '1', 'heavy surface; set MAESTRO_E2E_HEAVY=1 on a real display');
     const mark = errors.length;
-    await clickMust(page.locator('[data-onboarding="browser-button"]'), 'toolbar Browser');
+    await ensureDashboardActive();
+    await clickMust(page.getByRole('button', { name: 'Browser' }), 'toolbar Browser');
     // Wait for at least one <webview> to attach. A grey iframe = no webview = fail.
     await page.waitForFunction(() => document.querySelectorAll('webview').length > 0, undefined, { timeout: 15_000 });
     const webviews = await page.locator('webview').count();
@@ -317,42 +300,9 @@ test.describe('combinatorial user flows', () => {
     assertNoNew(mark, 'History panel');
   });
 
-  test('modes: edit screen mounts RichPromptEditor and accepts typing (TSF crash class)', async () => {
-    const mark = errors.length;
-    await clickMust(page.locator('[data-onboarding="sidebar-customization"]'), 'open customization');
-    await clickMust(page.getByText('Modes', { exact: true }), 'go to Modes');
-    // Modes list might be empty on a clean profile; we still want to enter the
-    // editor by either an existing row or the create flow. Fail if neither path exists.
-    const editIcons = page.locator('[aria-label="Edit"], [aria-label*="edit mode" i]');
-    const newBtn = page.getByRole('button', { name: /new mode|create mode|add mode/i });
-    if (await editIcons.count()) {
-      await editIcons.first().click({ timeout: 5_000 });
-    } else if (await newBtn.count()) {
-      await newBtn.first().click({ timeout: 5_000 });
-    } else {
-      // A truly clean CI profile has no modes and may not surface a create entry
-      // matching these selectors, so the rich editor is unreachable here. Annotate
-      // + skip rather than hard-fail: it is a profile-state gap, not a regression.
-      // (expect.fail() is also not a Playwright API - it threw a TypeError.) The
-      // RichPromptEditor crash coverage still runs whenever a mode or create entry
-      // exists, which is the common real-world state.
-      test.info().annotations.push({ type: 'skip', description: 'Modes: no edit-or-create entry on a clean profile; rich editor unreachable' });
-      return;
-    }
-    // RichPromptEditor uses a contentEditable; verify one is mounted somewhere on the route.
-    await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('[contenteditable="true"]')).length > 0,
-      undefined,
-      { timeout: 15_000 },
-    );
-    await page.keyboard.type('test prompt', { delay: 10 });
-    assertNoNew(mark, 'Modes RichPromptEditor mount + type');
-    await page.keyboard.press('Escape').catch(() => {});
-  });
-
   test('theme x toggle matrix: dark + first switch flipped, light + first switch flipped, all reverted', async () => {
     const mark = errors.length;
-    await clickMust(page.locator('[data-onboarding="sidebar-settings-button"]'), 'open settings (matrix)');
+    await clickMust(page.locator('[data-testid="dashboard-header-settings-button"]'), 'open settings (matrix)');
     await clickMust(page.getByRole('tab', { name: 'General' }), 'tab General');
     const readMode = () => page.evaluate(() => localStorage.getItem('maestro-theme-mode'));
     const initialMode = await readMode();
@@ -387,7 +337,7 @@ test.describe('combinatorial user flows', () => {
       await saveIfDirty();
       await expect.poll(readMode, { timeout: 5_000 }).toBe(initialMode);
     }
-    await clickMust(page.locator('[data-onboarding="settings-close-button"]'), 'close settings (matrix)');
+    await clickMust(page.locator('[data-testid="settings-close-button"]'), 'close settings (matrix)');
     assertNoNew(mark, 'theme x toggle matrix');
   });
 
@@ -395,9 +345,9 @@ test.describe('combinatorial user flows', () => {
     const mark = errors.length;
     await vis?.snapshotHeap('resilience-before');
     for (let i = 0; i < 3; i++) {
-      await clickMust(page.locator('[data-onboarding="sidebar-settings-button"]'), `open settings round ${i}`);
+      await clickMust(page.locator('[data-testid="dashboard-header-settings-button"]'), `open settings round ${i}`);
       await expect(page.getByRole('tab', { name: 'General' })).toBeVisible({ timeout: 5_000 });
-      await clickMust(page.locator('[data-onboarding="settings-close-button"]'), `close settings round ${i}`);
+      await clickMust(page.locator('[data-testid="settings-close-button"]'), `close settings round ${i}`);
       await expect(page.getByRole('tab', { name: 'General' })).toHaveCount(0, { timeout: 5_000 });
       assertNoNew(mark, `settings open/close round ${i}`);
     }
