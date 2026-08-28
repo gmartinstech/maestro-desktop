@@ -22,7 +22,7 @@ CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 def _class_line_ranges(filepath: str) -> list[tuple[int, int]]:
     """Return (start, end) line ranges for all class bodies in *filepath*."""
     try:
-        tree = ast.parse(Path(filepath).read_text())
+        tree = ast.parse(Path(filepath).read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return []
     ranges: list[tuple[int, int]] = []

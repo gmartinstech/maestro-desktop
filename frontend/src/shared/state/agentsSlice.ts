@@ -556,6 +556,7 @@ export const resumeSession = createAsyncThunk(
   async ({ sessionId }: { sessionId: string }) => {
     try {
       const res = await fetch(`${AGENTS_API}/sessions/${sessionId}/resume`, { method: 'POST' });
+      if (!res.ok) throw new Error(`resume failed: ${res.status}`);
       const data = await res.json();
       return data.session as AgentSession;
     } catch (e: any) {

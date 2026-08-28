@@ -8,10 +8,13 @@ recomputes when the cutoff advances, and fails open (no provider / kill switch /
 """
 
 import asyncio
+from types import SimpleNamespace
 
 import backend.apps.agents.manager.session.distill_history as dh
 from backend.apps.agents.core.models import AgentSession, Message
 from backend.apps.settings.settings import load_settings
+
+SECTIONS = ["## GOAL", "## CONSTRAINTS", "## DECISIONS", "## PROGRESS", "## FILES & FACTS", "## OPEN THREADS"]
 
 
 def p_session(n: int) -> AgentSession:
@@ -98,3 +101,33 @@ def test_kill_switch_disables(monkeypatch) -> None:
     out = asyncio.run(dh.distilled_history_summary(s, load_settings()))
     assert out == ""
     assert calls == []
+
+
+def test_aux_call_requests_the_fixed_sections_in_order(monkeypatch) -> None:
+    """Real distiller path (only the provider plumbing is stubbed): the prompt that actually
+    reaches the aux model must enumerate the fixed checkpoint sections, not ask for free prose."""
+    captured: dict = {}
+
+    async def fake_create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(content=[SimpleNamespace(text="## GOAL\n- ship it\n")])
+
+    async def fake_resolve(settings, preferred_tier="haiku"):
+        return ("claude-haiku-4-5-20251001", None)
+
+    client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
+    monkeypatch.setattr("backend.apps.agents.providers.registry.resolve_aux_model", fake_resolve)
+    monkeypatch.setattr("backend.apps.settings.credentials.get_anthropic_client_for_model", lambda settings, api_model: client)
+    s = p_session(8)
+    s.compacted_through_msg_id = s.messages[3].id
+    out = asyncio.run(dh.distilled_history_summary(s, load_settings()))
+    assert out == "## GOAL\n- ship it"
+    sent = captured["messages"][0]["content"]
+    assert "turn 0" in sent and "turn 3" in sent
+    positions = [sent.find(h) for h in SECTIONS]
+    assert all(p >= 0 for p in positions), f"missing section header; wanted {SECTIONS}, found {positions}"
+    assert positions == sorted(positions), "section headers must be requested in a fixed order"
+    # A bare header is worse than the free prose this replaced, so the empty-section escape hatch has to survive edits.
+    assert "- none" in sent
+    # The six-section form needs more room than the old single-blob briefing or it stops mid-section.
+    assert captured["max_tokens"] >= 1600

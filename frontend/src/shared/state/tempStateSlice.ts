@@ -5,6 +5,7 @@ interface TempState {
   pendingFocusAgentId: string | null;
   lastDashboardId: string | null;
   fullscreenCardId: string | null;
+  drawerCardId: string | null;
 }
 
 const initialState: TempState = {
@@ -12,6 +13,7 @@ const initialState: TempState = {
   pendingFocusAgentId: null,
   lastDashboardId: null,
   fullscreenCardId: null,
+  drawerCardId: null,
 };
 
 const tempStateSlice = createSlice({
@@ -39,6 +41,12 @@ const tempStateSlice = createSlice({
     clearFullscreenCardId(state, action: PayloadAction<string>) {
       if (state.fullscreenCardId === action.payload) state.fullscreenCardId = null;
     },
+    setDrawerCardId(state, action: PayloadAction<string>) {
+      state.drawerCardId = action.payload;
+    },
+    clearDrawerCardId(state, action: PayloadAction<string>) {
+      if (state.drawerCardId === action.payload) state.drawerCardId = null;
+    },
   },
 });
 
@@ -50,6 +58,8 @@ export const {
   clearPendingFocusAgentId,
   setFullscreenCardId,
   clearFullscreenCardId,
+  setDrawerCardId,
+  clearDrawerCardId,
 } = tempStateSlice.actions;
 
 export default tempStateSlice.reducer;

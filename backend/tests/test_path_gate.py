@@ -2,10 +2,15 @@
 (manager/permissions/path_gate.py). This gate had ZERO isolated tests while it lived
 inside the 3000-line agent loop; pinning it here is the point of the extraction.
 
+Every Bash case is mirrored for PowerShell: on Windows the CLI's shell tool is named
+`PowerShell`, not `Bash`, so a gate that tested the name `Bash` alone was inert on this
+product's primary platform.
+
 Every test runs with an empty trusted-paths allowlist by default (deterministic, no disk
 dependency); the trust tests opt a pattern in explicitly."""
 
 import pytest
+from claude_agent_sdk._cli_version import __cli_version__
 
 import backend.apps.agents.manager.permissions.path_gate as pg
 
@@ -64,6 +69,20 @@ def test_catastrophic_requires_a_write_operator():
     assert pg.match_bash_catastrophic_pattern("echo hello world") is None
 
 
+def test_catastrophic_powershell_writes_flagged():
+    # PowerShell honours ~ and forward slashes, so the Bash-shaped redirect is valid there too
+    assert pg.match_bash_catastrophic_pattern("'ssh-rsa AAA' >> ~/.ssh/authorized_keys") == "*/.ssh/*"
+    assert pg.match_bash_catastrophic_pattern(r"Add-Content -Path $env:USERPROFILE\.ssh\authorized_keys -Value 'ssh-rsa AAA'") == "*/.ssh/*"
+    assert pg.match_bash_catastrophic_pattern(r"Set-Content C:\Users\me\.ssh\authorized_keys 'ssh-rsa AAA'") == "*/.ssh/*"
+    assert pg.match_bash_catastrophic_pattern(r"'ssh-rsa AAA' | Out-File -Append $HOME\.ssh\authorized_keys") == "*/.ssh/*"
+    assert pg.match_bash_catastrophic_pattern(r"Copy-Item evil.txt C:\Users\me\.ssh\authorized_keys") == "*/.ssh/*"
+
+
+def test_catastrophic_powershell_requires_a_write_operator():
+    assert pg.match_bash_catastrophic_pattern(r"Get-Content $env:USERPROFILE\.ssh\id_rsa") is None
+    assert pg.match_bash_catastrophic_pattern("Write-Output 'hello world'") is None
+
+
 # ---- extract_target_path ----------------------------------------------------
 
 def test_extract_target_path():
@@ -95,6 +114,61 @@ def test_override_flips_catastrophic_bash_to_ask():
 
 def test_override_leaves_ordinary_bash_alone():
     assert pg.maybe_override_policy("always_allow", "Bash", {"command": "ls -la"}) == ("always_allow", None)
+
+
+# ---- the same three, for the shell tool Windows actually gets ---------------
+
+def test_override_flips_powershell_os_scheduling_to_ask():
+    assert pg.maybe_override_policy("always_allow", "PowerShell", {"command": "Register-ScheduledTask -TaskName evil -Action $a"}) == ("ask", None)
+    assert pg.maybe_override_policy("always_allow", "PowerShell", {"command": "schtasks /create /tn evil /tr calc.exe /sc minute"}) == ("ask", None)
+
+
+def test_override_flips_catastrophic_powershell_to_ask():
+    policy, matched = pg.maybe_override_policy(
+        "always_allow", "PowerShell",
+        {"command": r"Add-Content -Path $env:USERPROFILE\.ssh\authorized_keys -Value 'ssh-rsa AAA'"},
+    )
+    assert policy == "ask" and matched == "*/.ssh/*"
+
+
+def test_override_leaves_ordinary_powershell_alone():
+    assert pg.maybe_override_policy("always_allow", "PowerShell", {"command": "Get-ChildItem -Force"}) == ("always_allow", None)
+    assert pg.maybe_override_policy("always_allow", "PowerShell", {"command": "npm run verify"}) == ("always_allow", None)
+
+
+def test_override_honors_trust_for_powershell(monkeypatch):
+    monkeypatch.setattr(pg, "load_trusted_sensitive_paths", lambda: ["*/.ssh/*"])
+    assert pg.maybe_override_policy("always_allow", "PowerShell", {"command": r"Set-Content C:\Users\me\.ssh\authorized_keys 'k'"}) == ("always_allow", None)
+
+
+# ---- the gated tool-name manifests -----------------------------------------
+
+def test_shell_tools_covers_both_platform_shells():
+    assert {"Bash", "PowerShell"} <= pg.SHELL_TOOLS
+
+
+def test_monitor_is_gated_because_its_input_is_a_shell_command():
+    assert "Monitor" in pg.SHELL_TOOLS
+    policy, matched = pg.maybe_override_policy("always_allow", "Monitor", {"command": "while ($true) { Add-Content ~/.ssh/authorized_keys 'k'; sleep 60 }"})
+    assert policy == "ask" and matched == "*/.ssh/*"
+    assert pg.maybe_override_policy("always_allow", "Monitor", {"command": "tail -f dev.log | grep --line-buffered ERROR"}) == ("always_allow", None)
+
+
+def test_task_stop_is_not_gated():
+    # TaskStop (legacy alias KillShell) only stops an already-running task by id: no command, no path, and gating it would put a card in front of the safety valve
+    assert "TaskStop" not in pg.SHELL_TOOLS and "TaskStop" not in pg.SCHEDULE_GATED
+    assert pg.maybe_override_policy("always_allow", "TaskStop", {"task_id": "abc123"}) == ("always_allow", None)
+
+
+def test_tool_name_manifests_are_pinned_to_the_audited_cli_version():
+    """Drift guard: the gated tool names were transcribed by hand from the CLI binary this SDK
+    bundles. A version bump can rename or add a shell/scheduler tool and silently widen the
+    un-gated surface, so re-audit SHELL_TOOLS + SCHEDULE_GATED against the new claude binary
+    and then move the pin. Only the version moving fails this; refactoring path_gate does not."""
+    assert __cli_version__ == pg.AUDITED_CLI_VERSION, (
+        f"bundled Claude CLI moved {pg.AUDITED_CLI_VERSION} -> {__cli_version__}; "
+        "re-check the shell and scheduler tool names it ships, then update pg.AUDITED_CLI_VERSION"
+    )
 
 
 def test_override_does_not_touch_non_path_gated_tools():

@@ -949,9 +949,14 @@ def test_compact_threshold_default():
 
 
 def test_post_compact_estimate_excludes_compacted_messages():
+    # Updated: the estimate now measures build_history_prefix's real output (recap fence + "User: keep" lines) instead of summing raw content, and reserves the distiller's real max_tokens budget instead of a flat 200. See test_context_estimate.py.
     from backend.apps.agents.core.models import AgentSession, Message
     from backend.apps.agents.manager.session.history_compaction import (
+        distilled_summary_budget_tokens,
+        HISTORY_TOKEN_SAFETY_MARGIN,
+        build_history_prefix,
         estimate_post_compact_input,
+        get_branch_messages,
     )
 
     messages = [
@@ -963,7 +968,11 @@ def test_post_compact_estimate_excludes_compacted_messages():
     s.compacted_through_msg_id = "m5"
     s.framework_overhead_tokens = 100
 
-    assert estimate_post_compact_input(s) == 100 + 200 + (len("keepkeep") // 4)
+    shipped = build_history_prefix(get_branch_messages(s), cutoff_msg_id="m5")
+    assert "old" not in shipped
+    assert estimate_post_compact_input(s) == (
+        100 + distilled_summary_budget_tokens() + int(len(shipped) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+    )
 
 
 @pytest.mark.asyncio

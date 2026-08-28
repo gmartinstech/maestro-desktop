@@ -16,6 +16,7 @@ type Direction = 'left' | 'right' | 'up' | 'down';
 
 interface AgentCardsLayerProps {
   cards: Record<string, CardPosition>;
+  dashboardId: string;
   glowingAgentCards: Record<string, GlowingAgentCard>;
   expandedSessionIds: string[];
   selection: Selection;
@@ -28,6 +29,7 @@ interface AgentCardsLayerProps {
   revealSpawnedRef: RefObject<Set<string>>;
   measuredHeightsRef: RefObject<Record<string, number>>;
   getCanvasState: () => { panX: number; panY: number; zoom: number };
+  getViewportEl: () => HTMLDivElement | null;
   onCardSelect: (id: string, type: CardType, shiftKey: boolean) => void;
   onDragStart: (id: string, type: CardType) => void;
   onDragMove: (dx: number, dy: number, mouseX?: number, mouseY?: number) => void;
@@ -40,6 +42,7 @@ interface AgentCardsLayerProps {
 
 const AgentCardsLayer: React.FC<AgentCardsLayerProps> = ({
   cards,
+  dashboardId,
   glowingAgentCards,
   expandedSessionIds,
   selection,
@@ -52,6 +55,7 @@ const AgentCardsLayer: React.FC<AgentCardsLayerProps> = ({
   revealSpawnedRef,
   measuredHeightsRef,
   getCanvasState,
+  getViewportEl,
   onCardSelect,
   onDragStart,
   onDragMove,
@@ -122,6 +126,8 @@ const AgentCardsLayer: React.FC<AgentCardsLayerProps> = ({
             sessionId={sid}
             expanded={expandedSessionIds.includes(sid)}
             getCanvasState={getCanvasState}
+            getViewportEl={getViewportEl}
+            dashboardId={dashboardId}
             spawnFrom={origin}
             exitTarget={exitTarget}
             isSelected={isSel}

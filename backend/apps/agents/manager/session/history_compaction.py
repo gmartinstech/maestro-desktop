@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from typeguard import typechecked
 import os
 import re
@@ -22,6 +22,11 @@ SESSION_RECAP_CLOSE = "</maestro_session_recap>"
 # Per-turn caps so the re-grounded recap stays compact (summaries, not replays) and cannot reinflate the context window from one giant tool input/output.
 RECAP_TOOL_INPUT_CAP = 200
 RECAP_TOOL_RESULT_CAP = 500
+
+# chars/4 is the house heuristic, but dense JSON/code tokenizes nearer 3.5 chars/token, and this estimate gates a hard guard that evicts MCPs. Round the measurement up rather than risk letting a real overflow through.
+HISTORY_TOKEN_SAFETY_MARGIN = 1.15
+# The distiller's cap counts MODEL OUTPUT tokens, so reserving it needs a chars-per-token rate to reach the chars/4 house unit everything else here is measured in. 4.5 is the loose-prose ceiling: real briefings carry paths and identifiers and run denser, and over-reserving is the safe side of a guard that evicts MCPs.
+DISTILL_SUMMARY_CHARS_PER_TOKEN = 4.5
 
 
 @typechecked
@@ -151,34 +156,69 @@ def build_history_prefix(messages, cutoff_msg_id: Optional[str] = None) -> str:
 
 
 @typechecked
+def distilled_summary_budget_tokens() -> int:
+    """Tokens to reserve for a distilled summary that does not exist yet.
+
+    Derived from the distiller's own cap rather than hand-copied: a literal here that silently
+    stops matching distill_history is the same class of drift that made this module's estimate
+    run 50x high. That cap is in MODEL OUTPUT tokens, so it is turned back into chars and run
+    through the same chars/4 x safety-margin formula the cached branch below uses; added raw it
+    was a different unit from the block it stands in for and reserved 10-470 tokens short of a
+    summary that actually fills the cap. The fence is the platform-note wrapper RunOptions puts
+    around the summary, measured from wrap_platform_note itself so it cannot drift either; the
+    one-line "Summary of earlier conversation" label rides on HISTORY_TOKEN_SAFETY_MARGIN, as it
+    does for a cached summary below. Imported inside the function because distill_history imports
+    THIS module at load time, so a top-level import would be a cycle.
+    """
+    from backend.apps.agents.manager.session.distill_history import DISTILL_MAX_TOKENS
+    summary_chars = len(wrap_platform_note("")) + DISTILL_MAX_TOKENS * DISTILL_SUMMARY_CHARS_PER_TOKEN
+    return int(summary_chars / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+
+
+@typechecked
+def p_distilled_summary_tokens(session, cutoff_msg_id: Optional[str]) -> int:
+    """Token cost of the distilled-summary block RunOptions prepends whenever a cutoff exists.
+    Measures the cached summary when it is still keyed to this cutoff, otherwise reserves the
+    distiller's full max_tokens budget because the next rebuild will generate a fresh one."""
+    if not cutoff_msg_id:
+        return 0
+    cached = getattr(session, "compacted_summary", None)
+    if cached and getattr(session, "compacted_summary_through", None) == cutoff_msg_id:
+        # The real block also carries a short "Summary of earlier conversation" label; the safety margin absorbs those few dozen chars.
+        return int(len(wrap_platform_note(cached)) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
+    return distilled_summary_budget_tokens()
+
+
+@typechecked
+def post_compact_estimate_applies(session) -> bool:
+    """True only when the next send will REBUILD history from local messages.
+
+    estimate_post_compact_input measures build_history_prefix, and RunOptions injects that recap
+    only on the no-resume path. On a resumed session maybe_compact merely MARKS a boundary:
+    nothing is trimmed this turn and history still ships from the Claude CLI's own transcript, so
+    the estimate describes a hypothetical future rebuild, not the upcoming send. Applying it there
+    would report a context drop that has not happened and, worse, disarm the pre-send hard guard
+    that LRU-evicts MCP servers, since that guard reads the same session.tokens["input"].
+    """
+    return not getattr(session, "sdk_session_id", None) or bool(getattr(session, "needs_fresh_session", False))
+
+
+@typechecked
 def estimate_post_compact_input(session) -> int:
-    """Return a conservative token estimate after compaction trims history."""
+    """Return a conservative token estimate after compaction trims history.
+
+    Measures the string `build_history_prefix` actually ships rather than raw message content.
+    Summing untrimmed content was a ~50x overestimate on tool-heavy sessions (every tool result
+    is clamped to RECAP_TOOL_RESULT_CAP before it reaches the model), and because this number is
+    written to session.tokens["input"] it drove the context meter, the compaction trigger, and
+    the pre-send guard that LRU-evicts the user's active MCP servers on phantom overflow.
+    """
     try:
-        messages = get_branch_messages(session)
         cutoff_msg_id = getattr(session, "compacted_through_msg_id", None)
-        if cutoff_msg_id:
-            skip_idx = next(
-                (i for i, m in enumerate(messages) if m.id == cutoff_msg_id),
-                -1,
-            )
-            if skip_idx >= 0:
-                messages = messages[skip_idx + 1:]
-        surviving_chars = 0
-        for message in messages:
-            if getattr(message, "hidden", False):
-                continue
-            content = getattr(message, "content", "")
-            if isinstance(content, str):
-                serialized = content
-            else:
-                try:
-                    serialized = json.dumps(content, ensure_ascii=False)
-                except Exception:
-                    serialized = str(content)
-            surviving_chars += len(serialized)
+        history = build_history_prefix(get_branch_messages(session), cutoff_msg_id=cutoff_msg_id)
+        history_tokens = int(len(history) / 4 * HISTORY_TOKEN_SAFETY_MARGIN)
         framework_overhead = int(getattr(session, "framework_overhead_tokens", 0) or 0)
-        summary_overhead = 200 if cutoff_msg_id else 0
-        return max(0, framework_overhead + summary_overhead + (surviving_chars // 4))
+        return max(0, framework_overhead + p_distilled_summary_tokens(session, cutoff_msg_id) + history_tokens)
     except Exception:
         logger.debug("post-compact token estimate failed", exc_info=True)
         return max(0, int(getattr(session, "framework_overhead_tokens", 0) or 0))
@@ -193,6 +233,13 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
     never honors caller-supplied paths (defense against path
     traversal). The inline replacement keeps the first 4KB so the
     model retains some signal about what was returned.
+
+    A tool_result content dict keeps its shape: only its "text" is
+    spilled and replaced, so tool_name/elapsed_ms/sub_session_id
+    survive the spill and the retained head is readable tool output
+    rather than the escaped JSON of the whole envelope. The trip-wire
+    still measures the full serialized envelope, so the threshold does
+    not move.
     """
     if not isinstance(content, str):
         try:
@@ -203,6 +250,13 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
         serialized = content
     if len(serialized.encode("utf-8")) <= max_bytes:
         return content, None
+    # The oversized part of a result envelope is always its text; spilling that alone keeps the .txt blob readable for the Read the note points the agent at.
+    spilled_text: Optional[str] = None
+    if isinstance(content, dict):
+        raw_text = content.get("text")
+        if isinstance(raw_text, str):
+            spilled_text = raw_text
+    body = spilled_text if spilled_text is not None else serialized
     blobs_dir = os.path.join(SESSIONS_DIR, session_id, "blobs")
     os.makedirs(blobs_dir, exist_ok=True)
     # Sanitize msg_id (it's UUID hex, but be defensive).
@@ -210,14 +264,18 @@ def truncate_large_tool_result(content: object, session_id: str, msg_id: str, ma
     blob_path = os.path.join(blobs_dir, f"{safe_msg_id}.txt")
     try:
         with open(blob_path, "w", encoding="utf-8") as f:
-            f.write(serialized)
+            f.write(body)
     except Exception as e:
         logger.warning(f"Failed to spill tool result to {blob_path}: {e}")
         return content, None
-    head = strip_forged_sentinels(serialized[:4_000])
+    head = strip_forged_sentinels(body[:4_000])
     note = wrap_platform_note(
-        f"Output truncated by Maestro. Full output ({len(serialized)} chars) saved to "
+        f"Output truncated by Maestro. Full output ({len(body)} chars) saved to "
         f"{blob_path}. Ask the user or run a follow-up tool call if you need the rest."
     )
     replacement = f"{head}\n\n{note}"
+    if spilled_text is not None and isinstance(content, dict):
+        truncated: Dict[str, object] = {str(k): v for k, v in content.items()}
+        truncated["text"] = replacement
+        return truncated, blob_path
     return replacement, blob_path

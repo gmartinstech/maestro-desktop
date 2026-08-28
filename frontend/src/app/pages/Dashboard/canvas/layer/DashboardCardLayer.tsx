@@ -103,6 +103,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
     <>
       <AgentCardsLayer
         cards={cards}
+        dashboardId={dashboardId}
         glowingAgentCards={glowingAgentCards}
         expandedSessionIds={expandedSessionIds}
         selection={selection}
@@ -115,6 +116,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
         revealSpawnedRef={revealSpawnedRef}
         measuredHeightsRef={measuredHeightsRef}
         getCanvasState={getCanvasState}
+        getViewportEl={getViewportEl}
         onCardSelect={onCardSelect}
         onDragStart={onDragStart}
         onDragMove={onDragMove}
@@ -172,6 +174,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
           panX={panX}
           panY={panY}
           cmdHeld={cmdHeld}
+          getViewportEl={getViewportEl}
           isSelected={selection.isSelected(bc.browser_id)}
           isHighlighted={highlightedCardId === bc.browser_id}
           multiDragDelta={multiDragDelta}
