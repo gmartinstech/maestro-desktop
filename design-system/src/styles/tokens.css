@@ -1,0 +1,111 @@
+/* Maestro Studio design tokens — generated from frontend/src/shared/styles/claudeTokens.ts.
+   Navy #003566 / gold #F5CC00, neutrals tinted toward the navy hue (cool, not warm cream). */
+
+:root {
+  --mds-bg-page: #F3F5F8;
+  --mds-bg-surface: #FCFDFE;
+  --mds-bg-elevated: #F8FAFC;
+  --mds-bg-secondary: #E9EEF4;
+  --mds-bg-inverse: #0D1B2A;
+
+  --mds-text-primary: #0F1D2B;
+  --mds-text-secondary: #33414F;
+  --mds-text-tertiary: #5E6B78;
+  --mds-text-muted: #6B7682;
+  --mds-text-inverse: #FFFFFF;
+  --mds-text-ghost: rgba(94, 107, 120, 0.5);
+
+  --mds-accent: #003566;
+  --mds-accent-hover: #0A4C8F;
+  --mds-accent-pressed: #002647;
+
+  --mds-brand-navy: #003566;
+  --mds-brand-gold: #F5CC00;
+
+  --mds-border-subtle: rgba(13, 27, 42, 0.07);
+  --mds-border-medium: rgba(13, 27, 42, 0.10);
+  --mds-border-strong: rgba(13, 27, 42, 0.16);
+  --mds-border-width: 0.5px;
+
+  --mds-shadow-sm: 0 1px 3px rgba(13, 27, 42, 0.05);
+  --mds-shadow-md: 0 0.25rem 1.25rem rgba(13, 27, 42, 0.05);
+  --mds-shadow-lg: 0 0.5rem 2rem rgba(13, 27, 42, 0.10);
+
+  --mds-radius-xs: 8px;
+  --mds-radius-sm: 8px;
+  --mds-radius-md: 8px;
+  --mds-radius-lg: 8px;
+  --mds-radius-xl: 8px;
+  --mds-radius-full: 9999px;
+
+  --mds-success: #265B19;
+  --mds-success-bg: #E9F1DC;
+  --mds-warning: #805C1F;
+  --mds-warning-bg: #F6EEDF;
+  --mds-error: #B53333;
+  --mds-error-bg: #FEE2E2;
+  --mds-info: #003566;
+  --mds-info-bg: #DCE7F2;
+
+  --mds-user-bubble: #E4EBF3;
+
+  --mds-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mds-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, Menlo, monospace;
+
+  --mds-transition: all 150ms cubic-bezier(0.165, 0.85, 0.45, 1);
+
+  /* Spacing scale — 4px base, the rhythm the app's layouts already use. */
+  --mds-space-1: 4px;
+  --mds-space-2: 8px;
+  --mds-space-3: 12px;
+  --mds-space-4: 16px;
+  --mds-space-5: 20px;
+  --mds-space-6: 24px;
+  --mds-space-8: 32px;
+  --mds-space-10: 40px;
+
+  /* Chrome metrics — verified against AppShell.tsx. */
+  --mds-titlebar-height: 38px;
+  --mds-sidebar-width: 260px;
+  --mds-window-controls-gutter: 138px;
+  --mds-traffic-light-gutter: 78px;
+}
+
+[data-theme="dark"] {
+  --mds-bg-page: #0D1621;
+  --mds-bg-surface: #14202D;
+  --mds-bg-elevated: #1C2A38;
+  --mds-bg-secondary: #101A25;
+  --mds-bg-inverse: #F3F5F8;
+
+  --mds-text-primary: #F3F6FA;
+  --mds-text-secondary: #B8C2CE;
+  --mds-text-tertiary: #8A96A3;
+  --mds-text-muted: #77828E;
+  --mds-text-inverse: #0D1621;
+  --mds-text-ghost: rgba(138, 150, 163, 0.5);
+
+  /* Navy is too dark on a dark surface; a lightened brand-azure carries the accent. */
+  --mds-accent: #4A90D9;
+  --mds-accent-hover: #6BA6E2;
+  --mds-accent-pressed: #3B7BC0;
+
+  --mds-border-subtle: rgba(180, 194, 206, 0.08);
+  --mds-border-medium: rgba(180, 194, 206, 0.12);
+  --mds-border-strong: rgba(180, 194, 206, 0.2);
+
+  --mds-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --mds-shadow-md: 0 0.25rem 1.25rem rgba(0, 0, 0, 0.15);
+  --mds-shadow-lg: 0 0.5rem 2rem rgba(0, 0, 0, 0.25);
+
+  --mds-success: #7AB948;
+  --mds-success-bg: #1B4614;
+  --mds-warning: #D1A041;
+  --mds-warning-bg: #483A0F;
+  --mds-error: #DD5353;
+  --mds-error-bg: #3D1515;
+  --mds-info: #80AADD;
+  --mds-info-bg: #16324B;
+
+  --mds-user-bubble: #1E2C3A;
+}
