@@ -84,19 +84,25 @@ Apply the original concern commits in this order, stopping at every conflict:
 
 ```bash
 git cherry-pick 791a7cc6
+git cherry-pick d48fa4c2
+git cherry-pick 89f3e34b
 git cherry-pick f6c4aa0d
+git cherry-pick 8d46ce04
+git cherry-pick 3e99ebae
 git cherry-pick 72e6a632
 git cherry-pick 32180b43
 git cherry-pick 52d2f6cf
 git cherry-pick 3d79259c
 git cherry-pick e9a44dea
 git cherry-pick 3301e631
+git cherry-pick 9c82e788
+git cherry-pick 98142b15
 git cherry-pick 47f6fd70
 git cherry-pick 9c228847
 git cherry-pick effbdf9f
 ```
 
-For every conflict in updater or release files, keep the current-main CDN implementation, then reapply only the DET change that removes an OpenSwarm endpoint or coupling. Use `git add <resolved-files> && git cherry-pick --continue`; do not use `-X ours`, `-X theirs`, or a merge commit.
+For every conflict in updater or release files, keep the current-main CDN implementation, then reapply only the DET change that removes an OpenSwarm endpoint or coupling. For the former GitHub-release docs and scripts in `d48fa4c2`, `8d46ce04`, `3e99ebae`, and `98142b15`, preserve current CDN terminology and reconcile only the still-true DET assertions. Use `git add <resolved-files> && git cherry-pick --continue`; do not use `-X ours`, `-X theirs`, or a merge commit.
 
 - [ ] **Step 3: Remove obsolete UI/backend imports before deleting DET files**
 
