@@ -350,7 +350,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               })}
               <ItemRow onClick={handleCreateDashboard} c={c}>
                 <Plus size={14} style={{ flexShrink: 0 }} />
-                <Typography sx={{ fontSize: '0.8rem', color: c.text.secondary }}>
+                <Typography data-testid="dashboard-header-new-dashboard" sx={{ fontSize: '0.8rem', color: c.text.secondary }}>
                   {t('appShell.newDashboard')}
                 </Typography>
               </ItemRow>

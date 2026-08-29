@@ -779,6 +779,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               <Box
                 role="button"
                 aria-label={t('dashboard.toolbar.addNote')}
+                data-testid="dashboard-toolbar-add-note"
                 tabIndex={0}
                 onClick={onAddNote}
                 sx={{

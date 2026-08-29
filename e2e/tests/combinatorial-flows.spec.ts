@@ -68,7 +68,7 @@ test.describe('combinatorial user flows', () => {
       await clickMust(page.getByRole('button', { name: 'New dashboard' }), 'create dashboard (DashboardSelection)');
       await expect.poll(() => page.url(), { timeout: 8_000 }).toMatch(/\/dashboard\//);
     }
-    await expect(page.getByRole('button', { name: 'Add note' }), 'dashboard toolbar never mounted').toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="dashboard-toolbar-add-note"]'), 'dashboard toolbar never mounted').toBeVisible({ timeout: 10_000 });
   };
   const errorsSince = (mark: number) => errors.slice(mark).filter((e) => !CONSOLE_WHITELIST.some((rx) => rx.test(e.text)));
   const assertNoNew = (mark: number, label: string) => {
@@ -149,9 +149,8 @@ test.describe('combinatorial user flows', () => {
     expect(firstId, 'no dashboard id found in the URL after ensureDashboardActive').toBeTruthy();
 
     await clickMust(page.locator('[data-testid="dashboard-header-toggle"]'), 'dashboard header toggle');
-    await clickMust(page.getByText('New dashboard', { exact: true }), 'new dashboard (header dropdown)');
-    await expect.poll(() => page.url(), { timeout: 8_000 }).toMatch(/\/dashboard\//);
-    expect(page.url(), 'creating a dashboard from the header dropdown did not navigate to a new one').not.toBe(firstUrl);
+    await clickMust(page.locator('[data-testid="dashboard-header-new-dashboard"]'), 'new dashboard (header dropdown)');
+    await expect.poll(() => page.url(), { timeout: 8_000 }).not.toBe(firstUrl);
     assertNoNew(mark, 'header dropdown: create dashboard');
 
     // Switch back to the first dashboard via its row in the dropdown list.
@@ -287,7 +286,7 @@ test.describe('combinatorial user flows', () => {
   test('dashboard toolbar: Add note + Add App + History each mount their surfaces', async () => {
     const mark = errors.length;
     await ensureDashboardActive();
-    await clickMust(page.getByRole('button', { name: 'Add note' }), 'toolbar Add note');
+    await clickMust(page.locator('[data-testid="dashboard-toolbar-add-note"]'), 'dashboard toolbar add-note');
     assertNoNew(mark, 'Add note mount');
 
     await clickMust(page.getByRole('button', { name: 'Add App' }), 'toolbar Add App');
