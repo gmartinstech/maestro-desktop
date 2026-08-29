@@ -73,7 +73,7 @@ def p_run_sync(monkeypatch, providers: list) -> list:
         def __init__(self) -> None:
             self.httpx = p_Httpx()
 
-        def is_running(self) -> bool:
+        async def is_running(self) -> bool:
             return True
 
     async def p_no_connection(node_id: str, name: str) -> None:

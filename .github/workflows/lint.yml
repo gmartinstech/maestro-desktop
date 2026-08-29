@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      # lint.py imports watchfiles at module load; vulture backs the dead-code check.
-      - run: pip install watchfiles vulture==2.16
+      # Pinned lint/test tools: lint.py invokes watchfiles, vulture, ruff, and pyright.
+      - run: pip install -r backend/requirements-dev.txt
 
       - run: python3 linter/lint.py --root .

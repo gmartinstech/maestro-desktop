@@ -28,6 +28,8 @@ interface AgentCardsLayerProps {
   revealSpawnedRef: RefObject<Set<string>>;
   measuredHeightsRef: RefObject<Record<string, number>>;
   getCanvasState: () => { panX: number; panY: number; zoom: number };
+  getViewportEl: () => HTMLDivElement | null;
+  dashboardId: string;
   onCardSelect: (id: string, type: CardType, shiftKey: boolean) => void;
   onDragStart: (id: string, type: CardType) => void;
   onDragMove: (dx: number, dy: number, mouseX?: number, mouseY?: number) => void;
@@ -52,6 +54,8 @@ const AgentCardsLayer: React.FC<AgentCardsLayerProps> = ({
   revealSpawnedRef,
   measuredHeightsRef,
   getCanvasState,
+  getViewportEl,
+  dashboardId,
   onCardSelect,
   onDragStart,
   onDragMove,
@@ -122,6 +126,8 @@ const AgentCardsLayer: React.FC<AgentCardsLayerProps> = ({
             sessionId={sid}
             expanded={expandedSessionIds.includes(sid)}
             getCanvasState={getCanvasState}
+            getViewportEl={getViewportEl}
+            dashboardId={dashboardId}
             spawnFrom={origin}
             exitTarget={exitTarget}
             isSelected={isSel}
