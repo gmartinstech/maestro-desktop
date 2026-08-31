@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { AZURE_SIGNING_ENV, STORE_IDENTITY_ENV, resolveWindowsBuildMode } = require('./windowsBuildMode');
@@ -52,4 +53,16 @@ test('Azure-required releases clear the dev-only signing skip before packaging',
     script,
     /if \(\$BuildMode\.requiresAzureSigning\) \{[\s\S]*?Remove-Item -Path 'Env:CSC_IDENTITY_AUTO_DISCOVERY' -ErrorAction SilentlyContinue/,
   );
+});
+
+test('a self-signed DevSign build cannot enter the CDN publish path', { skip: process.platform !== 'win32' }, () => {
+  const result = spawnSync('pwsh', [
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', path.join(__dirname, 'build-app-win.ps1'),
+    '-DevSign',
+    '-Publish',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(`${result.stdout}${result.stderr}`, /ERROR: -DevSign cannot be combined with -Sign or -Publish\./);
 });
