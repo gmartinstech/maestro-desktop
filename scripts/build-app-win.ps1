@@ -21,6 +21,8 @@ param(
     [switch]$Sign,
     [switch]$DevSign,
     [switch]$Publish,
+    # Partner Center submission artifact: AppX, no Azure Trusted Signing or CDN upload.
+    [switch]$Store,
     # Fast CI gate path: build only the unpacked win-unpacked\ dir (no
     # installer, no LZMA compression of the ~1GB tree - the slowest packaging
     # phase). verify-all + Playwright drive the unpacked Maestro Studio.exe directly.
@@ -44,11 +46,6 @@ foreach ($tool in @('robocopy', 'taskkill')) {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool not found even after restoring System32 to PATH. Is this a stripped-down Windows image?" }
 }
 
-if ($Publish) { $Sign = $true }
-# Override only the win target; everything else (signing hook, extraResources,
-# publish config) merges from electron/package.json's build block unchanged.
-$TargetOverride = if ($Squirrel) { @('--config.win.target=squirrel', '--config.squirrelWindows.iconUrl=https://raw.githubusercontent.com/gmartinstech/maestro-desktop/main/electron/build/icon.ico') } else { @() }
-
 $ScriptDir   = Split-Path -Parent $PSCommandPath
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
@@ -61,7 +58,7 @@ $BuildStopwatch = [Diagnostics.Stopwatch]::StartNew()
 $BuildLogPath = Join-Path $ProjectRoot 'electron\build-times.log'
 function Write-BuildLogEntry([string]$Outcome) {
     $Elapsed = $BuildStopwatch.Elapsed
-    $ModeLabel = if ($Publish) { 'PUBLISH' } elseif ($Sign) { 'SIGN' } elseif ($DevSign) { 'DEVSIGN' } elseif ($DirOnly) { 'DIRONLY' } else { 'LOCAL' }
+    $ModeLabel = if ($Store) { 'STORE' } elseif ($Publish) { 'PUBLISH' } elseif ($Sign) { 'SIGN' } elseif ($DevSign) { 'DEVSIGN' } elseif ($DirOnly) { 'DIRONLY' } else { 'LOCAL' }
     $Sha = git -C $ProjectRoot rev-parse --short=12 HEAD 2>$null
     if (-not $Sha) { $Sha = 'unknown' }
     $Line = "{0:yyyy-MM-dd HH:mm:ss}  outcome={1,-7}  mode={2,-8}  elapsed={3:hh\:mm\:ss}  sha={4}" -f $BuildStartedAt, $Outcome, $ModeLabel, $Elapsed, $Sha
@@ -94,9 +91,28 @@ if (Test-Path $EnvFile) {
     }
 }
 
+# Resolve release behavior in the unit-tested Node helper. It runs after .env.windows
+# loading so Store identity inputs can stay ignored like signing credentials.
+$ModeArgs = @()
+if ($Store)   { $ModeArgs += '--store' }
+if ($Publish) { $ModeArgs += '--publish' }
+if ($Sign)    { $ModeArgs += '--sign' }
+if ($DevSign) { $ModeArgs += '--devSign' }
+if ($DirOnly) { $ModeArgs += '--dirOnly' }
+if ($Squirrel){ $ModeArgs += '--squirrel' }
+$ModeOutput = & node (Join-Path $ProjectRoot 'scripts\windowsBuildMode.js') @ModeArgs 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $ModeOutput | ForEach-Object { Write-Host $_ }
+    exit 1
+}
+$BuildMode = (($ModeOutput -join '') | ConvertFrom-Json)
+$Sign = [bool]$BuildMode.requiresAzureSigning
+$TargetOverride = @($BuildMode.targetArgs)
+
 Write-Host "========================================"
 Write-Host "  Maestro Studio Desktop App Builder (Windows)"
-if     ($Publish) { Write-Host "  Mode: PRODUCTION (sign + publish to cdn.martinstech.net via cloudinha)" }
+if     ($Store)   { Write-Host "  Mode: STORE (Azure-free AppX submission artifact)" }
+elseif ($Publish) { Write-Host "  Mode: PRODUCTION (sign + publish to cdn.martinstech.net via cloudinha)" }
 elseif ($Sign)    { Write-Host "  Mode: SIGNED (sign, no publish)" }
 elseif ($DevSign) { Write-Host "  Mode: DEV-SIGNED (self-signed, internal installs only)" }
 else              { Write-Host "  Mode: LOCAL (unsigned)" }
@@ -123,20 +139,15 @@ if ($DevSign) {
 }
 
 # --- Required env validation ---
-if ($Sign) {
-    $required = @(
-        'AZURE_TENANT_ID','AZURE_CLIENT_ID','AZURE_CLIENT_SECRET',
-        'AZURE_SIGNING_ENDPOINT','AZURE_SIGNING_ACCOUNT','AZURE_SIGNING_CERT_PROFILE'
-    )
-    # -Publish no longer needs GH_TOKEN -- it scp's to cloudinha instead of `gh release upload`.
-    $missing = $required | Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
+if ($BuildMode.requiresAzureSigning) {
+    $missing = @($BuildMode.missingAzureEnv)
     if ($missing.Count -gt 0) {
-        Write-Host "ERROR: Missing required environment variables:" -ForegroundColor Red
+        Write-Host "ERROR: Missing required Azure Trusted Signing environment variables:" -ForegroundColor Red
         $missing | ForEach-Object { Write-Host "  - $_" }
         Write-Host "Copy .env.windows.example to .env.windows and fill in values."
         exit 1
     }
-    # A signed build is one users actually run, so its Widevine VMP signature is
+    # A signed CDN build is one users actually run, so its Widevine VMP signature is
     # mandatory: the afterPack hook hard-fails on a missing/failed signature rather
     # than ship an installer whose Spotify/Netflix audio is silently dead.
     $env:VMP_REQUIRE_SIGN = '1'
@@ -632,7 +643,7 @@ if ($EffectiveCount -ne $CommitCount) {
     Write-Host "Version floored: commit count $CommitCount -> $EffectiveCount (already-published version is higher)."
 }
 $BuildVersion = "1.$EffectiveCount.0"
-$BuildChannel = 'stable'
+$BuildChannel = $BuildMode.channel
 $BuildShortSha = if ($BuildSha.Length -ge 12) { $BuildSha.Substring(0, 12) } else { $BuildSha }
 $BuildInfo = [ordered]@{
     sha      = $BuildSha
@@ -708,6 +719,18 @@ if ($Publish) {
     Write-Host "Paste these into the cloudinha publish prompt:"
     Write-Host "  Version: $BuildVersion"
     Write-Host "  Expected sha256: $Sha256"
+} elseif ($Store) {
+    $DistDir = Join-Path $ProjectRoot 'electron\dist'
+    $ExpectedName = "MaestroStudio-Store-$BuildVersion-x64.appx"
+    $StoreArtifact = Get-ChildItem -Path $DistDir -Recurse -Filter $ExpectedName -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $StoreArtifact) { throw "No Store AppX named $ExpectedName found under $DistDir" }
+    $Sha256 = (Get-FileHash -Path $StoreArtifact.FullName -Algorithm SHA256).Hash.ToLower()
+    Write-Host ""
+    Write-Host "Partner Center upload:"
+    Write-Host "  Artifact: $($StoreArtifact.FullName)"
+    Write-Host "  Version: $BuildVersion"
+    Write-Host "  SHA-256: $Sha256"
+    Write-Host "  Provenance SHA: $BuildSha"
 }
 
 Write-Host ""
@@ -718,6 +741,7 @@ Write-Host ""
 Write-Host "Output files:"
 Get-ChildItem -Path (Join-Path $ProjectRoot 'electron\dist') -Filter '*.exe' -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime
 Get-ChildItem -Path (Join-Path $ProjectRoot 'electron\dist') -Filter '*.zip' -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime
+Get-ChildItem -Path (Join-Path $ProjectRoot 'electron\dist') -Filter '*.appx' -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime
 
 Write-BuildLogEntry 'SUCCESS'
 Write-Host "Elapsed: $($BuildStopwatch.Elapsed.ToString('hh\:mm\:ss'))  (logged to $BuildLogPath)"
