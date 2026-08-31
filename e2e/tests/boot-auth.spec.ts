@@ -12,5 +12,5 @@ test('clean packaged boot has a local bearer and can create a dashboard', async 
 });
 
 test('clean packaged boot applies English settings', async ({ maestro }) => {
-  await expect(maestro.page.getByRole('heading', { name: 'Dashboards' })).toBeVisible();
+  await expect(maestro.page.getByRole('button', { name: 'Settings' })).toBeVisible();
 });
