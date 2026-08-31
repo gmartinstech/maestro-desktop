@@ -39,14 +39,17 @@ app.on('child-process-gone', (_event, details) => {
   console.error('[diag][main:child-process-gone]', JSON.stringify(details));
 });
 // Platform-split auto-updater: electron-updater on Mac (full-featured), Electron's
-// built-in autoUpdater on Windows (Squirrel.Windows target; electron-updater dropped Squirrel).
+// built-in autoUpdater on Windows Squirrel/CDN installs. Store packages use Microsoft
+// Store updates exclusively and must never initialize the CDN updater.
+const { resolveUpdateChannel, storeManagedStatus } = require('./storeChannel');
+const windowsUpdateChannel = resolveUpdateChannel();
 let autoUpdater;
 let isSquirrelUpdater = false;
 try {
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' && windowsUpdateChannel === 'cdn') {
     autoUpdater = require('electron').autoUpdater;
     isSquirrelUpdater = true;
-  } else {
+  } else if (process.platform !== 'win32') {
     autoUpdater = require('electron-updater').autoUpdater;
   }
 } catch (_) {}
@@ -1669,6 +1672,11 @@ async function checkCdnForUpdate() {
 }
 
 function setupAutoUpdater() {
+  if (windowsUpdateChannel === 'store') {
+    cachedUpdateStatus = storeManagedStatus();
+    console.log('[updater] managed by Microsoft Store');
+    return;
+  }
   if (!autoUpdater) return;
   if (isSquirrelUpdater) {
     // Windows updates come from cdn.martinstech.net/maestro/version.json instead of a Squirrel
@@ -3049,6 +3057,18 @@ function connectMainBridge() {
 
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);
 
+ipcMain.handle('open-store-updates', async () => {
+  if (windowsUpdateChannel !== 'store') {
+    return { success: false, error: 'Microsoft Store is unavailable for this install.' };
+  }
+  try {
+    await shell.openExternal('ms-windows-store://home');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err?.message || String(err) };
+  }
+});
+
 // One-shot recovery info: if the crash-watchdog relaunched us, returns the
 // {ts, parent_pid, uptime_ms} JSON it wrote and then DELETES the file so the
 // chip only shows once. Returns null if no marker present (normal launch).
@@ -3071,6 +3091,9 @@ ipcMain.handle('get-crash-recovery-info', () => {
 });
 
 ipcMain.handle('check-for-updates', async () => {
+  if (windowsUpdateChannel === 'store') {
+    return { success: true, channel: 'store', managed: true };
+  }
   if (!autoUpdater || !isPackaged) {
     sendToRenderer('update-error', 'Update check is only available in the packaged app.');
     return { success: false, error: 'Not packaged' };
@@ -3094,6 +3117,9 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 ipcMain.handle('download-update', async () => {
+  if (windowsUpdateChannel === 'store') {
+    return { success: false, channel: 'store', error: 'Updates are managed by Microsoft Store.' };
+  }
   if (!autoUpdater) return { success: false, error: 'Updater not available' };
   // checkCdnForUpdate() already downloads and verifies as soon as it finds a newer release; no manual trigger needed.
   if (isSquirrelUpdater) return { success: true };
@@ -3177,6 +3203,9 @@ async function installDownloadedUpdate() {
 }
 
 ipcMain.handle('install-update', async () => {
+  if (windowsUpdateChannel === 'store') {
+    return { success: false, channel: 'store', error: 'Updates are managed by Microsoft Store.' };
+  }
   // Veto while a workflow is in flight; lifecycle poller fires the deferred install once active drains.
   try {
     const vetoed = await workflowsLifecycle.maybeVetoInstall();
