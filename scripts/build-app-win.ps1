@@ -675,15 +675,21 @@ try {
     # Windows (see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md). -Publish
     # below still means "produce a release-ready signed installer," just delivered via scp to the
     # CDN host instead of `gh release upload`.
+    # Pass a composed argument array to npx. Expanding an empty override array directly
+    # into a native .cmd invocation creates a literal empty argument under PowerShell 7.6,
+    # which electron-builder rejects as an unknown option.
+    $BuilderArgs = @('electron-builder', '--win', '--x64')
     if ($DirOnly) {
         # Unpacked-only build for the fast CI gate. afterPack (router node_modules)
         # and locale-pak filtering still run during the pack phase, so the produced
         # win-unpacked\Maestro Studio.exe is fully functional; only the NSIS installer +
         # update feed are skipped (verify-update-feed skips cleanly when absent).
-        & npx electron-builder --win --x64 --dir $TargetOverride $ExtraMetadataArg --publish never
-    } else {
-        & npx electron-builder --win --x64 $TargetOverride $ExtraMetadataArg --publish never
+        $BuilderArgs += '--dir'
     }
+    $BuilderArgs += $TargetOverride
+    $BuilderArgs += $ExtraMetadataArg
+    $BuilderArgs += '--publish', 'never'
+    & npx @BuilderArgs
     if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 } finally { Pop-Location }
 
