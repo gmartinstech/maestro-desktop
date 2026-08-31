@@ -37,3 +37,9 @@ test('CDN publish remains Azure-gated', () => {
   assert.equal(mode.requiresAzureSigning, true);
   assert.deepEqual(mode.missingAzureEnv, AZURE_SIGNING_ENV);
 });
+
+test('Store artifact naming cannot be confused with CDN Squirrel naming', () => {
+  const mode = resolveWindowsBuildMode({ store: true }, storeEnv);
+  assert.ok(mode.targetArgs.includes('--config.appx.artifactName=MaestroStudio-Store-${version}-${arch}.${ext}'));
+  assert.ok(!mode.targetArgs.some((arg) => arg.includes('squirrelWindows')));
+});

@@ -3,9 +3,11 @@
 How a Maestro Studio desktop release is built, verified, and promoted. The guiding
 rule: **a release is reproducible and provenanced** — anyone can tell exactly
 what commit produced a given EXE, and rebuilding that commit yields the same
-bits. Distribution is self-hosted: `cdn.martinstech.net/maestro/*`, served from
-the `cloudinha` VPS (see `docs/superpowers/specs/2026-08-13-cdn-version-management-design.md`
-for the full design).
+bits. Direct-download distribution is self-hosted at `cdn.martinstech.net/maestro/*`,
+served from the `cloudinha` VPS (see
+`docs/superpowers/specs/2026-08-13-cdn-version-management-design.md` for the full
+design). Microsoft Store distribution is a separate AppX submission channel with
+Store-managed installation and updates.
 
 ## Versioning
 
@@ -101,12 +103,33 @@ pipeline (`scripts/build-app.sh`, `publish.sh`, `release-macos.yml`, notarizatio
 entitlements) was deleted — do not resurrect it without a decision to re-adopt it.
 
 - `pwsh scripts/build-app-win.ps1` — local dev build, unsigned.
-- `pwsh scripts/build-app-win.ps1 -Sign` — signed build (Azure Trusted Signing), not published.
-- `pwsh scripts/build-app-win.ps1 -Publish` — signed build, then scp's the installer to
-  `cloudinha:~/maestro-releases/incoming/` and prints the version + sha256 to paste into the
-  cloudinha publish step below.
+- `pwsh scripts/build-app-win.ps1 -Store` — Azure-free AppX submission artifact; requires the
+  non-secret Partner Center identity values in `.env.windows`, and never uploads to the CDN.
+- `pwsh scripts/build-app-win.ps1 -Sign` — Azure Trusted Signing build for direct delivery, not published.
+- `pwsh scripts/build-app-win.ps1 -Publish` — Azure Trusted Signing build for direct CDN/Squirrel
+  delivery, then scp's the installer to `cloudinha:~/maestro-releases/incoming/` and prints the
+  version + sha256 to paste into the cloudinha publish step below.
 
-## Release (manual, two machines)
+## Microsoft Store release (manual Partner Center handoff)
+
+1. Reserve the Maestro Studio identity in Partner Center and copy its **Identity name**,
+   **Publisher**, and **Publisher display name** into the ignored `.env.windows` file as
+   `MAESTRO_STORE_IDENTITY_NAME`, `MAESTRO_STORE_PUBLISHER`, and
+   `MAESTRO_STORE_PUBLISHER_DISPLAY_NAME`. These are non-secret identity values; do not commit
+   the file.
+2. Check out the exact approved `main` commit and run `pwsh scripts/build-app-win.ps1 -Store`.
+   It does not need Azure credentials and does not upload anywhere.
+3. Record the emitted AppX path, version, SHA-256, and provenance SHA. Upload that exact artifact
+   manually in Partner Center and complete its submission/certification process.
+4. After certification, install through Microsoft Store. Settings → General → Advanced → About
+   must show the released source SHA and `store` channel. Software update must say Microsoft
+   Store manages updates, and its action must open Microsoft Store rather than downloading a CDN
+   installer.
+5. Store availability never authorizes an unsigned CDN release. The existing `-Publish` command
+   remains only for direct CDN/Squirrel delivery and requires Azure Trusted Signing. Never upload
+   an unsigned or self-signed installer to `cloudinha`.
+
+## CDN/Squirrel release (manual, two machines)
 
 1. On your build machine: `pwsh scripts/build-app-win.ps1 -Publish`. Note the printed version
    and sha256.
@@ -119,9 +142,10 @@ entitlements) was deleted — do not resurrect it without a decision to re-adopt
 
 ## Update verification (before telling anyone it's live)
 
-Windows apps check `cdn.martinstech.net/maestro/version.json` on launch and every 4h, download
-in the background on detect, and install on quit (or after a sustained idle period with no
-active agent). To verify a release actually lands:
+Direct CDN/Squirrel Windows apps check `cdn.martinstech.net/maestro/version.json` on launch and
+every 4h, download in the background on detect, and install on quit (or after a sustained idle
+period with no active agent). Microsoft Store packages do not check this manifest; Microsoft
+Store owns their update cadence. To verify a CDN release actually lands:
 
 1. Install the previous stable build.
 2. Launch it, wait for (or trigger via Settings → Check for Updates) the update-available /
