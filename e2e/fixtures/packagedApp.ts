@@ -1,9 +1,11 @@
 import { _electron, test as base, expect, type ElectronApplication, type Page } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { packagedAppPath, waitForMainWindow } from '../helpers/launch';
+import { closePackagedApp, descendantPids } from '../helpers/processTree';
+
+export { descendantPids } from '../helpers/processTree';
 
 export const seededSettings = () => ({
   user_id: 'e2e-fake-user',
@@ -11,40 +13,6 @@ export const seededSettings = () => ({
   language: 'en',
   provedor_ia_token: 'mtok_e2e_fake_opaque_token',
 });
-
-type ProcessInfo = { pid: number; parentPid: number };
-
-export function descendantPids(rootPid: number, processes: ProcessInfo[]): number[] {
-  const found = new Set<number>([rootPid]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const process of processes) {
-      if (found.has(process.parentPid) && !found.has(process.pid)) {
-        found.add(process.pid);
-        changed = true;
-      }
-    }
-  }
-  return [...found].sort((a, b) => a - b);
-}
-
-function runningProcesses(): ProcessInfo[] {
-  try {
-    if (process.platform === 'win32') {
-      const raw = execFileSync('pwsh', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Json -Compress'], { encoding: 'utf8' });
-      const rows = JSON.parse(raw || '[]');
-      return (Array.isArray(rows) ? rows : [rows]).map((row) => ({ pid: row.ProcessId, parentPid: row.ParentProcessId }));
-    }
-    const raw = execFileSync('ps', ['-eo', 'pid=,ppid='], { encoding: 'utf8' });
-    return raw.split('\n').flatMap((line) => {
-      const [pid, parentPid] = line.trim().split(/\s+/).map(Number);
-      return Number.isFinite(pid) && Number.isFinite(parentPid) ? [{ pid, parentPid }] : [];
-    });
-  } catch {
-    return [];
-  }
-}
 
 export type PackagedApp = {
   app: ElectronApplication;
@@ -99,13 +67,7 @@ export const test = base.extend<{ maestro: PackagedApp }>({
     try {
       await use({ app, page, dataRoot, stateHome, userData, api, crashCount, assertNoUnexpectedErrors: () => expect(errors).toEqual([]) });
     } finally {
-      const rootPid = app.process()?.pid;
-      const descendants = rootPid ? descendantPids(rootPid, runningProcesses()).filter((pid) => pid !== rootPid) : [];
-      await app.close().catch(() => {});
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      for (const pid of descendants) {
-        try { process.kill(pid); } catch {}
-      }
+      await closePackagedApp(app);
       for (const root of [dataRoot, stateHome, userData]) rmSync(root, { recursive: true, force: true });
     }
   },

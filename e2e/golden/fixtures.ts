@@ -2,6 +2,7 @@
 import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';
 import { packagedAppPath } from '../helpers/launch';
+import { closePackagedApp } from '../helpers/processTree';
 
 // A static opaque credential (`mtok_...` shape, but any non-JWT string classifies the same way —
 // see backend/apps/settings/maestro_token_status.py token_looks_like_jwt) reads as `state: "opaque"`,
@@ -59,5 +60,5 @@ export async function launchMaestro() {
   // while the backend boots. Waiting for React to actually mount is the difference between
   // driving the app and driving a blank page that merely has the right title.
   await win.waitForFunction(() => (document.querySelector('#root')?.childElementCount ?? 0) > 0, undefined, { timeout: 120_000 });
-  return { app, win, dataRoot, stateHome, userData };
+  return { app, win, dataRoot, stateHome, userData, close: () => closePackagedApp(app) };
 }

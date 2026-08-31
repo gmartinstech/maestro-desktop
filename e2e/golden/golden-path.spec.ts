@@ -8,7 +8,7 @@ import { launchMaestro } from './fixtures';
 // (canvas vs chat) -> smoke-test") and resolved that way here. A turn-through-canvas assertion is a
 // separate ticket: it needs the canonical send path from a draft card, which is a product decision.
 test('golden path: packaged app boots, renders, and serves a session', async () => {
-  const { app, win } = await launchMaestro();
+  const { win, close } = await launchMaestro();
 
   // launchMaestro already waited for #root to have children, so React mounted for real.
   await expect(win).toHaveTitle(/Maestro Studio/);
@@ -35,5 +35,5 @@ test('golden path: packaged app boots, renders, and serves a session', async () 
   });
   expect(health.status, `backend did not serve /api/health/check (got ${health.body?.slice(0, 120)})`).toBe(200);
 
-  await app.close();
+  await close();
 });

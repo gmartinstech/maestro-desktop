@@ -1,5 +1,6 @@
 import { test, expect, ElectronApplication, Page } from '@playwright/test';
 import { launchIsolatedApp, waitForMainWindow, hasAnyProviderKey } from '../helpers/launch';
+import { closePackagedApp } from '../helpers/processTree';
 import { startVisibility, VisibilityHandle } from '../helpers/visibility';
 import fs from 'fs';
 import os from 'os';
@@ -47,7 +48,7 @@ test.describe('real agent round-trip', () => {
   });
   test.afterAll(async () => {
     try { await vis?.stop(); } catch {}
-    await app?.close().catch(() => {});
+    if (app) await closePackagedApp(app);
     for (const dir of tempRoots) {
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
     }
