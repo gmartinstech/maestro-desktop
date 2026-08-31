@@ -1,4 +1,5 @@
 const { app, components, BrowserWindow, ipcMain, shell, session, dialog, crashReporter, powerMonitor, Menu, clipboard } = require('electron');
+const { authTokenPath } = require('./backendPaths');
 
 // Browser cards live in their own persistent partition so cookies/localStorage/IndexedDB survive reload + quit (Discord etc. stay logged in) and site data stays isolated from the app's defaultSession. The "clear browsing data" wipe nukes only this partition. MUST match BROWSER_PARTITION in frontend BrowserCard.tsx.
 const BROWSER_PARTITION = 'persist:maestro-browser';
@@ -1103,23 +1104,15 @@ function markBackendReady() {
 }
 
 function getAuthTokenFilePath() {
-  // Mirrors backend/config/paths.py. On macOS the file lives at
-  // ~/Library/Application Support/Maestro Studio/data/auth.token; on
-  // Windows under %APPDATA%/Maestro Studio/data/; on Linux under
-  // ~/.local/share/Maestro Studio/data/. In dev the backend writes it to
-  // backend/data/auth.token instead.
-  if (isPackaged) {
-    if (process.platform === 'darwin') {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'Maestro Studio', 'data', 'auth.token');
-    } else if (process.platform === 'win32') {
-      return path.join(process.env.APPDATA || os.homedir(), 'Maestro Studio', 'data', 'auth.token');
-    } else {
-      const xdg = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-      return path.join(xdg, 'Maestro Studio', 'data', 'auth.token');
-    }
-  }
-  // Dev: backend/data/auth.token relative to repo root.
-  return path.join(__dirname, '..', 'backend', 'data', 'auth.token');
+  // Mirrors backend/config/paths.py, including MAESTRO_DATA_ROOT for isolated
+  // packaged runs. The backend and Electron must read the same per-install bearer.
+  return authTokenPath({
+    isPackaged,
+    env: process.env,
+    platform: process.platform,
+    home: os.homedir(),
+    dirname: __dirname,
+  });
 }
 
 // Persistent backend log on disk. Until now the bundled-Python stdout/stderr
