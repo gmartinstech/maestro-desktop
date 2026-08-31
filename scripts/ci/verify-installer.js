@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Verifies the Windows NSIS installer: default safely observes an existing install (dir, an uninstaller that exists, shortcuts); --destructive runs install->verify->uninstall but refuses to clobber an existing install unless --force (clean machine / CI).
+// Verifies the Windows Squirrel installer: default safely observes an existing install (dir, an uninstaller that exists, shortcuts); --destructive runs install->verify->uninstall but refuses to clobber an existing install unless --force (clean machine / CI).
 
 'use strict';
 const fs = require('fs');
@@ -25,9 +25,15 @@ const ok = (m) => process.stdout.write(`  ok   ${m}\n`);
 const bad = (m) => { failures.push(m); process.stdout.write(`  FAIL ${m}\n`); };
 const exists = (p) => { try { fs.statSync(p); return true; } catch { return false; } }
 
+// electron-builder's squirrel target writes into dist/squirrel-windows/, and
+// artifactName bakes the version in (MaestroStudio-Setup-<version>-x64.exe -
+// see docs/superpowers/specs/2026-08-13-cdn-version-management-design.md), so
+// the exact filename can't be hardcoded; glob for it instead.
 function defaultSetup() {
-  const p = path.join(h.REPO_ROOT, 'electron', 'dist', 'MaestroStudio-Setup-x64.exe');
-  return exists(p) ? p : null;
+  const dir = path.join(h.REPO_ROOT, 'electron', 'dist', 'squirrel-windows');
+  if (!exists(dir)) return null;
+  const setup = fs.readdirSync(dir).find((f) => /^MaestroStudio-Setup-.*-x64\.exe$/.test(f));
+  return setup ? path.join(dir, setup) : null;
 }
 
 // The shipped installer must be a real, complete PE (catch a 0-byte stub or truncated upload).
@@ -140,7 +146,7 @@ function runDestructive(setup) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (process.platform !== 'win32') { process.stdout.write('SKIP: NSIS installer check is Windows-only.\n'); process.exit(0); }
+  if (process.platform !== 'win32') { process.stdout.write('SKIP: Squirrel installer check is Windows-only.\n'); process.exit(0); }
   const setup = args.setup || defaultSetup();
   if (!setup) { process.stderr.write('INSTALLER FAIL: no Setup.exe found; build first or pass --setup.\n'); process.exit(1); }
 

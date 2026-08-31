@@ -34,18 +34,6 @@ def p_base_url() -> str:
 
 
 @typechecked
-def p_mode() -> str:
-    # logs.write is diagnostic so it flows even in 'minimal'; only product events are muted.
-    try:
-        from backend.apps.settings.store import load_settings
-        if not getattr(load_settings(), "analytics_opt_in", True):
-            return "minimal"
-    except Exception:
-        pass
-    return "full"
-
-
-@typechecked
 def get_analytics_client() -> Optional[AnalyticsClient]:
     """Always None: product telemetry is removed in this fork.
 

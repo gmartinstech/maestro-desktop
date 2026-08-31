@@ -5,14 +5,14 @@ import {
   fetchWorkflows, fetchAllRuns, fetchPausedState, fetchActiveRuns, fetchDeletedWorkflows,
 } from '@/shared/state/workflowsSlice';
 import { fetchMissedRuns } from '@/shared/state/missedRunsSlice';
-import { FONT_SANS, useWC } from './uiKit';
-import type { AppMode, CalView, AppNav } from './types';
-import LeftRail from './LeftRail';
-import HomeView from './HomeView';
-import CalendarView from './CalendarView';
-import DetailView from './DetailView';
-import ComposeView from './ComposeView';
-import TrashView from './TrashView';
+import { FONT_SANS, useWC } from './shared/uiKit';
+import type { AppMode, CalView, AppNav } from './shared/types';
+import LeftRail from './ui/LeftRail';
+import HomeView from './views/HomeView';
+import CalendarView from './views/CalendarView';
+import DetailView from './views/DetailView';
+import ComposeView from './views/ComposeView';
+import TrashView from './views/TrashView';
 
 // The three-pane Workflows body, independent of how it's framed (canvas card). Holds nav + data; the card chrome (title bar drag handle, resize) wraps it.
 const WorkflowsAppContent: React.FC = () => {

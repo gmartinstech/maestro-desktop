@@ -76,7 +76,7 @@ def test_authorize_url_carries_the_exact_verified_params():
 
 
 def test_authorize_url_code_challenge_matches_s256_of_the_verifier():
-    authorize_url, _state, code_verifier = build_authorize_url()
+    authorize_url, _, code_verifier = build_authorize_url()
     qs = parse_qs(urlparse(authorize_url).query)
     expected = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).rstrip(b"=").decode()
     assert qs["code_challenge"] == [expected]
@@ -85,14 +85,14 @@ def test_authorize_url_code_challenge_matches_s256_of_the_verifier():
 def test_code_verifier_is_rfc7636_shaped():
     """43-128 chars, url-safe."""
     for _ in range(5):
-        _url, _state, verifier = build_authorize_url()
+        _, _, verifier = build_authorize_url()
         assert 43 <= len(verifier) <= 128
         assert all(c.isalnum() or c in "-_" for c in verifier)
 
 
 def test_every_call_mints_a_fresh_state_and_verifier():
-    _u1, s1, v1 = build_authorize_url()
-    _u2, s2, v2 = build_authorize_url()
+    _, s1, v1 = build_authorize_url()
+    _, s2, v2 = build_authorize_url()
     assert s1 != s2 and v1 != v2
 
 

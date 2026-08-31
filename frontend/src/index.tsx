@@ -7,6 +7,7 @@ import Main from './app/Main';
 import ErrorBoundary from './app/components/feedback/ErrorBoundary';
 import { ensureAuthToken } from './shared/config';
 import { runStartupMigrations } from './shared/migrations';
+import { shouldMountAfterAuth } from './shared/bootstrapAuth';
 import './shared/i18n/i18n';
 
 // Must run before ensureAuthToken reads localStorage; v1.0.31 migration force-clears auth+onboarding so the stale token doesn't survive.
@@ -15,10 +16,14 @@ runStartupMigrations();
 // 3s timeout so a missing Electron bridge (plain-browser dev) doesn't hang; 401 in that case is intentional.
 async function bootstrap() {
   try {
-    await Promise.race([
+    const token = await Promise.race([
       ensureAuthToken(),
-      new Promise(resolve => setTimeout(resolve, 3000)),
+      new Promise<string>((resolve) => setTimeout(() => resolve(''), 3000)),
     ]);
+    const packaged = typeof (window as any).maestro?.getAuthToken === 'function';
+    if (!shouldMountAfterAuth({ packaged, token })) {
+      throw new Error('Electron backend authorization token was not ready before React bootstrap');
+    }
   } catch {}
   const root = document.getElementById('root')!;
   createRoot(root).render(

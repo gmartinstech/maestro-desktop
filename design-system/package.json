@@ -1,0 +1,34 @@
+{
+  "name": "@martinstech/maestro-ds",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Maestro Studio design system — MartinsTech navy/gold tokens, primitives, app shell and screen templates for the desktop app",
+  "license": "MIT",
+  "type": "module",
+  "module": "dist/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/maestro-ds.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "clean": "rimraf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}

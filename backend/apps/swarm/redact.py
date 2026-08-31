@@ -26,7 +26,6 @@ P_DENY_EXACT = {
 from backend.common.secret_scan import (  # noqa: E402
     REDACTED,
     find_secrets_in_files,
-    looks_secret as p_looks_secret,
     redact_secret_shapes as scrub_text,
 )
 
@@ -71,4 +70,4 @@ def find_denied_keys(value: Any, p_path: str = "") -> list[str]:
     return found
 
 
-# _looks_secret + find_secrets_in_files now come from backend.common.secret_scan (imported at the top); kept re-exported so ziputil's audit import is unchanged.
+# find_secrets_in_files now comes from backend.common.secret_scan (imported at the top); kept re-exported so ziputil's audit import is unchanged.

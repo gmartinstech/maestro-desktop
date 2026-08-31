@@ -98,9 +98,13 @@ test.describe(`settings ${EXHAUSTIVE ? 'cartesian' : 'pairwise'} (${ROWS.length}
         if (!res.ok) throw new Error(`PUT /api/settings returned ${res.status}`);
         const body = await res.json();
         const persisted = body.settings || body;
-        store.dispatch({ type: 'settings/update/fulfilled', payload: persisted });
+        // settingsSlice's updateSettings thunk ('settings/update') was renamed to
+        // updateSettingsPatch ('settings/patch') for the PATCH diff-merge save; the
+        // matching fulfilled type moved with it, so a stale 'settings/update/fulfilled'
+        // hits no reducer case and silently no-ops.
+        store.dispatch({ type: 'settings/patch/fulfilled', payload: persisted, meta: { requestId: `e2e-${Date.now()}`, arg: next } });
       } else {
-        store.dispatch({ type: 'settings/update/fulfilled', payload: next });
+        store.dispatch({ type: 'settings/patch/fulfilled', payload: next, meta: { requestId: `e2e-${Date.now()}`, arg: next } });
       }
       if (r.theme) { try { localStorage.setItem('maestro-theme-mode', r.theme); } catch {} }
     }, { rowJson: JSON.stringify(row), throughBackend: THROUGH_BACKEND });
