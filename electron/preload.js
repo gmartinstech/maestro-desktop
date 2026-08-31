@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('maestro', {
   getWebviewConsole: (wcId) => ipcRenderer.invoke('get-webview-console', wcId),
   capturePage: (rect) => ipcRenderer.invoke('capture-page', rect),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+  openStoreUpdates: () => ipcRenderer.invoke('open-store-updates'),
   getCrashRecoveryInfo: () => ipcRenderer.invoke('get-crash-recovery-info'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),

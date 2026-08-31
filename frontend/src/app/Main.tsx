@@ -20,6 +20,7 @@ import {
   setDownloading,
   setUpdateDownloaded,
   setUpdateError,
+  setStoreManaged,
 } from '@/shared/state/updateSlice';
 import AppShell from './components/Layout/AppShell';
 import ImportEntryPoint from './components/share/ImportEntryPoint';
@@ -442,7 +443,9 @@ const UpdateListener: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
     api.getUpdateStatus?.().then((cached) => {
       if (!cached) return;
-      if (cached.status === 'available' && cached.info?.version) {
+      if (cached.status === 'store-managed') {
+        dispatch(setStoreManaged());
+      } else if (cached.status === 'available' && cached.info?.version) {
         dispatch(setUpdateAvailable(cached.info.version));
       } else if (cached.status === 'not-available') {
         dispatch(setUpdateNotAvailable());

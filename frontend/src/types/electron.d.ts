@@ -31,12 +31,27 @@ declare global {
     total: number;
   }
 
+  type MaestroCachedUpdateStatus =
+    | 'idle'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+    | 'store-managed';
+
   interface MaestroAPI {
     getBackendPort: () => number;
     getWebviewPreloadPath: () => string;
     getAppVersion: () => Promise<string>;
     getBuildInfo: () => Promise<{ sha: string; shortSha: string; builtAt: string | null; channel: string }>;
-    getUpdateStatus: () => Promise<{ status: string; info: any; error: string | null }>;
+    getUpdateStatus: () => Promise<{
+      status: MaestroCachedUpdateStatus;
+      info: { source?: 'microsoft-store'; version?: string; percent?: number } | null;
+      error: string | null;
+    }>;
+    openStoreUpdates: () => Promise<{ success: boolean; error?: string }>;
     getCrashRecoveryInfo?: () => Promise<{ ts: number; parent_pid: number; uptime_ms: number } | null>;
     checkForUpdates: () => Promise<{ success: boolean; version?: string; error?: string }>;
     downloadUpdate: () => Promise<{ success: boolean; error?: string }>;

@@ -7,7 +7,8 @@ export type UpdateStatus =
   | 'not-available'
   | 'downloading'
   | 'downloaded'
-  | 'error';
+  | 'error'
+  | 'store-managed';
 
 interface UpdateState {
   status: UpdateStatus;
@@ -55,6 +56,12 @@ const updateSlice = createSlice({
       state.status = 'downloaded';
       state.downloadPercent = 100;
     },
+    setStoreManaged(state) {
+      state.status = 'store-managed';
+      state.availableVersion = null;
+      state.error = null;
+      state.installing = false;
+    },
     setUpdateError(state, action: PayloadAction<string>) {
       state.status = 'error';
       state.error = action.payload;
@@ -80,6 +87,7 @@ export const {
   setDownloading,
   setUpdateDownloaded,
   setUpdateError,
+  setStoreManaged,
   setInstalling,
   resetUpdateStatus,
 } = updateSlice.actions;

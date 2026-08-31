@@ -277,6 +277,8 @@
         "idle": "Verificar se há novas versões do Maestro Studio.",
         "installButton": "Reiniciar e atualizar",
         "installing": "Reiniciando…",
+        "storeButton": "Abrir Microsoft Store",
+        "storeManaged": "As atualizações são gerenciadas pela Microsoft Store.",
         "title": "Atualização de software",
         "upToDate": "Você está na versão mais recente."
       }

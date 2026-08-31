@@ -40,6 +40,11 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
     }
   };
 
+  const handleOpenMicrosoftStore = async () => {
+    const result = await window.maestro.openStoreUpdates();
+    if (!result.success) dispatch(setUpdateError(result.error || 'Microsoft Store is unavailable for this install.'));
+  };
+
   const handleDownloadUpdate = async () => {
     try {
       await (window as any).maestro?.downloadUpdate();
@@ -66,6 +71,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
             {updateStatus === 'downloading' && t('settings.general.softwareUpdate.downloading', { percent: Math.round(downloadPercent) })}
             {updateStatus === 'downloaded' && t('settings.general.softwareUpdate.downloaded', { version: availableVersion })}
             {updateStatus === 'error' && (updateError || t('settings.general.softwareUpdate.failed'))}
+            {updateStatus === 'store-managed' && t('settings.general.softwareUpdate.storeManaged')}
             {updateStatus === 'idle' && t('settings.general.softwareUpdate.idle')}
           </Typography>
         </Box>
@@ -95,6 +101,23 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
               }}
             >
               {t('settings.general.softwareUpdate.checkButton')}
+            </Button>
+          )}
+          {updateStatus === 'store-managed' && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleOpenMicrosoftStore}
+              sx={{
+                color: c.text.secondary,
+                borderColor: c.border.medium,
+                textTransform: 'none',
+                fontSize: '0.8rem',
+                whiteSpace: 'nowrap',
+                '&:hover': { color: c.accent.primary, borderColor: c.accent.primary },
+              }}
+            >
+              {t('settings.general.softwareUpdate.storeButton')}
             </Button>
           )}
           {updateStatus === 'available' && (
