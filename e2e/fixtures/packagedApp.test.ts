@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { descendantPids, seededSettings } from './packagedApp';
 
-test('generic settings seed contains no provider credential', () => {
+test('generic settings seed uses only the fixed opaque local test token', () => {
   assert.deepEqual(seededSettings(), {
     user_id: 'e2e-fake-user',
     user_email: 'e2e@maestro.test',
     language: 'en',
+    provedor_ia_token: 'mtok_e2e_fake_opaque_token',
   });
 });
 

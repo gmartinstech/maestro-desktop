@@ -43,7 +43,7 @@ Keep the useful assertions and packaged-binary coverage, but replace the generic
 Introduce one fixture used by ordinary packaged E2E specs. It will:
 
 1. Create a unique `MAESTRO_DATA_ROOT`, `MAESTRO_STATE_HOME`, and Electron `--user-data-dir` for each test.
-2. Seed only local, non-secret test settings required to dismiss the local sign-in gate. It must not copy provider keys or a Maestro bearer from the parent process.
+2. Seed only local, non-secret test settings required to dismiss the local sign-in gate, including the fixed opaque `mtok_e2e_fake_opaque_token`. It must not copy provider keys or a Maestro bearer from the parent process.
 3. Launch the packaged binary with `MAESTRO_MOCK_AGENT=1`, disabled preflight, and a test-only English locale flag.
 4. Return the app, renderer page, roots, and an authenticated local API helper.
 5. Close the app and verify that only children belonging to that launch are reaped. It must not kill unrelated developer processes.

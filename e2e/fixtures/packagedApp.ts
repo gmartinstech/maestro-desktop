@@ -9,6 +9,7 @@ export const seededSettings = () => ({
   user_id: 'e2e-fake-user',
   user_email: 'e2e@maestro.test',
   language: 'en',
+  provedor_ia_token: 'mtok_e2e_fake_opaque_token',
 });
 
 type ProcessInfo = { pid: number; parentPid: number };
