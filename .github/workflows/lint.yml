@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Pinned lint/test tools: lint.py invokes watchfiles, vulture, ruff, and pyright.
-      - run: pip install -r backend/requirements-dev.txt
+      # Runtime imports plus pinned tools needed by lint.py and Pyright.
+      - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
       - run: python3 linter/lint.py --root .
