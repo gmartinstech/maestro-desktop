@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { AZURE_SIGNING_ENV, STORE_IDENTITY_ENV, resolveWindowsBuildMode } = require('./windowsBuildMode');
@@ -42,4 +44,12 @@ test('Store artifact naming cannot be confused with CDN Squirrel naming', () => 
   const mode = resolveWindowsBuildMode({ store: true }, storeEnv);
   assert.ok(mode.targetArgs.includes('--config.appx.artifactName=MaestroStudio-Store-${version}-${arch}.${ext}'));
   assert.ok(!mode.targetArgs.some((arg) => arg.includes('squirrelWindows')));
+});
+
+test('Azure-required releases clear the dev-only signing skip before packaging', () => {
+  const script = fs.readFileSync(path.join(__dirname, 'build-app-win.ps1'), 'utf8');
+  assert.match(
+    script,
+    /if \(\$BuildMode\.requiresAzureSigning\) \{[\s\S]*?Remove-Item -Path 'Env:CSC_IDENTITY_AUTO_DISCOVERY' -ErrorAction SilentlyContinue/,
+  );
 });

@@ -147,6 +147,9 @@ if ($BuildMode.requiresAzureSigning) {
         Write-Host "Copy .env.windows.example to .env.windows and fill in values."
         exit 1
     }
+    # An inherited local-build setting must never suppress signing for a CDN release.
+    # With Azure credentials preflighted above, the custom hook now either signs or fails.
+    Remove-Item -Path 'Env:CSC_IDENTITY_AUTO_DISCOVERY' -ErrorAction SilentlyContinue
     # A signed CDN build is one users actually run, so its Widevine VMP signature is
     # mandatory: the afterPack hook hard-fails on a missing/failed signature rather
     # than ship an installer whose Spotify/Netflix audio is silently dead.
