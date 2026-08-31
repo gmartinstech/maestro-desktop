@@ -21,7 +21,7 @@
 | `frontend/src/shared/bootstrapAuth.test.ts` | Unit-test the token-gated bootstrap decision without mounting Electron. |
 | `frontend/src/shared/bootstrapAuth.ts` | Small pure, testable helper that distinguishes packaged token readiness from browser-dev fallback. |
 | `e2e/fixtures/packagedApp.ts` | Disposable launch roots, generic mock-only environment, authenticated API helper, per-test teardown, and root-aware crash/log helpers. |
-| `e2e/fixtures/packagedApp.test.ts` | Node-level tests for seed isolation and process ownership matching. |
+| `e2e/fixtures/packagedApp.test.ts` | Node-level tests for seed isolation and PID-tree process ownership. |
 | `e2e/tests/boot-auth.spec.ts` | Clean-package token, authorization, locale, and first-dashboard regression coverage. |
 | `e2e/tests/dashboard.spec.ts` | Independent dashboard creation and switching coverage. |
 | `e2e/tests/settings.spec.ts` | Independent settings modal, tabs, theme, and toggle coverage. |
@@ -227,15 +227,20 @@ Create `e2e/fixtures/packagedApp.test.ts` with tests for these exported helpers:
 ```ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isOwnedChild, seededSettings } from './packagedApp';
+import { descendantPids, seededSettings } from './packagedApp';
 
 test('generic settings seed contains no provider credential', () => {
   assert.deepEqual(seededSettings(), { user_id: 'e2e-fake-user', user_email: 'e2e@maestro.test', language: 'en' });
 });
 
-test('process ownership requires the launch roots in the command line', () => {
-  assert.equal(isOwnedChild('node.exe --data-root C:/tmp/run-a', 'C:/tmp/run-a'), true);
-  assert.equal(isOwnedChild('node.exe --data-root C:/tmp/run-b', 'C:/tmp/run-a'), false);
+test('process ownership follows the Electron process tree', () => {
+  const processes = [
+    { pid: 10, parentPid: 1 },
+    { pid: 11, parentPid: 10 },
+    { pid: 12, parentPid: 11 },
+    { pid: 20, parentPid: 1 },
+  ];
+  assert.deepEqual(descendantPids(10, processes), [10, 11, 12]);
 });
 ```
 
@@ -280,7 +285,7 @@ MAESTRO_STATE_HOME: stateHome,
 
 Do not forward provider credentials into the settings seed. After the page has mounted, call `window.maestro.getAuthToken()` from Playwright, require a nonempty result, and construct `api(method, path, body?)` with `Authorization: Bearer ${token}`. Require `GET /api/dashboards/list` to return 200 before yielding the fixture.
 
-In teardown, close Electron, identify only processes whose command lines contain this fixture's `dataRoot`, terminate those processes, and finally remove all three roots. Do not kill by image name.
+Capture `app.process().pid` at launch. In teardown, enumerate only descendants of that PID, close Electron, wait briefly for normal shutdown, then terminate surviving captured descendants by PID. This reaches the backend and its 9Router child even when their command lines do not include `dataRoot`; it must never kill by image name.
 
 - [ ] **Step 4: Make visibility root-aware**
 
