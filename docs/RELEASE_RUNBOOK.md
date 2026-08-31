@@ -103,14 +103,15 @@ pipeline (`scripts/build-app.sh`, `publish.sh`, `release-macos.yml`, notarizatio
 entitlements) was deleted — do not resurrect it without a decision to re-adopt it.
 
 - `pwsh scripts/build-app-win.ps1` — local dev build, unsigned.
-- `pwsh scripts/build-app-win.ps1 -Store` — Azure-free AppX submission artifact; requires the
-  non-secret Partner Center identity values in `.env.windows`, and never uploads to the CDN.
+- `pwsh scripts/build-app-win.ps1 -Store` — Azure-free, build-only AppX artifact; requires the
+  non-secret Partner Center identity values in `.env.windows`. Publish an existing Store artifact
+  separately with `pwsh scripts/publish-store-appx.ps1 -ArtifactPath <path>`.
 - `pwsh scripts/build-app-win.ps1 -Sign` — Azure Trusted Signing build for direct delivery, not published.
 - `pwsh scripts/build-app-win.ps1 -Publish` — Azure Trusted Signing build for direct CDN/Squirrel
   delivery, then scp's the installer to `cloudinha:~/maestro-releases/incoming/` and prints the
   version + sha256 to paste into the cloudinha publish step below.
 
-## Microsoft Store release (manual Partner Center handoff)
+## Microsoft Store release and static AppX download
 
 1. Reserve the Maestro Studio identity in Partner Center and copy its **Identity name**,
    **Publisher**, and **Publisher display name** into the ignored `.env.windows` file as
@@ -118,16 +119,23 @@ entitlements) was deleted — do not resurrect it without a decision to re-adopt
    `MAESTRO_STORE_PUBLISHER_DISPLAY_NAME`. These are non-secret identity values; do not commit
    the file.
 2. Check out the exact approved `main` commit and run `pwsh scripts/build-app-win.ps1 -Store`.
-   It does not need Azure credentials and does not upload anywhere.
-3. Record the emitted AppX path, version, SHA-256, and provenance SHA. Upload that exact artifact
-   manually in Partner Center and complete its submission/certification process.
-4. After certification, install through Microsoft Store. Settings → General → Advanced → About
+   It does not need Azure credentials and emits a build-only AppX.
+3. Publish the exact artifact without rebuilding it:
+   `pwsh scripts/publish-store-appx.ps1 -ArtifactPath electron/dist/MaestroStudio-Store-<version>-x64.appx`.
+   The publisher validates the packaged identity, Store provenance, SHA-256, and public OAuth URL,
+   then atomically publishes the AppX and its JSON sidecar under
+   `https://cdn.martinstech.net/maestro/downloads/`.
+4. Fetch both public files and compare the downloaded AppX SHA-256 to the publisher output. The
+   sidecar must report `channel: store-static-download`, the version, SHA-256, and provenance SHA.
+   Upload those same verified AppX bytes manually in Partner Center and complete submission.
+5. After certification, install through Microsoft Store. Settings → General → Advanced → About
    must show the released source SHA and `store` channel. Software update must say Microsoft
    Store manages updates, and its action must open Microsoft Store rather than downloading a CDN
    installer.
-5. Store availability never authorizes an unsigned CDN release. The existing `-Publish` command
-   remains only for direct CDN/Squirrel delivery and requires Azure Trusted Signing. Never upload
-   an unsigned or self-signed installer to `cloudinha`.
+6. Static Store AppX hosting never authorizes an unsigned CDN/Squirrel release. The existing
+   `-Publish` command remains only for direct CDN/Squirrel delivery and requires Azure Trusted
+   Signing. Never put an AppX in `version.json`, and never upload an unsigned or self-signed
+   installer to the Squirrel release path.
 
 ## CDN/Squirrel release (manual, two machines)
 
