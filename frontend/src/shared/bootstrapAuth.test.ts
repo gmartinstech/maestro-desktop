@@ -1,15 +1,16 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, expect, it } from 'vitest';
 import { shouldMountAfterAuth } from './bootstrapAuth';
 
-test('packaged Electron refuses to mount without its local bearer', () => {
-  assert.equal(shouldMountAfterAuth({ packaged: true, token: '' }), false);
-});
+describe('shouldMountAfterAuth', () => {
+  it('refuses packaged Electron without its local bearer', () => {
+    expect(shouldMountAfterAuth({ packaged: true, token: '' })).toBe(false);
+  });
 
-test('packaged Electron mounts after its local bearer arrives', () => {
-  assert.equal(shouldMountAfterAuth({ packaged: true, token: 'local-test-token' }), true);
-});
+  it('allows packaged Electron after its local bearer arrives', () => {
+    expect(shouldMountAfterAuth({ packaged: true, token: 'local-test-token' })).toBe(true);
+  });
 
-test('plain-browser development retains its unauthenticated fallback', () => {
-  assert.equal(shouldMountAfterAuth({ packaged: false, token: '' }), true);
+  it('retains the unauthenticated plain-browser fallback', () => {
+    expect(shouldMountAfterAuth({ packaged: false, token: '' })).toBe(true);
+  });
 });
