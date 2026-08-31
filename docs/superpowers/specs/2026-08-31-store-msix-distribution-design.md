@@ -1,6 +1,6 @@
 # Store MSIX distribution design
 
-**Status:** approved direction; pending written-spec review  
+**Status:** approved
 **Date:** 2026-08-31
 
 ## Goal

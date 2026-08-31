@@ -74,7 +74,7 @@ test('CDN publish remains Azure-gated', () => {
 
 - [ ] **Step 2: Run the test and confirm the missing module failure**
 
-Run: `node --test scripts/windowsBuildMode.test.js`  
+Run: `node --test scripts/windowsBuildMode.test.js`
 Expected: FAIL with `Cannot find module './windowsBuildMode'`.
 
 - [ ] **Step 3: Implement the pure release-mode resolver**
@@ -124,7 +124,7 @@ module.exports = { AZURE_SIGNING_ENV, STORE_IDENTITY_ENV, resolveWindowsBuildMod
 
 - [ ] **Step 4: Run the mode tests**
 
-Run: `node --test scripts/windowsBuildMode.test.js`  
+Run: `node --test scripts/windowsBuildMode.test.js`
 Expected: four passing tests.
 
 - [ ] **Step 5: Make PowerShell consume the tested resolver**
@@ -207,7 +207,7 @@ test('Store status explains that Microsoft Store owns updates', () => {
 
 - [ ] **Step 2: Run the test and confirm the missing module failure**
 
-Run: `cd electron && node --test storeChannel.test.js`  
+Run: `cd electron && node --test storeChannel.test.js`
 Expected: FAIL with `Cannot find module './storeChannel'`.
 
 - [ ] **Step 3: Implement the isolated channel helper**
@@ -227,7 +227,7 @@ module.exports = { resolveUpdateChannel, storeManagedStatus };
 
 - [ ] **Step 4: Run the channel unit tests**
 
-Run: `cd electron && node --test storeChannel.test.js`  
+Run: `cd electron && node --test storeChannel.test.js`
 Expected: two passing tests.
 
 - [ ] **Step 5: Route main-process update behavior through the helper**
@@ -244,7 +244,7 @@ In `electron/main.js`:
 
 - [ ] **Step 6: Run Electron unit tests**
 
-Run: `cd electron && node --test storeChannel.test.js cdnUpdater.test.js backendPaths.test.js`  
+Run: `cd electron && node --test storeChannel.test.js cdnUpdater.test.js backendPaths.test.js`
 Expected: all named test files pass; CDN manifest behavior remains covered by `cdnUpdater.test.js`.
 
 - [ ] **Step 7: Commit Store/CDN runtime separation**
@@ -284,7 +284,7 @@ describe('updateSlice Store status', () => {
 
 - [ ] **Step 2: Run the reducer test and confirm it fails**
 
-Run: `cd frontend && npx vitest run src/shared/state/updateSlice.test.ts`  
+Run: `cd frontend && npx vitest run src/shared/state/updateSlice.test.ts`
 Expected: FAIL because `setStoreManaged` does not exist.
 
 - [ ] **Step 3: Extend the typed Electron bridge and Redux state**
@@ -356,7 +356,7 @@ test('Store artifact naming cannot be confused with CDN Squirrel naming', () => 
 
 - [ ] **Step 2: Run the assertion and confirm it passes with the resolver**
 
-Run: `node --test scripts/windowsBuildMode.test.js`  
+Run: `node --test scripts/windowsBuildMode.test.js`
 Expected: five passing tests.
 
 - [ ] **Step 3: Add concise Store instructions to the release runbook**
@@ -402,7 +402,7 @@ Expected: an AppX artifact named with the computed version, `build-info.json` co
 
 - [ ] **Step 6: Run the full repository gate after a Store artifact is available**
 
-Run: `npm run verify`  
+Run: `npm run verify`
 Expected: `VERIFY GREEN`. If golden refuses a stale package, rebuild the packaged artifact first with `pwsh scripts/build-app-win.ps1` and rerun the gate; do not alter release mode to bypass the freshness check.
 
 - [ ] **Step 7: Commit verification documentation**
