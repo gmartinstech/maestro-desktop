@@ -81,14 +81,15 @@ except Exception:
     pass
 
 
-# CORS: previously wide open (`allow_origins=["*"]`), which combined with `allow_credentials=True` was a security footgun, any external origin could CORS-preflight us. Now restricted to Electron renderer origins + localhost dev servers. The token middleware below provides the *primary* defense; CORS is defense-in-depth so a misconfigured page can't even reach us.
+# CORS: previously wide open (`allow_origins=["*"]`), which combined with `allow_credentials=True` was a security footgun, any external origin could CORS-preflight us. Now restricted to Electron renderer origins + localhost dev servers + Tauri's WebView2 production origin. The token middleware below provides the *primary* defense; CORS is defense-in-depth so a misconfigured page can't even reach us.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://tauri.localhost",
     ],
-    allow_origin_regex=r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+)$",
+    allow_origin_regex=r"^(file://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+|http://tauri\.localhost)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

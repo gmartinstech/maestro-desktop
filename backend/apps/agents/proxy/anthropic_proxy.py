@@ -364,20 +364,24 @@ def p_pick_upstream(model: str) -> tuple[str, dict[str, str]]:
     "",
     methods=["GET", "HEAD", "OPTIONS"],
     include_in_schema=False,
+    operation_id="anthropic_proxy_healthcheck_root",
 )
 @anthropic_proxy.router.api_route(
     "/",
     methods=["GET", "HEAD", "OPTIONS"],
     include_in_schema=False,
+    operation_id="anthropic_proxy_healthcheck_slash",
 )
 async def p_healthcheck():
     """CLI healthchecks the proxy root; return 200 so it doesn't 404."""
     return {"ok": True}
 
 
+# Explicit operation_id: FastAPI's default generator picks list(route.methods)[0], and route.methods is a set, so without this the generated id flip-flops across process restarts with different PYTHONHASHSEED values.
 @anthropic_proxy.router.api_route(
     "/v1/{rest:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    operation_id="anthropic_proxy_v1_dispatch",
 )
 async def proxy(rest: str, request: Request):
     body = await request.body()

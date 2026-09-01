@@ -191,9 +191,28 @@ def load_settings() -> AppSettings:
 p_settings_write_lock = threading.Lock()
 
 
+P_ENGINE_OWNS_SETTINGS_ENV = "MAESTRO_ENGINE_OWNS_SETTINGS"
+
+
+def p_engine_owns_settings() -> bool:
+    """True once the TS engine (ENG-3, engine/src/settings/store.ts) has taken over settings.json
+    ownership for this install. Exactly one process may write settings.json during the TXM
+    migration; Python may still read (load_settings is untouched) but must never write once this
+    is set. Checked at the top of atomic_write_settings, the single choke point every write path
+    (save_settings, save_settings_async) already funnels through, so this is the one place that
+    needs the guard."""
+    return os.environ.get(P_ENGINE_OWNS_SETTINGS_ENV) == "1"
+
+
 def atomic_write_settings(payload: dict) -> None:
     """Atomic SETTINGS_FILE write; call via save_settings*, not directly."""
     global p_cached_settings, p_cached_sig
+    if p_engine_owns_settings():
+        logger.warning(
+            "%s=1: refusing to write settings.json from Python (the TS engine owns writes during the TXM migration)",
+            P_ENGINE_OWNS_SETTINGS_ENV,
+        )
+        return
     with p_settings_write_lock:
         os.makedirs(DATA_DIR, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".settings.", suffix=".tmp", dir=DATA_DIR)
