@@ -74,7 +74,12 @@ const clean = (res.stdout || '')
 
 process.stdout.write(clean + '\n');
 
-const m = clean.match(/VERDICT:\s*(APPROVE|REQUEST-CHANGES)/i);
+// LAST match, not the first: the prompt asks for the verdict as the FINAL line, and reasoning
+// models routinely restate both options verbatim while thinking ("...exactly one of VERDICT:
+// APPROVE / VERDICT: REQUEST-CHANGES"). A first-match read of that preamble reports APPROVE for a
+// review that actually ended in REQUEST-CHANGES — i.e. the gate silently passes rejected changes.
+const all = [...clean.matchAll(/VERDICT:\s*(APPROVE|REQUEST-CHANGES)/gi)];
+const m = all.length ? all[all.length - 1] : null;
 if (!m) {
   console.error('\nreview: no VERDICT line found in model output');
   process.exit(4);
