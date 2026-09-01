@@ -10,11 +10,11 @@ const FORBIDDEN = [
   /api\.openswarm/i,
   /analytics\.openswarm/i,
 ];
-const ROOTS = ['frontend/build', 'electron'];
+const ROOTS = ['frontend/build', 'electron', 'engine/src', 'engine/dist', 'tauri/src', 'tauri/gen', 'contract'];
 let hits = [];
 function walk(p){ for (const e of readdirSync(p)){ const f=join(p,e); const s=statSync(f);
   if (s.isDirectory()){ if(!/node_modules|\.git/.test(f)) walk(f);}
-  else if (/\.(js|html|json|css)$/.test(f)){ const t=readFileSync(f,'utf8');
+  else if (/\.(js|html|json|css|rs|toml|ts|tsx|mjs|kt|swift|plist|xml|yml)$/.test(f)){ const t=readFileSync(f,'utf8');
     for (const rx of FORBIDDEN) if (rx.test(t)) hits.push(`${f} :: ${rx}`);} } }
 for (const r of ROOTS){ try { walk(r); } catch {} }
 if (hits.length){ console.error('CALL-HOME LEAK:\n'+hits.join('\n')); process.exit(1); }

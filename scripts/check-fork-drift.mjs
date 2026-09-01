@@ -32,7 +32,7 @@ const ALLOW = [
   ['docs/UPSTREAM.md', 'documents what must not come back'],
   ['docs/WINDOWS_INSTALLER.md', 'paragraphs about the rename itself'],
 ];
-const ALLOW_PREFIX = ['docs/plans/', 'docs/specs/', 'docs/perf/', 'docs/superpowers/', 'docs/ops/', 'backend/tests/', 'backend/mcp-bundles/', 'electron/build-staging/', 'electron/dist/', 'debugger/build/', 'node_modules/'];
+const ALLOW_PREFIX = ['docs/plans/', 'docs/specs/', 'docs/perf/', 'docs/superpowers/', 'docs/ops/', 'backend/tests/', 'backend/mcp-bundles/', 'electron/build-staging/', 'electron/dist/', 'debugger/build/', 'tauri/gen/', 'node_modules/'];
 
 // Narrower than a file exemption: these exact strings are allowed ANYWHERE, so a big file stays
 // guarded for everything else. (The Apple keychain access group used to live here, pinned to
