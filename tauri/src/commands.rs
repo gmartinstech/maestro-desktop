@@ -4,7 +4,9 @@
 // don't duplicate) -- this file only adds get_app_version, get_build_info, open_external and
 // hard_reset, all registered alongside the other two in lib.rs's invoke_handler.
 
+#[cfg(debug_assertions)]
 use std::path::PathBuf;
+#[cfg(debug_assertions)]
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -48,19 +50,8 @@ fn compute_build_info() -> BuildInfo {
             }
         }
     }
-    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    if let Ok(out) = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&repo_root).output() {
-        if out.status.success() {
-            let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !sha.is_empty() {
-                return BuildInfo {
-                    short_sha: sha.chars().take(12).collect(),
-                    sha,
-                    built_at: None,
-                    channel: "dev".to_string(),
-                };
-            }
-        }
+    if let Some(info) = dev_git_build_info() {
+        return info;
     }
     BuildInfo {
         sha: "unknown".to_string(),
@@ -68,6 +59,35 @@ fn compute_build_info() -> BuildInfo {
         built_at: None,
         channel: "unknown".to_string(),
     }
+}
+
+// Dev-mode-only fallback: `git rev-parse HEAD` against the repo checkout, same as
+// electron/main.js's dev branch. `#[cfg(debug_assertions)]`-gated (like
+// sidecar::dev_repo_root()) so `CARGO_MANIFEST_DIR` never gets embedded in a release binary --
+// a real packaged build has no repo checkout / `.git` to `rev-parse` anyway, and always ships a
+// `build-info.json` instead (the branch above), so this literally has nothing to do there.
+#[cfg(debug_assertions)]
+fn dev_git_build_info() -> Option<BuildInfo> {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&repo_root).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if sha.is_empty() {
+        return None;
+    }
+    Some(BuildInfo {
+        short_sha: sha.chars().take(12).collect(),
+        sha,
+        built_at: None,
+        channel: "dev".to_string(),
+    })
+}
+
+#[cfg(not(debug_assertions))]
+fn dev_git_build_info() -> Option<BuildInfo> {
+    None
 }
 
 #[tauri::command]

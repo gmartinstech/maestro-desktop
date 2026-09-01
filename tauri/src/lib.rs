@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -12,7 +11,7 @@ mod restart_policy;
 mod sidecar;
 mod splash;
 
-use sidecar::Sidecar;
+use sidecar::{BackendRoot, Sidecar};
 use splash::MainWindowReady;
 
 // Forwards an uncaught JS error / unhandled rejection / console.error call from the webview into
@@ -43,11 +42,13 @@ fn get_backend_port(sidecar: tauri::State<Sidecar>) -> u16 {
 }
 
 #[tauri::command]
-fn get_auth_token() -> String {
+fn get_auth_token(root: tauri::State<BackendRoot>) -> String {
   // Mirrors electron/preload.js's read of the same per-install token file; backend/auth.py is the
   // source of truth for the path and accepts it back as `Authorization: Bearer <token>`.
-  let repo_root: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-  let path = sidecar::dev_auth_token_path(&repo_root);
+  // `root.is_packaged` is a real runtime determination (see sidecar::is_packaged), not a
+  // hardcoded false, so a genuinely packaged build resolves the same per-OS app-data path
+  // Electron's shipped app does instead of a dev-only repo-relative one.
+  let path = sidecar::resolve_auth_token_path(&root);
   fs::read_to_string(path)
     .map(|s| s.trim().to_string())
     .unwrap_or_default()
@@ -193,13 +194,21 @@ pub fn run() {
       // mirroring main.js's boot sequence starting with `splashWindow = createSplashWindow()`.
       splash::create_splash_window(app.handle())?;
 
+      // Resolves once, at real runtime, whether this is a `cargo tauri dev` process or an
+      // installed/packaged one (sidecar::is_packaged()), and the matching root path: the repo
+      // root in dev, or Tauri's resolved `resource_dir()` in a packaged build (falling back to
+      // `current_exe()`'s parent if resource_dir() itself can't resolve). Managed as state so
+      // get_auth_token sees the exact same answer spawn_supervisor uses below, rather than each
+      // re-deriving it (and, pre-this-fix, rather than each independently baking this dev
+      // machine's absolute path into the compiled binary via `env!("CARGO_MANIFEST_DIR")`).
+      let backend_root = BackendRoot::resolve(app.path().resource_dir().ok());
+      app.manage(backend_root);
+
       // Spawns the backend sidecar and supervises it (health poll, bounded restart-on-crash) for
       // the app's whole lifetime. Runs on its own OS thread so `setup` (which must return
       // quickly) isn't blocked on the health poll -- see sidecar::spawn_supervisor's doc comment.
-      // repo root = this crate's manifest dir's parent, same anchor get_auth_token() already used
-      // pre-TAU-3 for the dev-mode auth.token path.
-      let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-      sidecar::spawn_supervisor(app.handle().clone(), repo_root.clone());
+      let root_for_supervisor = app.state::<BackendRoot>().inner().clone();
+      sidecar::spawn_supervisor(app.handle().clone(), root_for_supervisor);
 
       // Waits on backend + main-window readiness, then swaps splash -> main (TAU-5).
       spawn_boot_coordinator(app.handle().clone());

@@ -3,13 +3,16 @@
 // of whether to respawn to `restart_policy::decide_restart`.
 //
 // Ported from electron/main.js's startBackend()/waitForBackend()/pickBackendPort()/
-// maybeRestartBackend()/killBackend(), mirroring DEV-mode behavior only (spawns
-// backend/.venv/Scripts/python.exe directly) -- this repo's local checkout has no bundled
-// python-env, so the packaged-mode branches of the JS (process.resourcesPath, python-env/,
-// bundled node) are intentionally not ported here. authTokenPath() below is the one exception:
-// its packaged-mode branches ARE ported, because TAU-4 needs the exact same resolution the
-// Electron app uses so both shells agree on where the per-install bearer token lives, even
-// though this build never actually runs isPackaged=true today.
+// maybeRestartBackend()/killBackend(). Both DEV mode (spawns backend/.venv/Scripts/python.exe
+// straight out of the repo checkout) and the PACKAGED-mode *resolution* path (spawns
+// <resource_dir>/python-env/python.exe, mirroring electron/main.js's getPythonPath()/
+// getResourcePath() isPackaged branches) are implemented via `BackendRoot` below -- which mode
+// actually runs is decided at runtime by `is_packaged()`, not hardcoded. NOTE: this repo's local
+// checkout has no bundled `python-env` payload yet (tauri.conf.json's `bundle.resources` doesn't
+// stage one -- see docs/plans/txm-status.md's "Build-artifact readiness" section for exactly
+// what script/step would need to produce and wire it), so a real packaged build's sidecar will
+// resolve to the *correct* location and fail loudly (spawn ENOENT) rather than silently falling
+// back to the dev path or baking this machine's absolute path into the shipped binary.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -100,14 +103,82 @@ fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
-// Mirrors electron/main.js's getPythonPath() DEV branch only (win32 .venv/Scripts/python.exe,
-// posix .venv/bin/python3) -- packaged mode (process.resourcesPath/python-env) is not ported,
-// per this repo's local checkout having no bundled python-env.
-fn python_path(repo_root: &Path) -> PathBuf {
-    if cfg!(target_os = "windows") {
-        repo_root.join("backend").join(".venv").join("Scripts").join("python.exe")
+/// True for an installed/packaged build (a `cargo tauri build` release binary), false for
+/// `cargo tauri dev`. Tauri 2.x (checked tauri-2.11.5's own source, `path::desktop::resource_dir`
+/// / tauri-utils-2.9.3's `platform::resource_dir_from`) has no public `isPackaged`-style API on
+/// desktop -- on Windows it special-cases `resource_dir()` to always return the running exe's own
+/// directory in BOTH dev and packaged builds, so that alone can't distinguish them either.
+/// `debug_assertions` is the correct real signal instead: `cargo tauri dev` always builds the
+/// `dev` Cargo profile (debug_assertions=true) and `cargo tauri build` always builds `release`
+/// (debug_assertions=false) unless told otherwise -- so this reflects how the binary that is
+/// ACTUALLY RUNNING right now was built, not a hardcoded literal.
+pub fn is_packaged() -> bool {
+    !cfg!(debug_assertions)
+}
+
+/// Dev-mode-only: this crate's manifest dir's parent (the repo root). `#[cfg(debug_assertions)]`
+/// so `CARGO_MANIFEST_DIR` is compiled OUT of a release build entirely -- not just unreached at
+/// runtime, but literally absent from the produced binary's source. This is what fixes the
+/// dev-path-baked-into-the-shipped-exe bug: previously this same `env!()` call was reachable (and
+/// therefore embedded in .rodata) from a `cargo tauri build` release binary too, since Cargo
+/// always compiles from whatever machine/checkout is running the build.
+#[cfg(debug_assertions)]
+fn dev_repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
+}
+
+#[cfg(not(debug_assertions))]
+fn dev_repo_root() -> PathBuf {
+    unreachable!("dev_repo_root() is only reachable when is_packaged() is false, which requires debug_assertions")
+}
+
+/// Where the backend's on-disk payload lives, resolved once at startup based on whether this is a
+/// dev or packaged run -- shared as Tauri-managed state so every command/thread that needs
+/// backend-relative paths (get_auth_token, spawn_supervisor, get_build_info) reads the same
+/// answer instead of re-deriving `is_packaged`/the root path independently.
+#[derive(Clone)]
+pub struct BackendRoot {
+    pub is_packaged: bool,
+    /// Dev: the repo root. Packaged: Tauri's resolved `resource_dir()` (electron/main.js's
+    /// `projectRoot`/`process.resourcesPath` equivalent) -- the directory a real
+    /// `bundle.resources` payload (`python-env/`, `debugger/`, ...) would be copied into.
+    pub root: PathBuf,
+}
+
+impl BackendRoot {
+    /// `resource_dir_hint` is `app.path().resource_dir()`'s result, threaded in by the caller
+    /// (lib.rs's `setup()`, which has the `AppHandle` this needs) since resolving it requires a
+    /// live Tauri app; this function only decides which of {dev repo root, packaged resource
+    /// dir} is authoritative, based on the real running binary via `is_packaged()`.
+    pub fn resolve(resource_dir_hint: Option<PathBuf>) -> Self {
+        if is_packaged() {
+            let root = resource_dir_hint
+                .or_else(|| std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)))
+                .unwrap_or_else(|| PathBuf::from("."));
+            BackendRoot { is_packaged: true, root }
+        } else {
+            BackendRoot { is_packaged: false, root: dev_repo_root() }
+        }
+    }
+}
+
+// Mirrors electron/main.js's getPythonPath(): dev branch is win32 .venv/Scripts/python.exe /
+// posix .venv/bin/python3 relative to the repo root; packaged branch is <resource_dir>/python-env/
+// {python.exe | bin/python3} -- the exact layout electron-builder's `extraResources` (from:
+// "python-env") stages today, so a Tauri build that gains an equivalent `bundle.resources` entry
+// (see docs/plans/txm-status.md) needs no further change here.
+fn python_path(root: &BackendRoot) -> PathBuf {
+    if root.is_packaged {
+        let env_dir = root.root.join("python-env");
+        if cfg!(target_os = "windows") {
+            env_dir.join("python.exe")
+        } else {
+            env_dir.join("bin").join("python3")
+        }
+    } else if cfg!(target_os = "windows") {
+        root.root.join("backend").join(".venv").join("Scripts").join("python.exe")
     } else {
-        repo_root.join("backend").join(".venv").join("bin").join("python3")
+        root.root.join("backend").join(".venv").join("bin").join("python3")
     }
 }
 
@@ -159,23 +230,26 @@ pub fn auth_token_path(args: &AuthTokenPathArgs) -> PathBuf {
     }
 }
 
-/// Resolves the dev-mode auth token path for the CURRENT process env, matching
-/// electron/main.js's getAuthTokenFilePath() (isPackaged is always false in this repo's local
-/// Tauri checkout -- see module doc comment).
-pub fn dev_auth_token_path(repo_root: &Path) -> PathBuf {
+/// Resolves the auth token path for the CURRENT process env, matching electron/main.js's
+/// getAuthTokenFilePath() -- `root.is_packaged` (a real runtime determination, see
+/// `is_packaged()`) picks dev vs. packaged branch instead of a hardcoded `false`, so a genuinely
+/// packaged build resolves the same per-OS app-data path Electron's shipped app does.
+pub fn resolve_auth_token_path(root: &BackendRoot) -> PathBuf {
     let data_root = std::env::var("MAESTRO_DATA_ROOT").ok();
+    let appdata = std::env::var("APPDATA").ok();
+    let xdg_data_home = std::env::var("XDG_DATA_HOME").ok();
     auth_token_path(&AuthTokenPathArgs {
-        is_packaged: false,
+        is_packaged: root.is_packaged,
         data_root_override: data_root.as_deref(),
         platform: std::env::consts::OS,
         home: &dirs_home(),
-        appdata: None,
-        xdg_data_home: None,
-        repo_root,
+        appdata: appdata.as_deref(),
+        xdg_data_home: xdg_data_home.as_deref(),
+        repo_root: &root.root,
     })
 }
 
-fn dirs_home() -> PathBuf {
+pub fn dirs_home() -> PathBuf {
     std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .map(PathBuf::from)
@@ -199,15 +273,17 @@ pub fn pick_backend_port() -> u16 {
     port
 }
 
-/// Builds the dev-mode env var contract, mirroring electron/main.js's startBackend() env object
-/// (DEV branch only): MAESTRO_PORT and MAESTRO_PACKAGED are always set here; MAESTRO_DATA_ROOT,
-/// MAESTRO_STATE_HOME, MAESTRO_NODE_PATH and MAESTRO_INSTALLATION_ID are never set by Electron
-/// either -- the backend reads them straight off the *inherited* process env if a caller (a
-/// test harness, a developer's shell) set them, which `Command` gives us for free by not calling
-/// `.env_clear()`. Only the few keys Electron computes itself are listed here.
-fn backend_env(port: u16) -> HashMap<&'static str, String> {
+/// Builds the env var contract, mirroring electron/main.js's startBackend() env object:
+/// MAESTRO_PORT/MAESTRO_PACKAGED are always set (MAESTRO_PACKAGED now reflects the real
+/// `root.is_packaged`, not a hardcoded "0"); MAESTRO_DATA_ROOT, MAESTRO_STATE_HOME,
+/// MAESTRO_NODE_PATH and MAESTRO_INSTALLATION_ID are never set by Electron either -- the backend
+/// reads them straight off the *inherited* process env if a caller (a test harness, a developer's
+/// shell) set them, which `Command` gives us for free by not calling `.env_clear()`. Packaged mode
+/// additionally sets PYTHONPATH, mirroring electron/main.js's isPackaged branch exactly
+/// (projectRoot + debugger dir + python-env's site-packages, joined with the platform delimiter).
+fn backend_env(port: u16, root: &BackendRoot) -> HashMap<&'static str, String> {
     let mut env = HashMap::new();
-    env.insert("MAESTRO_PACKAGED", "0".to_string());
+    env.insert("MAESTRO_PACKAGED", if root.is_packaged { "1" } else { "0" }.to_string());
     env.insert("MAESTRO_PORT", port.to_string());
     // Electron computes this from Intl.DateTimeFormat().resolvedOptions().timeZone; iana-time-zone
     // is the Rust equivalent cross-platform IANA-name lookup. Empty string on lookup failure,
@@ -220,14 +296,25 @@ fn backend_env(port: u16) -> HashMap<&'static str, String> {
     // unconditionally for every backend spawn (dev and packaged alike).
     env.insert("PYTHONDONTWRITEBYTECODE", "1".to_string());
     env.insert("PYTHONUTF8", "1".to_string());
+    if root.is_packaged {
+        let site_packages = if cfg!(target_os = "windows") {
+            root.root.join("python-env").join("Lib").join("site-packages")
+        } else {
+            root.root.join("python-env").join("lib").join("python3.13").join("site-packages")
+        };
+        let debugger_dir = root.root.join("debugger");
+        if let Ok(joined) = std::env::join_paths([root.root.clone(), debugger_dir, site_packages]) {
+            env.insert("PYTHONPATH", joined.to_string_lossy().to_string());
+        }
+    }
     env
 }
 
 /// Spawns `python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port <port>` with cwd =
-/// repo root, mirroring electron/main.js's startBackend() spawn call (DEV mode: no PYTHONPATH
-/// override, since that's only added for the packaged python-env's site-packages layout).
-pub fn spawn_backend(repo_root: &Path, port: u16) -> std::io::Result<Child> {
-    let python = python_path(repo_root);
+/// `root.root` (repo root in dev, resource dir in a packaged build), mirroring electron/main.js's
+/// startBackend() spawn call (`cwd: projectRoot`, same dev/packaged split).
+pub fn spawn_backend(root: &BackendRoot, port: u16) -> std::io::Result<Child> {
+    let python = python_path(root);
     log::info!("[sidecar] starting backend: {} on port {}", python.display(), port);
     let mut cmd = Command::new(&python);
     cmd.args([
@@ -239,11 +326,11 @@ pub fn spawn_backend(repo_root: &Path, port: u16) -> std::io::Result<Child> {
         "--port",
         &port.to_string(),
     ])
-    .current_dir(repo_root)
+    .current_dir(&root.root)
     .stdin(Stdio::null())
     .stdout(Stdio::piped())
     .stderr(Stdio::piped());
-    for (k, v) in backend_env(port) {
+    for (k, v) in backend_env(port, root) {
         cmd.env(k, v);
     }
     let mut child = cmd.spawn()?;
@@ -362,7 +449,7 @@ fn kill_tree(child: &mut Child) {
 /// `restart_policy::decide_restart` exactly as electron/main.js's maybeRestartBackend() does,
 /// bounded to MAX_RESTARTS attempts within the restart window. Runs on its own OS thread so
 /// `tauri::Builder::setup` (which must return quickly) isn't blocked on the health poll.
-pub fn spawn_supervisor(app_handle: AppHandle, repo_root: PathBuf) {
+pub fn spawn_supervisor(app_handle: AppHandle, root: BackendRoot) {
     thread::spawn(move || {
         // `Sidecar` is managed via `app.manage()` in lib.rs; this handle is Send + owned by the
         // thread for its whole lifetime, so borrowing the managed state through it for the
@@ -371,7 +458,7 @@ pub fn spawn_supervisor(app_handle: AppHandle, repo_root: PathBuf) {
         let mut attempts: Vec<i64> = Vec::new();
         loop {
             let port = pick_backend_port();
-            let mut child = match spawn_backend(&repo_root, port) {
+            let mut child = match spawn_backend(&root, port) {
                 Ok(c) => c,
                 Err(err) => {
                     log::error!("[sidecar] backend failed to spawn: {}", err);
