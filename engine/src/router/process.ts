@@ -39,6 +39,20 @@ export const NINE_ROUTER_V1 = `${NINE_ROUTER_URL}/v1`;
 // Pinned 9router npm package version. Prod default stays 0.3.60; set MAESTRO_ROUTER_VERSION to stage a bump in dev (keys the dev cache by version, so the override pulls a clean install) without shipping it. 0.4.x gates its internal /api/* routes behind auth (the old bump blocker): bare `POST /api/providers` / `/api/oauth/<prov>/device-code` now 401 instead of working. That auth is now PORTED here: see cliAuthToken() / cliAuthHeaders() below, which compute the `x-9r-cli-token` 9Router checks and which every /api/* call in this package attaches. The header is empty on 0.3.60 (no machine-id file), so the old auth-free path is untouched. What the bump buys: cc/claude-opus-4-8 and cx/gpt-5.5 on the sub routes (gpt-5.5 404s on 0.3.60), a reworked WebSearch behind /api/v1/search, and 3 months of cross-provider translator robustness. REMAINING gate before flipping the prod default to 0.4.x: re-qualify cross-provider WebSearch. The original 0.3.60 pin reason was that 0.3.60-0.3.96 regressed it (a Codex/Gemini primary delegating WebSearch saw "claude-haiku-4-5-20251001 unavailable" or hallucinated output); 0.4.x reworked it but that's unverified here. Also confirmed on 0.4.80: it STILL emits `max_tokens` (not max_completion_tokens) on Anthropic->OpenAI, so our /api/openai-passthrough rename (core/openai_passthrough.py + sync_openai_api_key, routed via an `openai-compatible` node that honors `baseUrl`) STAYS necessary. DO NOT bump this pin -- out of scope for ENG-6.
 export const NINE_ROUTER_NPM_VERSION = process.env.MAESTRO_ROUTER_VERSION ?? '0.3.60';
 
+// Spawn env for 9Router: inherited, plus the port/mode we pin, minus HOSTNAME. 9Router's server
+// does `process.env.HOSTNAME || '0.0.0.0'` to choose its bind host, so any shell that exports
+// HOSTNAME (git-bash/MSYS sets it automatically; Windows itself uses COMPUTERNAME) makes it bind
+// that name -- which resolves to the machine's routable address, NOT loopback. That breaks the app
+// in one specific, confusing way: the Keycloak OAuth redirect URI is the fixed, pre-registered
+// http://127.0.0.1:20128/callback, so sign-in dead-ends on connection-refused while everything
+// else looks fine. Loopback reachability is a correctness requirement, not a preference.
+// Mirrors backend/apps/nine_router/process.py's p_router_env().
+function routerEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(NINE_ROUTER_PORT), NODE_ENV: 'production' };
+  delete env.HOSTNAME;
+  return env;
+}
+
 function expandHome(path: string): string {
   const home = userInfo().homedir;
   if (path === '~') return home;
@@ -721,7 +735,7 @@ async function ensureRunningImpl(): Promise<void> {
     console.info(`Starting 9Router (production) on port ${NINE_ROUTER_PORT}...`);
     cmd = [node, `--max-old-space-size=${NODE_HEAP_MB}`, ...(patch ? ['--require', patch] : []), standaloneServer];
     cwd = dirname(standaloneServer);
-    env = { ...process.env, PORT: String(NINE_ROUTER_PORT), NODE_ENV: 'production' };
+    env = routerEnv();
     if (node === process.env.MAESTRO_ELECTRON_PATH) env.ELECTRON_RUN_AS_NODE = '1';
   } else {
     // Dev: install the pinned npm package into a local cache once, then spawn `node app/server.js` directly (bypasses the package cli.js tray icon users confusingly quit, its update-check spinner, and the TUI).
@@ -735,7 +749,7 @@ async function ensureRunningImpl(): Promise<void> {
     console.info(`Starting 9Router (dev cache, 9router@${NINE_ROUTER_NPM_VERSION}) on port ${NINE_ROUTER_PORT}...`);
     cmd = [node, `--max-old-space-size=${NODE_HEAP_MB}`, ...(patch ? ['--require', patch] : []), cachedServer];
     cwd = dirname(cachedServer);
-    env = { ...process.env, PORT: String(NINE_ROUTER_PORT), NODE_ENV: 'production' };
+    env = routerEnv();
   }
 
   // Capture stdout+stderr so a failed start can tell us WHY (the old DEVNULL default made every "router never came up" a silent mystery, which is the whole reason #90 was un-diagnosable). Packaged prod (NODE_ENV=production standalone) is quiet, so one fixed temp file, truncated each start attempt, won't grow; dev keeps its chatty-Next.js DEVNULL unless debug is set.
