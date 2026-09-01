@@ -99,3 +99,13 @@ ds-bundle/
 design-system/dist/
 design-system/node_modules/
 .design-sync/upload-list.txt
+
+# TXM migration (Tauri/TS) — build output, test-gate artifacts, tool caches.
+/node_modules/
+frontend/node_modules/
+engine/node_modules/
+engine/dist/
+tauri/target/
+tauri/gen/android/app/build/
+.gate-brw4-data/
+frontend/.gate-harness-dist/
