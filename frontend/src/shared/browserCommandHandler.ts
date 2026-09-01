@@ -1,5 +1,4 @@
 import type { TFunction } from 'i18next';
-import i18n from '@/shared/i18n/i18n';
 import { getWebview, findWebviewByDomain, type BrowserWebview } from './browserRegistry';
 import { store } from './state/store';
 import { resumeBrowserCard } from './state/dashboardLayoutSlice';
@@ -8,6 +7,7 @@ import { resolveInput } from './resolveUrl';
 import { rankAndCapInteractives, type RankItem } from './interactiveRanking';
 import { shouldStopWaiting, SETTLE_POLL_MS, settleProbeJs } from './browserSettle';
 import { captureWithTimeout, CAPTURE_ATTEMPT_TIMEOUT_MS, CAPTURE_TOTAL_BUDGET_MS } from './captureWithTimeout';
+import { shell } from './shell';
 
 let initialized = false;
 
@@ -86,7 +86,7 @@ function _cdpTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 async function annotateElements(wv: BrowserWebview): Promise<number> {
-  const cacheBridge = (window as any).maestro?.cdpCacheGet;
+  const cacheBridge = shell.cdpCacheGet;
   const cached = cacheBridge ? await _cdpTimeout(cacheBridge(wv.getWebContentsId()), 500) : null;
   if (!cached || typeof cached !== 'object') return 0;
   const deadline = Date.now() + _ANNOTATE_BUDGET_MS;
@@ -186,8 +186,7 @@ async function captureRetry(wv: BrowserWebview): Promise<Record<string, any>> {
 // Count the safe (GET) API endpoints captured for this site so the backend can nudge the agent toward the fast network path. Best-effort, never throws.
 async function countSafeRoutes(wv: BrowserWebview): Promise<number> {
   try {
-    const bridge = (window as any).maestro?.cdpRoutesGet as
-      | ((id: number, origin?: string) => Promise<any[]>) | undefined;
+    const bridge = shell.cdpRoutesGet;
     if (!bridge) return 0;
     let origin = '';
     try { origin = new URL(wv.getURL()).origin; } catch {}
@@ -208,9 +207,7 @@ async function handleGetText(wv: BrowserWebview): Promise<Record<string, any>> {
 // Recent warn+error console output for this webview (captured in main.js). Lets a stuck agent see the page's OWN errors (JS exceptions, failed loads) instead of guessing. Read-only, fail-safe: any miss returns an empty, honest result.
 async function handleGetConsole(wv: BrowserWebview): Promise<Record<string, any>> {
   try {
-    const bridge = (window as any).maestro?.getWebviewConsole as
-      | ((id: number) => Promise<Array<{ level: string; message: string; source?: string; line?: number }>>)
-      | undefined;
+    const bridge = shell.getWebviewConsole;
     if (!bridge) return { text: 'Console capture is unavailable here.', errors: [] };
     const errors = (await bridge(wv.getWebContentsId())) || [];
     if (errors.length === 0) {
@@ -402,16 +399,10 @@ function extractAxValue(prop: any): string {
   return '';
 }
 
-interface CdpResult { ok: boolean; result?: any; error?: string }
-
 // sessionId undefined => root frame; a child-frame sessionId => that OOPIF.
 async function sendCdp(wv: BrowserWebview, method: string, params?: Record<string, any>, sessionId?: string): Promise<any> {
   const wcId = wv.getWebContentsId();
-  const bridge = (window as any).maestro?.sendCdpCommand as
-    | ((id: number, m: string, p?: any, s?: string) => Promise<CdpResult>)
-    | undefined;
-  if (!bridge) throw new Error(i18n.t('common.cdpBridgeNotAvailable'));
-  const resp = await bridge(wcId, method, params, sessionId);
+  const resp = await shell.sendCdpCommand(wcId, method, params, sessionId);
   if (!resp || !resp.ok) {
     throw new Error(resp?.error || `CDP ${method} failed`);
   }
@@ -421,11 +412,8 @@ async function sendCdp(wv: BrowserWebview, method: string, params?: Record<strin
 interface ChildSession { sessionId: string; frameId: string; parentSessionId: string | null; url: string }
 
 async function getChildSessions(wv: BrowserWebview): Promise<ChildSession[]> {
-  const bridge = (window as any).maestro?.cdpChildSessionsGet as
-    | ((id: number) => Promise<ChildSession[]>) | undefined;
-  if (!bridge) return [];
   try {
-    return (await bridge(wv.getWebContentsId())) || [];
+    return (await shell.cdpChildSessionsGet(wv.getWebContentsId())) || [];
   } catch {
     return [];
   }
@@ -835,7 +823,7 @@ async function handleListInteractives(wv: BrowserWebview, params: Record<string,
   let prevIds: Set<string> | null = null;
   const prevIndexByKey = new Map<string, number>();
   try {
-    const cacheBridge = (window as any).maestro?.cdpCacheGet;
+    const cacheBridge = shell.cdpCacheGet;
     const prev = cacheBridge ? await cacheBridge(wv.getWebContentsId()) : null;
     if (prev && typeof prev === 'object') {
       for (const [idxStr, e] of Object.entries(prev)) {
@@ -875,7 +863,7 @@ async function handleListInteractives(wv: BrowserWebview, params: Record<string,
     indexMap[el.index] = { backendNodeId: el.backendNodeId, sessionId: el.sessionId, role: el.role, name: el.name };
   }
   try {
-    const cacheBridge = (window as any).maestro?.cdpCacheSet;
+    const cacheBridge = shell.cdpCacheSet;
     if (cacheBridge) await cacheBridge(wv.getWebContentsId(), indexMap);
   } catch {
     // best-effort; click_index falls back to re-listing.
@@ -924,9 +912,9 @@ async function handleClickIndex(wv: BrowserWebview, params: Record<string, any>)
   let role: string | undefined;
   let name: string | undefined;
   try {
-    const cacheBridge = (window as any).maestro?.cdpCacheGet;
+    const cacheBridge = shell.cdpCacheGet;
     if (cacheBridge) {
-      const cached = await cacheBridge(wv.getWebContentsId());
+      const cached = (await cacheBridge(wv.getWebContentsId())) as any;
       const entry = cached && cached[idx];
       if (typeof entry === 'number') {
         backendNodeId = entry; // legacy cache shape
@@ -1286,13 +1274,10 @@ async function handleDetectWebMCP(wv: BrowserWebview): Promise<Record<string, an
 
 // Tier 2: the safe GET routes captured for the current site, so the agent can fetch data directly instead of re-scraping the UI. Only same-origin GET/HEAD routes are listed; those are all that replay_route will run.
 async function handleListRoutes(wv: BrowserWebview): Promise<Record<string, any>> {
-  const bridge = (window as any).maestro?.cdpRoutesGet as
-    | ((id: number, origin?: string) => Promise<any[]>) | undefined;
-  if (!bridge) return { error: i18n.t('common.routeCaptureNotAvailable') };
   let origin = '';
   try { origin = new URL(wv.getURL()).origin; } catch {}
   let routes: any[] = [];
-  try { routes = (await bridge(wv.getWebContentsId(), origin)) || []; } catch {}
+  try { routes = (await shell.cdpRoutesGet(wv.getWebContentsId(), origin)) || []; } catch {}
   const safe = routes.filter((r) => r && r.safe);
   if (!safe.length) {
     return { text: 'No replayable (GET) API routes captured for this site yet. Use the page first so they get recorded, then try again.', url: wv.getURL() };
@@ -1405,12 +1390,8 @@ async function handleBrowserCommand(data: Record<string, any>) {
 
 // Hand a vetted social platform's partition cookies to its session-backed MCP shim. No webview needed: it reads the main-process cookie store directly, so it runs before the webview lookup.
 async function handleSessionCookies(params: Record<string, any>): Promise<Record<string, any>> {
-  const bridge = (window as any).maestro?.getPartitionCookies as
-    | ((domain: string) => Promise<{ cookies: { name: string; value: string }[]; userAgent: string; error?: string }>)
-    | undefined;
-  if (!bridge) return { error: i18n.t('common.cookieBridgeUnavailable'), cookies: [] };
   try {
-    return await bridge(String(params.domain || ''));
+    return await shell.getPartitionCookies(String(params.domain || ''));
   } catch (err: any) {
     return { error: `Cookie bridge failed: ${err?.message || String(err)}`, cookies: [] };
   }

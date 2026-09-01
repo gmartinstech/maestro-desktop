@@ -1388,7 +1388,8 @@
     "browserLogin": {
       "signedIn": "Conectado",
       "signIn": "Entrar",
-      "recheck": "Verificar o login novamente"
+      "recheck": "Verificar o login novamente",
+      "connecting": "Aguardando login…"
     },
     "serviceGroup": {
       "readOnly": "Somente leitura",

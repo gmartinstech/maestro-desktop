@@ -60,9 +60,13 @@ import BrowserFindBar from './BrowserFindBar';
 import { useBrowserActivity } from '@/shared/useBrowserActivity';
 import { getActionLabel } from '@/shared/browserCommandHandler';
 import { resolveInput, isGoogleSearch } from '@/shared/resolveUrl';
+import { shell } from '@/shared/shell';
 import BrowserAgentOverlay from './BrowserAgentOverlay';
 import { useOverlayScrollPassthrough } from '../../hooks/interaction/useOverlayScrollPassthrough';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
+import { getBrowserEngineMode } from '@/shared/browserEngineMode';
+import { WS_BASE, getAuthToken } from '@/shared/config';
+import BrowserCanvasCdp from './BrowserCanvasCdp';
 
 type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -131,6 +135,16 @@ const isWindows = navigator.userAgent.includes('Windows');
 const inElectron = navigator.userAgent.includes('Electron');
 const isElectron = inElectron && (!isWindows || windowsWebviewEnabled());
 
+// BRW-4 safety switch (docs/plans/2026-08-31-txm-tauri-typescript-migration.md, BRW-4 row):
+// default 'electron' leaves every branch below byte-for-byte the same as before this ticket.
+// 'cdp' swaps the whole "Browser body" section (webview/iframe/RunInDesktopMessage) for a single
+// <canvas> fed by engine/src/browser/screencastServer.ts over browserScreencastClient.ts, in
+// BOTH shells (unlike isElectron above, this is not gated on navigator.userAgent) -- BRW-7 is
+// what proves both-shell parity, this ticket only builds the path. Read once at module load,
+// same posture as isElectron/inElectron above (a mid-session flip needs a reload either way,
+// since flipping it means rebuilding with a different env var -- see browserEngineMode.ts).
+const useCdpEngine = getBrowserEngineMode() === 'cdp';
+
 // Keep the maestro/<ver> product token: Google's sign-in flags a BARE Chrome UA as not-genuine-Chrome and blocks it ("browser may not be secure"), but tolerates a UA carrying a product token. Only the Electron token must go (that one Google hard-blocks).
 const chromeUserAgent = navigator.userAgent
   .replace(/\s*Electron\/\S+/i, '');
@@ -141,7 +155,7 @@ const BROWSER_PARTITION = 'persist:maestro-browser';
 // Sync exposure set at preload boot; async API fallback for older builds.
 const webviewPreloadPath: string | undefined = isElectron
   ? ((window as any).__MAESTRO_WEBVIEW_PRELOAD__
-      || (window as any).maestro?.getWebviewPreloadPath?.())
+      || shell.getWebviewPreloadPath())
   : undefined;
 
 
@@ -236,8 +250,8 @@ const BrowserCard: React.FC<Props> = ({
   const suspendedSnap = useAppSelector((state) => state.dashboardLayout.suspendedBrowserCards[browserId]);
   const endingState = useAppSelector((state) => state.dashboardLayout.endingBrowserCards[browserId]);
 
-  // Arm the Windows webview crash-safety marker synchronously, before React commits the <webview> below. Cleared on dom-ready; a leftover marker next launch tells windowsWebviewEnabled() the mount crashed, so it falls back to the iframe. MUST skip parked cards: they render no webview, so dom-ready never fires and a stale marker reads as a phantom crash that locks Windows out of webviews.
-  if (isElectron && isWindows && !suspendedSnap) armWindowsWebviewPending();
+  // Arm the Windows webview crash-safety marker synchronously, before React commits the <webview> below. Cleared on dom-ready; a leftover marker next launch tells windowsWebviewEnabled() the mount crashed, so it falls back to the iframe. MUST skip parked cards: they render no webview, so dom-ready never fires and a stale marker reads as a phantom crash that locks Windows out of webviews. Also MUST skip the cdp path: it renders a <canvas>, never a <webview>, so dom-ready would never fire there either -- see useCdpEngine above.
+  if (!useCdpEngine && isElectron && isWindows && !suspendedSnap) armWindowsWebviewPending();
 
   const activity = useBrowserActivity(browserId);
   const agentRunning = browserAgentSession?.status === 'running';
@@ -324,7 +338,7 @@ const BrowserCard: React.FC<Props> = ({
 
   const tabIdKey = tabs.map((t) => t.id).join(',');
   useEffect(() => {
-    if (!isElectron) return;
+    if (!isElectron || useCdpEngine) return; // cdp path has no <webview> to register -- see BrowserCanvasCdp
     const cleanups: (() => void)[] = [];
 
     for (const tab of tabs) {
@@ -1271,7 +1285,28 @@ const BrowserCard: React.FC<Props> = ({
         {cmdHeld && !isSelected && (
           <Box sx={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none' }} />
         )}
-        {isElectron ? (
+        {useCdpEngine ? (
+          // BRW-4 canvas path: one screencast connection per browser card, following the ACTIVE
+          // tab only. Scope cut (flagged, not an oversight, same convention as cdp.ts/screencast.ts's
+          // own header comments): the engine launches one external Chromium page per browserId,
+          // so multiple tabs in this card share that single live page today -- a follow-up ticket
+          // (BRW-5/7 territory) that gives screencastServer.ts one CDP target per tabId would lift
+          // this. suspendedSnap/crashedTabs (webview-only memory/crash concerns) don't apply here:
+          // the remote browser runs in its own OS process regardless of this card's visibility.
+          <BrowserCanvasCdp
+            browserId={browserId}
+            // The engine's WS auth hook validates ?token= the same way WebSocketManager.ts's
+            // dashboard socket does (auth/middleware.ts's wsRequestAuthOk reads it from the
+            // query string because a browser-driven WebSocket() can't set a header).
+            wsUrl={`${WS_BASE}/ws/browser-screencast?browserId=${encodeURIComponent(browserId)}&token=${encodeURIComponent(getAuthToken())}`}
+            url={activeUrl}
+            isElementSelectMode={isElementSelectMode}
+            onGuestSelect={() => {
+              setLastInteractedBrowser(browserId);
+              window.dispatchEvent(new CustomEvent('maestro:browser-guest-select', { detail: { browserId } }));
+            }}
+          />
+        ) : isElectron ? (
           suspendedSnap ? (
             suspendedSnap.dataUrl ? (
               <Box
@@ -1450,7 +1485,7 @@ const BrowserCard: React.FC<Props> = ({
             </Button>
           </DialogActions>
         </Dialog>
-        {!isElectron && (inElectron ? (
+        {!useCdpEngine && !isElectron && (inElectron ? (
           // inElectron but !isElectron = Windows after the webview crashed (windowsWebviewEnabled() false); keep the iframe as the crash safety net. No sandbox so sites render; the renderer's already isolated by Electron + the main.js XFO/CSP strip.
           <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
             <iframe

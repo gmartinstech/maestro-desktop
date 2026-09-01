@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
@@ -63,6 +64,13 @@ module.exports = (env, argv) => {
     },
 
     plugins: [
+      // BRW-4 safety switch (see frontend/src/shared/browserEngineMode.ts): baked in at build
+      // time from the host env, same posture as MAESTRO_MOCK_AGENT (CLAUDE.md) -- there is no
+      // live `process` global in the packaged renderer to read this from at runtime. Unset
+      // defaults to 'electron', today's unmodified webview path.
+      new webpack.DefinePlugin({
+        'process.env.MAESTRO_BROWSER_ENGINE': JSON.stringify(process.env.MAESTRO_BROWSER_ENGINE || 'electron'),
+      }),
       new HtmlWebpackPlugin({
         template: './public/index.html',
         filename: 'index.html',
