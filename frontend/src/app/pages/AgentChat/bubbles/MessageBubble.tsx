@@ -35,6 +35,7 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { SKILL_COLOR } from '@/app/components/editor/richEditorUtils';
 import { AlertGlyph } from '@/app/components/feedback/AlertGlyph';
+import { shell } from '@/shared/shell';
 
 const streamingCursorKeyframes = `
 @keyframes blink-cursor {
@@ -1249,7 +1250,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                       size="small"
                       variant="outlined"
                       onClick={() => {
-                        const api = (window as any).maestro;
                         if (maestroError.ctaAction === 'maestro_login') {
                           dispatch(startMaestroLogin());
                         } else if (maestroError.ctaAction === 'settings') {
@@ -1260,8 +1260,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                           if (activeSessionId) dispatch(retryLastUserMessage({ sessionId: activeSessionId }));
                         } else if (maestroError.ctaAction === 'waitlist') {
                           const url = 'https://discord.com/channels/1486442924391796896/1486442927554170892';
-                          if (api?.openExternal) api.openExternal(url);
-                          else window.open(url, '_blank');
+                          shell.openExternal(url);
                         }
                       }}
                       sx={{

@@ -116,6 +116,22 @@ def main() -> None:
     # In-app brand mark; rendered ~20px, so 96 covers 2x/3x displays.
     write_png(sources, REPO / "frontend" / "public" / "maestro-mark.png", 96)
 
+    # Tauri packaging + runtime window/taskbar icon (tauri.conf.json's bundle.icon list).
+    tauri_icons = REPO / "tauri" / "icons"
+    write_png(sources, tauri_icons / "32x32.png", 32)
+    write_png(sources, tauri_icons / "128x128.png", 128)
+    write_png(sources, tauri_icons / "128x128@2x.png", 256)
+    write_png(sources, tauri_icons / "icon.png", 512)
+    write_ico(sources, tauri_icons / "icon.ico", ICO_SIZES)
+    write_icns(sources, tauri_icons / "icon.icns")
+
+    # Windows Store tile set (unused by bundle.icon directly, but shipped by Tauri's default
+    # scaffold for the MSIX/Store packaging path; sizes match the Square*Logo/StoreLogo files
+    # tauri init generated under tauri/icons/).
+    for size in (30, 44, 71, 89, 107, 142, 150, 284, 310):
+        write_png(sources, tauri_icons / f"Square{size}x{size}Logo.png", size)
+    write_png(sources, tauri_icons / "StoreLogo.png", 50)
+
     print("done")
 
 

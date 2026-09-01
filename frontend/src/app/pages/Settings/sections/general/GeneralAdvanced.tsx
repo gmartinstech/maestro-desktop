@@ -9,6 +9,7 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { closeSettingsModal, AppSettings } from '@/shared/state/settingsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import TrustedFilePatterns from '@/app/components/overlays/TrustedFilePatterns';
+import { shell } from '@/shared/shell';
 import SoftwareUpdateRow from './SoftwareUpdateRow';
 import type { SettingsStyles } from '../settingsStyles';
 import { settingSelectAttrs } from '../settingSelect';
@@ -27,8 +28,7 @@ const GeneralAdvanced: React.FC<{
   // Provenance: the exact commit this build was cut from. Surfaced so a support screenshot of Settings is enough to identify the shipped code. Empty in dev / web (no Electron bridge or unknown sha), in which case we hide the row.
   const [buildLabel, setBuildLabel] = React.useState<string | null>(null);
   React.useEffect(() => {
-    const api = (window as { maestro?: { getBuildInfo?: () => Promise<{ shortSha: string; channel: string }> } }).maestro;
-    api?.getBuildInfo?.()
+    shell.getBuildInfo()
       .then((b) => { if (b?.shortSha && b.shortSha !== 'unknown') setBuildLabel(`${b.shortSha} (${b.channel})`); })
       .catch(() => {});
   }, []);

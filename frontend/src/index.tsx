@@ -8,6 +8,7 @@ import ErrorBoundary from './app/components/feedback/ErrorBoundary';
 import { ensureAuthToken } from './shared/config';
 import { runStartupMigrations } from './shared/migrations';
 import { shouldMountAfterAuth } from './shared/bootstrapAuth';
+import { hasNativeShell } from './shared/shell';
 import './shared/i18n/i18n';
 
 // Must run before ensureAuthToken reads localStorage; v1.0.31 migration force-clears auth+onboarding so the stale token doesn't survive.
@@ -20,7 +21,7 @@ async function bootstrap() {
       ensureAuthToken(),
       new Promise<string>((resolve) => setTimeout(() => resolve(''), 3000)),
     ]);
-    const packaged = typeof (window as any).maestro?.getAuthToken === 'function';
+    const packaged = hasNativeShell;
     if (!shouldMountAfterAuth({ packaged, token })) {
       throw new Error('Electron backend authorization token was not ready before React bootstrap');
     }

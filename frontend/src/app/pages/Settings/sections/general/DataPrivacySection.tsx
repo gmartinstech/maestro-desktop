@@ -7,6 +7,7 @@ import Dialog from '@mui/material/Dialog';
 import TextField from '@mui/material/TextField';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { API_BASE } from '@/shared/config';
+import { shell, hasNativeShell } from '@/shared/shell';
 import type { SettingsStyles } from '../settingsStyles';
 
 const ERASE_WORD = 'ERASE';
@@ -50,15 +51,14 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
   };
 
   const doErase = async () => {
-    const api = window.maestro;
-    if (!api?.hardReset) {
+    if (!hasNativeShell) {
       setErr(t('settings.general.dataPrivacy.desktopOnly'));
       return;
     }
     setBusy(true);
     setErr(null);
     try {
-      await api.hardReset(); // the app exits + relaunches, so this normally never resolves.
+      await shell.hardReset(); // the app exits + relaunches, so this normally never resolves.
     } catch {
       setBusy(false);
       setErr(t('settings.general.dataPrivacy.eraseError'));
@@ -66,15 +66,14 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
   };
 
   const doClearBrowser = async () => {
-    const api = window.maestro;
-    if (!api?.clearBrowserData) {
+    if (!hasNativeShell) {
       setErr(t('settings.general.dataPrivacy.desktopOnly'));
       return;
     }
     setBusy(true);
     setErr(null);
     try {
-      await api.clearBrowserData();
+      await shell.clearBrowserData();
       setBusy(false);
       setClearedOk(true);
     } catch {

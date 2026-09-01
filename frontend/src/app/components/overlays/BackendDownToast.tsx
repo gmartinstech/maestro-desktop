@@ -7,6 +7,7 @@ import AlertTitle from '@mui/material/AlertTitle';
 import Button from '@mui/material/Button';
 import { useTranslation } from 'react-i18next';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { shell } from '@/shared/shell';
 
 export default function BackendDownToast() {
   const c = useClaudeTokens();
@@ -14,11 +15,9 @@ export default function BackendDownToast() {
   const [attempts, setAttempts] = React.useState<number | null>(null);
 
   React.useEffect(() => {
-    const api = (window as any).maestro as MaestroAPI | undefined;
-    return api?.onBackendUnrecoverable?.((info: { attempts: number }) => setAttempts(info?.attempts ?? 0));
+    return shell.onBackendUnrecoverable((info: { attempts: number }) => setAttempts(info?.attempts ?? 0));
   }, []);
 
-  const api = (window as any).maestro as MaestroAPI | undefined;
   return (
     <Snackbar
       open={attempts !== null}
@@ -30,10 +29,10 @@ export default function BackendDownToast() {
         sx={{ bgcolor: c.bg.surface, color: c.text.primary, border: `1px solid ${c.border.medium}`, maxWidth: 520 }}
         action={
           <>
-            <Button size="small" onClick={() => api?.openBackendLogs?.()} sx={{ color: c.text.muted }}>
+            <Button size="small" onClick={() => shell.openBackendLogs()} sx={{ color: c.text.muted }}>
               {t('overlays.backendDown.viewLogs')}
             </Button>
-            <Button size="small" onClick={() => api?.restartApp?.()} sx={{ color: c.accent.primary, fontWeight: 700 }}>
+            <Button size="small" onClick={() => shell.restartApp()} sx={{ color: c.accent.primary, fontWeight: 700 }}>
               {t('overlays.backendDown.restart')}
             </Button>
           </>

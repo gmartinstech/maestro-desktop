@@ -1,0 +1,44 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+# webview-data-url: TAU-5's splash window is a self-contained data: URL page (see
+# tauri/src/splash.rs), mirroring how electron/main.js's createSplashWindow() loads its splash
+# HTML via loadURL(dataUrl) -- no separate static asset root needed for a window that isn't part
+# of frontendDist.
+tauri = { version = "2.11.3", features = ["webview-data-url"] }
+tauri-plugin-log = "2"
+# open_external (TAU-4): Tauri 2's shell/opener plugin, mirroring electron/main.js's
+# shell.openExternal() call in its 'open-external' IPC handler.
+tauri-plugin-opener = "2"
+# Cross-platform IANA timezone lookup for the MAESTRO_TIMEZONE env var passed to the backend
+# sidecar (electron/main.js gets this for free from Node's Intl.DateTimeFormat()). Already in the
+# resolved dependency graph transitively (see Cargo.lock), so pinning it directly here as a
+# top-level dep needs no new source.
+iana-time-zone = "0.1"
+# TAU-5: second launch focuses the existing window instead of starting a new one, mirroring
+# electron/main.js's app.requestSingleInstanceLock() + 'second-instance' handler.
+tauri-plugin-single-instance = "2"
+# TAU-5: maestro:// deep link handling, mirroring electron/main.js's
+# app.setAsDefaultProtocolClient('maestro') + forwardDeepLinkToRenderer(). Scheme is declared in
+# tauri.conf.json's plugins.deep-link.desktop.schemes.
+tauri-plugin-deep-link = "2"

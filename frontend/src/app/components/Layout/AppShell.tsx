@@ -37,10 +37,11 @@ import { findBrowserByWebContentsId } from '@/shared/browserRegistry';
 import { byPreviewRecency } from '@/shared/previewOrder';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { AlertGlyph } from '@/app/components/feedback/AlertGlyph';
+import { shell } from '@/shared/shell';
 
 // macOS insets its traffic lights into our bar, so the left gutter is reserved there and
 // nowhere else; Windows/Linux instead reserve a right gutter for the native button overlay.
-const IS_MAC = ((window as any).maestro?.platform ?? 'darwin') === 'darwin';
+const IS_MAC = (shell.platform ?? 'darwin') === 'darwin';
 const TITLEBAR_HEIGHT = 38;
 const TRAFFIC_LIGHT_GUTTER = 78;
 // Win11's minimise/maximise/close overlay is ~138px; the trailing cluster must clear it.
@@ -124,13 +125,13 @@ const AppShell: React.FC = () => {
   }, [availableVersion]);
 
   const handleDownloadUpdate = useCallback(async () => {
-    try { await (window as any).maestro?.downloadUpdate(); } catch {}
+    try { await shell.downloadUpdate(); } catch {}
   }, []);
 
   const handleInstallUpdate = useCallback(() => {
     if (installing) return;
     dispatch(setInstalling());
-    (window as any).maestro?.installUpdate();
+    shell.installUpdate();
   }, [installing, dispatch]);
 
   // shallowEqual on top-level Immer dicts: nested mutations bump the dict reference, causing AppShell to re-render on every rename/output bump despite identical structure.
@@ -216,11 +217,9 @@ const AppShell: React.FC = () => {
   }, [openUrlInBrowser]);
 
   useEffect(() => {
-    const w = window as any;
-    if (!w.maestro?.onWebviewNewWindow) return;
     let lastUrl = '';
     let lastTime = 0;
-    return w.maestro.onWebviewNewWindow((url: string, webContentsId: number, disposition?: string) => {
+    return shell.onWebviewNewWindow((url: string, webContentsId: number, disposition?: string) => {
       const now = Date.now();
       if (url === lastUrl && now - lastTime < 1000) return;
       lastUrl = url;
@@ -242,9 +241,7 @@ const AppShell: React.FC = () => {
 
   // Cmd/Ctrl+R: main neutralizes the default-menu reload and hands us the decision. Reload the browser you're in or last used IN PLACE (keeps its login); only when no browser is open at all fall back to a full app reload, since reloading the renderer destroys every webview and wipes its session. To deliberately reload Maestro itself, use View > Reload.
   useEffect(() => {
-    const w = window as any;
-    if (!w.maestro?.onReloadShortcut) return;
-    return w.maestro.onReloadShortcut(() => {
+    return shell.onReloadShortcut(() => {
       for (const id of [getLastInteractedBrowser(), ...getKeepAliveBrowserIds()]) {
         const wv = id ? getWebview(id) : undefined;
         if (wv) { try { wv.reload(); return; } catch (_e) { /* torn-down webview; try the next */ } }
@@ -255,9 +252,7 @@ const AppShell: React.FC = () => {
 
   // Zoom / find / tab-cycle from a focused browser GUEST (keydowns inside a webview can't reach this document, so main forwards them with the guest's id). Targets that exact browser; the host-focused counterparts live in the keydown below + useCanvasControls (zoom).
   useEffect(() => {
-    const w = window as any;
-    if (!w.maestro?.onBrowserShortcut) return;
-    return w.maestro.onBrowserShortcut((payload: { action: string; webContentsId: number }) => {
+    return shell.onBrowserShortcut((payload: { action: string; webContentsId: number }) => {
       // Reopen-last-closed is global (no target browser), so handle it before the per-browser id guard.
       if (payload.action === 'reopen-closed') { dispatch(reopenLastClosed()); return; }
       const id = findBrowserByWebContentsId(payload.webContentsId) ?? getLastInteractedBrowser();
@@ -310,13 +305,13 @@ const AppShell: React.FC = () => {
   // Anchor the native menu to the button's bottom-left so it drops like a normal menu.
   const handleOpenAppMenu = useCallback((e: React.MouseEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    try { (window as any).maestro?.popupAppMenu(r.left, r.bottom); } catch {}
+    try { shell.popupAppMenu(r.left, r.bottom); } catch {}
   }, []);
 
   // The OS paints the window-button strip, so it can't inherit our CSS; push the
   // resolved chrome tokens whenever the theme flips or it strands on stale colors.
   useEffect(() => {
-    try { (window as any).maestro?.setTitleBarOverlay(c.bg.secondary, c.text.secondary); } catch {}
+    try { shell.setTitleBarOverlay(c.bg.secondary, c.text.secondary); } catch {}
   }, [c.bg.secondary, c.text.secondary]);
 
   const isDashboardViewActive = location.pathname.startsWith('/dashboard/');

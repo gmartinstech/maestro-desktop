@@ -2,22 +2,17 @@ import type { Dispatch } from '@reduxjs/toolkit';
 import { removeBrowserCard } from '@/shared/state/dashboardLayoutSlice';
 import { getBrowserWebviews } from '@/shared/browserRegistry';
 import { forgetBrowser } from '@/shared/browserFocus';
-
-interface CdpBridge {
-  cdpDetachClean?: (wcId: number) => Promise<unknown>;
-}
+import { shell } from '@/shared/shell';
 
 // A wedged CDP pipe must never hold a card open; cap the whole detach round-trip.
 const DETACH_BUDGET_MS = 600;
 
 // Detach the CDP debugger from every webview of a browser card BEFORE React unmounts them. Otherwise a late DevTools notification (a Target child-session message or Network.responseReceivedExtraInfo) lands on a session Chromium has already freed and SIGSEGVs the whole browser process. Bounded + fail-open.
 export async function detachBrowserCdp(browserId: string): Promise<void> {
-  const ow = (window as unknown as { maestro?: CdpBridge }).maestro;
-  if (!ow?.cdpDetachClean) return;
   const detaches: Promise<unknown>[] = [];
   for (const wv of getBrowserWebviews(browserId)) {
     try {
-      detaches.push(ow.cdpDetachClean(wv.getWebContentsId()).catch(() => {}));
+      detaches.push(shell.cdpDetachClean(wv.getWebContentsId()).catch(() => {}));
     } catch {
       // webview already torn down; nothing to detach
     }

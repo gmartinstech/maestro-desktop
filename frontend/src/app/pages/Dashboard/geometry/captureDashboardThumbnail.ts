@@ -1,4 +1,5 @@
 import type { CardPosition, ViewCardPosition, BrowserCardPosition } from '@/shared/state/dashboardLayoutSlice';
+import { shell, hasNativeShell } from '@/shared/shell';
 
 interface AllCards {
   cards: Record<string, CardPosition>;
@@ -12,8 +13,7 @@ export async function captureDashboardThumbnail(
   _contentEl: HTMLDivElement,
   _allCards: AllCards,
 ): Promise<string | null> {
-  const maestro = (window as any).maestro;
-  if (!maestro?.capturePage) return null;
+  if (!hasNativeShell) return null;
 
   const vRect = viewportEl.getBoundingClientRect();
   if (vRect.width === 0 || vRect.height === 0) return null;
@@ -27,7 +27,7 @@ export async function captureDashboardThumbnail(
       height: Math.round(vRect.height * dpr),
     };
 
-    const dataUrl: string = await maestro.capturePage(captureRect);
+    const dataUrl: string = await shell.capturePage(captureRect);
     return dataUrl || null;
   } catch (err) {
     console.warn('Dashboard thumbnail capture failed:', err);
