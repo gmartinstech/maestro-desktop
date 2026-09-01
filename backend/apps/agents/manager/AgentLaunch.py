@@ -107,7 +107,8 @@ class AgentLaunch(AgentManagerProtocol):
             effective_cwd = home_state_dir("workspaces", session_id)
             os.makedirs(effective_cwd, exist_ok=True)
 
-        ensure_cwd_git_repo(effective_cwd, home)
+        # Pass the REAL home, not the state home: ensure_cwd_git_repo uses this argument solely to build its risky-roots guard (never git-init directly in $HOME, / or $HOME's parent). Handing it p_state_home() would narrow that guard to the state home, so a user pointing target_directory at their actual home while MAESTRO_STATE_HOME is overridden would slip past it. The state home is still what decides the workspace LOCATION above; this argument is only about what must never be git-init'd.
+        ensure_cwd_git_repo(effective_cwd, os.path.expanduser("~"))
 
         repo_url, branch_name = detect_git_identity(effective_cwd)
 

@@ -204,15 +204,18 @@ def p_engine_owns_settings() -> bool:
     return os.environ.get(P_ENGINE_OWNS_SETTINGS_ENV) == "1"
 
 
+class SettingsWriteRefused(RuntimeError):
+    """Raised when Python is asked to write settings.json while the TS engine owns writes."""
+
+
 def atomic_write_settings(payload: dict) -> None:
     """Atomic SETTINGS_FILE write; call via save_settings*, not directly."""
     global p_cached_settings, p_cached_sig
+    # Raise rather than return quietly: a silent no-op here is indistinguishable from a successful save to every caller, so the UI would report the user's settings as saved while nothing was persisted. Losing a write silently is strictly worse than failing loudly, and this only fires when the migration flag is explicitly opted into.
     if p_engine_owns_settings():
-        logger.warning(
-            "%s=1: refusing to write settings.json from Python (the TS engine owns writes during the TXM migration)",
-            P_ENGINE_OWNS_SETTINGS_ENV,
+        raise SettingsWriteRefused(
+            f"{P_ENGINE_OWNS_SETTINGS_ENV}=1: refusing to write settings.json from Python (the TS engine owns writes during the TXM migration); route this write through the engine's /api/settings"
         )
-        return
     with p_settings_write_lock:
         os.makedirs(DATA_DIR, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".settings.", suffix=".tmp", dir=DATA_DIR)
