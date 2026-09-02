@@ -100,8 +100,12 @@ const nullShell: ShellBridge = {
 // file is not a barrel.
 function detectShell(): { instance: ShellBridge; native: boolean } {
   if (typeof window === 'undefined') return { instance: nullShell, native: false };
-  if ('maestro' in window) return { instance: electronShell, native: true };
-  if ('__TAURI_INTERNALS__' in window) return { instance: tauriShell, native: true };
+  // Truthiness, not `'maestro' in window`: `in` is true even when window.maestro is a present-but-
+  // undefined property (e.g. a stray global from another script), which would wrongly select
+  // electronShell and then throw the first time one of its methods dereferences a nonexistent
+  // window.maestro.
+  if ((window as unknown as { maestro?: unknown }).maestro) return { instance: electronShell, native: true };
+  if ((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return { instance: tauriShell, native: true };
   return { instance: nullShell, native: false };
 }
 

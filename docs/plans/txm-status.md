@@ -15,6 +15,195 @@ pushed; changes sit as uncommitted working-tree edits pending review.
 
 ---
 
+## ▶ WORK QUEUE — the live todo list
+
+**This section is the todo list.** It is the single source of truth: if you are an agent finishing a
+ticket, tick its box here in the same change that lands the work. Do not keep a second list
+elsewhere — two lists drift, and the whole point of this file is that chat history does not survive.
+
+Ordering is dependency-real, not aspirational. `[~]` = in flight.
+
+**Now**
+- [x] **TRI-1** ✅ done — Triaged the 5 open cross-vendor (`harness/review.mjs`) TAU review findings.
+      **3 of 5 confirmed and fixed, 1 confirmed-but-accepted (no code change beyond a doc comment),
+      1 dismissed (verified empirically against tauri-2.11.5's own source).**
+      1. **Race in `tauriShell.ts`/`config.ts`'s 8324 fallback — CONFIRMED, fixed.** `getBackendPortLive()`
+         returned the in-memory cache (0 on a fresh page load) before `invoke('get_backend_port')`
+         could resolve, so `config.ts`'s `shell.getBackendPortLive() || 8324` baked in the wrong
+         port whenever the real backend wasn't on 8324. Fix: `tauriShell.ts` now seeds
+         `cachedBackendPort` from `sessionStorage` and persists every resolved port back into it, so
+         a same-session reload (the existing self-heal-on-failed-fetch path already did this) reads
+         the *real* port synchronously on the very next load instead of guessing 8324 again — closes
+         the reload loop, not just the first guess. 5 new vitest cases in
+         `frontend/src/shared/shell/tauriShell.test.ts`.
+      2. **Fragile `'maestro' in window` shell detection — CONFIRMED, fixed.** `in` is true even
+         when `window.maestro` is a present-but-`undefined` property, which would select
+         `electronShell` and throw on first use. `frontend/src/shared/shell/index.ts`'s
+         `detectShell()` now checks truthiness (`(window as ...).maestro`) for both the Electron and
+         Tauri globals. 4 new vitest cases in `frontend/src/shared/shell/index.test.ts` (one is a
+         direct regression test: constructs `window.maestro = undefined` via `defineProperty`,
+         asserts `'maestro' in window` is true but `electronShell` is NOT selected).
+      3. **`pick_backend_port()` bind-then-drop TOCTOU — CONFIRMED real, not fixed further
+         (documented as accepted risk).** The gap between dropping the probe listener and the
+         spawned Python process's own `bind()` is real and can't be closed in Rust alone without
+         backend-side socket handoff (out of scope, `backend/**` frozen). Not a regression — it's
+         electron/main.js's exact `pickBackendPort()` tradeoff. Verified by reading the control flow
+         that it's already bounded/self-healing: a stolen port makes the child exit almost
+         immediately, which `spawn_supervisor` treats as an unexpected exit and retries with a
+         freshly-probed port, subject to `restart_policy`'s `MAX_RESTARTS=4`/backoff (whose own doc
+         comment names transient port issues as a cause that budget exists to absorb). Added a doc
+         comment on `pick_backend_port()` recording this triage so it isn't re-flagged without
+         context.
+      4. **`child` mutex held across blocking `Child::wait()` in the supervisor — CONFIRMED, fixed
+         (real deadlock risk).** `shutdown()` also needs `sidecar.child`'s lock to force-kill a
+         child; since the supervisor held that lock for the *entire* blocking `wait()` (unbounded —
+         as long as the child keeps running), a concurrent `shutdown()` couldn't even attempt the
+         kill it exists to perform until the child exited on its own. Fixed: new
+         `wait_for_child_exit()` in `tauri/src/sidecar.rs` polls `try_wait()` under a lock held only
+         ~microseconds per attempt (100ms sleep between polls, lock released during the sleep), so
+         `shutdown()` can interrupt within one poll interval. **2 new `cargo test --lib` cases**
+         (11/11 total, up from 9): one spawns a real ~30s `ping` child, starts a poller thread, and
+         asserts `shutdown()` returns in well under 5s (not the child's natural lifetime) while the
+         poller correctly observes "already taken" (`None`); the other confirms a child that exits
+         on its own still reports its real `ExitStatus`. **Live-verified per the ticket's own bar**
+         (touched the spawn/supervision path): `cargo tauri dev`, found the sidecar's `python.exe`
+         (PID 17780, child of `app.exe` PID 50040) via `Get-CimInstance`, `taskkill /T /F`'d it,
+         confirmed the log showed detection + restart within ~1s (`backend exited` → `restart 1/4 in
+         1000ms` → `backend ready on port 8324` 14s later, matching TAU-3's original timings), a
+         **new** python.exe PID (58592, same parent `app.exe`) served the same port, and `curl
+         http://127.0.0.1:8324/api/health/check` returned 200 both before the kill and after the
+         restart. All spawned processes (`app.exe` tree, both python.exe generations) confirmed
+         killed afterward — verified zero `app.exe`/uvicorn processes remained.
+      5. **`http://ipc.localhost` in the CSP `connect-src` — DISMISSED, needed.** Verified
+         empirically against the exact pinned version (`Cargo.lock` resolves `tauri = 2.11.5`, not
+         just the `Cargo.toml` caret): `tauri-2.11.5/src/manager/webview.rs` unconditionally
+         registers an `"ipc"` custom URI scheme; `wry-0.55.1/src/custom_protocol_workaround.rs`
+         rewrites `{scheme}://localhost/...` to `{http|https}://{scheme}.localhost/...` on Windows
+         (WebView2 can't handle arbitrary custom schemes); and — the direct proof — the bundled
+         `tauri-2.11.5/scripts/ipc-protocol.js` shows `invoke()`'s real, first-choice transport is
+         `fetch(window.__TAURI_INTERNALS__.convertFileSrc(cmd, 'ipc'), {method:'POST',...})`, i.e. a
+         real `fetch()` to exactly `http://ipc.localhost/<cmd>` for every single Tauri command call
+         on this Windows build (`get_backend_port`, `get_auth_token`, etc. all go through this).
+         CSP's `connect-src` governs by request URL regardless of local interception, so without
+         this entry every invoke() would hit the CSP wall and permanently fall back to the slower
+         `postMessage` transport for the rest of the session (functional but not what's actually
+         shipping, plus a console warning) — not a hard break, but a real, evidenced, in-use
+         dependency, so the entry stays. (Checked history too: TAU-6's own commit 1592e62c added it
+         alongside `tauri.localhost` for a real CSP-blocked-IPC bug, but its comment only explained
+         `tauri.localhost` — this triage supplies the missing justification for `ipc.localhost`
+         itself, not a shift from that earlier finding.)
+      **Gates run for real**: `cd tauri && cargo test --lib` → 11/11 pass; `cargo build` → clean
+      (one pre-existing benign linker-message warning, unrelated); `cd frontend && npx tsc --noEmit`
+      → clean; `npx vitest run` → all pass (54 total incl. the 9 new cases; one pre-existing,
+      unrelated stderr `RangeError` from `config.ts`'s fetch interceptor teardown reproduces with
+      or without this ticket's files present — not caused by this change); `node
+      scripts/check-callhome.mjs` / `check-fork-drift.mjs` → both clean. Ran concurrently with
+      WIRE-1 landing in the same working tree (shared, not a worktree) — `sidecar.rs` had gained
+      `MAESTRO_USE_ENGINE`/`spawn_engine` mid-session; re-read the file fresh before each edit so
+      nothing here clobbered that work, and the live-verify pass above is against the merged result
+      of both tickets' changes together (`app.exe` PID confirms this was the real current build).
+- [x] **WIRE-1** ✅ done — Make a shell actually launch/proxy through the engine. **Tauri wired, not
+      Electron** (per the ticket's own preference: it's the migration's target, `electron/**` stays
+      frozen/deleted-in-CUT). New switch **`MAESTRO_USE_ENGINE=1`** (unset = today's exact behavior,
+      naming matches `MAESTRO_ENGINE_ROUTES`/`MAESTRO_BROWSER_ENGINE`'s convention). `tauri/src/
+      sidecar.rs` gained `use_engine()`, `spawn_engine()`/`engine_env()`/`engine_entry_path()`/
+      `node_command()`; `spawn_supervisor()`'s loop now branches once at start between
+      `spawn_engine` (spawns `node <root>/engine/dist/main.js`, `MAESTRO_ENGINE_PORT`/`_HOST` set,
+      `MAESTRO_NODE_PATH` overridable) and the pre-existing `spawn_backend` (Python direct) --
+      **reused, not duplicated**, all of `pick_backend_port()`/`wait_for_health()`/the restart
+      supervisor/`kill_tree()`. Missing `engine/dist/main.js` **fails loudly**: `spawn_engine()`
+      returns a `NotFound` io::Error with an actionable message ("build it first: `cd engine && npm
+      run build`"), which the existing restart-policy path treats as a failed spawn attempt (logged,
+      counted, eventually exhausts + emits `backend-unrecoverable`) -- no silent fallback to
+      direct-Python. `get_backend_port`/`get_auth_token` (TAU-2/TAU-4) needed **zero changes**: they
+      already read whatever port/token-path `Sidecar`/`BackendRoot` resolved, so the frontend
+      transparently talks through the engine's port once it's the one bound there.
+      **GATE — all 5 items run for real (2026-09-01), background processes cleaned up after each**:
+      (1) **default unregressed**: switch unset, `cargo tauri dev` → `Get-CimInstance Win32_Process`
+      showed `app.exe` (PID 59132) → `python.exe` (PID 26544, `uvicorn backend.main:app --port 8324`)
+      **directly**, no `node.exe` in that lineage; `curl http://127.0.0.1:8324/api/health/check` → 200.
+      (2) **engine path**: `MAESTRO_USE_ENGINE=1`, log showed `starting engine: node .../engine/dist/
+      main.js on port 8324` then `[engine] python backend ready on 127.0.0.1:<ephemeral>` then
+      `[engine] listening on http://127.0.0.1:8324`; process tree confirmed `app.exe`(22948) →
+      `node.exe`(46480, running `engine/dist/main.js`) → `python.exe`(54384, uvicorn on its own
+      ephemeral port) -- **exactly one uvicorn process spawned, owned by the engine, not by Tauri**;
+      `curl http://127.0.0.1:8324/api/health/check` (the engine's port) → 200. **Honest caveat**: one
+      extra `python.exe` (parent = the uvicorn PID itself) briefly appeared in both this run AND the
+      switch-unset baseline run alike -- confirmed via a second engine-tree still-being-torn-down
+      snapshot as well as gate 1's own tree; a pre-existing Windows `.venv/python.exe` launcher-stub
+      self-relaunch quirk, identical in shape whether Tauri or the engine is the one spawning it, NOT
+      a second independent backend spawn introduced by this ticket. (3) **BRW-7 payoff**: same run,
+      `MAESTRO_BROWSER_ENGINE=cdp` added; a throwaway Node WS probe (`ws://127.0.0.1:8324/ws/browser-
+      screencast?browserId=...&token=<the shared auth.token file's contents>` -- ENG-2's auth
+      middleware gates WS upgrades too, so the first unauthenticated attempt correctly got destroyed/
+      errored, not a bug) → **`RESULT: OPEN`** -- the exact route that connection-refused against
+      Python-direct is now reachable through the real running app's own port. Probe script deleted
+      after use, per instructions. (4) `cd tauri && cargo build` clean; `cd engine && npm run build`
+      clean. (5) Every spawned process tree (`taskkill /PID <app.exe> /T /F`) confirmed torn down via
+      a follow-up process listing each time -- zero orphans left running. **What's left for BRW-7**:
+      the wiring gap is closed and the WS route is now provably reachable through a real shell launch
+      path; a full BRW-7 re-run (its own probe script, both-shell parity language, ticket bookkeeping)
+      is still a separate pass someone should do formally -- this ticket only proves the blocker
+      condition is gone, it doesn't re-run BRW-7 itself. Packaged-mode (a real `cargo tauri build`
+      release binary) is NOT covered: `engine/dist/` isn't staged into `tauri.conf.json`'s
+      `bundle.resources` yet (same open gap as the Python payload itself, see this file's own
+      "Build-artifact readiness" section) -- a packaged build with the switch on will hit
+      `spawn_engine()`'s loud missing-file error, which is the intended (not silent) failure mode
+      until that staging step exists. Not committed -- uncommitted working-tree edits on `main`.
+
+**Next — retires Python (the actual goal)**
+- [ ] **AGT** (7 tickets) — port the agent loop, `backend/apps/agents` (~22k LOC, the largest single
+      chunk). Milestone is AGT-6: the *unmodified* `e2e/contract/golden-turn.spec.ts` must pass
+      against the TS engine. That oracle was built in CTR-4 specifically to grade this.
+- [ ] **SUB** (10 tickets) — every remaining SubApp (~15k LOC): outputs/App Builder (4.2k, hardest —
+      npm/Vite/uvicorn spawning + signal semantics on Windows), workflows (3.3k), swarm, tools_lib,
+      skills, dashboards, web, terminal/PTY, mcp_registry, modes, social shims, and the settings
+      remainder ENG-3 left proxying. Ends at SUB-10: "Python is dark".
+- [ ] **CUT** (7 tickets) — delete `electron/`, delete `backend/`, retire the old `verify` gate,
+      collapse the release channel, rewrite the docs. **CUT-3 is the point of no return.**
+
+**Deferred / blocked, with reasons**
+- [ ] **MSB** (5 tickets, new phase, not yet in the phase table above) — "Maestro as a first-class
+      subscription provider" design (2026-09-01, revised 2026-09-02 against a more specific ask):
+      `docs/plans/2026-09-01-maestro-as-subscription.md`. Central finding unchanged: 9Router can't be
+      taught a native Maestro OAuth vendor without a fork, but Maestro is *already* registered inside
+      it at runtime as a generic `cp-maestro` openai-compatible provider-node (`sync_custom_
+      providers`). **Revision narrowed the scope**: read line-by-line, `agents.py`'s `/agents/models`
+      handler (lines 813-848) already groups Maestro's models dynamically and heads the picker with
+      them, and `maestro_catalog.py` already live-fetches + caches + falls back correctly — so no
+      `registry.ts`/`registry.py` change is needed at all, only a Settings→Subscriptions UI branch
+      (`SubscriptionCards.tsx`) plus one new logout endpoint (`POST /api/settings/maestro/logout`,
+      calling the already-existing `clear_refresh_token()`/`clearRefreshToken()`). Live re-verification
+      of the gateway's `GET /v1/models` contract was attempted and explicitly could not be completed
+      this pass (sandbox has no egress — DNS timeout; and this machine's Keycloak session is the one
+      ENG-4 zeroed out) — designed against `docs/MAESTRO.md`'s dated verified contract instead, with a
+      dedicated follow-up ticket (MSB-5) to re-check live once a session exists again. **Still
+      sequenced after AGT-1's gate passes**, though the collision risk is now lower since this no
+      longer touches the files AGT-1 is porting. See the doc's §2 for exact file-anchored UI/backend
+      changes, §5 for risks, §7 for the ticket set.
+- [ ] **BRW-7** re-run — **WIRE-1's blocking condition is now closed (2026-09-01)**: `tauri/src/
+      sidecar.rs` can spawn `engine/dist/main.js` under `MAESTRO_USE_ENGINE=1`, and a live WS probe
+      against the real running app (switch on + `MAESTRO_BROWSER_ENGINE=cdp`) confirmed
+      `/ws/browser-screencast` is now reachable through the app's own port (`RESULT: OPEN`) — see
+      WIRE-1's row above for the full gate. BRW-7 itself has not been formally re-run/re-graded
+      (that's still a separate pass — its own probe/parity language, ticket bookkeeping) and
+      packaged-mode is not covered (`engine/dist/` isn't staged into `tauri.conf.json`'s
+      `bundle.resources` yet), but the specific wiring gap this row named is gone.
+- [ ] **CTR-7** npm workspace root — deferred deliberately; its gate is a full packaged build.
+- [ ] **ENG-5** remainder — no HTTP route exposes "start a Maestro login" yet; no background refresh
+      loop caller. Needs a human for a real end-to-end Keycloak login regardless.
+- [ ] **BRW-5** remainder — `fetch.ts` is not routed and `/ws/electron-main` is not retired; needs
+      WIRE-1 plus lifting `web.py`'s read-only constraint.
+- [ ] **Golden smoke** — never run against this work (needs a packaged Electron app). Bypassed by
+      explicit decision 2026-09-01; the merge commit says so plainly.
+- [ ] **Windows packaged bundle** — path resolution is fixed, but no Python payload is bundled. Note
+      this requirement *disappears* once CUT lands: no Python to ship, just Node + the engine.
+- [ ] **`CLAUDE.md` deselect-list folklore is stale** — it claims exactly 6 backend tests fail on
+      Windows. After the 9Router loopback fix the suite is **1975 passed / 0 failed**. At least one
+      of those "environmental" failures was that bug. Re-baseline the note when next touching it.
+
+---
+
 ## Phase CTR — Contract & Parity Harness
 
 **Status: 6/7 tickets done (2026-08-31, automated pass via Workflow run `wf_9e1e6ae3-1f1`). All gates actually executed, not assumed. Not yet committed — sitting as uncommitted working-tree edits pending `harness/review.mjs` cross-vendor review.**
@@ -100,7 +289,7 @@ pushed; changes sit as uncommitted working-tree edits pending review.
 | BRW-4 | ✅ done | ✅ pass | Canvas browser card — `BrowserCard.tsx` gains a `useCdpEngine` branch (build-time `DefinePlugin` switch, matching the existing `NODE_ENV` convention) rendering a new dependency-light `BrowserCanvasCdp.tsx` instead of the Electron `<webview>` branch, which is otherwise byte-for-byte untouched. Engine side: a new `/ws/browser-screencast` route wires BRW-1's launcher + BRW-3's screencast module together, keeping one launched browser alive per card across reconnects. **Default/unset path confirmed truly zero-cost**: production build with the switch off compiles clean and Terser dead-code-eliminates the entire CDP branch — the new canvas component is provably absent from the shipped bundle (0 matches vs 1 in a throwaway CDP-enabled build). **CDP path verified with genuinely rigorous end-to-end proof, twice**: (1) a real headless browser measured ~57-58fps of actual screencast frames, with a synthetic click confirmed to reach the real page's DOM; (2) the harder proof — bundled the REAL React component (no mocks) via a new webpack harness config, loaded it in real headless Chromium, sent a real Playwright mouse click on the actual `<canvas>` element, and confirmed by **reading live canvas pixels** that the remote page's background visibly changed color after the click — the full round trip (canvas→WS→engine→CDP→real page→repaint→new frame→canvas redraw) proven pixel-by-pixel, not just asserted. Ran twice back-to-back, zero orphaned processes both times. **Found and fixed 4 real bugs via the live gate, not unit tests** (which all still pass unmodified against fakes): two independent navigate-before-connection-ready races (server- and client-side), a `createImageBitmap`-vs-`img.src` decode bug that silently breaks at real ~60fps (rapid `src` reassignment aborts each decode before `onload` fires), and a real-browser-window-visibility issue (a non-headless CDP window can go invisible to `Page.startScreencast` the instant it's occluded — fixed by adding a `headless` launch option, defaulting false for BRW-1/6's existing callers, but always requested here since the user should never see the raw window). Explicit scope cuts, documented: one CDP page per `browserId` (not per-tab), no back/forward history under CDP mode, per-card teardown left for a follow-up. |
 | BRW-5 | ✅ done (partial wiring) | ✅ pass | `engine/src/browser/{fetch.ts,fetch.test.ts,fetch.integration-check.ts}`. `fetchPageContent()`/`searchWeb()` reimplement `electron/hiddenBrowser.js`'s `hiddenFetch`/`hiddenSearch` on BRW-1's launcher + BRW-2's `CdpBrowserPage` (`navigate` → settle → `get_text`/`evaluate`) instead of an offscreen Electron `BrowserWindow` — same per-call launch/connect/close lifecycle as `hiddenBrowser.js`'s `withWindow()`, same 3-engine Google→DDG→Bing search cascade and scrape selectors, same text-cleaning/truncation behavior. **What did NOT land this ticket**: `backend/apps/web/web.py` is read-only for this ticket per its own instructions, so the new engine-backed tier lives entirely in `fetch.ts`, not wired into `web.py`'s cascade or a live `/api/*` route yet — checked `engine/src/server.ts` (exists, from the concurrent ENG-1 stage) and found its `'native'` branch is still ENG-1's bare 501 placeholder with **no per-name handler-dispatch mechanism at all**, only proxy-vs-not; building that dispatch registry from scratch is Phase ENG's skeleton work, not this ticket's, and restructuring `engine/` further than this ticket's own files was explicitly out of scope. So `/ws/electron-main` (`electron/main.js:3025`) is **not yet retired** — it still has its two callers in `web.py` (`try_browser_fetch`/`try_browser_search`); that retirement needs (a) a native-route seam in `server.ts` (Phase ENG) and (b) `web.py`'s read-only constraint lifted for a follow-up ticket that adds the engine-backed tier to its cascade and deletes the bridge call. Exported functions are directly importable in the meantime by whatever lands that wiring. Nothing in `electron/**` or `backend/**` was touched. **Gate (a) — unit tests, run for real**: `npx vitest run src/browser/` — 9/9 new tests pass via dependency-injected fakes (`EngineBrowserDeps`) covering navigate→settle→read, navigation-error short-circuit (get_text never called), empty-page→error (matches `hiddenFetch`), maxChars truncation, cleanup-on-connect-throw, search cascade stop-at-first-hit, cascade fall-through on zero results, aggregated all-engines-failed error, and numResults capping; full `engine/` browser suite (mine + BRW-1/2/3's) is 43/43 green together (`main.ts`/`server.ts`/`server.test.ts` have pre-existing `authToken`-shape `tsc` errors from the concurrent ENG-2 stage, confirmed via `git status` as untracked files this ticket never touched — not this ticket's regression). **Gate (b) — real integration, run for real**: `npx tsx src/browser/fetch.integration-check.ts` launched a real system Edge (BRW-1), navigated to a local `data:` URL (per the ticket's own instruction to avoid a live-network dependency), and confirmed the returned `text` contained the test page's real sentence AND the returned `title` reflected an in-page `<script>`'s runtime mutation (`"...(script ran)"`) — proof this is a real render, not a static HTML parse. As a secondary, non-gate-blocking check, also ran `searchWeb()` against the live network and it genuinely returned 3 real DuckDuckGo results. Not committed — uncommitted working-tree edits pending `harness/review.mjs`. |
 | BRW-6 | ✅ done | ✅ pass (real E2E mechanism test) | `engine/src/browser/{cookies.ts,cookies.test.ts,cookies.integration-check.ts}`; `frontend/src/app/pages/Tools/cards/BrowserLoginConnect.tsx`; `engine/src/{server.ts,main.ts}`; `frontend/src/shared/i18n/{en,pt-BR}.json`. **The named escalation point did NOT fire** — the visible-window + CDP-cookie-capture mechanism worked cleanly on a real attempt, first try. `captureLoginCookies()` launches a REAL, non-headless external Chromium (BRW-1's launcher, `headless` left at its default `false`), navigates it to a login URL, detects completion via either of the two ticket-named strategies (a configurable success-cookie name appearing, or a URL-pattern match on a post-login redirect), then reads cookies via CDP `Network.getCookies()` — no Electron partition involved. Per-domain success-cookie names (`KNOWN_LOGIN_SUCCESS_COOKIES`) are duplicated from `backend/main.py`'s `P_SESSION_AUTH_COOKIES`/`P_SESSION_COOKIE_DOMAINS` (backend/** frozen for this ticket) covering reddit.com/x.com/twitter.com/tiktok.com, same allowlist trust posture as Electron's `SESSION_COOKIE_DOMAINS`. Wired into `server.ts` as a native `/api/browser-session/{login,status,cookies}` HTTP handler, checked ahead of split.ts's name-based routing (same convention BRW-4 set for the screencast WS upgrade), gated on `MAESTRO_BROWSER_ENGINE=cdp` — under the default `electron` mode these paths are byte-for-byte untouched (still proxy straight to Python's existing `readPartitionCookies`-backed implementation, `electron/main.js:2974`/`backend/main.py:652-707`). `BrowserLoginConnect.tsx`'s "Sign in" button is a plain `<button onClick>` under cdp mode (POSTs `{domain, loginUrl}` to `/api/browser-session/login`, then reuses its existing status-poll loop, now also reading a `pending` field to show a spinner chip) instead of the electron-mode `<a href>` AppShell's anchor handler would otherwise route into the (wrong, screencast-canvas) browser card — the `<a href>` branch itself is byte-identical to before this ticket. **Gate, run for real, both parts**: (1) a real visible window: `launchBrowser()` (headed) launched a real `msedge.exe`, and an independent PowerShell/Win32 check (`IsWindowVisible` on the process's `MainWindowHandle`) confirmed `VISIBLE=True` with a real window title ("Nova guia - Pessoal - Microsoft Edge") — proof this is a genuine interactive OS window, not headless; (2) `cookies.integration-check.ts` ran the full mechanism against live `httpbin.org` (a real external site, no account/2FA needed, sets a real cookie on a trivial interaction — the ticket's own suggested substitute for an autonomously-uncompletable real social-site login): cookie-name detection captured the exact requested value, URL-pattern-only detection (cookie-name detection deliberately disabled) also captured the exact requested value proving the second strategy independently, and a deliberate no-signal-ever-fires case reported an honest timeout error with zero false-positive cookies rather than a silent bad success. 11/11 new vitest tests pass (dependency-injected fake CDP session/browser, no real process); full `engine/` suite is 288/291 passing together (3 pre-existing skips, unrelated) — `tsc --noEmit` and `npm run build` both clean; frontend `tsc --noEmit`, the touched-file ESLint pass, and `npm run build` (both `MAESTRO_BROWSER_ENGINE` unset and `=cdp`) are all clean, and the default (electron-mode) production build was restored as the final `frontend/dist` state. **Deliberately NOT done** (out of this ticket's own scope, per its instructions): making `backend/apps/social_shims/session_source.py`'s MCP-shim consumer itself engine-aware end-to-end — that is SUB-9's job, which already lists BRW-6 as its dependency; and `/api/browser-session/action` (TikTok's write-delegation bridge) still falls through to the old proxy path even under cdp mode (no visible-browser equivalent built for it here), a documented gap for whoever picks up that surface later. `docs/plans/2026-08-31-txm-tauri-typescript-migration.md`'s own fallback language (a transitional Electron-hosted browser tier on Windows) was **not needed** — recorded here so it isn't second-guessed later without cause. |
-| BRW-7 | ⛔ blocked | ✅ ran (real, failed) | Both-shell parity gate. **All of BRW-1..6 are individually done with their own gates green** (see rows above) — this ticket is not blocked on any of them being incomplete. It is blocked on a phase-boundary integration gap none of BRW-1..6 owned: `/ws/browser-screencast` (BRW-4's CDP canvas route) is implemented **only** in `engine/src/server.ts` (the Node engine from Phase ENG) — confirmed by grep, zero hits in `backend/` or `electron/`. Neither shell's real backend-launch code spawns that Node engine: `electron/main.js` and `tauri/src/sidecar.rs` (TAU-3) both spawn `backend.main:app` (Python/uvicorn) directly. **Live gate run for real** (not just static grep): wrote a throwaway probe (`e2e/contract/brw7-gate.probe.ts`, deleted after use) reusing `e2e/contract/fixtures.ts`'s `bootBackend()` to boot (a) plain Python via uvicorn — what both Electron's and Tauri's real spawn code actually launches — and (b) the compiled Node engine (`CONTRACT_ENGINE=1`) with `MAESTRO_BROWSER_ENGINE=cdp`, then attempted a real WS upgrade to `/ws/browser-screencast` against each. Result: **Python-direct → `ERROR` (rejected/unreachable)**; **Node engine → `OPEN` (route reachable)**. This means: setting `MAESTRO_BROWSER_ENGINE=cdp` today, in either a dev or packaged build of either shell, produces a browser card whose canvas cannot connect to anything — there is no live parity to gate because the CDP path does not run end-to-end in either shell yet, only inside the Node engine standalone (already proven working by BRW-1..6's own integration-checks) and BRW-4's bespoke webpack harness (which stands the engine server up manually, bypassing the real shell launch path entirely). **Practical implication**: closing this gap is not BRW-work — it needs a ticket (ENG or AGT phase) that makes Electron and/or Tauri actually spawn/proxy through `engine/dist/main.js` instead of talking to Python directly, which is exactly the "flip to native" territory AGT-6 names but scoped to `/api/agents`+`/ws/agents` only; a browser-specific equivalent doesn't exist as a ticket yet and should be added before BRW-7 can be re-attempted. **e2e/ has zero browser-agent-aware specs today** (searched all of `e2e/tests`, `e2e/golden`, `e2e/golden-tauri`, `e2e/contract` — only `e2e/tests/multi-window-stress.spec.ts` touches a browser card at all, and it drives the old Electron `<webview>` path unconditionally, with no `MAESTRO_BROWSER_ENGINE` awareness and no packaged-build script wired to run it standalone in this environment) — so step 1's "run whatever browser-agent e2e specs exist" surfaced none to run against either shell; the live WS probe above is what stands in for that. **Step 2 (backend confirmation) done, unaffected as expected**: `backend/tests/test_browser_*.py` — 289 passed, 1 failed (`test_browser_metrics.py::test_task_secrets_are_scrubbed_from_tasks_jsonl`), and that failure is confirmed to be exactly one of the 6 pre-existing Windows-environment deselects already named in `CLAUDE.md`/`scripts/verify.mjs` (POSIX file-mode assertion), not a regression — `backend/**` was untouched this phase as required. Supplementary: `engine/src/browser/*`'s own vitest suite still 65/65 green (BRW-1..6's building blocks remain healthy in isolation). Nothing committed; no files changed by this ticket itself (probe script was written and deleted, not left in the tree). |
+| BRW-7 | ⛔ blocked (re-run pending) | ✅ ran (real, failed) | **Update 2026-09-01, WIRE-1**: the wiring gap this row names is now closed — `tauri/src/sidecar.rs` can spawn `engine/dist/main.js` under `MAESTRO_USE_ENGINE=1`, and a live WS probe against the real running Tauri app (switch on + `MAESTRO_BROWSER_ENGINE=cdp`) got `RESULT: OPEN` on `/ws/browser-screencast` through the app's own port — see WIRE-1's row in the WORK QUEUE section for the full gate. This ticket's own probe/parity language has not been formally re-run yet (still open, hence the status staying ⛔ rather than flipping to ✅ here) and packaged-mode isn't covered (`engine/dist/` has no `tauri.conf.json` `bundle.resources` entry yet) — but the specific blocker text below (no shell spawns the engine) is stale as of WIRE-1. Original blocked finding, preserved for context: both-shell parity gate. **All of BRW-1..6 are individually done with their own gates green** (see rows above) — this ticket is not blocked on any of them being incomplete. It is blocked on a phase-boundary integration gap none of BRW-1..6 owned: `/ws/browser-screencast` (BRW-4's CDP canvas route) is implemented **only** in `engine/src/server.ts` (the Node engine from Phase ENG) — confirmed by grep, zero hits in `backend/` or `electron/`. Neither shell's real backend-launch code spawns that Node engine: `electron/main.js` and `tauri/src/sidecar.rs` (TAU-3) both spawn `backend.main:app` (Python/uvicorn) directly. **Live gate run for real** (not just static grep): wrote a throwaway probe (`e2e/contract/brw7-gate.probe.ts`, deleted after use) reusing `e2e/contract/fixtures.ts`'s `bootBackend()` to boot (a) plain Python via uvicorn — what both Electron's and Tauri's real spawn code actually launches — and (b) the compiled Node engine (`CONTRACT_ENGINE=1`) with `MAESTRO_BROWSER_ENGINE=cdp`, then attempted a real WS upgrade to `/ws/browser-screencast` against each. Result: **Python-direct → `ERROR` (rejected/unreachable)**; **Node engine → `OPEN` (route reachable)**. This means: setting `MAESTRO_BROWSER_ENGINE=cdp` today, in either a dev or packaged build of either shell, produces a browser card whose canvas cannot connect to anything — there is no live parity to gate because the CDP path does not run end-to-end in either shell yet, only inside the Node engine standalone (already proven working by BRW-1..6's own integration-checks) and BRW-4's bespoke webpack harness (which stands the engine server up manually, bypassing the real shell launch path entirely). **Practical implication**: closing this gap is not BRW-work — it needs a ticket (ENG or AGT phase) that makes Electron and/or Tauri actually spawn/proxy through `engine/dist/main.js` instead of talking to Python directly, which is exactly the "flip to native" territory AGT-6 names but scoped to `/api/agents`+`/ws/agents` only; a browser-specific equivalent doesn't exist as a ticket yet and should be added before BRW-7 can be re-attempted. **e2e/ has zero browser-agent-aware specs today** (searched all of `e2e/tests`, `e2e/golden`, `e2e/golden-tauri`, `e2e/contract` — only `e2e/tests/multi-window-stress.spec.ts` touches a browser card at all, and it drives the old Electron `<webview>` path unconditionally, with no `MAESTRO_BROWSER_ENGINE` awareness and no packaged-build script wired to run it standalone in this environment) — so step 1's "run whatever browser-agent e2e specs exist" surfaced none to run against either shell; the live WS probe above is what stands in for that. **Step 2 (backend confirmation) done, unaffected as expected**: `backend/tests/test_browser_*.py` — 289 passed, 1 failed (`test_browser_metrics.py::test_task_secrets_are_scrubbed_from_tasks_jsonl`), and that failure is confirmed to be exactly one of the 6 pre-existing Windows-environment deselects already named in `CLAUDE.md`/`scripts/verify.mjs` (POSIX file-mode assertion), not a regression — `backend/**` was untouched this phase as required. Supplementary: `engine/src/browser/*`'s own vitest suite still 65/65 green (BRW-1..6's building blocks remain healthy in isolation). Nothing committed; no files changed by this ticket itself (probe script was written and deleted, not left in the tree). |
 | | | | **⚑ PHASE BRW: 6/7 done, 1 blocked at the parity gate on an out-of-phase wiring gap, not on any BRW ticket's own work.** The CDP browser engine is real and independently proven (launcher, CDP transport, screencast, canvas, fetch/search, visible-window login-cookie capture) but is not yet reachable through either shell's actual process launch — only through the Node engine standalone. `MAESTRO_BROWSER_ENGINE` stays defaulted to `electron` (today's Electron `<webview>` behavior, unmodified and unregressed by this phase) until a follow-up wires the engine into a shell's real launch path and BRW-7 is re-run. |
 
 ## Phase ENG — TypeScript engine skeleton + infra
@@ -124,7 +313,7 @@ pushed; changes sit as uncommitted working-tree edits pending review.
 |---|---|---|---|
 | AGT-1 | ⬜ | — | Provider registry + env adapter |
 | AGT-2 | ⬜ | — | WS manager + session models |
-| AGT-3 | ⬜ | — | MockAgent seam (byte-identical to Python) |
+| AGT-3 | ✅ done | ✅ pass (byte-identical, one documented exception) | **Run out of order, ahead of AGT-1/AGT-2** (neither had landed yet — `engine/src/agents/` didn't exist): built the minimal slice of what they'll eventually own, scoped tightly to what `MockAgent.run_mock_turn` touches, and documented every cut so AGT-1/AGT-2 know what to extend vs. replace. **Files**: `engine/src/agents/{models,seqLog,wsManager,RunSupport,MockAgent,AgentManager,uuid,pyJson}.ts` + matching `*.test.ts` (23 new vitest tests, all green; `tsc --noEmit` and `eslint src` both clean). `models.ts` ports `Message`/`MessageBranch`/`AgentSession` (not the rest of `core/models.py` — no `ApprovalRequest`/`AgentConfig`/`ToolGroupMeta`, unneeded by the mock seam) field-for-field, same declared order pydantic's `model_dump(mode="json")` walks (verified interactively against the real backend, see the gate below). `seqLog.ts`/`wsManager.ts` port only `seq_log.py`'s `stamp()` and `ws_manager.py`'s `send_to_session` — ring-buffer replay, terminal persistence, and the `agent:message` analytics bridge are explicit scope cuts (nothing in the engine has a real `/ws/agents` connection or an analytics backend to bridge into yet). `pyJson.ts` is a new, small but load-bearing piece: a `json.dumps`-compatible serializer, because plain `JSON.stringify` can't reproduce Python's `0.0` vs `0` float-vs-int rendering (JS has one `number` type) — without it `cost_usd` etc. would show a spurious byte diff against the reference forever, not just in this ticket. `AgentManager.ts`'s `runAgentLoop` is the seam itself: the `MAESTRO_MOCK_AGENT=1` check is the literal first thing after resolving the session, with the (unimplemented) real path as a throw textually AFTER it — so AGT-4+'s provider-resolution code has to be added below the check, not in front of it, mirroring `agent_manager.py`'s ordering by construction, not by convention. `runMockAgent` (the SDK-missing dev fallback) is ported too for completeness but is explicitly NOT gated — it needs a real HITL approval bridge (`ws_manager.send_approval_request`) that doesn't exist in the engine yet; its `requestApproval` dependency throws by default rather than faking a decision. **GATE — executed for real, not assumed**: wrote two driver scripts (Python: `backend/.venv/Scripts/python.exe` against the real `AgentManager.run_agent_loop` with `MAESTRO_MOCK_AGENT=1` set, so the actual seam runs, not `run_mock_turn` called in isolation; TS: `npx tsx` against the new `runAgentLoop`), both constructing an identical fixture session (same id/name/model/mode/cwd/`created_at`/branch `created_at`) and calling it with the same prompt. Non-determinism was pinned two ways: MockAgent's own `uuid4()` call was monkeypatched **in the driver script only** (backend/** itself untouched) to a fixed value shared by both sides; `ws_manager.send_to_session` was swapped for a recorder that still goes through the real `seq_log.stamp()` (so seq assignment is the real logic, not reimplemented) but skips the socket fan-out/analytics/persistence side effects, which have no bearing on the payload being compared. Both drivers dumped the raw per-event wire strings (not re-parsed-and-re-dumped JSON, which would have silently swallowed the float-rendering issue `pyJson.ts` exists to prevent) to files, `diff -u`'d directly. **Result: identical except the assistant reply's `Message.timestamp` field (two occurrences — the standalone `agent:message` event and the same message embedded again in `agent:status`'s session snapshot)** — after normalizing just that field, `diff` reports zero differences across all 10 events (stream_start, 6×stream_delta, stream_end, agent:message, agent:status), including seq numbers, event names, key order, and the full nested `AgentSession`/`Message` JSON (`cost_usd: 0.0` included, matching byte-for-byte thanks to `pyJson.ts`). **The timestamp exception is the ticket's own named fair one**: `MockAgent.py` constructs that `Message` without passing `timestamp=`, so pydantic's `Field(default_factory=datetime.now)` fires with the real wall clock every run — there is no way to pin it without editing `backend/**`, which this ticket may not touch; the TS port reproduces the identical real-timestamp behavior (not a workaround, a faithful mirror of what the reference does). Driver scripts and dumps kept in the scratchpad only; the throwaway TS driver that briefly lived at `engine/agt3_gate_driver.ts` was deleted after the run, same cleanup discipline WIRE-1's probe followed. **Full `engine/` vitest suite also re-run**: 364 passed / 6 failed / 3 skipped — the 6 failures are all in `src/settings/loopback.test.ts`, pre-existing and environmental (`EADDRINUSE :20128` — confirmed via `Get-NetTCPConnection` that PID 59032, unrelated to this session, already holds that port on this machine), not caused by or related to this ticket (loopback.ts is untouched by AGT-3). **What AGT-1/AGT-2 should treat this as**: `models.ts`'s `Message`/`AgentSession`/`MessageBranch` ports are complete and reusable as-is; `seqLog.ts`/`wsManager.ts` are a real but partial foundation (no replay/persistence/real sockets) that AGT-2 will need to extend, not replace. |
 | AGT-4 | ⬜ | — | Turn runner on @anthropic-ai/claude-agent-sdk — CLI version pin critical |
 | AGT-5 | ⬜ | — | Permission gates, prompt composition, session lifecycle |
 | AGT-6 | ⬜ | — | ⚑ MILESTONE: flip /api/agents + /ws/agents to native |

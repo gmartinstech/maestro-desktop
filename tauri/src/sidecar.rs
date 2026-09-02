@@ -162,6 +162,96 @@ impl BackendRoot {
     }
 }
 
+// WIRE-1: MAESTRO_USE_ENGINE=1 makes the sidecar spawn the TypeScript engine
+// (engine/dist/main.js, under Node) instead of spawning Python directly. The engine then spawns
+// Python itself as ITS OWN child (engine/src/pythonBackend.ts) -- so with the switch on there is
+// still exactly one python.exe in the whole tree, just one hop deeper (app.exe -> node.exe ->
+// python.exe instead of app.exe -> python.exe). Unset (the default) is byte-for-byte today's
+// behavior: spawn_backend() below, nothing else in this file changed. Naming matches the two
+// switches engine/src/split.ts and pythonBackend.ts already established
+// (MAESTRO_ENGINE_ROUTES, MAESTRO_BROWSER_ENGINE) -- one flag, opt-in, read once at boot.
+pub fn use_engine() -> bool {
+    std::env::var("MAESTRO_USE_ENGINE").map(|v| v == "1").unwrap_or(false)
+}
+
+// Where the built engine entry point lives. Mirrors python_path()'s own dev-vs-packaged split:
+// dev is the repo checkout's engine/dist/main.js (produced by `cd engine && npm run build`);
+// packaged would be <resource_dir>/engine/dist/main.js, the same "stage it under resources and
+// nothing else needs to change" shape python_path()'s packaged branch already uses for
+// python-env -- not staged by tauri.conf.json's bundle.resources yet (same open gap as the
+// Python payload itself, see docs/plans/txm-status.md's "Build-artifact readiness" section), so a
+// real packaged build with the switch on will hit spawn_engine()'s missing-file error below rather
+// than silently doing something else.
+fn engine_entry_path(root: &BackendRoot) -> PathBuf {
+    root.root.join("engine").join("dist").join("main.js")
+}
+
+// Node executable to run the engine with. MAESTRO_NODE_PATH (same variable name
+// electron/main.js's bundled-node lookup uses, per this repo's own convention) overrides when set
+// -- lets a packaged build point at a bundled Node the same way it will eventually point at a
+// bundled python-env -- otherwise falls back to whatever `node` resolves to on PATH, which is the
+// right choice for the dev opt-in path this ticket targets.
+fn node_command() -> PathBuf {
+    match std::env::var("MAESTRO_NODE_PATH") {
+        Ok(p) if !p.trim().is_empty() => PathBuf::from(p),
+        _ => PathBuf::from("node"),
+    }
+}
+
+// Mirrors backend_env() but for the engine: MAESTRO_ENGINE_PORT/HOST are the two vars
+// engine/src/main.ts reads to pick its bind address (see that file's enginePort()); MAESTRO_PACKAGED
+// is forwarded the same way backend_env() computes it, since engine/src/auth/token.ts's
+// resolveDataRoot() branches on it exactly like backend/config/paths.py does. Everything else
+// (MAESTRO_ENGINE_ROUTES, MAESTRO_BROWSER_ENGINE, MAESTRO_DATA_ROOT, ...) is inherited unchanged
+// from this process's own env, same "don't .env_clear()" posture backend_env() documents.
+fn engine_env(port: u16, root: &BackendRoot) -> HashMap<&'static str, String> {
+    let mut env = HashMap::new();
+    env.insert("MAESTRO_ENGINE_PORT", port.to_string());
+    env.insert("MAESTRO_ENGINE_HOST", BACKEND_HOST.to_string());
+    env.insert("MAESTRO_PACKAGED", if root.is_packaged { "1" } else { "0" }.to_string());
+    env
+}
+
+/// Spawns `node <root>/engine/dist/main.js` bound to `port`, mirroring spawn_backend()'s shape
+/// (piped stdout/stderr teed into the Rust log, cwd = repo root in dev). Fails loudly -- a plain
+/// `std::io::Error` with an actionable message -- if engine/dist/main.js doesn't exist yet, rather
+/// than silently falling back to spawning Python directly: MAESTRO_USE_ENGINE=1 is an explicit ask
+/// for the engine path, and a silent fallback would hide exactly the "did my build actually run"
+/// question a developer flipping this switch is asking. The engine spawns its own Python child
+/// (engine/src/pythonBackend.ts) after this returns -- this function itself never touches Python.
+pub fn spawn_engine(root: &BackendRoot, port: u16) -> std::io::Result<Child> {
+    let entry = engine_entry_path(root);
+    if !entry.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "MAESTRO_USE_ENGINE=1 but {} does not exist -- build it first: `cd engine && npm run build`",
+                entry.display()
+            ),
+        ));
+    }
+    let node = node_command();
+    log::info!("[sidecar] starting engine: {} {} on port {}", node.display(), entry.display(), port);
+    let mut cmd = Command::new(&node);
+    cmd.arg(&entry)
+        .current_dir(&root.root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (k, v) in engine_env(port, root) {
+        cmd.env(k, v);
+    }
+    let mut child = cmd.spawn()?;
+
+    if let Some(stdout) = child.stdout.take() {
+        thread::spawn(move || pipe_to_log(stdout, false));
+    }
+    if let Some(stderr) = child.stderr.take() {
+        thread::spawn(move || pipe_to_log(stderr, true));
+    }
+    Ok(child)
+}
+
 // Mirrors electron/main.js's getPythonPath(): dev branch is win32 .venv/Scripts/python.exe /
 // posix .venv/bin/python3 relative to the repo root; packaged branch is <resource_dir>/python-env/
 // {python.exe | bin/python3} -- the exact layout electron-builder's `extraResources` (from:
@@ -259,6 +349,19 @@ pub fn dirs_home() -> PathBuf {
 /// Races a preferred-range probe against a wall clock, same tradeoff as electron/main.js's
 /// pickBackendPort(): try 8324..8424 on 127.0.0.1 (the exact interface uvicorn binds), and fall
 /// back to an OS-assigned ephemeral port if the whole range is occupied.
+///
+/// TRI-1 triage (bind-then-drop TOCTOU, confirmed real, not fixed further): the listener above is
+/// dropped before the caller's child process gets anywhere near actually binding the same port, so
+/// another process on the machine could in principle steal it first. Closing that window for real
+/// needs OS-level socket handoff (bind here, pass the fd/handle to the spawned Python process,
+/// have uvicorn attach to it instead of calling its own bind()) -- that requires backend-side
+/// cooperation, out of scope while backend/** is frozen this phase. This is not a regression: it is
+/// the exact tradeoff electron/main.js's pickBackendPort() already made. It is also already bounded
+/// and self-healing here: a stolen port makes the spawned child fail its own bind and exit almost
+/// immediately, which spawn_supervisor's loop observes as an unexpected exit and retries with a
+/// freshly-probed port, subject to restart_policy's MAX_RESTARTS/backoff -- whose own sizing
+/// rationale (restart_policy.rs's module doc comment) explicitly names transient port issues as
+/// one of the causes that budget exists to absorb.
 pub fn pick_backend_port() -> u16 {
     for port in PREFERRED_PORT_RANGE {
         if let Ok(listener) = TcpListener::bind((BACKEND_HOST, port)) {
@@ -455,13 +558,20 @@ pub fn spawn_supervisor(app_handle: AppHandle, root: BackendRoot) {
         // thread for its whole lifetime, so borrowing the managed state through it for the
         // duration of the loop is sound without needing a `'static` reference or our own Arc.
         let sidecar: &Sidecar = app_handle.state::<Sidecar>().inner();
+        // WIRE-1: read once at supervisor start, not per-attempt -- flipping the env var mid-run
+        // isn't a supported scenario (same posture as every other MAESTRO_* switch in this repo).
+        let engine_mode = use_engine();
+        if engine_mode {
+            log::info!("[sidecar] MAESTRO_USE_ENGINE=1 -- spawning the TypeScript engine (engine/dist/main.js) instead of Python directly; the engine owns the one Python child from here on");
+        }
         let mut attempts: Vec<i64> = Vec::new();
         loop {
             let port = pick_backend_port();
-            let mut child = match spawn_backend(&root, port) {
+            let spawn_result = if engine_mode { spawn_engine(&root, port) } else { spawn_backend(&root, port) };
+            let mut child = match spawn_result {
                 Ok(c) => c,
                 Err(err) => {
-                    log::error!("[sidecar] backend failed to spawn: {}", err);
+                    log::error!("[sidecar] {} failed to spawn: {}", if engine_mode { "engine" } else { "backend" }, err);
                     // Treat a spawn failure the same as any other unexpected exit: it still
                     // consumes an attempt and is still subject to the same bound, matching
                     // electron/main.js (spawn 'error' there feeds into the same exit-driven
@@ -483,25 +593,58 @@ pub fn spawn_supervisor(app_handle: AppHandle, root: BackendRoot) {
             }
             *sidecar.child.lock().unwrap() = Some(child);
 
-            // Block until the child actually exits (whether it came up healthy and later
-            // crashed, or never came up at all) -- same as electron/main.js's 'exit' listener,
-            // which is what actually drives maybeRestartBackend().
-            let status = {
-                let mut guard = sidecar.child.lock().unwrap();
-                match guard.as_mut() {
-                    Some(c) => c.wait(),
-                    None => break, // shutdown() already took + killed it
-                }
-            };
-            *sidecar.child.lock().unwrap() = None;
+            // Wait for the child to exit (whether it came up healthy and later crashed, or never
+            // came up at all) -- same trigger as electron/main.js's 'exit' listener, which is what
+            // actually drives maybeRestartBackend(). Polls rather than blocking on Child::wait()
+            // while holding sidecar.child's mutex: a blocking wait() under that lock would make
+            // shutdown() (which also needs this same lock to force-kill a hung/long-running child)
+            // itself block until the child exits on its own -- exactly backwards for a forced
+            // teardown, and a real hang if the child never exits by itself. See wait_for_child_exit.
+            let status = wait_for_child_exit(sidecar);
             sidecar.ready.store(false, Ordering::SeqCst);
-            log::warn!("[sidecar] backend exited: {:?}", status);
+            match status {
+                Some(status) => log::warn!("[sidecar] backend exited: {:?}", status),
+                None => break, // shutdown() already took + killed it
+            }
 
             if !apply_restart_decision(&app_handle, sidecar, &mut attempts) {
                 return;
             }
         }
     });
+}
+
+/// Waits for the current child to exit, polling `Child::try_wait()` under a briefly-held lock
+/// instead of blocking on `Child::wait()` while holding `sidecar.child`'s mutex for the whole
+/// (possibly unbounded) duration -- see spawn_supervisor's call site for why that matters.
+/// Returns the exit status once the child has actually exited, or `None` if `shutdown()` already
+/// took (and killed) the child before this observed it -- the caller treats that as "stop, don't
+/// restart", matching the previous behavior's `None => break`.
+fn wait_for_child_exit(sidecar: &Sidecar) -> Option<std::process::ExitStatus> {
+    loop {
+        let mut guard = sidecar.child.lock().unwrap();
+        match guard.as_mut() {
+            None => return None,
+            Some(child) => match child.try_wait() {
+                Ok(Some(status)) => {
+                    *guard = None;
+                    return Some(status);
+                }
+                Ok(None) => {
+                    // Not exited yet: drop the lock BEFORE sleeping so a concurrent shutdown()
+                    // (or any other caller) can acquire it and force-kill the child immediately,
+                    // rather than waiting out however long this poll would otherwise take.
+                    drop(guard);
+                    thread::sleep(Duration::from_millis(100));
+                }
+                Err(err) => {
+                    log::error!("[sidecar] error polling backend exit status: {}", err);
+                    *guard = None;
+                    return None;
+                }
+            },
+        }
+    }
 }
 
 /// Runs one decide/act cycle of the restart policy against the current `sidecar` flags. Returns
@@ -540,4 +683,85 @@ fn apply_restart_decision(app_handle: &AppHandle, sidecar: &Sidecar, attempts: &
     );
     thread::sleep(Duration::from_millis(decision.delay_ms));
     true
+}
+
+#[cfg(test)]
+mod tests {
+    // Regression coverage for TRI-1 finding #4 (a real bug, confirmed and fixed): the supervisor
+    // used to block on `Child::wait()` while holding `sidecar.child`'s mutex for the whole
+    // (possibly unbounded) duration, so `shutdown()`'s own `self.child.lock()` -- needed to
+    // force-kill a hung/long-running child -- would itself block until the child exited on its
+    // own. That is exactly backwards for a forced teardown. `wait_for_child_exit` now polls
+    // `try_wait()` under a lock held only briefly per attempt, so shutdown() can interrupt it.
+    use super::*;
+    use std::sync::Arc;
+
+    fn spawn_long_running_child() -> Child {
+        // A process that reliably keeps running for ~30s without a test-specific binary: ping's
+        // own built-in interval, present on every Windows install (this crate targets Windows
+        // only per this repo's CLAUDE.md).
+        Command::new("ping")
+            .args(["-n", "30", "127.0.0.1"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("failed to spawn a long-running test child (ping)")
+    }
+
+    #[test]
+    fn shutdown_kills_a_long_running_child_promptly_even_during_a_concurrent_wait_poll() {
+        let sidecar = Arc::new(Sidecar::default());
+        *sidecar.child.lock().unwrap() = Some(spawn_long_running_child());
+
+        let poller_sidecar = Arc::clone(&sidecar);
+        let poller = thread::spawn(move || wait_for_child_exit(&poller_sidecar));
+
+        // Give the poller a moment to actually start looping (acquire + release the lock at
+        // least once) before racing shutdown() against it.
+        thread::sleep(Duration::from_millis(250));
+
+        let started = Instant::now();
+        sidecar.shutdown();
+        let elapsed = started.elapsed();
+
+        // Generous margin for CI slowness, but nowhere near the child's ~30s natural lifetime --
+        // that gap is exactly the deadlock this test guards against. Pre-fix, this assertion
+        // would see `elapsed` on the order of 29+ seconds (or hang until the test harness's own
+        // timeout), since shutdown() couldn't acquire the mutex until the ping process exited by
+        // itself.
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "shutdown() took {:?} to kill a still-running child -- it should force-kill \
+             promptly instead of waiting out the child's natural lifetime",
+            elapsed
+        );
+
+        // The poller must actually return (not hang forever on a child that's already gone), and
+        // must report "already taken by shutdown()" (None), not a status it invented itself.
+        let poller_result = poller.join().expect("poller thread panicked");
+        assert_eq!(poller_result, None);
+    }
+
+    #[test]
+    fn wait_for_child_exit_reports_the_real_exit_status_for_a_child_that_exits_on_its_own() {
+        let sidecar = Sidecar::default();
+        // A trivial, fast-exiting child -- unlike the other test, this one is meant to finish on
+        // its own so wait_for_child_exit's Ok(Some(status)) branch (not the shutdown-raced None
+        // branch) is what gets exercised.
+        let child = Command::new("cmd")
+            .args(["/C", "exit 0"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("failed to spawn a short-lived test child (cmd)");
+        *sidecar.child.lock().unwrap() = Some(child);
+
+        let status = wait_for_child_exit(&sidecar);
+        assert!(status.is_some(), "a child that exited on its own must report Some(status), not None");
+        assert!(status.unwrap().success());
+        // wait_for_child_exit must have cleared the slot so the caller doesn't see a stale Some.
+        assert!(sidecar.child.lock().unwrap().is_none());
+    }
 }

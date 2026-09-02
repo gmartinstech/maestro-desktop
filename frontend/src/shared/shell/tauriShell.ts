@@ -17,14 +17,32 @@ function noopUnsubscribe(member: string): () => void {
 }
 
 // The backend port is injected synchronously in Electron (preload's sendSync, before first paint);
-// Tauri's invoke() is inherently async, so this caches the last-known value and returns it
-// synchronously, same as a stale-but-usable read. TAU-4 should consider a synchronous injection
-// path (e.g. a global set by Rust before the window loads) if a cold-start stale read proves to
-// matter in practice.
-let cachedBackendPort = 0;
+// Tauri's invoke() is inherently async, so getBackendPortLive() has to return some synchronous
+// value before the first invoke('get_backend_port') round-trip can possibly resolve. Caching only
+// in memory (starting from 0 every load) meant frontend/src/shared/config.ts's module-level
+// `shell.getBackendPortLive() || 8324` always computed the hardcoded 8324 fallback on the very
+// first synchronous read of a fresh page load — wrong whenever the real backend landed on a
+// different port. sessionStorage survives a same-tab reload (not a fresh process), so the SECOND
+// time this module loads in the same session (e.g. after config.ts's own self-heal reload below
+// fires on a failed fetch) the synchronous read already has the real port from last time, correct
+// before any invoke() round-trip is needed.
+const PORT_CACHE_KEY = 'maestro.tauriShell.backendPort';
+function readCachedBackendPort(): number {
+  try {
+    const raw = typeof window !== 'undefined' ? window.sessionStorage.getItem(PORT_CACHE_KEY) : null;
+    const n = raw ? Number(raw) : 0;
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0; // sessionStorage can throw (privacy mode, disabled storage) -- fall back like no cache existed.
+  }
+}
+let cachedBackendPort = readCachedBackendPort();
 function refreshBackendPort(): void {
   invoke<number>('get_backend_port')
-    .then((p) => { cachedBackendPort = p; })
+    .then((p) => {
+      cachedBackendPort = p;
+      try { window.sessionStorage.setItem(PORT_CACHE_KEY, String(p)); } catch { /* best-effort cache */ }
+    })
     .catch((err) => console.warn('[tauriShell] get_backend_port failed:', err));
 }
 // index.ts imports this module unconditionally on every platform; only actually invoke a Tauri
