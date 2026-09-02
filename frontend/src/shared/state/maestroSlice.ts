@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { API_BASE } from '@/shared/config';
+import { shell } from '@/shared/shell';
 
 const SETTINGS_API = `${API_BASE}/settings`;
 
@@ -56,9 +57,7 @@ export const startMaestroLogin = createAsyncThunk(
     const data = await res.json().catch(() => null);
     const url = typeof data?.authorize_url === 'string' ? data.authorize_url : '';
     if (url) {
-      const api = (window as any).maestro;
-      if (api?.openExternal) api.openExternal(url);
-      else window.open(url, '_blank');
+      shell.openExternal(url);
     }
     return true;
   },

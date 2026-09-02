@@ -13,6 +13,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { setChecking, setUpdateError, setInstalling } from '@/shared/state/updateSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
+import { shell } from '@/shared/shell';
 import type { SettingsStyles } from '../settingsStyles';
 
 const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => {
@@ -32,7 +33,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
       dispatch(setUpdateError('Update check timed out. Please try again.'));
     }, 15000);
     try {
-      await (window as any).maestro?.checkForUpdates();
+      await shell.checkForUpdates();
     } catch {
       /* error handled via IPC event listener */
     } finally {
@@ -41,13 +42,13 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
   };
 
   const handleOpenMicrosoftStore = async () => {
-    const result = await window.maestro.openStoreUpdates();
+    const result = await shell.openStoreUpdates();
     if (!result.success) dispatch(setUpdateError(result.error || 'Microsoft Store is unavailable for this install.'));
   };
 
   const handleDownloadUpdate = async () => {
     try {
-      await (window as any).maestro?.downloadUpdate();
+      await shell.downloadUpdate();
     } catch {
       /* error handled via IPC event listener */
     }
@@ -56,7 +57,7 @@ const SoftwareUpdateRow: React.FC<{ styles: SettingsStyles }> = ({ styles }) => 
   const handleInstallUpdate = () => {
     if (installing) return;
     dispatch(setInstalling());
-    (window as any).maestro?.installUpdate();
+    shell.installUpdate();
   };
 
   return (

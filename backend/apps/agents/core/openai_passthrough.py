@@ -97,9 +97,11 @@ def scrub_gpt5_params(body: bytes) -> bytes:
     return json.dumps(parsed).encode("utf-8") if mutated else body
 
 
+# Explicit operation_id: FastAPI's default generator picks list(route.methods)[0], and route.methods is a set, so without this the generated id flip-flops across process restarts with different PYTHONHASHSEED values.
 @openai_passthrough.router.api_route(
     "/v1/{rest:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    operation_id="openai_passthrough_v1_dispatch",
 )
 async def passthrough(rest: str, request: Request):
     body = await request.body()

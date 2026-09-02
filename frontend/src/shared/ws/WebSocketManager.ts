@@ -37,6 +37,55 @@ import { upsertRun, ackRun, runWorkflowNow, openWorkflowCard, upsertWorkflow, re
 import { stepsSignature } from '@/app/pages/Workflows/schedule/scheduleUtils';
 import { getAuthToken } from '../config';
 import { notifyAgentCompletion } from '../notifications';
+import { shell } from '../shell';
+import type { AgentSession } from '../state/agentsSlice';
+import type { Output } from '../state/outputsSlice';
+import type { Workflow, WorkflowRun } from '../state/workflowsTypes';
+import type { BrowserCardPosition } from '../state/dashboardLayoutSlice';
+import type {
+  WsAgentMessageEvent,
+  WsAgentStreamStart,
+  WsAgentStreamDelta,
+  WsAgentStreamEnd,
+  WsAgentApprovalRequest,
+  WsAgentCostUpdate,
+  WsAgentContextUpdate,
+  WsAgentContextOverflow,
+  WsAgentRateLimited,
+  WsAgentContextStatus,
+  WsAgentTurnLabel,
+  WsAgentAuthError,
+  WsAgentOutOfTokens,
+  WsAgentMcpSuggestions,
+  WsAgentBranchCreated,
+  WsAgentBranchSwitched,
+  WsAgentNameUpdated,
+  WsAgentGroupMetaUpdated,
+  WsAgentClosed,
+} from '../../../../contract/ws/agents';
+import type {
+  WsAgentTestState,
+  WsWorkflowDeleted,
+  WsWorkflowNotify,
+  WsDashboardBrowserCardKeep,
+} from '../../../../contract/ws/dashboard';
+
+// Merged view of agent:status's two production shapes (contract/ws/agents.ts's
+// WsAgentStatusFull / WsAgentStatusLite): `session` is present on the full form only.
+// Kept as one optional-field type here (rather than the exact discriminated union) because
+// this handler branches on the KEY'S PRESENCE, not on a second discriminant field. `session`,
+// when present, is dispatched straight into the Redux store's AgentSession slot (updateSession),
+// so it's typed against that canonical shape rather than the contract's deliberately-partial
+// WsAgentSessionSnapshot (see contract/ws/agents.ts's doc comment on that type).
+type WsAgentStatusData = { session_id: string; status: AgentSession['status']; session?: AgentSession };
+
+// Same convention as WsAgentStatusData above: these dashboard-only events (contract/ws/dashboard.ts)
+// embed a whole row that's dispatched straight into the matching Redux slice, so it's typed
+// against that canonical shape rather than the contract's deliberately wire-relevant-only pin.
+type WsAgentOutputUpsertedData = { output: Output };
+type WsWorkflowUpdatedData = { workflow_id: string; workflow: Workflow };
+type WsWorkflowRunData = { workflow_id: string; run: WorkflowRun };
+type WsDashboardBrowserCardAddedData = { dashboard_id: string; browser_card: BrowserCardPosition; parent_session_id: string };
 
 // Phase 0 boot instrumentation: one-shot flag so we report the first streamed agent token to Electron main exactly once per app launch. Module scope (not instance) because multiple WebSocketManagers exist (one per session WS).
 let firstAgentResponseMarked = false;
@@ -152,7 +201,7 @@ class WebSocketManager {
     // Phase 0 boot instrumentation: the first streamed agent token is the "app is actually useful" milestone. Report it once to the Electron main process, which owns the timing log. Guarded by a module-level flag so this is a single no-op branch on every subsequent token.
     if (!firstAgentResponseMarked) {
       firstAgentResponseMarked = true;
-      try { (window as any).maestro?.markFirstAgentResponse?.(); } catch { /* not in Electron */ }
+      try { shell.markFirstAgentResponse(); } catch { /* not in Electron */ }
     }
     store.dispatch(streamDelta({ sessionId, messageId, delta }));
   }
@@ -363,14 +412,17 @@ class WebSocketManager {
     }
 
     switch (event) {
-      case 'agent:test_state':
+      case 'agent:test_state': {
         // broadcast_global puts everything under data (no top-level session_id).
+        const data = msg.data as WsAgentTestState['data'];
         if (data.session_id && data.state) {
           store.dispatch(setSessionTestState({ sessionId: data.session_id, state: data.state }));
         }
         break;
+      }
 
-      case 'agent:status':
+      case 'agent:status': {
+        const data = msg.data as WsAgentStatusData;
         // Capture pre-transition status so we only fire a system notification on a real running→terminal transition. Otherwise a session that was already 'completed' on disk and got refetched would re-toast.
         {
           const prevSession = session_id ? store.getState().agents.sessions[session_id] : undefined;
@@ -399,7 +451,7 @@ class WebSocketManager {
           if (
             session_id &&
             TERMINAL.has(data.status) &&
-            NON_TERMINAL.has(prevStatus as any) &&
+            NON_TERMINAL.has(prevStatus) &&
             data.session?.mode !== 'browser-agent' &&
             data.session?.mode !== 'sub-agent' &&
             data.session?.mode !== 'invoked-agent'
@@ -408,7 +460,7 @@ class WebSocketManager {
             if (sess) {
               const lastAssistant = [...(sess.messages || [])]
                 .reverse()
-                .find((m: any) => m.role === 'assistant' && typeof m.content === 'string');
+                .find((m) => m.role === 'assistant' && typeof m.content === 'string');
               notifyAgentCompletion({
                 sessionId: session_id,
                 sessionName: displaySessionName(sess.name),
@@ -461,26 +513,32 @@ class WebSocketManager {
           }
         }
         break;
+      }
 
-      case 'agent:message':
+      case 'agent:message': {
+        const data = msg.data as WsAgentMessageEvent['data'];
         if (session_id && data.message) {
           store.dispatch(addMessage({ sessionId: session_id, message: data.message }));
         }
         break;
+      }
 
-      case 'agent:output_upserted':
+      case 'agent:output_upserted': {
         // Emitted by the backend when an Output row is created (canvas-launched App Builder seed) or updated (post-session meta.json sync). The upsert reducer merges over an existing row so a UI that already loaded the row doesn't lose locally-applied fields.
+        const data = msg.data as WsAgentOutputUpsertedData;
         if (data.output && data.output.id) {
           store.dispatch(upsertOutput(data.output));
         }
         break;
+      }
 
       case 'agent:stream_start':
       case 'agent:stream_delta':
-      case 'agent:stream_end':
+      case 'agent:stream_end': {
         // Replay-skip guard. The WS resume protocol replays buffered events from the ring buffer with seq > last_seq. When this manager is freshly constructed (every AgentChat mount, because of `key={session.id}`), last_seq is 0, so the server replays EVERY buffered stream_* event for the session. Without this guard, opening any chat with prior streaming turns would replay every buffered delta as a live stream event, re-triggering the streaming UI on every reopen. The discriminator is `resumeAcked`: it flips to true when server:hello arrives, which the server sends AFTER the replay completes. Any stream_* event arriving while !resumeAcked is replay-from-buffer (historical) and can be dropped, the REST snapshot we awaited before connect is authoritative for any already-finalized message, and any genuinely live turn the server is pushing will continue emitting events after the ack.
         if (!this.resumeAcked) break;
         if (event === 'agent:stream_start') {
+          const data = msg.data as WsAgentStreamStart['data'];
           if (session_id && data.message_id) {
             store.dispatch(streamStart({
               sessionId: session_id,
@@ -490,10 +548,12 @@ class WebSocketManager {
             }));
           }
         } else if (event === 'agent:stream_delta') {
+          const data = msg.data as WsAgentStreamDelta['data'];
           if (session_id && data.message_id) {
             this.dispatchDelta(session_id, data.message_id, data.delta);
           }
         } else if (event === 'agent:stream_end') {
+          const data = msg.data as WsAgentStreamEnd['data'];
           if (session_id && data.message_id) {
             store.dispatch(streamEnd({
               sessionId: session_id,
@@ -502,8 +562,10 @@ class WebSocketManager {
           }
         }
         break;
+      }
 
-      case 'agent:approval_request':
+      case 'agent:approval_request': {
+        const data = msg.data as WsAgentApprovalRequest['data'];
         if (session_id) {
           store.dispatch(addApprovalRequest({
             sessionId: session_id,
@@ -520,8 +582,10 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:cost_update':
+      case 'agent:cost_update': {
+        const data = msg.data as WsAgentCostUpdate['data'];
         if (session_id) {
           store.dispatch(updateSessionCost({
             sessionId: session_id,
@@ -529,8 +593,10 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:context_update':
+      case 'agent:context_update': {
+        const data = msg.data as WsAgentContextUpdate['data'];
         if (session_id) {
           store.dispatch(updateSessionContext({
             sessionId: session_id,
@@ -545,8 +611,10 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:context_overflow':
+      case 'agent:context_overflow': {
+        const data = msg.data as WsAgentContextOverflow['data'];
         if (session_id) {
           store.dispatch(setContextOverflow({
             sessionId: session_id,
@@ -555,9 +623,11 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:rate_limited':
+      case 'agent:rate_limited': {
         // Provider throttle that outlasted the silent backoff. Transient muted pill, not a card; auto-clears frontend-side.
+        const data = msg.data as WsAgentRateLimited['data'];
         if (session_id) {
           store.dispatch(setRateLimited({
             sessionId: session_id,
@@ -565,6 +635,7 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
       case 'agent:context_recovered':
         // The backend hit a context-overflow crash mid-turn, rebuilt from its local copy, and retried on its own. Transient muted pill so the recovery is visible without reading like an error.
@@ -580,8 +651,9 @@ class WebSocketManager {
         }
         break;
 
-      case 'agent:context_status':
+      case 'agent:context_status': {
         // Auto-compaction collapsed older turns into a summary. Mirror compacted_through_msg_id locally so the renderer can drop a visible "N earlier turns summarized" chip into the transcript. Other reasons (cleared, etc.) flow through this same event but don't currently need a chip, ignore them for now.
+        const data = msg.data as WsAgentContextStatus['data'];
         if (session_id && data.reason === 'compacted') {
           store.dispatch(recordCompaction({
             sessionId: session_id,
@@ -589,9 +661,11 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:turn_label':
+      case 'agent:turn_label': {
         // Aux-LLM-generated verb-phrase for the current turn. Replaces the static "Thinking…" label until the turn ends, then the ThinkingBubble freezes to "Thought for Ns · M tokens".
+        const data = msg.data as WsAgentTurnLabel['data'];
         if (session_id && data.label) {
           store.dispatch(setTurnLabel({
             sessionId: session_id,
@@ -600,6 +674,7 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
       case 'agent:queued':
         // Admission gate: this turn is waiting for a concurrency slot; shows a "queued" chip so it doesn't read as a hung "working".
@@ -611,8 +686,9 @@ class WebSocketManager {
         if (session_id) store.dispatch(setQueued({ sessionId: session_id, queued: false }));
         break;
 
-      case 'agent:auth_error':
+      case 'agent:auth_error': {
         // Re-uses the context_overflow card slot, both are "this session is blocked, here's what to do" cards. Reason field disambiguates.
+        const data = msg.data as WsAgentAuthError['data'];
         if (session_id) {
           store.dispatch(setContextOverflow({
             sessionId: session_id,
@@ -623,9 +699,11 @@ class WebSocketManager {
         // A dead Maestro token failed a live turn; kick off the Keycloak login right away instead of waiting on the gate's next poll.
         if (data.reason === 'maestro_token_expired') store.dispatch(startMaestroLogin());
         break;
+      }
 
-      case 'agent:out_of_tokens':
+      case 'agent:out_of_tokens': {
         // Reuses the context_overflow card slot, same "this session is blocked, here's what to do" shape. Reason field disambiguates from auth/overflow.
+        const data = msg.data as WsAgentOutOfTokens['data'];
         if (session_id) {
           store.dispatch(setContextOverflow({
             sessionId: session_id,
@@ -634,8 +712,10 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:mcp_suggestions':
+      case 'agent:mcp_suggestions': {
+        const data = msg.data as WsAgentMcpSuggestions['data'];
         if (session_id) {
           store.dispatch(setMcpSuggestions({
             sessionId: session_id,
@@ -644,27 +724,35 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:branch_created':
+      case 'agent:branch_created': {
+        const data = msg.data as WsAgentBranchCreated['data'];
         if (session_id && data.branch) {
           store.dispatch(addBranch({ sessionId: session_id, branch: data.branch }));
           store.dispatch(setActiveBranch({ sessionId: session_id, branchId: data.active_branch_id }));
         }
         break;
+      }
 
-      case 'agent:branch_switched':
+      case 'agent:branch_switched': {
+        const data = msg.data as WsAgentBranchSwitched['data'];
         if (session_id) {
           store.dispatch(setActiveBranch({ sessionId: session_id, branchId: data.active_branch_id }));
         }
         break;
+      }
 
-      case 'agent:name_updated':
+      case 'agent:name_updated': {
+        const data = msg.data as WsAgentNameUpdated['data'];
         if (session_id && data.name) {
           store.dispatch(updateSessionName({ sessionId: session_id, name: data.name }));
         }
         break;
+      }
 
-      case 'agent:group_meta_updated':
+      case 'agent:group_meta_updated': {
+        const data = msg.data as WsAgentGroupMetaUpdated['data'];
         if (session_id && data.group_id) {
           store.dispatch(updateGroupMeta({
             sessionId: session_id,
@@ -675,8 +763,10 @@ class WebSocketManager {
           }));
         }
         break;
+      }
 
-      case 'agent:closed':
+      case 'agent:closed': {
+        const data = msg.data as WsAgentClosed['data'];
         if (session_id) {
           const closedStatus = data.status ?? 'stopped';
           // Don't evict a chat the user is actively watching from a workflow card; let it settle into a normal completed chat they can continue or close themselves.
@@ -711,8 +801,10 @@ class WebSocketManager {
           }
         }
         break;
+      }
 
-      case 'workflow:run':
+      case 'workflow:run': {
+        const data = msg.data as WsWorkflowRunData;
         if (data.run) {
           const run = data.run;
           store.dispatch(upsertRun(run));
@@ -723,20 +815,26 @@ class WebSocketManager {
           }
         }
         break;
+      }
 
-      case 'workflow:updated':
+      case 'workflow:updated': {
+        const data = msg.data as WsWorkflowUpdatedData;
         if (data.workflow) {
           store.dispatch(upsertWorkflow(data.workflow));
         }
         break;
+      }
 
-      case 'workflow:deleted':
+      case 'workflow:deleted': {
+        const data = msg.data as WsWorkflowDeleted['data'];
         if (data.workflow_id) {
           store.dispatch(removeWorkflow(data.workflow_id));
         }
         break;
+      }
 
-      case 'workflow:notify':
+      case 'workflow:notify': {
+        const data = msg.data as WsWorkflowNotify['data'];
         try {
           notifyAgentCompletion({
             sessionId: data.session_id || data.workflow_id,
@@ -745,8 +843,7 @@ class WebSocketManager {
           });
         } catch { /* notifications are best-effort */ }
         try {
-          const w: any = (window as any).maestro;
-          if (w?.notify) {
+          if (shell.notify) {
             // Seed by workflow id + current minute so multiple workflows pick different copy while a single workflow stays stable within a few minutes.
             const seed = ((data.workflow_id || '').length + Math.floor(Date.now() / 60000)) | 0;
             const SUCCESS_TITLES = [
@@ -783,18 +880,22 @@ class WebSocketManager {
               { text: 'Re-run', outcome: 'rerun' },
               { text: 'Adjust', outcome: 'edit' },
             ];
-            w.notify({ title, body, deepLink, runId: data.run_id, workflowId: data.workflow_id, actions });
+            shell.notify({ title, body, deepLink, runId: data.run_id, workflowId: data.workflow_id, actions });
           }
         } catch { /* native notif optional */ }
         break;
+      }
 
-      case 'dashboard:browser_card_keep':
+      case 'dashboard:browser_card_keep': {
+        const data = msg.data as WsDashboardBrowserCardKeep['data'];
         if (data.browser_id) {
           store.dispatch(keepBrowserCardOpen(data.browser_id));
         }
         break;
+      }
 
-      case 'dashboard:browser_card_added':
+      case 'dashboard:browser_card_added': {
+        const data = msg.data as WsDashboardBrowserCardAddedData;
         if (data.browser_card) {
           // Tag with origin dashboard so the card renders only on the dashboard that spawned it, without this, a browser spawned by an agent on dashboard A leaks into whatever dashboard the user is currently viewing (the global browserCards dict + unfiltered render).
           store.dispatch(addBrowserCardFromBackend({
@@ -836,6 +937,7 @@ class WebSocketManager {
           }
         }
         break;
+      }
 
       case 'settings:changed':
         // An agent wrote settings under us (not the user via the modal), so refetch now instead of waiting for the next window-focus. The slice's latestWriteId guard drops this if a newer user save is already in flight.
@@ -906,9 +1008,8 @@ import { WS_BASE } from '@/shared/config';
 // Bridge native-notification button actions to workflow actions. Subscribe at module import time so we never miss an early callback fired before any component mounts.
 (() => {
   try {
-    const w: any = (typeof window !== 'undefined') ? (window as any).maestro : null;
-    if (!w?.onNotificationAction) return;
-    w.onNotificationAction(({ outcome, runId, workflowId }: { outcome: string; runId?: string; workflowId?: string }) => {
+    if (!shell.onNotificationAction) return;
+    shell.onNotificationAction(({ outcome, runId, workflowId }: { outcome: string; runId?: string; workflowId?: string }) => {
       if (!workflowId) return;
       if (outcome === 'ack' && runId) {
         store.dispatch(ackRun(runId));

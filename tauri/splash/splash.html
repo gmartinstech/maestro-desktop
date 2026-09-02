@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Maestro Studio</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0a1420;
+  }
+  body {
+    color: #e8eef4;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    user-select: none;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .center {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 14px;
+    padding: 0 24px;
+    max-width: 100%;
+    text-align: center;
+  }
+  .wordmark {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #f5cc00;
+  }
+  .status {
+    font-size: 13px;
+    color: #9fb0c3;
+    min-height: 18px;
+  }
+  .status.error { color: #ff7a7a; }
+  .status.warning { color: #f5cc00; }
+  .spinner {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid #24384f;
+    border-top-color: #4a90d9;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .actions.hidden { display: none; }
+  .actions button {
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #24384f;
+    background: #12233a;
+    color: #e8eef4;
+    cursor: pointer;
+  }
+  .actions button:hover { background: #17304f; }
+</style>
+</head>
+<body>
+  <div class="center">
+    <div class="wordmark">Maestro Studio</div>
+    <div class="spinner" id="spinner"></div>
+    <div class="status" id="status">Starting…</div>
+    <div class="actions hidden" id="actions">
+      <button id="btn-logs">View logs</button>
+      <button id="btn-restart">Restart</button>
+      <button id="btn-quit">Quit</button>
+    </div>
+  </div>
+  <script>
+    // Ported from electron/splash/splash.html's status/action wiring. The Rust side
+    // (tauri/src/splash.rs) drives this element via WebviewWindow::eval() -- there is no
+    // event-listener path here on purpose, since eval() is the same mechanism this build
+    // already uses for early-boot renderer error reporting (see lib.rs's on_page_load hook),
+    // and it works the same way regardless of the window being a data: URL.
+    window.__maestroSplash = {
+      setStatus: function (text, level, showActions) {
+        var el = document.getElementById('status');
+        el.textContent = text;
+        el.className = 'status' + (level ? ' ' + level : '');
+        document.getElementById('actions').classList.toggle('hidden', !showActions);
+        document.getElementById('spinner').style.display = showActions ? 'none' : '';
+      },
+    };
+    function invokeSplashAction(action) {
+      try {
+        window.__TAURI_INTERNALS__.invoke('splash_action', { action: action });
+      } catch (_e) {}
+    }
+    document.getElementById('btn-quit').addEventListener('click', function () { invokeSplashAction('quit'); });
+    document.getElementById('btn-restart').addEventListener('click', function () { invokeSplashAction('restart'); });
+    document.getElementById('btn-logs').addEventListener('click', function () { invokeSplashAction('open-logs'); });
+  </script>
+</body>
+</html>

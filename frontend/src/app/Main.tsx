@@ -28,6 +28,7 @@ import DashboardSelection from './pages/DashboardSelection/DashboardSelection';
 import ErrorBoundary from './components/feedback/ErrorBoundary';
 import MaestroSessionGate from './components/MaestroLogin/MaestroSessionGate';
 import { MAESTRO_DEFAULT_MODEL, MAESTRO_PROVIDER_NAME } from '@/shared/config';
+import { shell, hasNativeShell } from '@/shared/shell';
 import i18n from '@/shared/i18n/i18n';
 import { resolveLanguageSync } from '@/shared/i18n/languageSync';
 
@@ -248,7 +249,7 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   useEffect(() => {
     if (!loaded) return;
-    (window as any).maestro?.setAllowPrerelease?.(allowExperimentalUpdates);
+    shell.setAllowPrerelease(allowExperimentalUpdates);
   }, [loaded, allowExperimentalUpdates]);
 
   // Backend `language` is the source of truth once loaded; localStorage only seeded i18n's
@@ -397,9 +398,7 @@ const CrashRecoveryChip: React.FC = () => {
   const [show, setShow] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
-    const api = (window as any).maestro as MaestroAPI | undefined;
-    if (!api?.getCrashRecoveryInfo) return;
-    api.getCrashRecoveryInfo().then((info) => {
+    shell.getCrashRecoveryInfo().then((info) => {
       if (info) { setMounted(true); setShow(true); }
     }).catch(() => {});
   }, []);
@@ -436,12 +435,11 @@ const UpdateListener: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    const api = (window as any).maestro as MaestroAPI | undefined;
-    if (!api?.getAppVersion) return;
+    if (!hasNativeShell) return;
 
-    api.getAppVersion().then((v: string) => dispatch(setAppVersion(v)));
+    shell.getAppVersion().then((v: string) => dispatch(setAppVersion(v)));
 
-    api.getUpdateStatus?.().then((cached) => {
+    shell.getUpdateStatus().then((cached) => {
       if (!cached) return;
       if (cached.status === 'store-managed') {
         dispatch(setStoreManaged());
@@ -459,11 +457,11 @@ const UpdateListener: React.FC<{ children: React.ReactNode }> = ({ children }) =
     });
 
     const cleanups = [
-      api.onUpdateAvailable?.((info: MaestroUpdateInfo) => dispatch(setUpdateAvailable(info.version))),
-      api.onUpdateNotAvailable?.(() => dispatch(setUpdateNotAvailable())),
-      api.onDownloadProgress?.((p: MaestroDownloadProgress) => dispatch(setDownloading(p.percent))),
-      api.onUpdateDownloaded?.(() => dispatch(setUpdateDownloaded())),
-      api.onUpdateError?.((msg: string) => dispatch(setUpdateError(msg))),
+      shell.onUpdateAvailable((info: MaestroUpdateInfo) => dispatch(setUpdateAvailable(info.version))),
+      shell.onUpdateNotAvailable(() => dispatch(setUpdateNotAvailable())),
+      shell.onDownloadProgress((p: MaestroDownloadProgress) => dispatch(setDownloading(p.percent))),
+      shell.onUpdateDownloaded(() => dispatch(setUpdateDownloaded())),
+      shell.onUpdateError((msg: string) => dispatch(setUpdateError(msg))),
     ];
 
     return () => cleanups.forEach((fn: (() => void) | undefined) => fn?.());

@@ -11,6 +11,7 @@ import {
   ToolDefinition,
 } from '@/shared/state/toolsSlice';
 import { API_BASE } from '@/shared/config';
+import { shell } from '@/shared/shell';
 import { Integration } from '../integrations';
 
 type Snackbar = { open: boolean; message: string; severity?: 'success' | 'error' };
@@ -160,7 +161,7 @@ export function useToolConnections({ items, setSnackbar, setExpandedToolId }: De
 
   const handleSlackAutoConnect = async () => {
     if (!credDialogToolId || !credDialogIntegration) return;
-    const slackBridge = (window as any).maestro?.connectSlack;
+    const slackBridge = shell.connectSlack;
     if (!slackBridge) {
       setSnackbar({ open: true, message: 'Slack auto-connect requires the desktop app', severity: 'error' });
       return;

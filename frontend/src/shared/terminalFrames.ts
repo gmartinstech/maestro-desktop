@@ -1,5 +1,7 @@
 // Wire codec for the /ws/terminal channel, kept free of React and JSX so `node --test` can cover it.
 
+import type { WsTerminalStatus, WsTerminalOutput, WsTerminalExit } from '../../../contract/ws/terminal';
+
 export interface TerminalStatus {
   running: boolean;
   shell: string;
@@ -36,24 +38,27 @@ export function decodeTerminalFrame(raw: string): TerminalFrame {
   }
   const data = msg?.data ?? {};
   if (msg?.event === 'term:status') {
+    const status = data as WsTerminalStatus['data'];
     return {
       kind: 'status',
       status: {
-        running: Boolean(data.running),
-        shell: String(data.shell ?? ''),
-        cwd: String(data.cwd ?? ''),
+        running: Boolean(status.running),
+        shell: String(status.shell ?? ''),
+        cwd: String(status.cwd ?? ''),
       },
     };
   }
   if (msg?.event === 'term:output') {
+    const output = data as WsTerminalOutput['data'];
     try {
-      return { kind: 'output', data: p_decodeBase64(String(data.data ?? '')) };
+      return { kind: 'output', data: p_decodeBase64(String(output.data ?? '')) };
     } catch {
       return { kind: 'unknown' };
     }
   }
   if (msg?.event === 'term:exit') {
-    return { kind: 'exit', code: Number(data.code ?? 0) };
+    const exit = data as WsTerminalExit['data'];
+    return { kind: 'exit', code: Number(exit.code ?? 0) };
   }
   return { kind: 'unknown' };
 }

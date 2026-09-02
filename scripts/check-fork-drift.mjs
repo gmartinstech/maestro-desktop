@@ -19,6 +19,16 @@ const ALLOW = [
   ['harness/review.mjs', 'the reviewer prompt names the banned host'],
   ['frontend/src/shared/legacyStorageKeys.ts', 'localStorage migration table needs the old keys'],
   ['backend/apps/settings/store.py', 'settings-key migration table needs the old names'],
+  // TS-engine counterparts of the already-allowed Python originals above. Same reasons, same
+  // requirement: an old install's settings.json must still round-trip, and the egress guard has
+  // to name the host it blocks in order to test that it blocks it.
+  ['engine/src/settings/migrations.ts', 'settings-key migration table needs the old names (TS port of store.py)'],
+  ['engine/src/settings/migrations.test.ts', 'asserts that migration table, so it names the old keys'],
+  ['engine/src/net/http.ts', 'the egress chokepoint names the host it blocks'],
+  ['engine/src/net/http.test.ts', 'asserts the call-home host is REJECTED — naming it is the point'],
+  ['engine/src/router/sync.test.ts', 'fixture for a stale legacy-named node the sync must clean up'],
+  ['engine/src/settings/store.test.ts', 'asserts a legacy key still migrates on load'],
+  ['scripts/check-settings-parity.mjs', 'seeds a legacy key to prove Python and TS migrate it identically'],
   ['backend/config/state_paths.py', 'LEGACY_STATE_DIR_NAME for the ~/.openswarm move'],
   ['backend/apps/outputs/workspace_io.py', 'legacy state dir stays in the export-skip set'],
   ['backend/apps/outputs/webapp_template/frontend/src/shared/styles/ThemeContext.tsx', 'legacy theme key migration'],
@@ -32,7 +42,7 @@ const ALLOW = [
   ['docs/UPSTREAM.md', 'documents what must not come back'],
   ['docs/WINDOWS_INSTALLER.md', 'paragraphs about the rename itself'],
 ];
-const ALLOW_PREFIX = ['docs/plans/', 'docs/specs/', 'docs/perf/', 'docs/superpowers/', 'docs/ops/', 'backend/tests/', 'backend/mcp-bundles/', 'electron/build-staging/', 'electron/dist/', 'debugger/build/', 'node_modules/'];
+const ALLOW_PREFIX = ['docs/plans/', 'docs/specs/', 'docs/perf/', 'docs/superpowers/', 'docs/ops/', 'backend/tests/', 'backend/mcp-bundles/', 'electron/build-staging/', 'electron/dist/', 'debugger/build/', 'tauri/gen/', 'node_modules/'];
 
 // Narrower than a file exemption: these exact strings are allowed ANYWHERE, so a big file stays
 // guarded for everything else. (The Apple keychain access group used to live here, pinned to

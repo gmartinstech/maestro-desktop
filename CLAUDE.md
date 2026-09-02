@@ -10,7 +10,11 @@ Fork of openswarm-ai/openswarm. Electron + React/TS (frontend/) + FastAPI/Python
 ## Rules
 - Never call *.openswarm.com. Models go through the Maestro provider (gateway: https://llm.martinstech.net/v1).
 - Retain LICENSE (© Haik Decie). Brand = Maestro Studio; appId net.martinstech.maestro.studio.
-- Small diffs. One ticket per branch/worktree. A different-vendor model (or human) reviews before merge.
+- Small diffs. One ticket per branch/worktree. A different-vendor model (or human) reviews before merge
+  (`node harness/review.mjs`). Blocking on auth/credentials/egress/process-spawn/subsystem-deletion;
+  advisory elsewhere, but findings must be dispositioned in writing, never silently skipped.
+  See `docs/HANDOFF.md` §4 + §11 — the rule was amended 2026-09-01 after the gate was found
+  silently inverted (it reported REQUEST-CHANGES reviews as APPROVE).
 - MAESTRO_MOCK_AGENT=1 makes an agent turn stream a deterministic synthetic reply with no key,
   CLI or network. It is for the packaged app and the golden e2e smoke. Do NOT set it for the
   backend suite: those tests drive the real loop, and the mock starves the WS assertions.

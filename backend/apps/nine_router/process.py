@@ -42,6 +42,14 @@ P_REQUEST_LOG_MAX_BYTES = 5 * 1024 * 1024
 P_NODE_HEAP_MB = 4096
 
 
+def p_router_env() -> dict[str, str]:
+    """Spawn env for 9Router: inherited, plus the port/mode we pin, minus HOSTNAME."""
+    # 9Router's server does `process.env.HOSTNAME || '0.0.0.0'` to choose its bind host. Any shell that exports HOSTNAME (git-bash/MSYS sets it automatically; Windows itself uses COMPUTERNAME) therefore makes it bind that name -- which resolves to the machine's routable address, NOT loopback -- and the app breaks in one specific, confusing way: the Keycloak OAuth redirect URI is the fixed, pre-registered http://127.0.0.1:20128/callback, so sign-in dead-ends on connection-refused while everything else looks fine. Loopback reachability is a correctness requirement here, not a preference, so drop HOSTNAME and let 9Router fall back to 0.0.0.0 (all interfaces, loopback included).
+    env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
+    env.pop("HOSTNAME", None)
+    return env
+
+
 def p_rotate_request_log() -> None:
     """Rotate ~/.9router/request-details.json to a single .0 backup when it grows past the cap,
     BEFORE 9Router is spawned (never racing a live writer). 9Router recreates a fresh file, exactly
@@ -690,7 +698,7 @@ async def p_ensure_running_impl():
         logger.info("Starting 9Router (production) on port %d...", NINE_ROUTER_PORT)
         cmd = [node, f"--max-old-space-size={P_NODE_HEAP_MB}"] + (["--require", p_patch] if p_patch else []) + [standalone_server]
         cwd = os.path.dirname(standalone_server)
-        env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
+        env = p_router_env()
         if node == os.environ.get("MAESTRO_ELECTRON_PATH"):
             env["ELECTRON_RUN_AS_NODE"] = "1"
     else:
@@ -708,7 +716,7 @@ async def p_ensure_running_impl():
         )
         cmd = [node, f"--max-old-space-size={P_NODE_HEAP_MB}"] + (["--require", p_patch] if p_patch else []) + [cached_server]
         cwd = os.path.dirname(cached_server)
-        env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
+        env = p_router_env()
 
     # Capture stdout+stderr so a failed start can tell us WHY (the old DEVNULL default made every "router never came up" a silent mystery, which is the whole reason #90 was un-diagnosable). Packaged prod (NODE_ENV=production standalone) is quiet, so one fixed temp file, truncated each start attempt, won't grow; dev keeps its chatty-Next.js DEVNULL unless debug is set.
     p_cap_path = os.path.join(tempfile.gettempdir(), "maestro-9router-start.log")

@@ -17,7 +17,7 @@ from backend.apps.agents.core.models import (
 )
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.settings import load_settings
-from backend.config.state_paths import state_dir
+from backend.config.state_paths import home_state_dir, p_state_home
 from backend.apps.agents.manager.session.session_store import load_session_data
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
 from backend.apps.agents.manager.session.workspace_git import (
@@ -64,7 +64,7 @@ class AgentLaunch(AgentManagerProtocol):
             config.target_directory
             or mode_folder
             or global_settings.default_folder
-            or os.path.expanduser("~")
+            or p_state_home()
         )
 
         if config.mode in ("view-builder", "skill-builder") and not config.target_directory:
@@ -101,13 +101,14 @@ class AgentLaunch(AgentManagerProtocol):
                     "still launch but the app may not appear in Apps sidebar"
                 )
 
-        # If the fallback chain landed on the user's home directory (no project dir, no default_folder set), re-route to a dedicated scratch workspace under ~/.maestro/workspaces/<session_id>. This prevents us from writing .git/ (or anything else) into the user's $HOME and gives the CLI's Agent tool a clean repo to do worktree isolation inside. Users with a default_folder or target_directory set keep whatever they configured.
-        home = os.path.expanduser("~")
+        # If the fallback chain landed on the state-home directory (no project dir, no default_folder set), re-route to a dedicated scratch workspace under <state_home>/.maestro/workspaces/<session_id>. This prevents us from writing .git/ (or anything else) into the real $HOME (or MAESTRO_STATE_HOME override) directly and gives the CLI's Agent tool a clean repo to do worktree isolation inside. Users with a default_folder or target_directory set keep whatever they configured.
+        home = p_state_home()
         if os.path.abspath(effective_cwd) == os.path.abspath(home):
-            effective_cwd = state_dir(home, "workspaces", session_id)
+            effective_cwd = home_state_dir("workspaces", session_id)
             os.makedirs(effective_cwd, exist_ok=True)
 
-        ensure_cwd_git_repo(effective_cwd, home)
+        # Pass the REAL home, not the state home: ensure_cwd_git_repo uses this argument solely to build its risky-roots guard (never git-init directly in $HOME, / or $HOME's parent). Handing it p_state_home() would narrow that guard to the state home, so a user pointing target_directory at their actual home while MAESTRO_STATE_HOME is overridden would slip past it. The state home is still what decides the workspace LOCATION above; this argument is only about what must never be git-init'd.
+        ensure_cwd_git_repo(effective_cwd, os.path.expanduser("~"))
 
         repo_url, branch_name = detect_git_identity(effective_cwd)
 

@@ -1,0 +1,98 @@
+name: Build Tauri (Windows, unsigned)
+
+# Unsigned Windows Tauri build for artifact validation only.
+# Runs on every push and pull request to validate the Tauri build succeeds,
+# then uploads the unsigned NSIS installer as a workflow artifact.
+# This workflow does NOT publish, sign, or release anything.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tauri/**'
+      - 'frontend/dist/**'
+      - 'frontend/src/**'
+      - '.github/workflows/build-tauri-windows.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tauri/**'
+      - 'frontend/dist/**'
+      - 'frontend/src/**'
+      - '.github/workflows/build-tauri-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build unsigned Tauri NSIS installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Exact pin to match the runtime bundled in Electron/release builds
+          node-version: '20.18.1'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli
+
+      - name: Verify frontend distribution exists
+        shell: pwsh
+        run: |
+          $distPath = 'frontend/dist/index.html'
+          if (-not (Test-Path $distPath)) {
+            Write-Error "Frontend distribution not found at $distPath; run 'cd frontend && npm run build' first"
+            exit 1
+          }
+          Write-Host "Frontend distribution found at frontend/dist"
+
+      - name: Build Tauri app (release, unsigned)
+        shell: bash
+        working-directory: tauri
+        run: |
+          set -e
+          echo "Building Tauri app (release, unsigned NSIS installer)..."
+          # Note: using release build (default), not --debug
+          # Output will be in target/release/bundle/nsis/
+          cargo tauri build
+          if [ $? -ne 0 ]; then
+            echo "Tauri build failed"
+            exit 1
+          fi
+          echo "Tauri build completed successfully"
+
+      - name: Verify NSIS installer was created
+        shell: pwsh
+        run: |
+          $nsisDirs = Get-ChildItem -Path 'tauri/target/release/bundle' -Filter 'nsis' -Directory -ErrorAction SilentlyContinue
+          if (-not $nsisDirs) {
+            Write-Error "No NSIS bundle directory found"
+            exit 1
+          }
+          $installers = Get-ChildItem -Path 'tauri/target/release/bundle/nsis' -Filter '*.exe' -ErrorAction SilentlyContinue
+          if (-not $installers) {
+            Write-Error "No .exe installer found in NSIS bundle directory"
+            exit 1
+          }
+          Write-Host "Found NSIS installers:"
+          $installers | ForEach-Object { Write-Host "  - $($_.Name) ($('{0:N2}' -f ($_.Length / 1MB)) MB)" }
+
+      - name: Upload NSIS installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-tauri-windows-x64-unsigned
+          path: tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14

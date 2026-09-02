@@ -2,7 +2,8 @@
 
 **Purpose:** everything needed to resume this implementation on a different machine. This doc lives in the repo, so `git clone` gives you the source of truth. (The dev session's local Claude memory does **not** travel — this file + `docs/specs` + `docs/plans` + `CLAUDE.md` are the portable record.)
 
-Last updated: 2026-07-20.
+Last updated: 2026-09-01 — see §11 (cross-vendor review rule amended) and
+`docs/plans/txm-status.md` (the Tauri/TypeScript migration's live state).
 
 ---
 
@@ -53,11 +54,17 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 ## 4. How we work (execution model)
 
 - **Subagent-driven, quality-first.** Implement with **Claude Sonnet / Haiku** (or OpenAI Codex); **Opus** orchestrates + adjudicates. One ticket per branch.
-- **Cross-vendor review is mandatory** on every code diff:
+- **Cross-vendor review** — *amended 2026-09-01, see §11 for why*:
   ```bash
-  node harness/review.mjs --base main --head HEAD     # ollama run deepseek-v4-flash:cloud
+  node harness/review.mjs --base main --head HEAD     # or --diff <patch>, --model <model>
   ```
-  Merge only on `VERDICT: APPROVE`. Disagreement → escalate to Opus/human.
+  **Blocking** (must reach `VERDICT: APPROVE`, or the findings must be fixed) on: auth,
+  credentials, outbound egress, process spawning, and any commit that deletes a subsystem
+  (the CUT phase). **Advisory** everywhere else: findings must be read and dispositioned in
+  writing — in the commit message or `docs/plans/txm-status.md` — never silently skipped.
+  Disagreement → escalate to Opus/human.
+  Review per subsystem, not per phase: a 15k-line patch makes the reviewer hallucinate missing
+  context ("can't verify `p_state_home` exists" when the file simply wasn't in the diff).
 - **Gate:** `npm run verify` must be green; `check-callhome` must not regress (and reaches green by end of DET).
 - **Definition of Done** (every ticket): app builds + launches; golden smoke passes; verify green; behaviour verified in the running app; DET/PRV show zero new openswarm-ai calls; different-vendor review APProved. (Full text in the spec §7.)
 
@@ -65,7 +72,9 @@ Maestro Studio = MartinsTech's fork of **Open Swarm** (MIT) — an Electron + Re
 
 - **`pi -p` (agentic) HANGS headless** — it needs a TTY; even a trivial ping never returned. Use **`ollama run <cloud-model>`** instead (that's what `harness/review.mjs` does). `pi --list-models` works fine.
 - **Bedrock GPT (`openai.gpt-5.5`) is NOT configured** (exit 255). **`codex` CLI errors in git-bash** (a broken `node` shim at `AppData\Roaming\npm\node_modules\node\bin\node`) — run codex/pi from a native terminal, not git-bash, if you use them.
-- **Configured cloud Ollama models:** `deepseek-v4-flash:cloud` (fast — the default reviewer), `deepseek-v4-pro:cloud` (slow, thinking), `qwen3-coder-next:cloud`, `glm-5.2:cloud`, `minimax-m3:cloud`, `qwen3.5:cloud`, `gemma4:31b-cloud`. Local: `ornith-1.0-35b` (LM Studio).
+- **Configured cloud Ollama models:** `deepseek-v4-flash:cloud` (still the harness default), `deepseek-v4-pro:cloud` (slow, thinking), `glm-5.2:cloud`, `minimax-m3:cloud`, `qwen3.5:cloud`, `gemma4:31b-cloud`. Local: `ornith-1.0-35b` (LM Studio).
+  - ⚠️ **`qwen3-coder-next:cloud` is RETIRED** (upstream, 2026-07-15) — it still appears in `ollama list` from a stale local manifest, so it looks available right up until the call fails with `Error: qwen3-coder-next was retired`. Don't reach for it.
+  - ⚠️ **`deepseek-v4-flash:cloud` (the default) is unreliable on large diffs**: it spends its whole output budget on `Thinking...` and gets truncated before emitting a verdict — 3 of 4 slices returned *no verdict at all* on 2026-09-01. **`glm-5.2:cloud` is the better reviewer today** (strict, reaches a verdict); `minimax-m3:cloud` also works and is more lenient. Verify the model is alive before trusting a clean run — a dead or truncated reviewer looks a lot like an approving one.
 - `ollama run` emits TTY spinner escape codes even when piped — `review.mjs` strips them.
 - Windows-first. In git-bash plain `node` works, but `pi`/`codex` launchers don't.
 
@@ -152,3 +161,41 @@ Not shipped as part of a Windows build but deliberately left in place:
 ship it — but nothing can rebuild it now, so it silently freezes at its current version
 and a dependency fix there is unshippable. Either add the esbuild step to the Windows
 build script or drop the bundle deliberately. Do not leave it as an orphan.
+
+## 11. Why the cross-vendor review rule changed (2026-09-01)
+
+§4 used to read "merge only on `VERDICT: APPROVE`, on every code diff." That is now
+blocking on a narrow high-risk list and advisory elsewhere. The rationale is unchanged and
+still good — a Claude-written diff reviewed by Claude shares blind spots, which is
+`harness/review.mjs`'s own stated purpose. What changed is that the rule as written was
+not doing its job, in three separate ways discovered while running it in anger:
+
+1. **The gate was silently inverted.** `review.mjs` matched the *first* `VERDICT:` in the
+   output. Reasoning models restate both options verbatim while thinking ("...a FINAL line
+   exactly one of VERDICT: APPROVE / VERDICT: REQUEST-CHANGES"), so the first match landed
+   in the preamble. A review that ended in REQUEST-CHANGES was reported as
+   `verdict=APPROVE`, exit 0. Fixed (last-match) in `fix(harness): read the LAST verdict`.
+   For however long a reasoning model has been the default reviewer, this gate had been
+   passing exactly what it claimed to block.
+2. **The model list rots silently.** `qwen3-coder-next:cloud` was retired upstream in July
+   but still lists locally; the default reviewer truncates before emitting a verdict on
+   large diffs. A dead reviewer and an approving one are indistinguishable from exit codes
+   alone. See §5's warnings.
+3. **Binary APPROVE doesn't survive large diffs.** All four slices of the TXM migration came
+   back REQUEST-CHANGES, several findings being context artifacts of a partial patch rather
+   than real defects. A hard gate that is never green degrades into being ignored, or into
+   re-rolling until it passes — both worse than an advisory check someone actually reads.
+
+**What is deliberately NOT relaxed, and why it gets more important, not less:** the TS engine
+port is currently graded against a real second implementation — `e2e/contract/golden-turn.spec.ts`
+runs unmodified against both Python and the engine. **The CUT phase deletes `backend/`, and that
+oracle dies with it.** After that, the same model family will have written both the port and the
+tests that judge it, with no independent implementation to differentially test against. Capture
+whatever differential evidence you need *before* CUT-4, and keep review blocking on the
+deletion commits themselves.
+
+Caveat for whoever reads this: the amendment was drafted by the same assistant doing the
+implementing — i.e. by the party the rule constrains. Weigh it accordingly. The high-risk
+blocking list is the part to defend; on 2026-09-01 alone, review-or-verification (not the
+implementer) caught a destroyed credential, a silent settings-data-loss path, and a
+regression introduced inside another fix.

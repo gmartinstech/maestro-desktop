@@ -1,10 +1,10 @@
+import { shell, hasNativeShell } from './shell';
+
 const _w = window as any;
 // Prefer the preload-injected port; if it's missing (preload raced the backend port being picked), re-query the live value before falling back to 8324. The bare 8324 guess is wrong on any machine where the backend landed on a fallback port (e.g. 8324 was held by a leftover backend); see the self-heal below.
 const port =
   _w.__MAESTRO_PORT__ ||
-  (_w.maestro && typeof _w.maestro.getBackendPortLive === 'function'
-    ? _w.maestro.getBackendPortLive()
-    : 0) ||
+  shell.getBackendPortLive() ||
   8324;
 const host = window.location.hostname || 'localhost';
 
@@ -25,10 +25,9 @@ export function getAuthToken(): string {
 }
 
 export async function refreshAuthToken(): Promise<string> {
-  const ow = (window as any).maestro;
-  if (ow && typeof ow.getAuthToken === 'function') {
+  if (hasNativeShell) {
     try {
-      const tok = await ow.getAuthToken();
+      const tok = await shell.getAuthToken();
       _authTokenCache = typeof tok === 'string' ? tok : '';
     } catch {
       _authTokenCache = '';
@@ -60,8 +59,7 @@ let _portHealTried = false;
 function _maybeHealBackendPort(): void {
   if (_portHealTried) return;
   try {
-    const ow = (window as any).maestro;
-    const live = ow && typeof ow.getBackendPortLive === 'function' ? ow.getBackendPortLive() : null;
+    const live = hasNativeShell ? shell.getBackendPortLive() : null;
     if (typeof live === 'number' && live > 0 && live !== port) {
       _portHealTried = true;
       window.location.reload();

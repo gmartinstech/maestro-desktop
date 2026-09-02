@@ -1,4 +1,5 @@
 import { API_BASE } from '@/shared/config';
+import { shell, hasNativeShell } from '@/shared/shell';
 
 interface ConnectCtx {
   providerId: string;
@@ -137,8 +138,8 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
   // Gemini/Google block embedded browsers; backend sets use_external_browser and exchange happens server-side via /api/subscriptions/callback. Detect via status poller (no postMessage possible).
   const useExternal = !!data.use_external_browser;
   let popup: Window | null = null;
-  if (useExternal && (window as any).maestro?.openExternal) {
-    (window as any).maestro.openExternal(data.auth_url);
+  if (useExternal && hasNativeShell) {
+    shell.openExternal(data.auth_url);
   } else {
     popup = window.open(data.auth_url, 'oauth_connect', 'width=600,height=700');
   }
@@ -226,9 +227,8 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
 
   // Electron IPC fallback; main.js forwards callback params so exchange works when opener postMessage fails.
   let ipcUnsub: (() => void) | null = null;
-  const ow = (window as any).maestro;
-  if (ow && typeof ow.onOauthCallback === 'function') {
-    ipcUnsub = ow.onOauthCallback(async (cb: { code?: string; state?: string; error?: string }) => {
+  if (hasNativeShell) {
+    ipcUnsub = shell.onOauthCallback(async (cb: { code?: string; state?: string; error?: string }) => {
       if (cb?.code) await runExchange(cb.code, cb.state);
     });
   }

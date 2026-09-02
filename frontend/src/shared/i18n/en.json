@@ -1388,7 +1388,8 @@
     "browserLogin": {
       "signedIn": "Signed in",
       "signIn": "Sign in",
-      "recheck": "Re-check sign-in"
+      "recheck": "Re-check sign-in",
+      "connecting": "Waiting for sign-in…"
     },
     "serviceGroup": {
       "readOnly": "Read-only",
