@@ -14,5 +14,12 @@
     "sourceMap": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist"],
+  // AGT-2: engine/src/agents/core/wsManager.ts imports contract/ws/agents.ts's real event types
+  // (per that ticket's own requirement -- import the frozen contract, don't redeclare a second
+  // set). rootDir "src" above means engine/src can't directly import a .ts file living outside it
+  // without tsc's TS6059 ("File is not under 'rootDir'"); this reference is the fix -- see
+  // contract/tsconfig.json's header comment for the full mechanism and the required build order
+  // (contract/tsconfig.json must be built before this project's own build/typecheck).
+  "references": [{ "path": "../contract" }]
 }

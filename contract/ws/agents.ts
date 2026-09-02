@@ -18,7 +18,13 @@ export interface WsAgentSessionSnapshot {
   status: 'draft' | 'running' | 'waiting_approval' | 'completed' | 'error' | 'stopped';
   model: string;
   mode: string;
-  dashboard_id?: string;
+  // AGT-2 fix: was `dashboard_id?: string` (no `| null`), inconsistent with its two siblings right
+  // below. AgentSession.dashboard_id (backend/apps/agents/core/models.py) is `Optional[str] = None`
+  // -- identical to workflow_run_id/workflow_edit_id -- and model_dump(mode="json") always emits
+  // the key (JSON null, not an omitted key), so a real `agent:status` payload never actually hits
+  // the bare-optional case this type described. Caught by tsc when engine/src/agents/core/models.ts's
+  // ported AgentSession failed to structurally satisfy this snapshot type.
+  dashboard_id?: string | null;
   workflow_run_id?: string | null;
   workflow_edit_id?: string | null;
   cost_usd: number;
@@ -325,7 +331,8 @@ export interface WsAgentClosed {
     created_at: string | null;
     closed_at: string | null;
     cost_usd: number;
-    dashboard_id?: string;
+    // Same AGT-2 fix as WsAgentSessionSnapshot.dashboard_id above -- see that comment.
+    dashboard_id?: string | null;
   };
 }
 

@@ -306,6 +306,14 @@ function Build-McpBundleDir($PackageName, $EntrySubpath, $OutDirName, $Extras, $
 }
 
 Build-McpBundleSingle 'reddit-mcp-buddy'              'reddit-mcp-buddy/dist/index.js'             'reddit-mcp-buddy.js'
+# SUB-4: closes the orphan documented at docs/HANDOFF.md's "Fallout worth a ticket" section --
+# `scripts/build-app.sh` (the mac build, deleted per the OSR macOS-drop) was the ONLY thing that
+# ever regenerated `backend/mcp-bundles/kirbah-mcp-youtube.js`; this Windows script never built it,
+# so the checked-in bundle was frozen (unbuildable, un-updatable) since the mac script's deletion.
+# Single-file layout (matches the existing bundle's own entry path, confirmed by inspecting it:
+# `node_modules/@kirbah/mcp-youtube/dist/index.js`, no sibling package.json/data-file reads), so
+# Build-McpBundleSingle (not -Dir) is the correct helper, same as reddit-mcp-buddy above.
+Build-McpBundleSingle '@kirbah/mcp-youtube'           '@kirbah/mcp-youtube/dist/index.js'          'kirbah-mcp-youtube.js'
 Build-McpBundleDir    '@notionhq/notion-mcp-server'   '@notionhq/notion-mcp-server/bin/cli.mjs'    `
                       'notionhq-notion-mcp-server' `
                       @('@notionhq/notion-mcp-server/scripts/notion-openapi.json=scripts/notion-openapi.json') `

@@ -1,0 +1,31 @@
+// AGT-2: a composite/declaration-emitting project so engine/tsconfig.json can `"references"` it.
+// engine/'s own tsconfig sets `rootDir: "src"` + a real `outDir` (dist/main.js's path is load-bearing
+// -- WIRE-1's tauri sidecar spawns it by that exact path), so engine/src files importing a .ts file
+// living outside "src" (e.g. this repo's contract/ws/*.ts) fail tsc with TS6059 ("File is not under
+// 'rootDir'") whether or not `--noEmit` is passed -- confirmed empirically, not assumed. TS project
+// references are the standard fix: build THIS project first (emits contract/dist/ws/*.d.ts), and
+// engine's tsc then resolves an import of the ORIGINAL `contract/ws/agents.ts` SOURCE path against
+// that already-built declaration output instead of the source file, satisfying rootDir without
+// engine ever touching its own dist layout. Build order matters: this project must be built (`tsc -p
+// contract/tsconfig.json`, no node_modules of its own needed -- borrow engine's local tsc, e.g.
+// `engine/node_modules/.bin/tsc -p ../contract/tsconfig.json`) BEFORE `engine`'s own build/typecheck
+// runs; engine/package.json's `prebuild`/`pretypecheck` scripts do this automatically for `npm run
+// build`/`npm run typecheck`, but a bare `npx tsc --noEmit` inside engine/ (as AGT-2's own gate names
+// it) still needs this run manually first, once, whenever contract/ws/*.ts changes.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "composite": true,
+    "declaration": true,
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["ws/**/*.ts"]
+}

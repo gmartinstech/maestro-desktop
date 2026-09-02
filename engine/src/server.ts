@@ -15,6 +15,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import type { IncomingMessage } from 'node:http';
 import type { Socket } from 'node:net';
 import { createHttpAuthHook, wsRequestAuthOk } from './auth/middleware';
+import { handleCorsPreflight } from './cors';
 import { handleHealthHttpRequest } from './apps/health/health';
 import { handleServiceHttpRequest } from './apps/service/service';
 import { handleBrowserScreencastUpgrade } from './browser/screencastServer';
@@ -24,6 +25,24 @@ import { handleBrowserLoginHttpRequest } from './browser/cookies';
 // header for why this mechanism can't just become an engineFetch() call).
 import { proxyHttpRequest, proxyWebSocketUpgrade } from './net/localProxy';
 import { handleSettingsHttpRequest } from './settings/handler';
+import { handleDevHttpRequest } from './apps/dev/dev';
+import { handleModesHttpRequest } from './apps/modes/modes';
+import { handleDashboardLayoutHttpRequest } from './apps/dashboardLayout/dashboardLayout';
+import { handleSkillsHttpRequest } from './apps/skills/http';
+import { handleSkillRegistryHttpRequest } from './apps/skillRegistry/http';
+import { handleToolsHttpRequest } from './apps/toolsLib/http';
+import { handleMcpRegistryHttpRequest } from './apps/mcpRegistry/http';
+import { handleAgentsHttpRequest } from './agents/http';
+import { handleDashboardsHttpRequest } from './apps/dashboards/dashboards';
+import { handleSwarmHttpRequest } from './apps/swarm/swarm';
+import { handleOutputsHttpRequest } from './apps/outputs/outputs';
+import { handleOutputVersionsHttpRequest } from './apps/outputs/versionsRoutes';
+import { handleWorkflowsHttpRequest } from './apps/workflows/http';
+import { handleWebHttpRequest } from './apps/web/web';
+import { handleAgentsWsUpgrade } from './agents/ws';
+import { handleTerminalWsUpgrade } from './apps/terminal/ws';
+import { handleAnthropicProxyHttpRequest } from './agents/proxy/anthropicProxy';
+import { handleOpenaiPassthroughHttpRequest } from './agents/proxy/openaiPassthrough';
 import { resolveMode, routeNameFromPath, type RouteTable } from './split';
 
 export interface EngineConfig {
@@ -71,6 +90,11 @@ export function buildServer(config: EngineConfig): FastifyInstance {
   fastify.addHook('onRequest', createHttpAuthHook(() => config.authToken));
 
   fastify.all('*', async (request: FastifyRequest, reply: FastifyReply) => {
+    // SUB-10: CORS preflight is answered here, ahead of EVERY path's native/proxy dispatch --
+    // backend/main.py's CORSMiddleware wraps the whole app the same way, so a native route must
+    // not need to reimplement this itself (see cors.ts's own header for the gap this closes).
+    if (handleCorsPreflight(request, reply)) return;
+
     const pathname = (request.raw.url ?? '/').split('?')[0];
 
     // BRW-6: browser-session cookie capture (interactive login) is native to the engine under
@@ -104,6 +128,90 @@ export function buildServer(config: EngineConfig): FastifyInstance {
         if (await handleHealthHttpRequest(pathname, request, reply)) return;
       } else if (name === 'service') {
         if (await handleServiceHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'dev') {
+        // SUB-10: full native, its one route dev.ts's own header names -- backend/main.py's bare
+        // GET /api/dev/token, not a SubApp. MAESTRO_ENGINE_ROUTES=dev:native (not in split.ts's
+        // DEFAULT_ROUTES), same convention every other SUB-ported name uses.
+        if (await handleDevHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'modes') {
+        // SUB-1: full native, every route modes.ts's own header names.
+        if (await handleModesHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'dashboard_layout') {
+        // SUB-1: full native (2 routes) -- see dashboardLayout.ts's header: this SubApp is
+        // unmounted/dead in the real Python backend today, so this only activates via an
+        // explicit MAESTRO_ENGINE_ROUTES opt-in, never via a DEFAULT_ROUTES default.
+        if (await handleDashboardLayoutHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'skills') {
+        // SUB-2: full native, every route apps/skills/http.ts's own header names.
+        if (await handleSkillsHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'skill-registry') {
+        // SUB-2: full native (backend/apps/skill_registry/skill_registry.py's whole router) --
+        // note the route-table NAME is the hyphenated "skill-registry" (matching the actual
+        // /api/skill-registry URL prefix Python's SubApp("skill-registry", ...) produces), not the
+        // underscored Python module/package name -- MAESTRO_ENGINE_ROUTES=skill-registry:native.
+        if (await handleSkillRegistryHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'tools') {
+        // SUB-4: full native, every route apps/toolsLib/http.ts's own header names (the deliberate
+        // scope cuts documented there fall through to proxy instead of 501ing, same convention
+        // 'settings'/'agents' already use).
+        if (await handleToolsHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'mcp-registry') {
+        // SUB-4: full native, every route apps/mcpRegistry/http.ts's own header names -- note the
+        // route-table NAME is the hyphenated "mcp-registry" (matching the actual /api/mcp-registry
+        // URL prefix Python's SubApp("mcp-registry", ...) produces), same convention SUB-2
+        // established for skill-registry -- MAESTRO_ENGINE_ROUTES=mcp-registry:native.
+        if (await handleMcpRegistryHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'agents') {
+        // AGT-6: partial native, same convention as 'settings' above -- an /api/agents/* subpath
+        // this ticket didn't port falls through to proxy instead of 501ing (see agents/http.ts's
+        // own header for the exact list and why).
+        if (await handleAgentsHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'anthropic-proxy') {
+        // AGT-7: full native (every method under /v1/* plus the bare-path healthcheck) -- see
+        // agents/proxy/anthropicProxy.ts's own header. Only takes effect via
+        // MAESTRO_ENGINE_ROUTES=anthropic-proxy:native (not in DEFAULT_ROUTES), same convention
+        // as 'agents' above.
+        if (await handleAnthropicProxyHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'openai-passthrough') {
+        // AGT-7: full native -- see agents/proxy/openaiPassthrough.ts's own header. Also only
+        // takes effect via MAESTRO_ENGINE_ROUTES, same convention as 'anthropic-proxy' above.
+        if (await handleOpenaiPassthroughHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'dashboards') {
+        // SUB-3: full native, every route apps/dashboards/dashboards.ts's own header names
+        // (the one documented scope cut -- generate-name's aux-LLM call -- falls back to the
+        // exact heuristic branch the Python original's own except-Exception already uses, so it
+        // never 501s or proxies partway through a route).
+        if (await handleDashboardsHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'swarm') {
+        // SUB-3: full native, every route apps/swarm/swarm.ts's own header names.
+        if (await handleSwarmHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'outputs') {
+        // SUB-5: partial native (same convention as 'settings'/'agents' above) -- every CRUD +
+        // workspace + persistent-runtime route apps/outputs/outputs.ts's own header names; the one
+        // remaining documented scope cut (vibe-code's LLM call) answers inline with a clear
+        // "not yet available" message rather than 501ing. Only takes effect via
+        // MAESTRO_ENGINE_ROUTES=outputs:native (not in DEFAULT_ROUTES), same convention 'dashboards'/
+        // 'swarm' established.
+        if (await handleOutputsHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'output_versions') {
+        // SUB-5: full native -- backend/apps/outputs/versions_routes.py's `/api/output_versions`
+        // surface, apps/outputs/versionsRoutes.ts's own header names every route. A separate
+        // route-table name from 'outputs' (matching Python's own separate SubApp), so it needs its
+        // own MAESTRO_ENGINE_ROUTES=output_versions:native flip alongside outputs:native.
+        if (await handleOutputVersionsHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'workflows') {
+        // SUB-7: full native, every route apps/workflows/http.ts's own header names (~3.3k LOC,
+        // 35 routes -- the largest route surface in the app). Only takes effect via
+        // MAESTRO_ENGINE_ROUTES=workflows:native (not in DEFAULT_ROUTES), same convention
+        // 'dashboards'/'swarm'/'outputs' established.
+        if (await handleWorkflowsHttpRequest(pathname, request, reply)) return;
+      } else if (name === 'web') {
+        // SUB-8: full native, both routes apps/web/web.ts's own header names (POST /search,
+        // POST /fetch). Only takes effect via MAESTRO_ENGINE_ROUTES=web:native (not in
+        // DEFAULT_ROUTES), same convention 'dashboards'/'swarm'/'outputs'/'workflows'
+        // established. Its browser tier replaces Electron's `/ws/electron-main` bridge with a
+        // direct, in-process call into BRW-5's CDP tier -- see web.ts's own module doc.
+        if (await handleWebHttpRequest(pathname, request, reply)) return;
       } else {
         // Placeholder only for every other native-configured name -- a later ticket fills in
         // real behavior for it (see the plan's per-ticket route-table flips).
@@ -159,8 +267,20 @@ export function buildServer(config: EngineConfig): FastifyInstance {
     const mode = resolveMode(config.routes, name);
 
     if (mode === 'native') {
-      writeUpgradeRejection(socket, 501, 'Not Implemented');
-      return;
+      // AGT-6: partial native, same convention as the HTTP branch above -- 'agents' has exactly
+      // one WS shape (/ws/agents/{session_id}); anything under that name NOT matching it falls
+      // through to proxy rather than 501ing, mirroring agents/http.ts's own fallthrough.
+      if (name === 'agents') {
+        if (handleAgentsWsUpgrade(req, socket, head)) return;
+      } else if (name === 'terminal') {
+        // SUB-6: 'terminal' has no /api/terminal HTTP surface at all (see apps/terminal/ws.ts's
+        // own header) -- only takes effect via MAESTRO_ENGINE_ROUTES=terminal:native, same
+        // convention as 'agents' above; the one WS shape is /ws/terminal/{workspace_id}.
+        if (handleTerminalWsUpgrade(req, socket, head)) return;
+      } else {
+        writeUpgradeRejection(socket, 501, 'Not Implemented');
+        return;
+      }
     }
     if (config.backendPort === null) {
       writeUpgradeRejection(socket, 502, 'Bad Gateway');

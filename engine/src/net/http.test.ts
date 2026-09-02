@@ -9,6 +9,17 @@ describe('isHostAllowed', () => {
     'localhost',
     '127.0.0.1',
     '::1',
+    // SUB-2's skill registry: api.github.com/raw.githubusercontent.com/skills.sh, added on top of
+    // ENG-7's original set -- see http.ts's own module doc for why these are runtime allowances.
+    'api.github.com',
+    'raw.githubusercontent.com',
+    'skills.sh',
+    // SUB-8's web sub-app: DDG search hosts, same "our own hardcoded outbound call" posture.
+    'html.duckduckgo.com',
+    'lite.duckduckgo.com',
+    // SUB-9's social MCP shims: reddit/tiktok's own session-cookie-borrowing HTTP transport.
+    'www.reddit.com',
+    'www.tiktok.com',
   ])('always-allowed host: %s', (host) => {
     expect(isHostAllowed(host)).toBe(true);
   });
@@ -48,6 +59,12 @@ describe('isHostAllowed', () => {
 
   test('naming a lane does not unlock the other lane host', () => {
     expect(isHostAllowed('api.openai.com', { passthroughLane: 'anthropic-passthrough' })).toBe(false);
+  });
+
+  test('generativelanguage.googleapis.com allowed only under the gemini-passthrough lane (SUB-8)', () => {
+    expect(isHostAllowed('generativelanguage.googleapis.com')).toBe(false);
+    expect(isHostAllowed('generativelanguage.googleapis.com', { passthroughLane: 'gemini-passthrough' })).toBe(true);
+    expect(isHostAllowed('generativelanguage.googleapis.com', { passthroughLane: 'openai-passthrough' })).toBe(false);
   });
 
   test('build-time-only hosts are never allowed through this path', () => {

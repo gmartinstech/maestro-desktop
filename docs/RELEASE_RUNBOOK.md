@@ -54,6 +54,23 @@ screen).
 | Python deps | fully hash-locked | `backend/requirements.lock` |
 | npm deps | lockfile-exact via `npm ci` | `frontend/package-lock.json`, `electron/package-lock.json` |
 | electron-builder + deps | exact (no `^`) | `electron/package.json` |
+| `@anthropic-ai/claude-agent-sdk` (TS engine) | `0.2.122` (exact, no `^`) | `engine/package.json` |
+
+**Why `0.2.122` exactly (AGT-4):** `backend/requirements.txt` pins the Python `claude-agent-sdk`
+package (a *different* npm/pip artifact, its own version stream) at `0.1.70`, and that file's own
+comment records what that pin bundles: **Claude Code CLI 2.1.122**, chosen to sit above the
+2.1.90 deferred-tools cache-fix floor. The TS Agent SDK is a separate published package with its
+own unrelated version numbers (`0.1.x`/`0.2.x`/`0.3.x`), so "same SDK version number" would have
+been a coincidence, not a guarantee — what has to match is the **bundled CLI version**, not the
+package version string. Verified empirically, not assumed: `npm pack`ed several
+`@anthropic-ai/claude-agent-sdk` versions and inspected each one's own `package.json` — as of this
+SDK's newer (per-platform-binary) release architecture it carries an explicit
+`"claudeCodeVersion"` field, confirmed monotonic (`0.2.121`→CLI `2.1.121`, `0.2.122`→CLI `2.1.122`,
+`0.2.123`→CLI `2.1.123`) — so `0.2.122` is the one TS SDK release whose bundled CLI is the exact
+same `2.1.122` the Python pin already ships. Re-verify this mapping (don't assume it still holds)
+before ever bumping either pin: re-run `npm view @anthropic-ai/claude-agent-sdk@<candidate>
+claudeCodeVersion` and cross-check against `backend/requirements.txt`'s own comment for the
+Python-side CLI version, updating both together.
 
 Both `package-lock.json` files are **committed** — `npm ci` refuses to run
 without them. Do not re-add them to `.gitignore`.

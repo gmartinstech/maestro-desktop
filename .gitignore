@@ -105,7 +105,12 @@ design-system/node_modules/
 frontend/node_modules/
 engine/node_modules/
 engine/dist/
+contract/dist/
+contract/tsconfig.tsbuildinfo
 tauri/target/
 tauri/gen/android/app/build/
 .gate-brw4-data/
 frontend/.gate-harness-dist/
+
+# Stray PSReadLine console history an agent PTY test created under engine/.
+engine/Microsoft/

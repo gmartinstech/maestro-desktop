@@ -1,0 +1,4837 @@
+{
+"router_down|anthropic_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_down|anthropic_key|fable-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use fable-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-fable-5"
+},
+"router_down|anthropic_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"error": "9Router is not running; cannot use gemini-3.1-flash-lite. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_down|anthropic_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"error": "9Router is not running; cannot use gemini-3.1-flash-lite-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_down|anthropic_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"error": "9Router is not running; cannot use gemini-3.5-flash-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gemini-3.5-flash"
+},
+"router_down|anthropic_key|gpt-5.4": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4"
+},
+"router_down|anthropic_key|gpt-5.4-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.4-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_down|anthropic_key|gpt-5.4-mini": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4-mini. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_down|anthropic_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.4-mini-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_down|anthropic_key|gpt-5.5-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.5-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_down|anthropic_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_down|anthropic_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_down|anthropic_key|haiku-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use haiku-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_down|anthropic_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_down|anthropic_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_down|anthropic_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_down|anthropic_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-7-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_down|anthropic_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_down|anthropic_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_down|anthropic_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-8-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_down|anthropic_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_down|anthropic_key|opus-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_down|anthropic_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_down|anthropic_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_down|anthropic_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_down|anthropic_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_down|anthropic_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_down|anthropic_key|sonnet-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_down|google_key|fable-5-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-fable-5"
+},
+"router_down|google_key|fable-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use fable-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-fable-5"
+},
+"router_down|google_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"error": "9Router is not running; cannot use gemini-3.1-flash-lite. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gemini/gemini-3.1-flash-lite-preview"
+},
+"router_down|google_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_down|google_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_down|google_key|gpt-5.4": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4"
+},
+"router_down|google_key|gpt-5.4-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.4-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_down|google_key|gpt-5.4-mini": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4-mini. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_down|google_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.4-mini-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_down|google_key|gpt-5.5-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.5-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_down|google_key|haiku": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use haiku. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_down|google_key|haiku-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-haiku-4-5"
+},
+"router_down|google_key|haiku-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use haiku-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_down|google_key|opus": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_down|google_key|opus-4-7": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-7. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_down|google_key|opus-4-7-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-7"
+},
+"router_down|google_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-7-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_down|google_key|opus-4-8": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-8. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_down|google_key|opus-4-8-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-8"
+},
+"router_down|google_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-8-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_down|google_key|opus-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-6"
+},
+"router_down|google_key|opus-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_down|google_key|sonnet": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_down|google_key|sonnet-5": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-5. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_down|google_key|sonnet-5-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-sonnet-5"
+},
+"router_down|google_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_down|google_key|sonnet-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-sonnet-4-6"
+},
+"router_down|google_key|sonnet-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_down|no_keys|fable-5-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-fable-5"
+},
+"router_down|no_keys|fable-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use fable-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-fable-5"
+},
+"router_down|no_keys|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"error": "9Router is not running; cannot use gemini-3.1-flash-lite. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_down|no_keys|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"error": "9Router is not running; cannot use gemini-3.1-flash-lite-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_down|no_keys|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"error": "9Router is not running; cannot use gemini-3.5-flash-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gemini-3.5-flash"
+},
+"router_down|no_keys|gpt-5.4": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4"
+},
+"router_down|no_keys|gpt-5.4-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.4-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_down|no_keys|gpt-5.4-mini": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4-mini. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_down|no_keys|gpt-5.4-mini-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.4-mini-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_down|no_keys|gpt-5.5-api": {
+"apiType": "openai",
+"error": "9Router is not running; cannot use gpt-5.5-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_down|no_keys|haiku": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use haiku. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_down|no_keys|haiku-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-haiku-4-5"
+},
+"router_down|no_keys|haiku-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use haiku-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_down|no_keys|opus": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_down|no_keys|opus-4-7": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-7. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_down|no_keys|opus-4-7-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-7"
+},
+"router_down|no_keys|opus-4-7-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-7-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_down|no_keys|opus-4-8": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-8. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_down|no_keys|opus-4-8-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-8"
+},
+"router_down|no_keys|opus-4-8-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-8-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_down|no_keys|opus-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-6"
+},
+"router_down|no_keys|opus-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_down|no_keys|sonnet": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_down|no_keys|sonnet-5": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-5. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_down|no_keys|sonnet-5-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-sonnet-5"
+},
+"router_down|no_keys|sonnet-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_down|no_keys|sonnet-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-sonnet-4-6"
+},
+"router_down|no_keys|sonnet-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_down|openai_key|fable-5-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-fable-5"
+},
+"router_down|openai_key|fable-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use fable-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-fable-5"
+},
+"router_down|openai_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"error": "9Router is not running; cannot use gemini-3.1-flash-lite. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_down|openai_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"error": "9Router is not running; cannot use gemini-3.1-flash-lite-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_down|openai_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"error": "9Router is not running; cannot use gemini-3.5-flash-api. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "gemini-3.5-flash"
+},
+"router_down|openai_key|gpt-5.4": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4"
+},
+"router_down|openai_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_down|openai_key|gpt-5.4-mini": {
+"apiType": "codex",
+"error": "9Router is not running; cannot use gpt-5.4-mini. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_down|openai_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_down|openai_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_down|openai_key|haiku": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use haiku. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_down|openai_key|haiku-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-haiku-4-5"
+},
+"router_down|openai_key|haiku-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use haiku-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_down|openai_key|opus": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_down|openai_key|opus-4-7": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-7. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_down|openai_key|opus-4-7-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-7"
+},
+"router_down|openai_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-7-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_down|openai_key|opus-4-8": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-8. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_down|openai_key|opus-4-8-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-8"
+},
+"router_down|openai_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-4-8-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_down|openai_key|opus-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-opus-4-6"
+},
+"router_down|openai_key|opus-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use opus-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_down|openai_key|sonnet": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_down|openai_key|sonnet-5": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-5. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_down|openai_key|sonnet-5-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-sonnet-5"
+},
+"router_down|openai_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-5-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_down|openai_key|sonnet-api": {
+"apiType": "anthropic",
+"error": "No AI provider configured. Set an API key or connect a subscription.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "claude-sonnet-4-6"
+},
+"router_down|openai_key|sonnet-cc": {
+"apiType": "anthropic",
+"error": "9Router is not running; cannot use sonnet-cc. Install Node.js and restart the app, or switch to a model with a direct API key.",
+"errorType": "ValueError",
+"ok": false,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_claude_sub|anthropic_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_claude_sub|anthropic_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_claude_sub|anthropic_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|anthropic_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|anthropic_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_claude_sub|anthropic_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_claude_sub|anthropic_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_claude_sub|anthropic_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_claude_sub|anthropic_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_claude_sub|anthropic_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_claude_sub|anthropic_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_claude_sub|anthropic_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_claude_sub|anthropic_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_claude_sub|anthropic_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_claude_sub|anthropic_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_claude_sub|anthropic_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_claude_sub|anthropic_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_claude_sub|anthropic_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_claude_sub|anthropic_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_claude_sub|anthropic_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_claude_sub|anthropic_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_claude_sub|anthropic_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_claude_sub|anthropic_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_claude_sub|anthropic_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_claude_sub|anthropic_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_claude_sub|anthropic_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_claude_sub|anthropic_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_claude_sub|anthropic_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_claude_sub|google_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_claude_sub|google_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_claude_sub|google_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini/gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|google_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|google_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_claude_sub|google_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_claude_sub|google_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_claude_sub|google_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_claude_sub|google_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_claude_sub|google_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_claude_sub|google_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_claude_sub|google_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_claude_sub|google_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_claude_sub|google_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_claude_sub|google_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_claude_sub|google_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_claude_sub|google_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_claude_sub|google_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_claude_sub|google_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_claude_sub|google_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_claude_sub|google_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_claude_sub|google_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_claude_sub|google_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_claude_sub|google_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_claude_sub|google_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_claude_sub|google_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_claude_sub|google_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_claude_sub|google_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_claude_sub|no_keys|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_claude_sub|no_keys|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_claude_sub|no_keys|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|no_keys|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|no_keys|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_claude_sub|no_keys|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_claude_sub|no_keys|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_claude_sub|no_keys|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_claude_sub|no_keys|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_claude_sub|no_keys|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_claude_sub|no_keys|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_claude_sub|no_keys|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_claude_sub|no_keys|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_claude_sub|no_keys|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_claude_sub|no_keys|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_claude_sub|no_keys|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_claude_sub|no_keys|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_claude_sub|no_keys|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_claude_sub|no_keys|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_claude_sub|no_keys|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_claude_sub|no_keys|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_claude_sub|no_keys|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_claude_sub|no_keys|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_claude_sub|no_keys|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_claude_sub|no_keys|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_claude_sub|no_keys|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_claude_sub|no_keys|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_claude_sub|no_keys|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_claude_sub|openai_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_claude_sub|openai_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_claude_sub|openai_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|openai_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_claude_sub|openai_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_claude_sub|openai_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_claude_sub|openai_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_claude_sub|openai_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_claude_sub|openai_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_claude_sub|openai_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_claude_sub|openai_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_claude_sub|openai_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_claude_sub|openai_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_claude_sub|openai_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_claude_sub|openai_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_claude_sub|openai_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_claude_sub|openai_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_claude_sub|openai_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_claude_sub|openai_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_claude_sub|openai_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_claude_sub|openai_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_claude_sub|openai_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_claude_sub|openai_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_claude_sub|openai_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_claude_sub|openai_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_claude_sub|openai_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_claude_sub|openai_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_claude_sub|openai_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "cc/claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_codex_sub|anthropic_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_codex_sub|anthropic_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_codex_sub|anthropic_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|anthropic_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|anthropic_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_codex_sub|anthropic_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_codex_sub|anthropic_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_codex_sub|anthropic_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_codex_sub|anthropic_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_codex_sub|anthropic_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_codex_sub|anthropic_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_codex_sub|anthropic_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_codex_sub|anthropic_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_codex_sub|anthropic_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_codex_sub|anthropic_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_codex_sub|anthropic_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_codex_sub|anthropic_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_codex_sub|anthropic_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_codex_sub|anthropic_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_codex_sub|anthropic_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_codex_sub|anthropic_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_codex_sub|anthropic_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_codex_sub|anthropic_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_codex_sub|anthropic_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_codex_sub|anthropic_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_codex_sub|anthropic_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_codex_sub|anthropic_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_codex_sub|anthropic_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_codex_sub|google_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_codex_sub|google_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_codex_sub|google_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini/gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|google_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|google_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_codex_sub|google_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_codex_sub|google_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_codex_sub|google_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_codex_sub|google_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_codex_sub|google_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_codex_sub|google_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_codex_sub|google_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_codex_sub|google_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_codex_sub|google_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_codex_sub|google_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_codex_sub|google_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_codex_sub|google_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_codex_sub|google_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_codex_sub|google_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_codex_sub|google_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_codex_sub|google_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_codex_sub|google_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_codex_sub|google_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_codex_sub|google_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_codex_sub|google_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_codex_sub|google_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_codex_sub|google_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_codex_sub|google_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_codex_sub|no_keys|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_codex_sub|no_keys|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_codex_sub|no_keys|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|no_keys|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|no_keys|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_codex_sub|no_keys|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_codex_sub|no_keys|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_codex_sub|no_keys|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_codex_sub|no_keys|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_codex_sub|no_keys|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_codex_sub|no_keys|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_codex_sub|no_keys|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_codex_sub|no_keys|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_codex_sub|no_keys|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_codex_sub|no_keys|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_codex_sub|no_keys|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_codex_sub|no_keys|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_codex_sub|no_keys|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_codex_sub|no_keys|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_codex_sub|no_keys|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_codex_sub|no_keys|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_codex_sub|no_keys|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_codex_sub|no_keys|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_codex_sub|no_keys|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_codex_sub|no_keys|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_codex_sub|no_keys|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_codex_sub|no_keys|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_codex_sub|no_keys|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_codex_sub|openai_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_codex_sub|openai_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_codex_sub|openai_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|openai_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_codex_sub|openai_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_codex_sub|openai_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_codex_sub|openai_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_codex_sub|openai_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_codex_sub|openai_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_codex_sub|openai_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_codex_sub|openai_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_codex_sub|openai_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_codex_sub|openai_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_codex_sub|openai_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_codex_sub|openai_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_codex_sub|openai_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_codex_sub|openai_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_codex_sub|openai_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_codex_sub|openai_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_codex_sub|openai_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_codex_sub|openai_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_codex_sub|openai_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_codex_sub|openai_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_codex_sub|openai_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_codex_sub|openai_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_codex_sub|openai_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_codex_sub|openai_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_codex_sub|openai_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini",
+"ANTHROPIC_SMALL_FAST_MODEL": "cx/gpt-5.4-mini",
+"CLAUDE_CODE_SUBAGENT_MODEL": "cx/gpt-5.4-mini",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_no_sub|anthropic_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_no_sub|anthropic_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_no_sub|anthropic_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|anthropic_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|anthropic_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_no_sub|anthropic_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_no_sub|anthropic_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_no_sub|anthropic_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_no_sub|anthropic_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_no_sub|anthropic_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_no_sub|anthropic_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_no_sub|anthropic_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_no_sub|anthropic_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_no_sub|anthropic_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_no_sub|anthropic_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_no_sub|anthropic_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_no_sub|anthropic_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_no_sub|anthropic_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_no_sub|anthropic_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_no_sub|anthropic_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_no_sub|anthropic_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_no_sub|anthropic_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_no_sub|anthropic_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_no_sub|anthropic_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_no_sub|anthropic_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_no_sub|anthropic_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_no_sub|anthropic_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "sk-ant-test-000",
+"ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_no_sub|anthropic_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+"ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_no_sub|google_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_no_sub|google_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_no_sub|google_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini/gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|google_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|google_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"GEMINI_API_KEY": "goog-test-000",
+"GOOGLE_API_KEY": "goog-test-000"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_no_sub|google_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_no_sub|google_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_no_sub|google_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_no_sub|google_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_no_sub|google_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_no_sub|google_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_no_sub|google_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_no_sub|google_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_no_sub|google_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_no_sub|google_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_no_sub|google_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_no_sub|google_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_no_sub|google_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_no_sub|google_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_no_sub|google_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_no_sub|google_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_no_sub|google_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_no_sub|google_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_no_sub|google_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_no_sub|google_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_no_sub|google_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_no_sub|google_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_no_sub|google_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_no_sub|no_keys|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_no_sub|no_keys|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_no_sub|no_keys|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|no_keys|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|no_keys|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_no_sub|no_keys|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_no_sub|no_keys|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_no_sub|no_keys|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_no_sub|no_keys|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_no_sub|no_keys|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_no_sub|no_keys|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_no_sub|no_keys|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_no_sub|no_keys|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_no_sub|no_keys|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_no_sub|no_keys|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_no_sub|no_keys|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_no_sub|no_keys|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_no_sub|no_keys|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_no_sub|no_keys|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_no_sub|no_keys|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_no_sub|no_keys|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_no_sub|no_keys|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_no_sub|no_keys|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_no_sub|no_keys|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_no_sub|no_keys|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_no_sub|no_keys|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_no_sub|no_keys|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_no_sub|no_keys|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_no_sub|openai_key|fable-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-fable-5"
+},
+"router_up_no_sub|openai_key|fable-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-fable-5"
+},
+"router_up_no_sub|openai_key|gemini-3.1-flash-lite": {
+"apiType": "gemini-cli",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://127.0.0.1:8324/api/anthropic-proxy",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gc/gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|openai_key|gemini-3.1-flash-lite-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.1-flash-lite-preview"
+},
+"router_up_no_sub|openai_key|gemini-3.5-flash-api": {
+"apiType": "gemini",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "gemini-3.5-flash"
+},
+"router_up_no_sub|openai_key|gpt-5.4": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4"
+},
+"router_up_no_sub|openai_key|gpt-5.4-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4"
+},
+"router_up_no_sub|openai_key|gpt-5.4-mini": {
+"apiType": "codex",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cx/gpt-5.4-mini"
+},
+"router_up_no_sub|openai_key|gpt-5.4-mini-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.4-mini"
+},
+"router_up_no_sub|openai_key|gpt-5.5-api": {
+"apiType": "openai",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"OPENAI_API_KEY": "sk-oai-test-000",
+"OPENAI_BASE_URL": "http://127.0.0.1:8324/api/openai-passthrough/v1"
+},
+"ok": true,
+"resolved": "cp-openai/gpt-5.5"
+},
+"router_up_no_sub|openai_key|haiku": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_no_sub|openai_key|haiku-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-haiku-4-5"
+},
+"router_up_no_sub|openai_key|haiku-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-haiku-4-5-20251001"
+},
+"router_up_no_sub|openai_key|opus": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_no_sub|openai_key|opus-4-7": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_no_sub|openai_key|opus-4-7-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-7"
+},
+"router_up_no_sub|openai_key|opus-4-7-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-7"
+},
+"router_up_no_sub|openai_key|opus-4-8": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_no_sub|openai_key|opus-4-8-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-8"
+},
+"router_up_no_sub|openai_key|opus-4-8-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-8"
+},
+"router_up_no_sub|openai_key|opus-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-opus-4-6"
+},
+"router_up_no_sub|openai_key|opus-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-opus-4-6"
+},
+"router_up_no_sub|openai_key|sonnet": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+},
+"router_up_no_sub|openai_key|sonnet-5": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_no_sub|openai_key|sonnet-5-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-5"
+},
+"router_up_no_sub|openai_key|sonnet-5-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-5"
+},
+"router_up_no_sub|openai_key|sonnet-api": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "claude-sonnet-4-6"
+},
+"router_up_no_sub|openai_key|sonnet-cc": {
+"apiType": "anthropic",
+"env": {
+"ANTHROPIC_API_KEY": "9router",
+"ANTHROPIC_BASE_URL": "http://localhost:20128",
+"ENABLE_TOOL_SEARCH": "auto"
+},
+"ok": true,
+"resolved": "cc/claude-sonnet-4-6"
+}
+}

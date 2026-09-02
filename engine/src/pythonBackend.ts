@@ -24,6 +24,15 @@ function pythonPath(): string {
   return join(P_REPO_ROOT, 'backend', '.venv', bin);
 }
 
+// SUB-5: exported so apps/outputs/runtime.ts can hand a legacy old-mode workspace's `backend.py`
+// the EXACT interpreter this engine spawns the real backend with -- the same "the running
+// backend's own python, not a bare `python3` that may not exist on PATH" reasoning runtime.py's
+// own `sys.executable` gave the Python original (see that file's p_spawn_env_base doc). Kept a
+// getter (not a constant) so a test can still see a fresh P_REPO_ROOT-relative path.
+export function resolveBackendPythonPath(): string {
+  return pythonPath();
+}
+
 // Port 0 + immediate close: a free ephemeral port with a tiny (unavoidable) race window before
 // uvicorn binds it, same tradeoff e2e/contract/fixtures.ts's freePort() accepts.
 async function freePort(): Promise<number> {
