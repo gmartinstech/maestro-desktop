@@ -11,7 +11,10 @@
 //      (b) does its own source scan for the same banned patterns outside engine/src/net/, so a
 //      quietly-disabled or misconfigured lint rule doesn't silently reopen the hole.
 //
-// This is the TypeScript-side twin of the never-call-openswarm.com / Maestro-provider-only
+// This is the TypeScript-side twin of the never-call-the-upstream-vendor / Maestro-provider-only
+// (deliberately not spelling the banned host here: this module is an ALLOW-list, so it never needs
+// the name functionally, and keeping it out means check-callhome can scan production source with
+// no exemptions. scripts/check-callhome.mjs is the one place that names it.)
 // constraint scripts/check-callhome.mjs enforces via string scanning on built output -- here the
 // enforcement is structural (a host allowlist gating the one function permitted to reach the
 // network) rather than textual, because freshly-written TS has no "known bad string" to grep for
