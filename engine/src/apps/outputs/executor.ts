@@ -15,8 +15,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
-import { resolveBackendPythonPath } from '../../pythonBackend';
+import { PythonNotFoundError, resolveAppBuilderPython } from '../../pythonBackend';
 
 const TIMEOUT_MS = 30_000;
 
@@ -31,9 +30,11 @@ const P_ALLOWED_MODULES = [
 
 const P_BLOCKED_BUILTINS = ['exec', 'eval', 'compile', '__import__', 'open', 'input', 'breakpoint', 'exit', 'quit'];
 
-function pPythonExecutable(): string {
-  const resolved = resolveBackendPythonPath();
-  return existsSync(resolved) ? resolved : (process.env.MAESTRO_PYTHON || 'python');
+// PKG-2: null when no usable Python 3 was found -- see resolveAppBuilderPython()'s own doc for the
+// resolution order. Callers below turn that into a PythonNotFoundError up front, instead of handing
+// a bogus path/bare 'python' to spawn() and parsing whatever cryptic ENOENT/exit-code text comes back.
+function pResolvePythonExecutable(): string | null {
+  return resolveAppBuilderPython()?.path ?? null;
 }
 
 // Runs the EXACT AST walk get_code_warnings performs, over a subprocess boundary -- reads the
@@ -82,9 +83,9 @@ for node in ast.walk(tree):
 print(json.dumps(warnings))
 `;
 
-function runPython(args: string[], stdin: string, envOverride: NodeJS.ProcessEnv, cwd?: string, timeoutMs = TIMEOUT_MS): Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }> {
+function runPython(pythonPath: string, args: string[], stdin: string, envOverride: NodeJS.ProcessEnv, cwd?: string, timeoutMs = TIMEOUT_MS): Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolvePromise) => {
-    const child = spawn(pPythonExecutable(), args, { cwd, env: envOverride, windowsHide: true });
+    const child = spawn(pythonPath, args, { cwd, env: envOverride, windowsHide: true });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -110,7 +111,13 @@ function runPython(args: string[], stdin: string, envOverride: NodeJS.ProcessEnv
 /** Return human-readable warnings for AST-visible risks, without raising. [] for code that's fully
  * inside the allowlist. A syntax error is reported as a single warning. */
 export async function getCodeWarnings(code: string): Promise<string[]> {
-  const { code: exitCode, stdout, stderr } = await runPython(['-c', P_VALIDATOR_SCRIPT], code, minimalEnv(false));
+  const pythonPath = pResolvePythonExecutable();
+  if (!pythonPath) {
+    // PKG-2: no usable interpreter at all -- don't spawn a bogus path and parse its ENOENT; report
+    // the same clear, actionable detail runtime.ts's old-mode path uses.
+    return [new PythonNotFoundError().message];
+  }
+  const { code: exitCode, stdout, stderr } = await runPython(pythonPath, ['-c', P_VALIDATOR_SCRIPT], code, minimalEnv(false));
   if (exitCode !== 0) {
     // The validator subprocess itself failed to run (no python found, etc) -- surface as a single
     // warning rather than silently reporting "no risk", which would defeat the HITL gate's purpose.
@@ -179,6 +186,11 @@ export interface BackendExecResult {
  * warnings to a user and got explicit consent. */
 export async function executeBackendCode(code: string, inputData: Record<string, unknown>, opts: { skipValidation?: boolean } = {}): Promise<BackendExecResult> {
   if (!opts.skipValidation) await pValidateCodeSafety(code);
+  // Checked even when skipValidation bypassed pValidateCodeSafety above (that path never resolves
+  // Python itself) -- without this, a missing interpreter would only surface once we actually try
+  // to spawn it, as a raw ENOENT/exit-code error rather than this clear, typed one.
+  const pythonPath = pResolvePythonExecutable();
+  if (!pythonPath) throw new PythonNotFoundError();
 
   const preamble =
     'import json, sys, io, builtins\n' +
@@ -199,6 +211,7 @@ export async function executeBackendCode(code: string, inputData: Record<string,
   const workdir = mkdtempSync(join(tmpdir(), 'maestro-exec-'));
   try {
     const { code: exitCode, stdout, stderr, timedOut } = await runPython(
+      pythonPath,
       ['-c', wrapper],
       JSON.stringify(inputData),
       minimalEnv(opts.skipValidation === true),

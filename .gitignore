@@ -114,3 +114,10 @@ frontend/.gate-harness-dist/
 
 # Stray PSReadLine console history an agent PTY test created under engine/.
 engine/Microsoft/
+
+# PKG-1: packaged-build staging payloads for tauri.conf.json's bundle.resources -- a pruned
+# (--omit=dev) copy of engine/node_modules and a copy of the bundled Node runtime binary that
+# would otherwise need re-deriving on every machine. Generated, not source; see
+# docs/plans/txm-status.md's PKG-1 row for how to regenerate.
+engine/node_modules.pkg/
+engine/node-runtime/

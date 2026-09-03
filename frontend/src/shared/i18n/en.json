@@ -1107,7 +1107,9 @@
       "filesMissing": "This app's files are missing.",
       "removeCard": "Remove card",
       "resetHardReload": "Reset & Hard Reload",
-      "restartBackend": "Restart backend.py + reload preview"
+      "restartBackend": "Restart backend.py + reload preview",
+      "pythonMissingTitle": "Python 3 required",
+      "pythonMissingBody": "This app's backend needs Python 3, which isn't installed. Install it from python.org, then reopen this app."
     },
     "cardSearch": {
       "placeholder": "Search cards...",

@@ -150,6 +150,199 @@ Ordering is dependency-real, not aspirational. `[~]` = in flight.
       "Build-artifact readiness" section) -- a packaged build with the switch on will hit
       `spawn_engine()`'s loud missing-file error, which is the intended (not silent) failure mode
       until that staging step exists. Not committed -- uncommitted working-tree edits on `main`.
+- [x] **PKG-1** ✅ done — make an INSTALLED Tauri app actually run the engine (the gap WIRE-1's
+      row above named: no `bundle.resources`, so a packaged build had no engine to run). Worked
+      out the full payload first, per the ticket's own instruction not to assume `engine/dist`
+      alone is enough -- it wasn't; three things were missing:
+      1. **Node runtime**: bundled, not system-wide. Copied the already-cached, pinned Node
+         20.18.1 x64 binary `build-app-win.ps1` downloads for the Electron build's own
+         `node/${arch}` extraResources entry (`electron/node-bin/v20.18.1/x64/node.exe`, read-only
+         reference, not edited) to a new `engine/node-runtime/x64/node.exe` (gitignored, generated
+         -- engine/** is not frozen). `tauri/src/sidecar.rs`'s `node_command()` now takes
+         `&BackendRoot` and resolves, in priority order: `MAESTRO_NODE_PATH` override (unchanged) →
+         packaged build's staged `<resource_dir>/node/x64/node.exe` (new) → dev's bare `node` on
+         PATH (unchanged, an explicit documented dependency, not accidental). `spawn_engine()` also
+         gained a loud, actionable `NotFound` check for the packaged branch specifically (a bare
+         relative `"node"` can't be `.exists()`-checked meaningfully, so dev's PATH-resolution path
+         is deliberately left to surface via `Command::spawn`'s own ENOENT instead).
+      2. **Engine runtime deps**: staged a **pruned, production-only copy** of `engine/node_modules`
+         (`npm ci --omit=dev` against `engine/package.json`+`package-lock.json` in a scratch dir,
+         then copied to `engine/node_modules.pkg/`, gitignored/generated), not a single-file esbuild
+         bundle. Justification: `@napi-rs/keyring` and `@lydell/node-pty`'s native `.node` files
+         were confirmed (via `napi_register_module_v1` present, `node_module_register` absent in
+         both binaries' raw bytes) to be N-API-based, i.e. ABI-stable across Node majors -- so they
+         load fine under the bundled Node 20.18.1 despite this dev machine running Node 25, and
+         keeping them un-rebuilt/un-repackaged was the lower-risk choice within this ticket's scope.
+         An esbuild single-file bundle was considered and rejected for this pass: same native-module
+         externalization problem either way, plus new build-pipeline surface, for a size win the
+         numbers below show would be marginal (dropping devDependencies-only packages saved 86MB out
+         of 391MB; the remaining 305MB is >99% one runtime dependency, not something bundling
+         reduces).
+      3. **Packaged-path resolution**: needed zero change to `engine_entry_path()` (already
+         `<root>/engine/dist/main.js`, from WIRE-1) -- only `tauri.conf.json` gained a `bundle.
+         resources` map: `engine/dist`→`engine/dist`, `engine/node_modules.pkg`→`engine/node_modules`,
+         `engine/package.json`→`engine/package.json`, `engine/node-runtime/x64/node.exe`→
+         `node/x64/node.exe`. Node's own `require()` resolution walks up from `dist/main.js` to find
+         `node_modules` as a sibling of `dist/`, which the resource map preserves unchanged from the
+         dev layout.
+      **Explicitly out of scope, called out rather than silently glossed over**: the Python payload
+      (`python-env`) is still not staged -- unchanged, pre-existing gap from the "Build-artifact
+      readiness" section below, `backend/**`/`electron/**` stay frozen. The installed-app gate below
+      therefore runs with `MAESTRO_ENGINE_SKIP_BACKEND=1` alongside `MAESTRO_USE_ENGINE=1` --
+      the exact combination SUB-10's own gate already established as "zero Python anywhere,
+      confirmed via `Get-CimInstance`" -- to isolate proving the engine/Node payload specifically,
+      not to paper over the still-open Python gap.
+      **GATE, all run for real (2026-09-02):**
+      (a) `cargo tauri build` (release): `cargo build` clean (1 pre-existing benign linker-message
+      warning, same as noted elsewhere in this file), `cargo test --lib` 11/11 pass, then
+      `cargo tauri build` exited 0 (~4m01s compile + WiX/NSIS packing, the packing step alone ran
+      several minutes given the ~380MB of new resources -- confirmed still genuinely in progress via
+      `Get-Process light`/`Get-CimInstance` mid-run, not stalled) producing both
+      `tauri/target/release/bundle/msi/Maestro Studio_0.1.0_x64_en-US.msi` and
+      `.../nsis/Maestro Studio_0.1.0_x64-setup.exe`.
+      (b) **Actually installed**: ran the NSIS installer silently (`/S /D=<path>`, no electron-
+      builder-style unattended flag needed -- this is Tauri's own NSIS template) to
+      `%TEMP%\maestro-pkg1-install` (outside the repo). Then **renamed the repo's `engine/dist`**
+      (restored after) so a dev-tree fallback could not mask a failure, and launched
+      `%TEMP%\maestro-pkg1-install\app.exe` directly with `MAESTRO_USE_ENGINE=1` +
+      `MAESTRO_ENGINE_SKIP_BACKEND=1` in its env. `Get-CimInstance Win32_Process` confirmed:
+      `app.exe` (PID 74180) → direct child `node.exe` (PID 69248), command line
+      `\\?\C:\Users\gsilva\AppData\Local\Temp\maestro-pkg1-install\node\x64\node.exe
+      \\?\...\maestro-pkg1-install\engine\dist\main.js` -- **the staged copy under the install
+      dir, not the repo** (repo's own `engine/dist` was renamed away at the time, so this could not
+      have been a dev-tree fallback even by accident). `Get-NetTCPConnection -OwningProcess 69248`
+      showed it listening on 127.0.0.1:8324; `curl http://127.0.0.1:8324/api/health/check` → **200**
+      (body `OK`). No `python.exe` appeared anywhere in the tree (expected, `SKIP_BACKEND=1`).
+      (c) `grep -a 'C:\\Users' "%TEMP%\maestro-pkg1-install\app.exe"` → **zero matches** (cleaner
+      than the "Build-artifact readiness" section's own prior finding of one benign cargo-registry-
+      path match -- this rebuild apparently didn't re-embed that particular panic-location string;
+      either way, zero is zero).
+      (d) **Sizes**: NSIS installer 85,268,677 bytes (**~82 MB**); MSI 129,548,828 bytes (~124 MB,
+      WiX doesn't compress as well as NSIS's LZMA -- expected, not a regression). Installed,
+      unpacked footprint: 394 MB. Compared to the ~270MB Electron baseline this migration's stated
+      goal is to beat (per this ticket's own text): **the NSIS installer (82MB) is smaller**, but
+      the unpacked install (394MB) and even the MSI (124MB) are not -- both are dominated by one
+      single new dependency, `@anthropic-ai/claude-agent-sdk-win32-x64`'s vendored `claude.exe` CLI
+      binary (242MB by itself, confirmed via `du`), which the engine's ported agent loop (AGT
+      phase) shells out to and Electron's Python-based agent loop may not have needed in the same
+      form -- flagged here as an honest, load-bearing size driver to investigate in a follow-up,
+      not something this ticket should silently strip (deleting it would break real agent-turn
+      functionality). **Every spawned process confirmed torn down** afterward (`taskkill /PID 74180
+      /T /F`, then two follow-up `Get-CimInstance` queries for anything under `maestro-pkg1-install`
+      both returned empty); `engine/dist` restored; `%TEMP%\maestro-pkg1-install` deleted. Not
+      committed -- uncommitted working-tree edits on `main`. **New generated/gitignored payload
+      dirs** (`engine/node_modules.pkg/`, `engine/node-runtime/`) are left in place, not cleaned up
+      -- they're inputs `tauri.conf.json`'s new `bundle.resources` entries now depend on for any
+      future build, the same "generated but must persist" status `engine/node_modules` itself
+      already has.
+- [x] **PKG-2** ✅ done — settle the App Builder's Python story for a packaged app (`engine/src/
+      apps/outputs/runtime.ts`'s legacy `python -u backend.py` spawn + `executor.ts`'s AST
+      code-safety validator, both of which resolved via `resolveBackendPythonPath()` falling back
+      to `backend/.venv`/bare `python` -- gone/unreliable once CUT deletes `backend/`).
+      **Rejected**: bundling a Python runtime for the App Builder -- exactly the ~120MB this
+      migration sheds, paid by every user for a feature only some touch; the electron/ reference
+      build's own `python-env` extraResources entry (`electron/package.json` + `scripts/
+      build-python-env-win.ps1`) proves this was the old cost, not a template to keep.
+      **Rejected**: trusting a bare `python`/`python3` name without running it -- the Windows
+      Store's `python.exe` PATH alias exists as a file with no real interpreter behind it, which
+      would silently hang or behave strangely rather than clearly fail.
+      **Chosen**: `engine/src/pythonBackend.ts`'s new `resolveAppBuilderPython()` -- resolves, in
+      order, (1) `MAESTRO_PYTHON` if the environment set it explicitly, validated by actually
+      running it (never silently swapped for a different interpreter if that pin is bad -- a
+      deliberate override failing is a real, reportable misconfiguration, and this is also how the
+      gate below simulates "no interpreter"); (2) the dev-tree `backend/.venv`, but ONLY outside a
+      packaged build (`resolveBackendPythonPath()` now returns `''` when `MAESTRO_PACKAGED=1`,
+      so it is never the primary path there, per the ticket's own instruction); (3) a system Python
+      found on PATH, validated the same way. Returns `null` (never throws) so callers degrade
+      deliberately: `runtime.ts`'s old-mode spawn and `executor.ts`'s validator/executor both check
+      this BEFORE spawning and, when null, set a new typed `pythonMissing`/`pythonMissingDetail`
+      state (`AppRuntime`) instead of attempting a spawn that would ENOENT/hang -- surfaced through
+      the already-native `/runtime/start` and `/runtime/status` HTTP responses (`python_missing`/
+      `python_missing_detail` fields) and through `executor.ts`'s existing `warnings` channel for
+      `/api/outputs/execute`. New-mode (`webapp_template`) apps with their own backend get the same
+      treatment for free: their `run.sh` (read-only reference) already does its own robust
+      PATH-probe with a clear "No working Python 3 found" stdout line; `pOnLine` now recognizes
+      that exact literal and sets the same `pythonMissing` state rather than leaving it as an
+      unparsed log line. **Frontend wired end-to-end**: `useRuntimePreviewUrl.ts` now reads
+      `python_missing`/`python_missing_detail` off the `/runtime/start` response and polls
+      `/runtime/status` (bounded, `STATUS_POLL_MAX_ATTEMPTS`) as a transport-independent path for
+      that signal -- **found in the process that the native `outputs` runtime-logs WS
+      (`/ws/outputs/runtime/:id/logs`) has no native handler in `server.ts` at all** (only
+      `agents`/`terminal` do), so in a fully-native, no-Python-backend engine this WS would 501;
+      flagging this as a real, separate gap for a future ticket, not fixed here (out of scope --
+      it's an outputs-WS-porting job, not a Python-resolution one), and worked around via the
+      HTTP poll so THIS ticket's signal reaches the UI regardless. `DashboardViewCard.tsx` (the
+      one place composing `ViewPreview/TerminalPanel`, i.e. the App Builder card) shows a dedicated
+      banner on `pythonMissing`, new i18n keys `dashboard.viewCard.pythonMissingTitle`/
+      `pythonMissingBody` in both `frontend/src/shared/i18n/{en,pt-BR}.json`
+      (`check-i18n-parity.mjs` run clean: "1576 keys in both locales"). **GATE, run for real**:
+      built the engine (`npx tsc -p tsconfig.json`, clean) and booted it standalone twice
+      (`MAESTRO_ENGINE_SKIP_BACKEND=1 MAESTRO_ENGINE_ROUTES=outputs:native MAESTRO_PACKAGED=1`,
+      isolated `MAESTRO_DATA_ROOT`). **(1) No interpreter**, simulated via
+      `MAESTRO_PYTHON=/tmp/.../does-not-exist-python`: seeded a flat workspace with a real
+      `backend.py`, `POST .../runtime/start` returned in 0.2s (not a hang, not a 500) with
+      `{"running":false,...,"python_missing":true,"python_missing_detail":"Python 3 is required to
+      run this app's backend, and none was found. Install Python 3 from
+      https://www.python.org/downloads/ (or set the MAESTRO_PYTHON environment variable to the
+      interpreter to use), then restart this app."}`; separately, `/api/outputs/execute` against an
+      Output with a `backend.py` returned 200 in 0.26s with `"warnings":["No usable Python 3
+      interpreter found"]` (not a stack trace). **(2) Real interpreter**: restarted the engine with
+      `MAESTRO_PYTHON` unset (real system Python 3.13 on PATH), same workspace: `runtime/start`
+      returned `"running":true`, its `backend_url` served real HTTP (`curl` → `ok`), and
+      `/api/outputs/execute` against the same Output ran the code for real (`"backend_result":
+      {"x":1}`). Also ran the existing engine suites: `npx vitest run src/apps/outputs/` (3 files,
+      46 tests, all green, including the pre-existing `execute` test that already needed a real
+      interpreter) and the frontend/root `tsc --noEmit` (frontend has one pre-existing, unrelated
+      failure in `WebSocketManager.ts`, confirmed present before this ticket's edits). **Every
+      spawned process confirmed torn down**: both engine instances and their `python.exe` children
+      killed via `taskkill /PID .. /T /F`, verified gone via follow-up `Get-CimInstance` (a third,
+      unrelated `node dist/main.js` + assorted `python.exe`/pytest processes on this shared dev box
+      were identified by owning port/PID and left untouched). `backend/**`/`electron/**` untouched
+      (read-only reference, read only to confirm the current shipping build's own `python-env`
+      staging). Not committed -- uncommitted working-tree edits on `main`.
+- [x] **PKG-3** ✅ done — make CI able to produce a publishable, **signed** Windows installer for
+      the Tauri app (also tracked as **REL-1** in the Phase REL table below — same ticket).
+      `build-tauri-windows.yml` (TAU-7) explicitly does not sign or publish; `release-windows.yml`
+      is the real, working, signed Electron pipeline (Azure Trusted Signing + `signtool` +
+      `scripts/ci/verify-signature.js --require-signed`) and was the template, per the ticket.
+      **Added** `.github/workflows/build-tauri-windows-signed.yml` — a *separate* workflow, not an
+      edit to either existing one: `release-windows.yml` stays byte-identical (confirmed via
+      `git diff --stat`, empty output), and the new workflow is deliberately `workflow_dispatch`-only
+      (not `push`/`pull_request`) so the Azure signing secrets it needs are never reachable from an
+      automatic or fork-PR-triggered run — `build-tauri-windows.yml` keeps that job for every
+      push/PR, unsigned, as before. Build steps (Node 20.18.1, `dtolnay/rust-toolchain@stable`,
+      `cargo install tauri-cli`) mirror `build-tauri-windows.yml`'s pins exactly; the
+      dlib-install/signtool-locate steps are copied verbatim from `release-windows.yml`; the sign
+      step itself calls `signtool sign /fd SHA256 /tr ... /td SHA256 /dlib ... /dmdf ...` directly
+      against both the NSIS `.exe` and the MSI (Tauri's `bundle.targets: "all"` produces both,
+      confirmed against a local `cargo tauri build` output already on disk) — mirroring, not
+      importing, `electron/build/sign-windows.js`'s invocation shape, since `electron/**` is
+      read-only reference for this ticket and Tauri has no electron-builder afterSign hook to plug
+      that file into. Verification reuses `scripts/ci/verify-signature.js --require-signed` unchanged,
+      once per installer (that script already takes an explicit `--target`, so no changes needed —
+      it was written generically, not Electron-specific). Ends with `actions/upload-artifact` only;
+      no CDN publish, no GitHub Release, no `latest`/channel change (CUT-1/CUT-7's job).
+      **Verified locally (signing itself is CI-only and NOT executed here — Azure secrets don't
+      exist on this machine, and the ticket says plainly not to fake that):** YAML parses
+      (`yaml.safe_load` in Python, "YAML OK"); all 6 secret names
+      (`AZURE_TENANT_ID`/`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/`AZURE_SIGNING_ENDPOINT`/
+      `AZURE_SIGNING_ACCOUNT`/`AZURE_SIGNING_CERT_PROFILE`) match `release-windows.yml`'s own
+      `grep -o 'secrets\.AZURE_[A-Z_]*'` output exactly, byte-for-byte; every referenced path/script
+      confirmed to exist on disk (`scripts/ci/verify-signature.js`, `frontend/package.json`'s
+      `build` script, `engine/package.json`'s `build` script, `tauri/Cargo.toml`); Node/Rust pins
+      cross-checked against both `build-tauri-windows.yml` and `release-windows.yml` (all three
+      agree: Node `20.18.1`, `dtolnay/rust-toolchain@stable`); `git diff --stat --
+      .github/workflows/release-windows.yml` returns empty (byte-identical, untouched).
+      **Known real gap, called out rather than glossed over (pre-existing, not introduced by this
+      ticket, out of this ticket's scope):** `tauri.conf.json`'s `bundle.resources` (PKG-1) stages
+      `engine/node-runtime/x64/node.exe` and `engine/node_modules.pkg/`, and **neither has a
+      committed, CI-reproducible build script yet** — PKG-1 produced them by hand on a dev machine
+      and they persist here only as gitignored generated dirs (see that row's own last paragraph).
+      A fresh CI checkout has neither, so this workflow's "Build Tauri app" step will fail for that
+      reason alone until a follow-up ticket scripts that staging — a real, separate gap from
+      signing, not something this pass silently worked around or is trying to claim is fixed.
+      **Not committed** — uncommitted working-tree add, no `harness/review.mjs` run (per this
+      ticket's own instructions).
 
 **Next — retires Python (the actual goal)**
 - [x] **AGT** (7 tickets) ✅ done — port the agent loop, `backend/apps/agents` (~22k LOC, the largest
@@ -302,6 +495,12 @@ Ordering is dependency-real, not aspirational. `[~]` = in flight.
 **Windows — installers build successfully:** `cargo tauri build` (release) exits 0 in ~5min and produces both
 `tauri/target/release/bundle/msi/Maestro Studio_0.1.0_x64_en-US.msi` (10.3 MB) and
 `.../nsis/Maestro Studio_0.1.0_x64-setup.exe` (9.3 MB). Tauri auto-downloaded WiX 3.14 and NSIS 3.11 on first run (works, but note it's a network dependency for a cold build machine/CI).
+
+**Superseded by PKG-1 (2026-09-02, see that row in the WORK QUEUE above) for the Node/engine half
+of item 2 below**: `bundle.resources` now stages the engine + a bundled Node runtime, so these
+sizes are stale (post-PKG-1: NSIS ~82MB, MSI ~124MB) — the jump is the real, staged engine payload,
+not bloat. The **Python** payload (this section's own item 2) is still exactly as unstaged as
+described below; PKG-1 deliberately did not touch it.
 
 1. **BLOCKER — the dev source path is compiled into the shipped binary. ✅ FIXED 2026-09-01 (later pass, same day).** `tauri/src/lib.rs:201` (and `:49`) used to resolve the repo root via `env!("CARGO_MANIFEST_DIR")`, a *compile-time* constant. **Verified empirically against the built artifact** (not just read from source): `grep -a` on `tauri/target/release/app.exe` found the literal `C:\Users\gsilva\maestro-desktop\tauri..` adjacent to `get_backend_port`/`MAESTRO_PORT`, and a second copy adjacent to `build-info.json`/`git rev-parse HEAD`. On any machine without that exact absolute path, the backend never spawned and the auth token never resolved. (Methodology note: a first attempt used `strings`, which **is not installed here** — it returned "0 matches", a false negative that would have wrongly cleared this. Re-tested with `grep -a`, which found it.)
    **Fix:** `tauri/src/sidecar.rs` gained `is_packaged()` (a real runtime check — `!cfg!(debug_assertions)`, true for a `cargo tauri build` release binary, false for `cargo tauri dev`; Tauri 2.x has no public `isPackaged`-style API on desktop, confirmed by reading tauri-2.11.5's and tauri-utils-2.9.3's own source) and a `BackendRoot { is_packaged, root }` struct, resolved once in `lib.rs`'s `setup()` via `BackendRoot::resolve(app.path().resource_dir().ok())` and managed as Tauri state. The dev-only repo-root helper (`dev_repo_root()`) is now `#[cfg(debug_assertions)]`-gated — not just unreached at runtime but **compiled out of the release binary's source entirely**, which is what actually removes the string from `.rodata` (a runtime `if` alone would not have, since the compiler can't always prove the branch dead once optimized). The same treatment was applied to `commands.rs`'s `get_build_info()` git-rev-parse dev fallback (`dev_git_build_info()`, also `#[cfg(debug_assertions)]`-gated). `sidecar.rs`'s `python_path()`/`spawn_backend()`/`backend_env()` now branch on `root.is_packaged` for a real (if not yet reachable — see item 2) packaged-mode resolution: `<resource_dir>/python-env/{python.exe|bin/python3}`, `cwd = resource_dir`, and a packaged-only `PYTHONPATH` (`resource_dir` + `resource_dir/debugger` + the platform-correct `python-env` site-packages dir), mirroring `electron/main.js`'s `getPythonPath()`/`getResourcePath()`/`startBackend()` isPackaged branches exactly. `get_auth_token` now calls the existing (already-correct) packaged branches of `sidecar::auth_token_path()` with the real `root.is_packaged` instead of a hardcoded `false`.
@@ -476,7 +675,7 @@ Ordering is dependency-real, not aspirational. `[~]` = in flight.
 
 | Ticket | Status | Gate? | Notes |
 |---|---|---|---|
-| REL-1 | ⬜ | — | Tauri Windows NSIS + Azure Trusted Signing CI |
+| REL-1 | ✅ done (as **PKG-3**) | ✅ pass (structural; signing itself is CI-only, unexecuted here) | Tauri Windows NSIS + Azure Trusted Signing CI — see **PKG-3** in the WORK QUEUE above for the full writeup. `.github/workflows/build-tauri-windows-signed.yml`, `workflow_dispatch`-only. |
 | REL-2 | ⬜ | — | version.json `next` block + updater |
 | REL-3 | ⬜ | — | Squirrel→NSIS migration path |
 | REL-4 | 🧑 | — | HUMAN: Store AppX identity transfer |

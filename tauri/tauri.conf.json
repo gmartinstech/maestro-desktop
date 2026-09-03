@@ -43,6 +43,12 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "resources": {
+      "../engine/dist": "engine/dist",
+      "../engine/node_modules.pkg": "engine/node_modules",
+      "../engine/package.json": "engine/package.json",
+      "../engine/node-runtime/x64/node.exe": "node/x64/node.exe"
     }
   }
 }

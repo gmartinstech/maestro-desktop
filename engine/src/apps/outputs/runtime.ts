@@ -19,7 +19,7 @@ import { dirname, join, resolve as pathResolve, sep as pathSep } from 'node:path
 import { createConnection } from 'node:net';
 import { AsyncLock } from '../../agents/manager/run/clientPool';
 import { stateDir } from '../../agents/manager/statePaths';
-import { resolveBackendPythonPath } from '../../pythonBackend';
+import { resolveAppBuilderPython } from '../../pythonBackend';
 import { forget as ledgerForget, reclaimPort, recordSpawn } from './runtimeLedger';
 import {
   ERROR_PATTERNS,
@@ -116,6 +116,20 @@ function pWhichNode(): string | null {
   return pWhichOnPath('node', process.platform === 'win32' ? ['.exe', ''] : ['']);
 }
 
+// PKG-2: the one clear, actionable message shown for BOTH ways an App Builder workspace can find
+// no usable Python 3 -- the old-mode `backend.py` path below, and webapp_template/backend/run.sh's
+// own "No working Python 3 found" stdout line (detected in pOnLine, since that script is read-only
+// reference and can't be edited to call back into this message directly).
+function pPythonMissingMessage(): string {
+  return "Python 3 is required to run this app's backend, and none was found. Install Python 3 "
+    + 'from https://www.python.org/downloads/ (or set the MAESTRO_PYTHON environment variable to '
+    + 'the interpreter to use), then restart this app.';
+}
+
+// The exact literal webapp_template/backend/run.sh (read-only reference) prints on its own
+// PATH-probe failure -- see that file's "No working Python 3 found" branch.
+const P_RUN_SH_NO_PYTHON_MARKER = 'Error: No working Python 3 found.';
+
 class AppRuntime {
   readonly workspaceId: string;
   workspacePath: string;
@@ -136,6 +150,12 @@ class AppRuntime {
   readonly frontendErrors: string[] = [];
   renderState: 'ok' | 'error' | null = null;
   renderErrorText = '';
+  // PKG-2: distinct from renderState (that's for the running app's OWN reported render errors --
+  // agent-fixable). This is "never even started because no Python 3 interpreter was found" -- not
+  // something rewriting the app's code can fix, so it's surfaced separately for the frontend/agent
+  // to tell apart from an ordinary bug.
+  pythonMissing = false;
+  pythonMissingDetail = '';
   private frontendReadyController: AbortController | null = null;
   readonly lock = new AsyncLock();
 
@@ -204,6 +224,8 @@ class AppRuntime {
     return this.lock.withLock(async () => {
       if (this.running) return true;
       await this.pResetTerminalLog();
+      this.pythonMissing = false;
+      this.pythonMissingDetail = '';
       if (this.isNewMode) {
         await pViteBootLock.acquire();
         try {
@@ -354,19 +376,28 @@ class AppRuntime {
       this.port = null;
       return false;
     }
+    // Hand the legacy backend.py a REAL, validated interpreter -- mirrors runtime.py's own
+    // `sys.executable`, but resolved via resolveAppBuilderPython() rather than assuming a bundled
+    // venv (gone in a packaged build) or blindly trusting a bare `python` name (the Windows
+    // Microsoft-Store-alias shim resolves as a file but doesn't run real Python). Detected up
+    // front and reported as a typed, legible degradation instead of a spawn ENOENT/hang -- see
+    // PKG-2.
+    const resolved = resolveAppBuilderPython();
+    if (!resolved) {
+      this.pythonMissing = true;
+      this.pythonMissingDetail = pPythonMissingMessage();
+      this.pBroadcast({ stream: 'runtime', text: `[runtime] ${this.pythonMissingDetail}` });
+      this.port = null;
+      this.child = null;
+      return false;
+    }
     this.port = await findFreePort();
     const env = this.pSpawnEnvBase();
     env.PORT = String(this.port);
     env.BACKEND_PORT = String(this.port);
-    // Hand the legacy backend.py the exact interpreter this engine's own backend runs on (the
-    // bundled venv in a packaged build, the dev venv otherwise) -- mirrors runtime.py's own
-    // `sys.executable`, sidestepping the Windows `python`/`python3` Microsoft-Store-alias shim a
-    // bare command name can resolve to instead of a real interpreter.
-    const resolvedPython = resolveBackendPythonPath();
-    const pythonExe = existsSync(resolvedPython) ? resolvedPython : (process.env.MAESTRO_PYTHON || 'python');
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawn(pythonExe, ['-u', 'backend.py'], { ...spawnOptions(), cwd: this.workspacePath, env });
+      child = spawn(resolved.path, ['-u', 'backend.py'], { ...spawnOptions(), cwd: this.workspacePath, env });
     } catch (e) {
       this.pBroadcast({ stream: 'runtime', text: `[runtime] failed to start: ${String(e)}` });
       this.port = null;
@@ -390,8 +421,13 @@ class AppRuntime {
       if (k === 'MAESTRO_AUTH_TOKEN') continue;
       env[k] = v;
     }
-    const resolvedPython = resolveBackendPythonPath();
-    env.MAESTRO_PYTHON = existsSync(resolvedPython) ? resolvedPython : (process.env.MAESTRO_PYTHON || 'python');
+    // Only pin MAESTRO_PYTHON when we actually found a validated interpreter -- leaving it unset
+    // when none was found lets webapp_template/run.sh (read-only reference) run its own
+    // multi-candidate PATH probe and print its own clear "no working Python 3" message, rather than
+    // pinning it to a literal 'python' that may not exist either.
+    const resolved = resolveAppBuilderPython();
+    if (resolved) env.MAESTRO_PYTHON = resolved.path;
+    else delete env.MAESTRO_PYTHON;
     // Force npm to skip dependency lifecycle scripts for every install run.sh triggers -- an
     // imported/agent-authored app's package.json is untrusted, so a malicious postinstall must
     // never get to run arbitrary code the moment its preview boots.
@@ -434,6 +470,11 @@ class AppRuntime {
     } else if (trimmed.includes('[maestro:app-error]')) {
       const idx = trimmed.indexOf('[maestro:app-error]') + '[maestro:app-error]'.length;
       this.setRenderError(trimmed.slice(idx).trim());
+    } else if (trimmed.includes(P_RUN_SH_NO_PYTHON_MARKER)) {
+      // PKG-2: new-mode (webapp_template) apps with their own backend hit this via run.sh's own
+      // PATH probe, not the old-mode spawn above -- same user-facing message either way.
+      this.pythonMissing = true;
+      this.pythonMissingDetail = pPythonMissingMessage();
     }
   }
 

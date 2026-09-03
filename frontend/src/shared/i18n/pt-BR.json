@@ -1107,7 +1107,9 @@
       "filesMissing": "Os arquivos deste app estão faltando.",
       "removeCard": "Remover cartão",
       "resetHardReload": "Resetar e recarregar à força",
-      "restartBackend": "Reiniciar backend.py + recarregar visualização"
+      "restartBackend": "Reiniciar backend.py + recarregar visualização",
+      "pythonMissingTitle": "Python 3 é necessário",
+      "pythonMissingBody": "O backend deste app precisa do Python 3, que não está instalado. Instale-o em python.org e reabra este app."
     },
     "cardSearch": {
       "placeholder": "Buscar cards...",

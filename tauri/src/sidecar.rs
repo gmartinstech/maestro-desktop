@@ -186,16 +186,27 @@ fn engine_entry_path(root: &BackendRoot) -> PathBuf {
     root.root.join("engine").join("dist").join("main.js")
 }
 
-// Node executable to run the engine with. MAESTRO_NODE_PATH (same variable name
-// electron/main.js's bundled-node lookup uses, per this repo's own convention) overrides when set
-// -- lets a packaged build point at a bundled Node the same way it will eventually point at a
-// bundled python-env -- otherwise falls back to whatever `node` resolves to on PATH, which is the
-// right choice for the dev opt-in path this ticket targets.
-fn node_command() -> PathBuf {
-    match std::env::var("MAESTRO_NODE_PATH") {
-        Ok(p) if !p.trim().is_empty() => PathBuf::from(p),
-        _ => PathBuf::from("node"),
+// Node executable to run the engine with. PKG-1: mirrors python_path()'s dev-vs-packaged split.
+// MAESTRO_NODE_PATH (same variable name electron/main.js's bundled-node lookup uses, per this
+// repo's own convention) always overrides first, for a developer/test harness that wants to point
+// at a specific binary. Otherwise: a PACKAGED build resolves the bundled runtime this ticket
+// stages at <resource_dir>/node/x64/node.exe (tauri.conf.json's bundle.resources maps
+// engine/node-runtime/x64/node.exe there -- see that file's header for where the binary itself
+// comes from: the same pinned Node 20.18.1 build/build-app-win.ps1 downloads and caches for the
+// Electron build's own extraResources "node/${arch}" entry, copied rather than re-downloaded). A
+// DEV build deliberately falls back to whatever `node` resolves to on PATH -- an explicit,
+// documented dependency on a system-wide Node for the dev opt-in path this ticket targets, not an
+// accidental one: a package a developer building from source is expected to already have.
+fn node_command(root: &BackendRoot) -> PathBuf {
+    if let Ok(p) = std::env::var("MAESTRO_NODE_PATH") {
+        if !p.trim().is_empty() {
+            return PathBuf::from(p);
+        }
     }
+    if root.is_packaged {
+        return root.root.join("node").join("x64").join("node.exe");
+    }
+    PathBuf::from("node")
 }
 
 // Mirrors backend_env() but for the engine: MAESTRO_ENGINE_PORT/HOST are the two vars
@@ -230,7 +241,24 @@ pub fn spawn_engine(root: &BackendRoot, port: u16) -> std::io::Result<Child> {
             ),
         ));
     }
-    let node = node_command();
+    let node = node_command(root);
+    // PKG-1: a packaged build resolves an absolute, staged path (see node_command()'s doc
+    // comment) -- if that file isn't actually there, fail loudly with an actionable message
+    // instead of letting Command::spawn's bare ENOENT (which doesn't name what's missing or why)
+    // be the only signal, and instead of silently falling back to a bare "node" that might
+    // resolve to an unrelated system install. A dev build's "node" (PATH-relative) is skipped
+    // here deliberately: `Path::exists()` on a bare relative command name almost never resolves
+    // (it isn't looked up against PATH), so it would misfire on the one branch that's supposed to
+    // depend on PATH resolution by design.
+    if root.is_packaged && !node.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "MAESTRO_USE_ENGINE=1 but the bundled Node runtime is missing at {} -- this installed build is missing its engine payload",
+                node.display()
+            ),
+        ));
+    }
     log::info!("[sidecar] starting engine: {} {} on port {}", node.display(), entry.display(), port);
     let mut cmd = Command::new(&node);
     cmd.arg(&entry)

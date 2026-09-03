@@ -912,7 +912,7 @@ const DashboardOutputPreview: React.FC<{
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const workspaceId = output.workspace_id ?? null;
-  const { frontendUrl, isNewMode, isHydrating } = useRuntimePreviewUrl({
+  const { frontendUrl, isNewMode, isHydrating, pythonMissing, pythonMissingDetail } = useRuntimePreviewUrl({
     workspaceId,
     enabled: !!workspaceId,
     onLog: onRuntimeLog,
@@ -998,6 +998,34 @@ const DashboardOutputPreview: React.FC<{
           }}
         >
           {t('dashboard.viewCard.removeCard')}
+        </Typography>
+      </Box>
+    );
+  }
+
+  // PKG-2: this app's backend needs Python 3 and none was found -- not agent-fixable (see
+  // pythonMissing's own doc), so it gets its own clear, translated message instead of the
+  // indefinite "Building..." spinner or a raw error iframe.
+  if (pythonMissing) {
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 1,
+          px: 3,
+          textAlign: 'center',
+        }}
+      >
+        <Typography sx={{ color: tokens.text.primary, fontSize: '0.9rem', fontWeight: 600 }}>
+          {t('dashboard.viewCard.pythonMissingTitle')}
+        </Typography>
+        <Typography sx={{ color: tokens.text.secondary, fontSize: '0.8rem', maxWidth: 360 }}>
+          {pythonMissingDetail || t('dashboard.viewCard.pythonMissingBody')}
         </Typography>
       </Box>
     );

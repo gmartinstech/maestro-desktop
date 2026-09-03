@@ -148,6 +148,7 @@ function runtimeStatusPayload(workspaceId: string, instance: number): Record<str
     return {
       running: false, port: null, has_backend_file: false, backend_url: null,
       frontend_port: null, frontend_url: null, is_new_mode: isNew,
+      python_missing: false, python_missing_detail: '',
     };
   }
   return {
@@ -158,6 +159,10 @@ function runtimeStatusPayload(workspaceId: string, instance: number): Record<str
     frontend_port: rt.frontendPort,
     frontend_url: rt.running ? rt.frontendUrl : null,
     is_new_mode: rt.isNewMode,
+    // PKG-2: lets the frontend show its own clear, translated copy instead of parsing runtime log
+    // text -- see runtime.ts's pythonMissing/pythonMissingDetail.
+    python_missing: rt.pythonMissing,
+    python_missing_detail: rt.pythonMissingDetail,
   };
 }
 
